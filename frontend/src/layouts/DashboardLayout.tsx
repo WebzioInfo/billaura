@@ -1,280 +1,145 @@
-import React, { useState } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, ShoppingBag, CreditCard, Package, 
-  Settings, LogOut, Menu, X, ChevronDown, User, Bell, Search, Landmark, Shield, Receipt, FileText
+  Bell, Search, Settings, LogOut, Landmark, User, Moon, Sun 
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
+import { Ribbon } from '@/components/workspace/Ribbon';
+import { WorkspaceTabs } from '@/components/workspace/WorkspaceTabs';
+import { CommandPalette } from '@/components/workspace/CommandPalette';
+import { QuickCreate } from '@/components/workspace/QuickCreate';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export default function DashboardLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
   const { user, clearSession } = useSessionStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { tabs, openTab, setActiveTab } = useWorkspaceStore();
+  
+  // Keep active tab in sync with URL on manual navigation/refresh
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const existingTab = tabs.find(t => t.path === currentPath);
+    
+    if (existingTab) {
+      setActiveTab(existingTab.id);
+    } else {
+      // Auto-register a new tab if navigated directly
+      // Very basic title extraction from path
+      const segments = currentPath.split('/').filter(Boolean);
+      let title = 'Document';
+      if (segments.length > 0) {
+        title = segments[segments.length - 1].replace(/-/g, ' ');
+        title = title.charAt(0).toUpperCase() + title.slice(1);
+      }
+      
+      openTab({
+        id: currentPath,
+        title,
+        path: currentPath,
+      });
+    }
+  }, [location.pathname]);
 
   const handleLogout = () => {
     clearSession();
     navigate('/login');
   };
 
-  // Core Navigation
-  const coreNavItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Customers', path: '/customers', icon: Users },
-    { name: 'Vendors', path: '/vendors', icon: Users },
-    { name: 'Products & Services', path: '/products', icon: Package },
-    { name: 'Sales', path: '/sales', icon: ShoppingBag },
-    { name: 'Purchases', path: '/purchases', icon: CreditCard },
-    { name: 'Banking', path: '/banking', icon: Landmark },
-    { name: 'Accounting', path: '/accounting', icon: Landmark },
-    { name: 'GST & Taxes', path: '/taxes', icon: Shield },
-    { name: 'Expenses', path: '/expenses', icon: Receipt },
-    { name: 'Reports', path: '/profit-loss', icon: FileText },
-    { name: 'Settings', path: '/settings', icon: Settings },
-  ];
-
-  // Supporting Modules
-  const supportingModules = [
-    { name: 'Inventory', path: '/inventory', icon: Package },
-    { name: 'HR', path: '/hr', icon: Users },
-    { name: 'Attendance', path: '/attendance', icon: Users },
-    { name: 'Payroll', path: '/payroll', icon: CreditCard },
-  ];
-
-  // Administration
-  const adminModules = [
-    { name: 'Users', path: '/users', icon: Users },
-    { name: 'Roles', path: '/roles', icon: Users },
-    { name: 'Branches', path: '/branches', icon: Landmark },
-    { name: 'Company', path: '/company', icon: Settings },
-    { name: 'Subscription', path: '/subscription', icon: CreditCard },
-  ];
-
   const userInitials = user?.name 
     ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() 
     : 'US';
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex transition-colors duration-300">
-      {/* Mobile Sidebar overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar navigation */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 glass-panel border-r border-border flex flex-col transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:flex-shrink-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="h-16 flex items-center justify-between px-6 border-b border-border">
-          <Link to="/dashboard" className="flex items-center gap-2 font-bold text-lg tracking-tight">
-            <Landmark className="w-5 h-5 text-accent" />
-            <span>Bill <span className="text-accent">Aura</span></span>
-          </Link>
-          <button 
-            onClick={() => setSidebarOpen(false)}
-            className="md:hidden p-1 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+      <CommandPalette />
+      
+      {/* 1. Header Area */}
+      <header className="h-12 border-b border-border bg-surface flex items-center justify-between px-4 shrink-0 shadow-sm z-20">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 font-bold text-lg tracking-tight mr-4">
+            <Landmark className="w-5 h-5 text-primary" />
+            <span>Bill <span className="text-primary">Aura</span></span>
+          </div>
+          
+          <div className="hidden md:flex items-center gap-4 text-xs font-medium text-muted-foreground">
+            <span className="bg-muted px-2 py-1 rounded-md text-foreground">FY 2026-27</span>
+            <span>HQ Branch</span>
+          </div>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-6 overflow-y-auto">
-          {/* Core Navigation */}
-          <div className="space-y-1.5">
-            {coreNavItems.map((item) => {
-              const checkIsActive = (itemPath: string) => {
-                const path = location.pathname;
-                if (itemPath === '/dashboard') return path === '/dashboard';
-                if (itemPath === '/customers') return path === '/customers' || path === '/crm';
-                if (itemPath === '/sales') return ['/sales', '/quotations', '/sales-orders', '/delivery-challans', '/invoices', '/recurring-invoices', '/payments'].includes(path);
-                if (itemPath === '/purchases') return ['/purchases', '/purchase-orders', '/bills', '/vendor-payments'].includes(path);
-                if (itemPath === '/banking') return path === '/banking';
-                if (itemPath === '/accounting') return ['/accounting', '/chart-of-accounts', '/journal-entries', '/general-ledger', '/trial-balance', '/balance-sheet', '/profit-loss', '/cash-flow'].includes(path);
-                if (itemPath === '/inventory') return ['/inventory', '/warehouses', '/categories'].includes(path);
-                if (itemPath === '/products') return ['/products', '/services'].includes(path);
-                if (itemPath === '/taxes') return ['/taxes', '/gst'].includes(path);
-                if (itemPath === '/hr') return ['/hr', '/employees'].includes(path);
-                if (itemPath === '/settings') return ['/settings', '/company', '/profile'].includes(path);
-                if (['/vendors', '/expenses', '/reports', '/attendance', '/payroll', '/users', '/roles', '/branches', '/subscription'].includes(itemPath)) return path === itemPath;
-                return path.startsWith(itemPath);
-              };
-              
-              const isActive = checkIsActive(item.path);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive 
-                      ? 'bg-primary text-primary-foreground shadow-sm' 
-                      : 'text-muted-foreground hover:bg-surface hover:text-foreground'
-                  }`}
-                >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
+        <div className="flex items-center gap-3">
+          <div className="hidden md:flex relative w-64 group">
+            <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <input 
+              type="text"
+              placeholder="Search (Ctrl+K)..."
+              className="h-8 w-full rounded-md border border-input bg-muted/50 pl-9 pr-4 text-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+              readOnly
+              onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+            />
           </div>
 
-          {/* Supporting Modules */}
-          <div>
-            <h3 className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Supporting Modules</h3>
-            <div className="space-y-1.5">
-              {supportingModules.map((item) => {
-                const checkIsActive = (itemPath: string) => {
-                  const path = location.pathname;
-                  if (itemPath === '/hr') return ['/hr', '/employees'].includes(path);
-                  if (itemPath === '/inventory') return ['/inventory', '/warehouses', '/categories'].includes(path);
-                  return path === itemPath;
-                };
-                const isActive = checkIsActive(item.path);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.path}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                      isActive 
-                        ? 'bg-primary text-primary-foreground shadow-sm' 
-                        : 'text-muted-foreground hover:bg-surface hover:text-foreground'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 flex-shrink-0" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
+          <QuickCreate />
+
+          <button className="relative p-1.5 rounded-full text-muted-foreground hover:bg-muted transition-colors">
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-background"></span>
+          </button>
+
+          <div className="h-4 w-px bg-border mx-1"></div>
+
+          <div className="flex items-center gap-2 group cursor-pointer relative">
+            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs">
+              {userInitials}
             </div>
-          </div>
-
-          {/* Administration (Admin Only) */}
-          {user?.role === 'ADMIN' && (
-            <div>
-              <h3 className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Administration</h3>
-              <div className="space-y-1.5">
-                {adminModules.map((item) => {
-                  const isActive = location.pathname === item.path;
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      to={item.path}
-                      onClick={() => setSidebarOpen(false)}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                        isActive 
-                          ? 'bg-primary text-primary-foreground shadow-sm' 
-                          : 'text-muted-foreground hover:bg-surface hover:text-foreground'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span>{item.name}</span>
-                    </Link>
-                  );
-                })}
+            <div className="absolute right-0 top-full mt-2 w-48 bg-popover rounded-md shadow-md border border-border p-1 hidden group-hover:block z-50">
+              <div className="px-2 py-2 border-b border-border mb-1">
+                <p className="text-sm font-medium">{user?.name || 'User'}</p>
+                <p className="text-xs text-muted-foreground">{user?.email}</p>
               </div>
-            </div>
-          )}
-        </nav>
-
-        <div className="p-4 border-t border-border bg-surface bg-opacity-30">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main dashboard content container */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Main top header */}
-        <header className="h-16 border-b border-border bg-surface bg-opacity-70 backdrop-blur-md flex items-center justify-between px-6 flex-shrink-0 z-30">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-
-            {/* Global Search Mock */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-background border border-border w-64 text-xs text-muted-foreground focus-within:border-accent">
-              <Search className="w-3.5 h-3.5" />
-              <input 
-                type="text" 
-                placeholder="Search resources, reports..." 
-                className="bg-transparent border-none outline-none w-full text-foreground"
-                readOnly
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 relative">
-            <button className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-background transition-all cursor-pointer">
-              <Bell className="w-5 h-5" />
-            </button>
-
-            {/* User Profile dropdown */}
-            <div className="relative">
-              <button 
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-2 p-1 rounded-xl hover:bg-background transition-all cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-xl bg-accent text-white flex items-center justify-center font-bold text-sm">
-                  {userInitials}
-                </div>
-                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded-sm flex items-center gap-2">
+                <User className="w-4 h-4" /> Profile
               </button>
-
-              {userDropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setUserDropdownOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-48 rounded-xl border border-border bg-surface p-2 shadow-premium z-50">
-                    <div className="px-3 py-2 border-b border-border mb-1">
-                      <p className="text-xs font-semibold text-foreground truncate">{user?.name || 'Accountant'}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
-                    </div>
-                    <Link
-                      to="/settings"
-                      onClick={() => setUserDropdownOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground rounded-lg hover:bg-background hover:text-foreground transition-colors"
-                    >
-                      <User className="w-3.5 h-3.5" />
-                      <span>Profile Settings</span>
-                    </Link>
-                    <button
-                      onClick={() => {
-                        setUserDropdownOpen(false);
-                        handleLogout();
-                      }}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-500 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer text-left"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Sign Out</span>
-                    </button>
-                  </div>
-                </>
-              )}
+              <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded-sm flex items-center gap-2">
+                <Settings className="w-4 h-4" /> Preferences
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="w-full text-left px-2 py-1.5 text-sm hover:bg-red-500/10 text-red-500 rounded-sm flex items-center gap-2 mt-1 border-t border-border pt-2"
+              >
+                <LogOut className="w-4 h-4" /> Sign Out
+              </button>
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Content Outlet */}
-        <main className="flex-grow overflow-x-hidden overflow-y-auto bg-background p-6">
+      {/* 2. Top Ribbon */}
+      <Ribbon />
+
+      {/* 3. Workspace Tabs */}
+      <WorkspaceTabs />
+
+      {/* 4. Main Workspace Area */}
+      <main className="flex-1 bg-[#f8f9fa] dark:bg-[#0a0a0a] overflow-auto relative shadow-inner">
+        <div className="h-full w-full">
+          {/* We use Outlet for the current route. In a more advanced implementation, 
+              we could map through all openTabs and render them hidden to preserve state. */}
           <Outlet />
-        </main>
-      </div>
+        </div>
+      </main>
+      
+      {/* 5. Status Bar (Optional Footer) */}
+      <footer className="h-6 border-t border-border bg-muted/30 flex items-center justify-between px-4 shrink-0 text-[10px] text-muted-foreground">
+        <div className="flex gap-4">
+          <span>Ready</span>
+          <span>Sync: Active</span>
+        </div>
+        <div>
+          <span>Bill Aura Enterprise v1.0</span>
+        </div>
+      </footer>
     </div>
   );
 }

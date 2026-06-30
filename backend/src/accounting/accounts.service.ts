@@ -4,7 +4,7 @@ import { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
-import { AccountCategory } from '@prisma/client';
+import { AccountCategory, AccountSubCategory } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -16,15 +16,15 @@ export class AccountsService {
     if (count > 0) return;
 
     const defaults = [
-      { name: 'Cash in Hand', category: AccountCategory.ASSET },
-      { name: 'Operating Bank Account', category: AccountCategory.ASSET },
-      { name: 'Inventory Asset', category: AccountCategory.ASSET },
-      { name: 'Accounts Receivable', category: AccountCategory.ASSET },
-      { name: 'Accounts Payable', category: AccountCategory.LIABILITY },
-      { name: 'Sales Revenue', category: AccountCategory.REVENUE },
-      { name: 'Cost of Goods Sold', category: AccountCategory.EXPENSE },
-      { name: 'Office Overheads', category: AccountCategory.EXPENSE },
-      { name: 'Retained Earnings', category: AccountCategory.EQUITY },
+      { name: 'Cash in Hand', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Operating Bank Account', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Inventory Asset', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Accounts Receivable', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Accounts Payable', category: AccountCategory.LIABILITY, subCategory: AccountSubCategory.CURRENT_LIABILITY },
+      { name: 'Sales Revenue', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SALES_REVENUE },
+      { name: 'Cost of Goods Sold', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.COGS },
+      { name: 'Office Overheads', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
+      { name: 'Retained Earnings', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
     ];
 
     await this.prisma.account.createMany({
@@ -32,6 +32,7 @@ export class AccountsService {
         companyId,
         name: d.name,
         category: d.category,
+        subCategory: d.subCategory,
         balance: 0,
       })),
     });

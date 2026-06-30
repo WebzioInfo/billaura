@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   Users, Activity, Shield, ArrowUpRight, CheckCircle, AlertTriangle,
   Settings, DollarSign, Plus, Search, Lock, Unlock, Mail, FileText,
-  RefreshCw, Layers, LifeBuoy, Bell, Server
+  RefreshCw, Layers, LifeBuoy, Bell, Server, Trash2, Edit2
 } from 'lucide-react';
 import api from '@/services/api';
 
@@ -123,6 +123,47 @@ export function PlatformDashboard() {
       }));
     } catch (err) {
       toast.error('Failed to toggle company status');
+    }
+  };
+
+  const handleDeleteCompany = async (companyId: string) => {
+    if (!window.confirm('WARNING: This will permanently delete the company and ALL associated data (invoices, customers, inventory). Are you sure?')) return;
+    try {
+      await api.delete(`/platform/companies/${companyId}`);
+      toast.success('Company deleted successfully');
+      setCompanies(prev => prev.filter(c => c.id !== companyId));
+    } catch (err) {
+      toast.error('Failed to delete company');
+    }
+  };
+
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    try {
+      await api.put(`/platform/users/${editingUser.id}`, {
+        name: editingUser.name,
+        email: editingUser.email,
+        globalRole: editingUser.globalRole,
+      });
+      toast.success('User updated successfully');
+      setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...editingUser } : u));
+      setEditingUser(null);
+    } catch (err) {
+      toast.error('Failed to update user');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!window.confirm('Are you sure you want to delete this global user account?')) return;
+    try {
+      await api.delete(`/platform/users/${userId}`);
+      toast.success('User deleted successfully');
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete user');
     }
   };
 
@@ -396,7 +437,7 @@ export function PlatformDashboard() {
                           {c.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right flex justify-end gap-2">
                         <button
                           onClick={() => handleToggleSuspend(c.id)}
                           className={`font-semibold cursor-pointer text-xs px-3 py-1.5 rounded-lg border transition-colors ${c.status === 'SUSPENDED'
@@ -405,6 +446,13 @@ export function PlatformDashboard() {
                             }`}
                         >
                           {c.status === 'SUSPENDED' ? 'Unsuspend' : 'Suspend'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCompany(c.id)}
+                          className="font-semibold cursor-pointer text-xs p-1.5 rounded-lg border transition-colors bg-white text-red-600 border-slate-200 hover:bg-red-50 hover:border-red-200"
+                          title="Delete Company"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
                     </tr>
@@ -592,6 +640,7 @@ export function PlatformDashboard() {
                     <th className="px-6 py-4">Email Verified</th>
                     <th className="px-6 py-4">Created Date</th>
                     <th className="px-6 py-4">Account Status</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -612,11 +661,27 @@ export function PlatformDashboard() {
                           {u.isActive ? 'Active' : 'Locked'}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-right flex justify-end gap-2">
+                        <button
+                          onClick={() => setEditingUser(u)}
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 bg-white border border-slate-200 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                          title="Edit User"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="p-1.5 text-red-500 hover:text-red-700 bg-white border border-slate-200 hover:border-red-200 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete User"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {filteredUsers.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
                         No platform users match filters.
                       </td>
                     </tr>
@@ -624,6 +689,65 @@ export function PlatformDashboard() {
                 </tbody>
               </table>
             </div>
+
+            {/* Edit User Modal */}
+            {editingUser && (
+              <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl animate-fadeIn">
+                  <h3 className="text-base font-bold text-slate-900 mb-4">Edit Platform User</h3>
+                  <form onSubmit={handleUpdateUser} className="space-y-4 text-xs text-slate-700">
+                    <div>
+                      <label className="block font-semibold mb-1">Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingUser.name}
+                        onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={editingUser.email}
+                        onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1">Global Role</label>
+                      <select
+                        value={editingUser.globalRole}
+                        onChange={(e) => setEditingUser({ ...editingUser, globalRole: e.target.value })}
+                        className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"
+                      >
+                        <option value="SUPER_ADMIN">Super Admin</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="ACCOUNTANT">Accountant</option>
+                        <option value="CUSTOM_ROLE">Custom Role</option>
+                      </select>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setEditingUser(null)}
+                        className="px-4 py-2 border border-slate-200 rounded-xl text-slate-500 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold cursor-pointer hover:bg-indigo-700"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         );
 

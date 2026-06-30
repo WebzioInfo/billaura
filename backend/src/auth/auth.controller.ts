@@ -56,7 +56,9 @@ export class AuthController {
     @Ip() ip: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.authService.login(loginDto, userAgent, ip);
+    const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
+    const safeIp = ip ? ip.substring(0, 45) : undefined;
+    const result = await this.authService.login(loginDto, safeUserAgent, safeIp);
     setRefreshCookie(res, result.refresh_token);
     const { refresh_token, ...responseBody } = result;
     return responseBody;
@@ -92,7 +94,9 @@ export class AuthController {
     if (!refreshToken) {
       throw new UnauthorizedException('No refresh token found');
     }
-    const result = await this.authService.refreshTokens(refreshToken, userAgent, ip);
+    const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
+    const safeIp = ip ? ip.substring(0, 45) : undefined;
+    const result = await this.authService.refreshTokens(refreshToken, safeUserAgent, safeIp);
     setRefreshCookie(res, result.refresh_token);
     const { refresh_token, ...responseBody } = result;
     return responseBody;

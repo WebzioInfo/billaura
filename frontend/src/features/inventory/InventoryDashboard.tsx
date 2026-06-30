@@ -9,6 +9,7 @@ import {
   Tag, Loader2, Landmark, RefreshCw, Barcode, Scale, AlertTriangle 
 } from 'lucide-react';
 import api from '../../services/api';
+import ProductFormModal from './ProductFormModal';
 
 // --- SCHEMAS ---
 const categorySchema = z.object({
@@ -208,18 +209,7 @@ export const InventoryDashboard = () => {
   const handleOpenEditModal = (item: any) => {
     setEditingId(item.id);
     if (activeTab === 'products') {
-      productForm.reset({
-        name: item.name,
-        sku: item.sku || '',
-        barcode: item.barcode || '',
-        categoryId: item.categoryId || '',
-        brandId: item.brandId || '',
-        hsnCode: item.hsnCode || '',
-        purchasePrice: Number(item.purchasePrice || 0),
-        sellingPrice: Number(item.sellingPrice || 0),
-        reorderLevel: Number(item.reorderLevel || 0),
-        taxRate: Number(item.taxRate || 0),
-      });
+      // The ProductFormModal handles its own state for products, we just set editingId
     } else if (activeTab === 'warehouses') {
       warehouseForm.reset({
         name: item.name,
@@ -659,94 +649,37 @@ export const InventoryDashboard = () => {
         )
       )}
 
-      {/* Product / Warehouse Modals */}
+      {/* Modal Overlays */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
           
-          <div className="bg-surface rounded-2xl border border-border shadow-premium w-full max-w-lg z-10 overflow-hidden">
+          <div className="bg-surface rounded-2xl border border-border shadow-premium w-full max-w-2xl z-10 overflow-hidden">
             <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-background bg-opacity-35">
               <h2 className="font-bold text-lg text-foreground">
-                {editingId ? 'Modify Details' : 'Register New Item'}
+                {editingId ? 'Edit' : 'Create'} {
+                  activeTab === 'warehouses' ? 'Warehouse' : 
+                  activeTab === 'categories' ? 'Category' : 'Brand'
+                }
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
             </div>
 
-            {activeTab === 'products' ? (
-              <form onSubmit={productForm.handleSubmit(handleProductSubmit)} className="p-6 space-y-4 text-left">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Product Name *</label>
-                    <input type="text" {...productForm.register('name')} placeholder="e.g. Copper Wire Coil" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">SKU / Code</label>
-                    <input type="text" {...productForm.register('sku')} placeholder="e.g. ELE-001" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">HSN Code</label>
-                    <input type="text" {...productForm.register('hsnCode')} placeholder="e.g. 8544" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Category</label>
-                    <select {...productForm.register('categoryId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                      <option value="">Select Category</option>
-                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Brand</label>
-                    <select {...productForm.register('brandId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                      <option value="">Select Brand</option>
-                      {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Purchase Price *</label>
-                    <input type="number" {...productForm.register('purchasePrice', { valueAsNumber: true })} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Selling Price *</label>
-                    <input type="number" {...productForm.register('sellingPrice', { valueAsNumber: true })} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Reorder Safety Level</label>
-                    <input type="number" {...productForm.register('reorderLevel', { valueAsNumber: true })} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 border-t border-border pt-4 mt-6">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer">Cancel</button>
-                  <button type="submit" disabled={isSubmitting} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm flex items-center gap-2 cursor-pointer">
-                    {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Save Product
-                  </button>
-                </div>
-              </form>
-            ) : activeTab === 'warehouses' ? (
+            {activeTab === 'warehouses' ? (
               <form onSubmit={warehouseForm.handleSubmit(handleWarehouseSubmit)} className="p-6 space-y-4 text-left">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
+                <div className="space-y-4">
+                  <div>
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Warehouse Name *</label>
-                    <input type="text" {...warehouseForm.register('name')} placeholder="e.g. North Delhi Warehouse" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                    <input type="text" {...warehouseForm.register('name')} placeholder="e.g. Main Hub, West Wing" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
                   </div>
- 
-                  <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Location Address</label>
-                    <input type="text" {...warehouseForm.register('location')} placeholder="e.g. Industrial Area Phase 1" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Location details</label>
+                    <input type="text" {...warehouseForm.register('location')} placeholder="e.g. Sector 4, Ind. Area" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
                   </div>
- 
-                  <div className="col-span-2">
-                    <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
-                      <input type="checkbox" {...warehouseForm.register('isDefault')} className="rounded border-border text-accent focus:ring-accent/20" />
-                      Set as primary default warehouse
+                  <div className="flex items-center gap-2 mt-4 p-3 border border-border rounded-lg bg-background bg-opacity-50">
+                    <input type="checkbox" {...warehouseForm.register('isDefault')} className="rounded border-border text-accent focus:ring-accent w-4 h-4" />
+                    <label className="text-sm font-semibold text-foreground">
+                      Set as default warehouse (Auto-selected for new products)
                     </label>
                   </div>
                 </div>
@@ -848,6 +781,17 @@ export const InventoryDashboard = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {isModalOpen && activeTab === 'products' && (
+        <ProductFormModal
+          product={editingId ? products.find(p => p.id === editingId) : undefined}
+          onClose={() => setIsModalOpen(false)}
+          onSuccess={() => {
+            setIsModalOpen(false);
+            fetchData();
+          }}
+        />
       )}
     </div>
   );

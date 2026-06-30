@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Delete, Put } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformGuard } from './platform.guard';
@@ -67,6 +67,21 @@ export class PlatformController {
     return { success: true, status: newStatus };
   }
 
+  @Delete('companies/:id')
+  async deleteCompany(@Param('id') id: string) {
+    const company = await this.prisma.company.findUnique({ where: { id } });
+    if (!company) {
+      throw new Error('Company not found');
+    }
+
+    // Relying on Prisma onDelete: Cascade to remove associated records
+    await this.prisma.company.delete({
+      where: { id }
+    });
+
+    return { success: true };
+  }
+
   @Get('subscriptions')
   async getSubscriptions() {
     const subs = await this.prisma.subscription.findMany({
@@ -124,6 +139,37 @@ export class PlatformController {
       orderBy: { createdAt: 'desc' }
     });
     return users;
+  }
+
+  @Put('users/:id')
+  async updateUser(@Param('id') id: string, @Body() data: any) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new Error('User not found');
+    
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        name: data.name,
+        email: data.email,
+        globalRole: data.globalRole,
+      }
+    });
+  }
+
+  @Delete('users/:id')
+  async deleteUser(@Param('id') id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new Error('User not found');
+
+    if (user.globalRole === 'SUPER_ADMIN') {
+      const superAdmins = await this.prisma.user.count({ where: { globalRole: 'SUPER_ADMIN' }});
+      if (superAdmins <= 1) {
+        throw new Error('Cannot delete the last Super Admin');
+      }
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+    return { success: true };
   }
 
   @Get('revenue')

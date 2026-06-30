@@ -10,7 +10,19 @@ const DepartmentsList = lazy(() => import('../features/departments/DepartmentsLi
 const LeadsList = lazy(() => import('../features/crm/LeadsList').then(m => ({ default: m.LeadsList })));
 const CrmDashboard = lazy(() => import('../features/crm/CrmDashboard').then(m => ({ default: m.CrmDashboard })));
 const ChartOfAccounts = lazy(() => import('../features/accounting/ChartOfAccounts').then(m => ({ default: m.ChartOfAccounts })));
+const ProfitLossDashboard = lazy(() => import('../features/reports/ProfitLossDashboard'));
 const LandingPage = lazy(() => import('../features/public/LandingPage').then(m => ({ default: m.LandingPage })));
+
+const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m => ({ default: m.CustomersList })));
+const VendorsList = lazy(() => import('../features/crm/VendorsList').then(m => ({ default: m.VendorsList })));
+const InvoicesList = lazy(() => import('../features/sales/InvoicesList').then(m => ({ default: m.InvoicesList })));
+const InvoiceForm = lazy(() => import('../features/sales/InvoiceForm').then(m => ({ default: m.InvoiceForm })));
+const BillsList = lazy(() => import('../features/purchases/BillsList').then(m => ({ default: m.BillsList })));
+const BillForm = lazy(() => import('../features/purchases/BillForm').then(m => ({ default: m.BillForm })));
+const TrialBalance = lazy(() => import('../features/reports/TrialBalance').then(m => ({ default: m.TrialBalance })));
+const BalanceSheet = lazy(() => import('../features/reports/BalanceSheet').then(m => ({ default: m.BalanceSheet })));
+const GeneralLedger = lazy(() => import('../features/reports/GeneralLedger').then(m => ({ default: m.GeneralLedger })));
+const DayBook = lazy(() => import('../features/reports/DayBook').then(m => ({ default: m.DayBook })));
 
 // --- Onboarding & Auth Pages ---
 const Login = lazy(() => import('../features/auth/pages/Login').then(m => ({ default: m.Login })));
@@ -30,7 +42,7 @@ const ExpensesDashboard = lazy(() => import('../features/expenses/ExpensesDashbo
 // Layout Shells
 const PublicLayout = lazy(() => import('../layouts/PublicLayout').then(m => ({ default: m.default })));
 const AuthLayout = lazy(() => import('../layouts/AuthLayout').then(m => ({ default: m.default })));
-const DashboardLayout = lazy(() => import('../layouts/DashboardLayout').then(m => ({ default: m.default })));
+const WorkspaceLayout = lazy(() => import('../layouts/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
 const PlatformLayout = lazy(() => import('../layouts/PlatformLayout').then(m => ({ default: m.default })));
 
 const PlatformDashboard = lazy(() => import('../features/dashboard/PlatformDashboard').then(m => ({ default: m.PlatformDashboard })));
@@ -109,14 +121,14 @@ export const router = createBrowserRouter([
     id: 'app',
     element: (
       <ProtectedRoute enabled requireCompletedOnboarding>
-        <Suspense fallback={<LoadingFallback />}><ErrorBoundary><DashboardLayout /></ErrorBoundary></Suspense>
+        <Suspense fallback={<LoadingFallback />}><ErrorBoundary><WorkspaceLayout /></ErrorBoundary></Suspense>
       </ProtectedRoute>
     ),
     errorElement: <ErrorBoundary />,
     children: [
       { path: 'dashboard', element: <ExecutiveDashboard /> },
-      { path: 'customers', element: <CrmDashboard /> },
-      { path: 'vendors', element: <PurchasesDashboard /> },
+      { path: 'customers', element: <CustomersList /> },
+      { path: 'vendors', element: <VendorsList /> },
       { path: 'products', element: <InventoryDashboard /> },
       { path: 'services', element: <InventoryDashboard /> },
       { path: 'categories', element: <InventoryDashboard /> },
@@ -126,22 +138,25 @@ export const router = createBrowserRouter([
       { path: 'quotations', element: <SalesDashboard /> },
       { path: 'sales-orders', element: <SalesDashboard /> },
       { path: 'delivery-challans', element: <SalesDashboard /> },
-      { path: 'invoices', element: <SalesDashboard /> },
+      { path: 'invoices', element: <InvoicesList /> },
+      { path: 'invoices/new', element: <InvoiceForm /> },
       { path: 'recurring-invoices', element: <SalesDashboard /> },
       { path: 'payments', element: <SalesDashboard /> },
       { path: 'purchases', element: <PurchasesDashboard /> },
       { path: 'purchase-orders', element: <PurchasesDashboard /> },
-      { path: 'bills', element: <PurchasesDashboard /> },
+      { path: 'bills', element: <BillsList /> },
+      { path: 'bills/new', element: <BillForm /> },
       { path: 'vendor-payments', element: <PurchasesDashboard /> },
       { path: 'expenses', element: <ExpensesDashboard /> },
       { path: 'banking', element: <ChartOfAccounts /> },
       { path: 'chart-of-accounts', element: <ChartOfAccounts /> },
       { path: 'accounting', element: <ChartOfAccounts /> },
       { path: 'journal-entries', element: <ChartOfAccounts /> },
-      { path: 'general-ledger', element: <ChartOfAccounts /> },
-      { path: 'trial-balance', element: <ChartOfAccounts /> },
-      { path: 'balance-sheet', element: <ChartOfAccounts /> },
-      { path: 'profit-loss', element: <ChartOfAccounts /> },
+      { path: 'general-ledger', element: <GeneralLedger /> },
+      { path: 'day-book', element: <DayBook /> },
+      { path: 'trial-balance', element: <TrialBalance /> },
+      { path: 'balance-sheet', element: <BalanceSheet /> },
+      { path: 'profit-loss', element: <ProfitLossDashboard /> },
       { path: 'cash-flow', element: <ChartOfAccounts /> },
       { path: 'gst', element: <TaxesDashboard /> },
       { path: 'taxes', element: <TaxesDashboard /> },

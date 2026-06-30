@@ -10,6 +10,10 @@ import { ProductsController } from './products.controller';
 import { InventoryService } from './inventory.service';
 import { InventoryController } from './inventory.controller';
 import { DatabaseModule } from '../database/database.module';
+import { UnitsService } from './units.service';
+import { UnitsController } from './units.controller';
+import { TaxGroupsService } from './tax-groups.service';
+import { TaxGroupsController } from './tax-groups.controller';
 
 @Module({
   imports: [DatabaseModule],
@@ -19,6 +23,8 @@ import { DatabaseModule } from '../database/database.module';
     WarehousesController,
     ProductsController,
     InventoryController,
+    UnitsController,
+    TaxGroupsController,
   ],
   providers: [
     CategoriesService,
@@ -26,6 +32,8 @@ import { DatabaseModule } from '../database/database.module';
     WarehousesService,
     ProductsService,
     InventoryService,
+    UnitsService,
+    TaxGroupsService,
   ],
   exports: [
     CategoriesService,

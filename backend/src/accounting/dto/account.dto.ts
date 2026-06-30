@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber } from 'class-validator';
-import { AccountCategory } from '@prisma/client';
+import { AccountCategory, AccountSubCategory } from '@prisma/client';
 
 export class CreateAccountDto {
   @IsString()
@@ -9,6 +9,10 @@ export class CreateAccountDto {
   @IsEnum(AccountCategory)
   @IsNotEmpty()
   category: AccountCategory;
+
+  @IsEnum(AccountSubCategory)
+  @IsOptional()
+  subCategory?: AccountSubCategory;
 
   @IsNumber()
   @IsOptional()
@@ -23,6 +27,10 @@ export class UpdateAccountDto {
   @IsEnum(AccountCategory)
   @IsOptional()
   category?: AccountCategory;
+
+  @IsEnum(AccountSubCategory)
+  @IsOptional()
+  subCategory?: AccountSubCategory;
 
   @IsNumber()
   @IsOptional()
