@@ -1,5 +1,4 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "Node",
@@ -15,7 +14,10 @@
     "strictPropertyInitialization": false,
     "baseUrl": "./",
     "rootDir": "src",
-    "paths": {}
+    "paths": {},
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "node_modules", "test"]
