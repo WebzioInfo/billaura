@@ -34,11 +34,11 @@ export class DashboardService {
         where: { companyId },
         _sum: { amount: true },
       }),
-      this.prisma.customer.count({
-        where: { companyId },
+      this.prisma.businessPartner.count({
+        where: { companyId, bpType: 'CUSTOMER' },
       }),
-      this.prisma.vendor.count({
-        where: { companyId },
+      this.prisma.businessPartner.count({
+        where: { companyId, bpType: 'VENDOR' },
       }),
       // Low stock count (selling price/reorder)
       this.prisma.product.findMany({
@@ -53,7 +53,7 @@ export class DashboardService {
         where: { companyId },
         take: 5,
         orderBy: { createdAt: 'desc' },
-        include: { customer: true },
+        include: { businessPartner: true },
       }),
     ]);
 
@@ -65,17 +65,17 @@ export class DashboardService {
         customerCount,
         vendorCount,
       },
-      lowStock: lowStockProducts.map(p => ({
+      lowStock: lowStockProducts.map((p: any) => ({
         id: p.id,
         name: p.name,
         sku: p.sku || 'N/A',
         reorderLevel: Number(p.reorderLevel),
       })),
-      recentActivity: recentInvoices.map(inv => ({
+      recentActivity: recentInvoices.map((inv: any) => ({
         id: inv.id,
         type: 'INVOICE',
         reference: inv.invoiceNo,
-        description: `Tax invoice issued to ${inv.customer.name}`,
+        description: `Tax invoice issued to ${inv.businessPartner?.name}`,
         amount: Number(inv.grandTotal),
         date: inv.date,
         status: inv.status,

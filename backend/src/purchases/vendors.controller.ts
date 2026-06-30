@@ -12,11 +12,11 @@ export class VendorsController {
   @Get()
   async findAll(@Query('search') search: string) {
     const companyId = CompanyContext.getCompanyId() as string;
-    const where: any = { companyId, deletedAt: null };
+    const where: any = { companyId, deletedAt: null, bpType: 'VENDOR' };
     if (search) {
       where.name = { contains: search };
     }
-    const items = await this.prisma.vendor.findMany({ where });
+    const items = await this.prisma.businessPartner.findMany({ where });
     return { success: true, data: { items } };
   }
 
@@ -24,12 +24,13 @@ export class VendorsController {
   async create(@Body() data: any) {
     const companyId = CompanyContext.getCompanyId() as string;
     const { name, vendorCode, gstin, contactDetails, payableBalance } = data;
-    const item = await this.prisma.vendor.create({
+    const item = await this.prisma.businessPartner.create({
       data: {
         name,
-        vendorCode: vendorCode || ('VEND-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
+        bpCode: vendorCode || ('VEND-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
+        bpType: 'VENDOR',
         gstin,
-        contactDetails,
+        phone: contactDetails,
         payableBalance: payableBalance !== undefined ? payableBalance : 0,
         companyId,
       }
@@ -43,13 +44,13 @@ export class VendorsController {
     const { name, vendorCode, gstin, contactDetails, payableBalance } = data;
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
-    if (vendorCode !== undefined) updateData.vendorCode = vendorCode;
+    if (vendorCode !== undefined) updateData.bpCode = vendorCode;
     if (gstin !== undefined) updateData.gstin = gstin;
-    if (contactDetails !== undefined) updateData.contactDetails = contactDetails;
+    if (contactDetails !== undefined) updateData.phone = contactDetails;
     if (payableBalance !== undefined) updateData.payableBalance = payableBalance;
 
-    const item = await this.prisma.vendor.updateMany({
-      where: { id, companyId, deletedAt: null },
+    const item = await this.prisma.businessPartner.updateMany({
+      where: { id, companyId, deletedAt: null, bpType: 'VENDOR' },
       data: updateData
     });
     return { success: true, data: item };
@@ -58,8 +59,8 @@ export class VendorsController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     const companyId = CompanyContext.getCompanyId() as string;
-    await this.prisma.vendor.updateMany({
-      where: { id, companyId, deletedAt: null },
+    await this.prisma.businessPartner.updateMany({
+      where: { id, companyId, deletedAt: null, bpType: 'VENDOR' },
       data: { deletedAt: new Date() }
     });
     return { success: true };

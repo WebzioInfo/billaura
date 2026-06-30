@@ -25,7 +25,7 @@ export class QuotationsService {
         ? {
             OR: [
               { quotationNo: { contains: query.search } },
-              { customer: { name: { contains: query.search } } },
+              { businessPartner: { name: { contains: query.search } } },
             ],
           }
         : {}),
@@ -36,7 +36,7 @@ export class QuotationsService {
         where,
         skip,
         take,
-        include: { customer: true, items: { include: { product: true } } },
+        include: { businessPartner: true, items: { include: { product: true } } },
         orderBy: { date: 'desc' },
       }),
       this.prisma.quotation.count({ where }),
@@ -53,7 +53,7 @@ export class QuotationsService {
 
     const quotation = await this.prisma.quotation.findFirst({
       where: { id, companyId, deletedAt: null },
-      include: { customer: true, items: { include: { product: true } } },
+      include: { businessPartner: true, items: { include: { product: true } } },
     });
 
     if (!quotation) {
@@ -69,7 +69,7 @@ export class QuotationsService {
       throw new ConflictException('Company context is required');
     }
 
-    const customer = await this.prisma.customer.findFirst({
+    const customer = await this.prisma.businessPartner.findFirst({
       where: { id: dto.customerId, companyId, deletedAt: null },
     });
     if (!customer) {
@@ -142,7 +142,7 @@ export class QuotationsService {
       return tx.quotation.create({
         data: {
           companyId,
-          customerId: dto.customerId,
+          businessPartnerId: dto.customerId,
           quotationNo,
           date: new Date(dto.date),
           status: 'SENT',

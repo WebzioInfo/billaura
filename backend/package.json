@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "nest start --watch",
-    "build": "npx nest build",
+    "build": "npx prisma generate && npx nest build",
     "start": "node dist/main.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts"

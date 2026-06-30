@@ -12,11 +12,11 @@ export class CustomersController {
   @Get()
   async findAll(@Query('search') search: string) {
     const companyId = CompanyContext.getCompanyId() as string;
-    const where: any = { companyId, deletedAt: null };
+    const where: any = { companyId, deletedAt: null, bpType: 'CUSTOMER' };
     if (search) {
       where.name = { contains: search };
     }
-    const items = await this.prisma.customer.findMany({ where });
+    const items = await this.prisma.businessPartner.findMany({ where });
     return { success: true, data: { items } };
   }
 
@@ -24,15 +24,15 @@ export class CustomersController {
   async create(@Body() data: any) {
     const companyId = CompanyContext.getCompanyId() as string;
     const { name, customerCode, mobile, whatsapp, email, gstin, gstNumber, panNumber, customerType, tradeName, address, pinCode, state, stateCode, placeOfSupply } = data;
-    const item = await this.prisma.customer.create({
+    const item = await this.prisma.businessPartner.create({
       data: {
         name,
-        customerCode: customerCode || ('CUST-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
-        mobile,
+        bpCode: customerCode || ('CUST-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
+        bpType: 'CUSTOMER',
+        phone: mobile,
         whatsapp,
         email,
-        gstin,
-        gstNumber,
+        gstin: gstin || gstNumber,
         panNumber,
         customerType: customerType || 'UNREGISTERED',
         tradeName,
@@ -53,12 +53,11 @@ export class CustomersController {
     const { name, customerCode, mobile, whatsapp, email, gstin, gstNumber, panNumber, customerType, tradeName, address, pinCode, state, stateCode, placeOfSupply } = data;
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
-    if (customerCode !== undefined) updateData.customerCode = customerCode;
-    if (mobile !== undefined) updateData.mobile = mobile;
+    if (customerCode !== undefined) updateData.bpCode = customerCode;
+    if (mobile !== undefined) updateData.phone = mobile;
     if (whatsapp !== undefined) updateData.whatsapp = whatsapp;
     if (email !== undefined) updateData.email = email;
-    if (gstin !== undefined) updateData.gstin = gstin;
-    if (gstNumber !== undefined) updateData.gstNumber = gstNumber;
+    if (gstin !== undefined || gstNumber !== undefined) updateData.gstin = gstin || gstNumber;
     if (panNumber !== undefined) updateData.panNumber = panNumber;
     if (customerType !== undefined) updateData.customerType = customerType;
     if (tradeName !== undefined) updateData.tradeName = tradeName;
@@ -68,8 +67,8 @@ export class CustomersController {
     if (stateCode !== undefined) updateData.stateCode = stateCode;
     if (placeOfSupply !== undefined) updateData.placeOfSupply = placeOfSupply;
 
-    const item = await this.prisma.customer.updateMany({
-      where: { id, companyId, deletedAt: null },
+    const item = await this.prisma.businessPartner.updateMany({
+      where: { id, companyId, deletedAt: null, bpType: 'CUSTOMER' },
       data: updateData
     });
     return { success: true, data: item };
@@ -78,8 +77,8 @@ export class CustomersController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     const companyId = CompanyContext.getCompanyId() as string;
-    await this.prisma.customer.updateMany({
-      where: { id, companyId, deletedAt: null },
+    await this.prisma.businessPartner.updateMany({
+      where: { id, companyId, deletedAt: null, bpType: 'CUSTOMER' },
       data: { deletedAt: new Date() }
     });
     return { success: true };

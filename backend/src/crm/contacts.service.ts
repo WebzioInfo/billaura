@@ -39,7 +39,7 @@ export class ContactsService {
         where,
         skip,
         take,
-        include: { customer: true, vendor: true },
+        include: { businessPartner: true },
         orderBy: { createdAt: query.sortOrder || 'desc' },
       }),
       this.prisma.contact.count({ where }),
@@ -60,7 +60,7 @@ export class ContactsService {
         companyId,
         deletedAt: null,
       },
-      include: { customer: true, vendor: true },
+      include: { businessPartner: true },
     });
 
     if (!contact) {
@@ -76,9 +76,13 @@ export class ContactsService {
       throw new ConflictException('Company context is required');
     }
 
+    const businessPartnerId = (dto as any).customerId || (dto as any).vendorId || (dto as any).businessPartnerId;
+    const { customerId, vendorId, ...restDto } = dto as any;
+
     return this.prisma.contact.create({
       data: {
-        ...dto,
+        ...restDto,
+        businessPartnerId,
         companyId,
       },
     });
@@ -86,9 +90,15 @@ export class ContactsService {
 
   async update(id: string, dto: UpdateContactDto) {
     await this.findOne(id);
+    const businessPartnerId = (dto as any).customerId || (dto as any).vendorId || (dto as any).businessPartnerId;
+    const { customerId, vendorId, ...restDto } = dto as any;
+
     return this.prisma.contact.update({
       where: { id },
-      data: dto,
+      data: {
+        ...restDto,
+        ...(businessPartnerId && { businessPartnerId }),
+      },
     });
   }
 

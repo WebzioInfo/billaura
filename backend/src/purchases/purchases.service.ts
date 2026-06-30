@@ -25,7 +25,7 @@ export class PurchasesService {
         ? {
             OR: [
               { purchaseNo: { contains: query.search } },
-              { vendor: { name: { contains: query.search } } },
+              { businessPartner: { name: { contains: query.search } } },
             ],
           }
         : {}),
@@ -36,7 +36,7 @@ export class PurchasesService {
         where,
         skip,
         take,
-        include: { vendor: true, items: { include: { product: true } } },
+        include: { businessPartner: true, items: { include: { product: true } } },
         orderBy: { date: 'desc' },
       }),
       this.prisma.purchase.count({ where }),
@@ -53,7 +53,7 @@ export class PurchasesService {
 
     const purchase = await this.prisma.purchase.findFirst({
       where: { id, companyId, deletedAt: null },
-      include: { vendor: true, items: { include: { product: true } } },
+      include: { businessPartner: true, items: { include: { product: true } } },
     });
 
     if (!purchase) {
@@ -70,7 +70,7 @@ export class PurchasesService {
     }
 
     // Check vendor exists
-    const vendor = await this.prisma.vendor.findFirst({
+    const vendor = await this.prisma.businessPartner.findFirst({
       where: { id: dto.vendorId, companyId, deletedAt: null },
     });
     if (!vendor) {
@@ -144,7 +144,7 @@ export class PurchasesService {
       const purchase = await tx.purchase.create({
         data: {
           companyId,
-          vendorId: dto.vendorId,
+          businessPartnerId: dto.vendorId,
           purchaseNo,
           date: new Date(dto.date),
           status: 'SENT',
@@ -165,7 +165,7 @@ export class PurchasesService {
       });
 
       // 4. Update vendor payable balance
-      await tx.vendor.update({
+      await tx.businessPartner.update({
         where: { id: dto.vendorId },
         data: {
           payableBalance: {
@@ -208,19 +208,8 @@ export class PurchasesService {
             });
           }
 
-          // Stock movement log
-          await tx.stockMovement.create({
-            data: {
-              companyId,
-              productId: item.productId,
-              type: 'PURCHASE',
-              quantity: item.qty,
-              referenceId: purchase.id,
-            },
-          });
-
-          // Stock audit log
-          await tx.stockLog.create({
+          // Stock ledger entry
+          await tx.stockLedger.create({
             data: {
               companyId,
               productId: item.productId,
@@ -230,6 +219,7 @@ export class PurchasesService {
               quantityAfter: newQty,
               notes: `Received via Purchase ${purchaseNo}`,
               referenceId: purchase.id,
+              referenceType: 'PURCHASE'
             },
           });
         }
@@ -291,8 +281,8 @@ export class PurchasesService {
 
     return this.prisma.$transaction(async (tx) => {
       // Revert vendor payable balance
-      await tx.vendor.update({
-        where: { id: purchase.vendorId },
+      await tx.businessPartner.update({
+        where: { id: purchase.businessPartnerId },
         data: {
           payableBalance: {
             decrement: purchase.grandTotal,

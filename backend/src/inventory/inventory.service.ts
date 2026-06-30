@@ -66,19 +66,8 @@ export class InventoryService {
         });
       }
 
-      // Log stock movement
-      await tx.stockMovement.create({
-        data: {
-          companyId,
-          productId: dto.productId,
-          type: 'ADJUSTMENT',
-          quantity: Math.abs(qtyChange),
-          referenceId: null,
-        },
-      });
-
-      // Log stock audit log
-      await tx.stockLog.create({
+      // Log stock ledger entry
+      await tx.stockLedger.create({
         data: {
           companyId,
           productId: dto.productId,
@@ -87,6 +76,7 @@ export class InventoryService {
           quantityChange: qtyChange,
           quantityAfter: qtyAfter,
           notes: dto.notes || 'Manual inventory adjustment',
+          referenceType: 'ADJUSTMENT',
         },
       });
 

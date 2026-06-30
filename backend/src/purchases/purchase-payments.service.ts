@@ -18,28 +18,29 @@ export class PurchasePaymentsService {
 
     const { skip, take } = getPagination(query);
 
-    const where: Prisma.PurchasePaymentWhereInput = {
+    const where: Prisma.TransactionPaymentWhereInput = {
       companyId,
       deletedAt: null,
+      paymentType: 'OUTBOUND',
       ...(query.search
         ? {
             OR: [
               { paymentNo: { contains: query.search } },
-              { vendor: { name: { contains: query.search } } },
+              { businessPartner: { name: { contains: query.search } } },
             ],
           }
         : {}),
     };
 
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.purchasePayment.findMany({
+      this.prisma.transactionPayment.findMany({
         where,
         skip,
         take,
-        include: { vendor: true, bankAccount: true },
+        include: { businessPartner: true, bankAccount: true },
         orderBy: { date: 'desc' },
       }),
-      this.prisma.purchasePayment.count({ where }),
+      this.prisma.transactionPayment.count({ where }),
     ]);
 
     return toPaginatedResult(data, total, query);
@@ -51,9 +52,9 @@ export class PurchasePaymentsService {
       throw new ConflictException('Company context is required');
     }
 
-    const payment = await this.prisma.purchasePayment.findFirst({
+    const payment = await this.prisma.transactionPayment.findFirst({
       where: { id, companyId, deletedAt: null },
-      include: { vendor: true, bankAccount: true, purchase: true },
+      include: { businessPartner: true, bankAccount: true, allocations: { include: { purchase: true } } },
     });
 
     if (!payment) {
@@ -69,7 +70,7 @@ export class PurchasePaymentsService {
       throw new ConflictException('Company context is required');
     }
 
-    const vendor = await this.prisma.vendor.findFirst({
+    const vendor = await this.prisma.businessPartner.findFirst({
       where: { id: dto.vendorId, companyId, deletedAt: null },
     });
     if (!vendor) {
@@ -114,18 +115,26 @@ export class PurchasePaymentsService {
 
       const paymentNo = `PPY-${String(nextNumber).padStart(5, '0')}`;
 
-      // 2. Create PurchasePayment record
-      const payment = await tx.purchasePayment.create({
+      // 2. Create TransactionPayment record
+      const payment = await tx.transactionPayment.create({
         data: {
           companyId,
-          vendorId: dto.vendorId,
-          purchaseId: dto.purchaseId,
+          businessPartnerId: dto.vendorId,
           bankAccountId: dto.bankAccountId,
           paymentNo,
+          paymentType: 'OUTBOUND',
           date: new Date(dto.date),
           amount: dto.amount,
           method: dto.method,
           reference: dto.reference || null,
+          allocations: {
+            create: [
+              {
+                purchaseId: dto.purchaseId,
+                amount: dto.amount,
+              }
+            ]
+          }
         },
       });
 
@@ -142,7 +151,7 @@ export class PurchasePaymentsService {
       });
 
       // 4. Update vendor payable balance
-      await tx.vendor.update({
+      await tx.businessPartner.update({
         where: { id: dto.vendorId },
         data: {
           payableBalance: {
@@ -214,19 +223,22 @@ export class PurchasePaymentsService {
 
     return this.prisma.$transaction(async (tx) => {
       // Revert purchase status
-      const pur = await tx.purchase.findFirst({ where: { id: payment.purchaseId } });
-      if (pur) {
-        const revertedPaid = Number(pur.amountPaid) - Number(payment.amount);
-        const status = revertedPaid <= 0 ? 'SENT' : 'PARTIAL';
-        await tx.purchase.update({
-          where: { id: pur.id },
-          data: { amountPaid: revertedPaid, status },
-        });
+      for (const alloc of payment.allocations) {
+        if (!alloc.purchaseId) continue;
+        const pur = await tx.purchase.findFirst({ where: { id: alloc.purchaseId } });
+        if (pur) {
+          const revertedPaid = Number(pur.amountPaid) - Number(alloc.amount);
+          const status = revertedPaid <= 0 ? 'SENT' : 'PARTIAL';
+          await tx.purchase.update({
+            where: { id: pur.id },
+            data: { amountPaid: revertedPaid, status },
+          });
+        }
       }
 
       // Revert vendor payable balance
-      await tx.vendor.update({
-        where: { id: payment.vendorId },
+      await tx.businessPartner.update({
+        where: { id: payment.businessPartnerId },
         data: {
           payableBalance: {
             increment: payment.amount,
@@ -245,7 +257,7 @@ export class PurchasePaymentsService {
       });
 
       // Soft delete payment
-      return tx.purchasePayment.update({
+      return tx.transactionPayment.update({
         where: { id },
         data: { deletedAt: new Date() },
       });

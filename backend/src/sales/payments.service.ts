@@ -18,28 +18,29 @@ export class PaymentsService {
 
     const { skip, take } = getPagination(query);
 
-    const where: Prisma.PaymentWhereInput = {
+    const where: Prisma.TransactionPaymentWhereInput = {
       companyId,
       deletedAt: null,
+      paymentType: 'INBOUND', // Sales payment is INBOUND
       ...(query.search
         ? {
             OR: [
               { paymentNo: { contains: query.search } },
-              { customer: { name: { contains: query.search } } },
+              { businessPartner: { name: { contains: query.search } } },
             ],
           }
         : {}),
     };
 
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.payment.findMany({
+      this.prisma.transactionPayment.findMany({
         where,
         skip,
         take,
-        include: { customer: true, bankAccount: true },
+        include: { businessPartner: true, bankAccount: true },
         orderBy: { date: 'desc' },
       }),
-      this.prisma.payment.count({ where }),
+      this.prisma.transactionPayment.count({ where }),
     ]);
 
     return toPaginatedResult(data, total, query);
@@ -51,9 +52,9 @@ export class PaymentsService {
       throw new ConflictException('Company context is required');
     }
 
-    const payment = await this.prisma.payment.findFirst({
+    const payment = await this.prisma.transactionPayment.findFirst({
       where: { id, companyId, deletedAt: null },
-      include: { customer: true, bankAccount: true, allocations: { include: { invoice: true } } },
+      include: { businessPartner: true, bankAccount: true, allocations: { include: { invoice: true } } },
     });
 
     if (!payment) {
@@ -69,7 +70,7 @@ export class PaymentsService {
       throw new ConflictException('Company context is required');
     }
 
-    const customer = await this.prisma.customer.findFirst({
+    const customer = await this.prisma.businessPartner.findFirst({
       where: { id: dto.customerId, companyId, deletedAt: null },
     });
     if (!customer) {
@@ -108,12 +109,13 @@ export class PaymentsService {
       const paymentNo = `PAY-${String(nextNumber).padStart(5, '0')}`;
 
       // 2. Create Payment record
-      const payment = await tx.payment.create({
+      const payment = await tx.transactionPayment.create({
         data: {
           companyId,
-          customerId: dto.customerId,
+          businessPartnerId: dto.customerId,
           bankAccountId: dto.bankAccountId,
           paymentNo,
+          paymentType: 'INBOUND',
           date: new Date(dto.date),
           amount: dto.amount,
           method: dto.method,
@@ -127,7 +129,7 @@ export class PaymentsService {
       const invoices = await tx.invoice.findMany({
         where: {
           companyId,
-          customerId: dto.customerId,
+          businessPartnerId: dto.customerId,
           deletedAt: null,
           NOT: { status: 'PAID' },
         },
@@ -154,7 +156,7 @@ export class PaymentsService {
 
           await tx.paymentAllocation.create({
             data: {
-              paymentId: payment.id,
+              transactionPaymentId: payment.id,
               invoiceId: inv.id,
               amount: allocate,
             },
@@ -165,10 +167,10 @@ export class PaymentsService {
       }
 
       // 4. Update customer outstanding balance
-      await tx.customer.update({
+      await tx.businessPartner.update({
         where: { id: dto.customerId },
         data: {
-          outstandingAmount: {
+          receivableBalance: {
             decrement: dto.amount,
           },
         },
@@ -188,13 +190,13 @@ export class PaymentsService {
       await tx.customerStatement.create({
         data: {
           companyId,
-          customerId: dto.customerId,
+          businessPartnerId: dto.customerId,
           date: new Date(dto.date),
           type: 'PAYMENT',
           reference: paymentNo,
           debit: 0,
           credit: dto.amount,
-          balance: Number(customer.outstandingAmount) - dto.amount,
+          balance: Number(customer.receivableBalance) - dto.amount,
         },
       });
 
@@ -252,6 +254,7 @@ export class PaymentsService {
     return this.prisma.$transaction(async (tx) => {
       // Revert allocations
       for (const alloc of payment.allocations) {
+        if (!alloc.invoiceId) continue;
         const inv = await tx.invoice.findFirst({ where: { id: alloc.invoiceId } });
         if (inv) {
           const revertedPaid = Number(inv.amountPaid) - Number(alloc.amount);
@@ -264,10 +267,10 @@ export class PaymentsService {
       }
 
       // Revert customer outstanding
-      await tx.customer.update({
-        where: { id: payment.customerId },
+      await tx.businessPartner.update({
+        where: { id: payment.businessPartnerId },
         data: {
-          outstandingAmount: {
+          receivableBalance: {
             increment: payment.amount,
           },
         },
@@ -284,7 +287,7 @@ export class PaymentsService {
       });
 
       // Soft delete payment
-      return tx.payment.update({
+      return tx.transactionPayment.update({
         where: { id },
         data: { deletedAt: new Date() },
       });

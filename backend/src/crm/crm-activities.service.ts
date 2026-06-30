@@ -24,7 +24,6 @@ export class CrmActivitiesService {
         ? {
             OR: [
               { subject: { contains: query.search } },
-              { type: { contains: query.search } },
             ],
           }
         : {}),
@@ -35,7 +34,7 @@ export class CrmActivitiesService {
         where,
         skip,
         take,
-        include: { lead: true, customer: true },
+        include: { businessPartner: true },
         orderBy: { createdAt: query.sortOrder || 'desc' },
       }),
       this.prisma.crmActivity.count({ where }),
@@ -55,7 +54,7 @@ export class CrmActivitiesService {
         id,
         companyId,
       },
-      include: { lead: true, customer: true },
+      include: { businessPartner: true },
     });
 
     if (!activity) {
@@ -71,9 +70,13 @@ export class CrmActivitiesService {
       throw new ConflictException('Company context is required');
     }
 
+    const businessPartnerId = (dto as any).leadId || (dto as any).customerId || (dto as any).businessPartnerId;
+    const { leadId, customerId, ...restDto } = dto as any;
+    
     return this.prisma.crmActivity.create({
       data: {
-        ...dto,
+        ...restDto,
+        businessPartnerId,
         companyId,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
       },
@@ -82,10 +85,14 @@ export class CrmActivitiesService {
 
   async update(id: string, dto: UpdateActivityDto) {
     await this.findOne(id);
+    const businessPartnerId = (dto as any).leadId || (dto as any).customerId || (dto as any).businessPartnerId;
+    const { leadId, customerId, ...restDto } = dto as any;
+
     return this.prisma.crmActivity.update({
       where: { id },
       data: {
-        ...dto,
+        ...restDto,
+        ...(businessPartnerId && { businessPartnerId }),
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
       },
     });

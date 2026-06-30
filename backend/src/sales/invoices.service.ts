@@ -25,7 +25,7 @@ export class InvoicesService {
         ? {
             OR: [
               { invoiceNo: { contains: query.search } },
-              { customer: { name: { contains: query.search } } },
+              { businessPartner: { name: { contains: query.search } } },
             ],
           }
         : {}),
@@ -36,7 +36,7 @@ export class InvoicesService {
         where,
         skip,
         take,
-        include: { customer: true, items: { include: { product: true } } },
+        include: { businessPartner: true, items: { include: { product: true } } },
         orderBy: { date: 'desc' },
       }),
       this.prisma.invoice.count({ where }),
@@ -53,7 +53,7 @@ export class InvoicesService {
 
     const invoice = await this.prisma.invoice.findFirst({
       where: { id, companyId, deletedAt: null },
-      include: { customer: true, items: { include: { product: true } } },
+      include: { businessPartner: true, items: { include: { product: true } } },
     });
 
     if (!invoice) {
@@ -70,7 +70,7 @@ export class InvoicesService {
     }
 
     // Check customer exists
-    const customer = await this.prisma.customer.findFirst({
+    const customer = await this.prisma.businessPartner.findFirst({
       where: { id: dto.customerId, companyId, deletedAt: null },
     });
     if (!customer) {
@@ -146,7 +146,7 @@ export class InvoicesService {
       const invoice = await tx.invoice.create({
         data: {
           companyId,
-          customerId: dto.customerId,
+          businessPartnerId: dto.customerId,
           invoiceNo,
           date: new Date(dto.date),
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
@@ -168,10 +168,10 @@ export class InvoicesService {
       });
 
       // 4. Update customer outstanding balance
-      await tx.customer.update({
+      await tx.businessPartner.update({
         where: { id: dto.customerId },
         data: {
-          outstandingAmount: {
+          receivableBalance: {
             increment: grandTotal,
           },
         },
@@ -181,13 +181,13 @@ export class InvoicesService {
       await tx.customerStatement.create({
         data: {
           companyId,
-          customerId: dto.customerId,
+          businessPartnerId: dto.customerId,
           date: new Date(dto.date),
           type: 'INVOICE',
           reference: invoiceNo,
           debit: grandTotal,
           credit: 0,
-          balance: Number(customer.outstandingAmount) + grandTotal,
+          balance: Number(customer.receivableBalance) + grandTotal,
         },
       });
 
@@ -226,19 +226,8 @@ export class InvoicesService {
             });
           }
 
-          // Stock movement log
-          await tx.stockMovement.create({
-            data: {
-              companyId,
-              productId: item.productId,
-              type: 'SALE',
-              quantity: item.qty,
-              referenceId: invoice.id,
-            },
-          });
-
-          // Stock audit log
-          await tx.stockLog.create({
+          // Stock ledger entry
+          await tx.stockLedger.create({
             data: {
               companyId,
               productId: item.productId,
@@ -248,6 +237,7 @@ export class InvoicesService {
               quantityAfter: newQty,
               notes: `Issued via Invoice ${invoiceNo}`,
               referenceId: invoice.id,
+              referenceType: 'INVOICE'
             },
           });
         }
@@ -309,10 +299,10 @@ export class InvoicesService {
 
     return this.prisma.$transaction(async (tx) => {
       // Revert customer outstanding balance
-      await tx.customer.update({
-        where: { id: invoice.customerId },
+      await tx.businessPartner.update({
+        where: { id: invoice.businessPartnerId },
         data: {
-          outstandingAmount: {
+          receivableBalance: {
             decrement: invoice.grandTotal,
           },
         },

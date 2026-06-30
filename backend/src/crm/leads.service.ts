@@ -19,14 +19,15 @@ export class LeadsService {
 
     const { skip, take } = getPagination(query);
 
-    const where: Prisma.LeadWhereInput = {
+    const where: Prisma.BusinessPartnerWhereInput = {
       companyId,
       deletedAt: null,
+      bpType: 'LEAD',
       ...(query.search
         ? {
             OR: [
               { name: { contains: query.search } },
-              { companyName: { contains: query.search } },
+              { tradeName: { contains: query.search } },
               { email: { contains: query.search } },
               { phone: { contains: query.search } },
             ],
@@ -35,14 +36,14 @@ export class LeadsService {
     };
 
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.lead.findMany({
+      this.prisma.businessPartner.findMany({
         where,
         skip,
         take,
-        include: { activities: true },
+        include: { crmActivities: true },
         orderBy: { createdAt: query.sortOrder || 'desc' },
       }),
-      this.prisma.lead.count({ where }),
+      this.prisma.businessPartner.count({ where }),
     ]);
 
     return toPaginatedResult(data, total, query);
@@ -54,13 +55,13 @@ export class LeadsService {
       throw new ConflictException('Company context is required');
     }
 
-    const lead = await this.prisma.lead.findFirst({
+    const lead = await this.prisma.businessPartner.findFirst({
       where: {
         id,
         companyId,
         deletedAt: null,
       },
-      include: { activities: true },
+      include: { crmActivities: true },
     });
 
     if (!lead) {
@@ -76,9 +77,12 @@ export class LeadsService {
       throw new ConflictException('Company context is required');
     }
 
-    return this.prisma.lead.create({
+    return this.prisma.businessPartner.create({
       data: {
         ...dto,
+        status: dto.status as any,
+        bpType: 'LEAD',
+        bpCode: 'LEAD-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
         companyId,
       },
     });
@@ -86,15 +90,18 @@ export class LeadsService {
 
   async update(id: string, dto: UpdateLeadDto) {
     await this.findOne(id);
-    return this.prisma.lead.update({
+    return this.prisma.businessPartner.update({
       where: { id },
-      data: dto,
+      data: {
+        ...dto,
+        status: dto.status as any,
+      },
     });
   }
 
   async remove(id: string) {
     await this.findOne(id);
-    return this.prisma.lead.update({
+    return this.prisma.businessPartner.update({
       where: { id },
       data: { deletedAt: new Date() },
     });

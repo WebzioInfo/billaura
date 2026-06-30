@@ -15,13 +15,13 @@ export class TaxesService {
     // Outward Supplies (Invoices)
     const invoices = await this.prisma.invoice.findMany({
       where: { companyId, deletedAt: null },
-      include: { customer: true, items: { include: { product: true } } },
+      include: { businessPartner: true, items: { include: { product: true } } },
     });
 
     return invoices.map((inv) => ({
       invoiceNo: inv.invoiceNo,
-      customerName: inv.customer?.name,
-      gstin: inv.customer?.gstin || 'Unregistered',
+      customerName: inv.businessPartner?.name,
+      gstin: inv.businessPartner?.gstin || 'Unregistered',
       date: inv.date,
       taxableValue: Number(inv.subTotal),
       cgst: Number(inv.cgstAmount || 0),
@@ -42,13 +42,13 @@ export class TaxesService {
     // Inward Supplies (Purchases/Bills)
     const purchases = await this.prisma.purchase.findMany({
       where: { companyId, deletedAt: null },
-      include: { vendor: true, items: { include: { product: true } } },
+      include: { businessPartner: true, items: { include: { product: true } } },
     });
 
     return purchases.map((pur) => ({
       purchaseNo: pur.purchaseNo,
-      vendorName: pur.vendor?.name,
-      gstin: pur.vendor?.gstin || 'Unregistered',
+      vendorName: pur.businessPartner?.name,
+      gstin: pur.businessPartner?.gstin || 'Unregistered',
       date: pur.date,
       taxableValue: Number(pur.subTotal),
       cgst: Number(pur.cgstAmount || 0),
