@@ -2,43 +2,76 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import * as crypto from 'crypto';
 
+function parseUserAgent(userAgent?: string): { deviceName: string; browser: string; os: string } {
+  if (!userAgent) {
+    return { deviceName: 'Unknown Device', browser: 'Unknown Browser', os: 'Unknown OS' };
+  }
+
+  let os = 'Unknown OS';
+  let browser = 'Unknown Browser';
+  let deviceName = 'Desktop';
+
+  if (userAgent.includes('Windows')) os = 'Windows';
+  else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS')) os = 'macOS';
+  else if (userAgent.includes('Linux')) os = 'Linux';
+  else if (userAgent.includes('Android')) { os = 'Android'; deviceName = 'Mobile'; }
+  else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) { os = 'iOS'; deviceName = 'Mobile'; }
+
+  if (userAgent.includes('Firefox')) browser = 'Firefox';
+  else if (userAgent.includes('Chrome') && !userAgent.includes('Chromium')) browser = 'Chrome';
+  else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) browser = 'Safari';
+  else if (userAgent.includes('Edge')) browser = 'Edge';
+  else if (userAgent.includes('Trident') || userAgent.includes('MSIE')) browser = 'Internet Explorer';
+  
+  if (userAgent.includes('Mobile')) {
+    deviceName = 'Mobile Device';
+  } else if (userAgent.includes('Tablet')) {
+    deviceName = 'Tablet';
+  }
+
+  return { deviceName, browser, os };
+}
+
 @Injectable()
 export class SessionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Generate a random cryptographically secure token
   private generateToken(): string {
     return crypto.randomBytes(40).toString('hex');
   }
 
-  // Hash the token using SHA-256 for secure storage
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  // Create an active session and return the raw refresh token
-  async createSession(userId: string, userAgent?: string, ipAddress?: string): Promise<string> {
+  async createSession(userId: string, userAgent?: string, ipAddress?: string, companyId?: string): Promise<string> {
     const rawToken = this.generateToken();
     const tokenHash = this.hashToken(rawToken);
     
-    // Sessions last 7 days by default
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    // Sessions last 30 days
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const { deviceName, browser, os } = parseUserAgent(userAgent);
 
     await this.prisma.session.create({
       data: {
         userId,
+        companyId: companyId || null,
         tokenHash,
         userAgent,
+        deviceName,
+        browser,
+        os,
         ipAddress,
         expiresAt,
+        isRevoked: false,
       },
     });
 
     return rawToken;
   }
 
-  // Validate a raw refresh token and return the associated userId
-  async validateRefreshToken(rawToken: string): Promise<string> {
+  // Validate raw token, rotate token hash, update telemetry, and return new token + metadata
+  async rotateSession(rawToken: string, userAgent?: string, ipAddress?: string): Promise<{ newRefreshToken: string; userId: string; companyId: string | null }> {
     const tokenHash = this.hashToken(rawToken);
     const session = await this.prisma.session.findUnique({
       where: { tokenHash },
@@ -47,16 +80,40 @@ export class SessionService {
 
     if (!session || session.isRevoked || session.expiresAt < new Date() || !session.user.isActive) {
       if (session && !session.isRevoked) {
-        // Revoke expired sessions to keep DB clean
         await this.prisma.session.update({
           where: { id: session.id },
-          data: { isRevoked: true },
+          data: { isRevoked: true, revokedAt: new Date() },
         });
       }
       throw new UnauthorizedException('Invalid or expired session');
     }
 
-    return session.userId;
+    const newRawToken = this.generateToken();
+    const newTokenHash = this.hashToken(newRawToken);
+    const { deviceName, browser, os } = parseUserAgent(userAgent);
+
+    // Refresh extends session lifespan
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: {
+        tokenHash: newTokenHash,
+        lastUsedAt: new Date(),
+        expiresAt,
+        ipAddress: ipAddress || session.ipAddress,
+        userAgent: userAgent || session.userAgent,
+        deviceName: deviceName || session.deviceName,
+        browser: browser || session.browser,
+        os: os || session.os,
+      },
+    });
+
+    return {
+      newRefreshToken: newRawToken,
+      userId: session.userId,
+      companyId: session.companyId,
+    };
   }
 
   // Revoke a session by token
@@ -64,7 +121,7 @@ export class SessionService {
     const tokenHash = this.hashToken(rawToken);
     await this.prisma.session.updateMany({
       where: { tokenHash },
-      data: { isRevoked: true },
+      data: { isRevoked: true, revokedAt: new Date() },
     });
   }
 
@@ -78,7 +135,9 @@ export class SessionService {
       },
       select: {
         id: true,
-        userAgent: true,
+        deviceName: true,
+        browser: true,
+        os: true,
         ipAddress: true,
         createdAt: true,
         expiresAt: true,
@@ -94,7 +153,18 @@ export class SessionService {
         id: sessionId,
         userId,
       },
-      data: { isRevoked: true },
+      data: { isRevoked: true, revokedAt: new Date() },
+    });
+  }
+
+  // Revoke all active sessions for a user
+  async revokeAllSessions(userId: string): Promise<void> {
+    await this.prisma.session.updateMany({
+      where: {
+        userId,
+        isRevoked: false,
+      },
+      data: { isRevoked: true, revokedAt: new Date() },
     });
   }
 }

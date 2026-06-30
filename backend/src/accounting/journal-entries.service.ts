@@ -110,6 +110,6 @@ export class JournalEntriesService {
       }
 
       return entry;
-    });
+    }, { timeout: 20000 });
   }
 }

@@ -11,6 +11,13 @@ import api from '../../services/api';
 import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
 
 // --- SCHEMAS ---
+const vendorSchema = z.object({
+  vendorCode: z.string().min(1, 'Vendor code is required'),
+  name: z.string().min(2, 'Name is too short'),
+  gstin: z.string().optional(),
+  contactDetails: z.string().optional(),
+});
+
 const purchaseItemSchema = z.object({
   productId: z.string().min(1, 'Select a product'),
   description: z.string().optional(),
@@ -34,13 +41,17 @@ const paymentSchema = z.object({
   reference: z.string().optional(),
 });
 
+type VendorFormValues = z.infer<typeof vendorSchema>;
 type PurchaseFormValues = z.infer<typeof purchaseSchema>;
 type PaymentFormValues = z.infer<typeof paymentSchema>;
 
 // --- TYPES ---
 interface Vendor {
   id: string;
+  vendorCode: string;
   name: string;
+  gstin?: string;
+  contactDetails?: string;
   payableBalance: number;
 }
 
@@ -91,7 +102,8 @@ interface Payment {
 }
 
 export const PurchasesDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'purchases' | 'payments'>('purchases');
+  const isVendorsPath = window.location.pathname.includes('/vendors');
+  const [activeTab, setActiveTab] = useState<'vendors' | 'purchases' | 'payments'>(isVendorsPath ? 'vendors' : 'purchases');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,13 +113,20 @@ export const PurchasesDashboard = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [bankAccounts, setBankAccount] = useState<BankAccount[]>([]);
 
   // Modal controls
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Forms hooks
+  const vendorForm = useForm<VendorFormValues>({
+    resolver: zodResolver(vendorSchema),
+    defaultValues: { vendorCode: '', name: '', gstin: '', contactDetails: '' }
+  });
+
   const purchaseForm = useForm<PurchaseFormValues>({
     resolver: zodResolver(purchaseSchema),
     defaultValues: {
@@ -166,9 +185,12 @@ export const PurchasesDashboard = () => {
       ]);
       setVendors(vendRes.data?.items || []);
       setProducts(prodRes.data?.items || []);
-      setBankAccounts(bankRes.data?.items || []);
+      setBankAccount(bankRes.data?.items || []);
 
-      if (activeTab === 'purchases') {
+      if (activeTab === 'vendors') {
+        const res = await api.get<{ success: boolean; data: { items: Vendor[] } }>('/vendors');
+        setVendors(res.data?.items || []);
+      } else if (activeTab === 'purchases') {
         const res = await api.get<{ success: boolean; data: { items: Purchase[] } }>('/purchases');
         setPurchases(res.data?.items || []);
       } else if (activeTab === 'payments') {
@@ -185,6 +207,53 @@ export const PurchasesDashboard = () => {
   useEffect(() => {
     fetchData();
   }, [activeTab]);
+
+  const handleOpenAddVendorModal = () => {
+    setEditingId(null);
+    vendorForm.reset();
+    setIsVendorModalOpen(true);
+  };
+
+  const handleOpenEditVendorModal = (item: Vendor) => {
+    setEditingId(item.id);
+    vendorForm.reset({
+      vendorCode: item.vendorCode,
+      name: item.name,
+      gstin: item.gstin || '',
+      contactDetails: item.contactDetails || '',
+    });
+    setIsVendorModalOpen(true);
+  };
+
+  const handleVendorSubmit = async (values: VendorFormValues) => {
+    setIsSubmitting(true);
+    try {
+      if (editingId) {
+        await api.patch(`/vendors/${editingId}`, values);
+        toast.success('Vendor updated successfully');
+      } else {
+        await api.post('/vendors', values);
+        toast.success('Vendor registered successfully');
+      }
+      setIsVendorModalOpen(false);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Action failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteVendor = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this vendor?')) return;
+    try {
+      await api.delete(`/vendors/${id}`);
+      toast.success('Vendor deleted successfully');
+      fetchData();
+    } catch (err) {
+      toast.error('Deletion failed');
+    }
+  };
 
   const handlePurchaseProductChange = (index: number, productId: string) => {
     const prod = products.find(p => p.id === productId);
@@ -253,6 +322,8 @@ export const PurchasesDashboard = () => {
   const formTaxTotal = formSubTotal * 0.18; // 18% GST display
   const formGrandTotal = formSubTotal + formTaxTotal;
 
+  const totalPayable = vendors.reduce((sum, v) => sum + Number(v.payableBalance || 0), 0);
+
   return (
     <div className="space-y-6 text-left">
       {/* Header Row */}
@@ -260,14 +331,24 @@ export const PurchasesDashboard = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <ShoppingCart className="w-6 h-6 text-accent" />
-            Procurement & Purchase Bills
+            {activeTab === 'vendors' ? 'Vendor Catalog & Registry' : 'Procurement & Purchase Bills'}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Log vendor purchases, receive inventory stock points, and track outgoing cash/bank payments.
+            {activeTab === 'vendors'
+              ? 'Manage supplier information, credit accounts, payable balances, and tax profiles.'
+              : 'Log vendor purchases, receive inventory stock points, and track outgoing cash/bank payments.'}
           </p>
         </div>
         <div className="flex gap-2">
-          {activeTab === 'purchases' ? (
+          {activeTab === 'vendors' ? (
+            <button
+              onClick={handleOpenAddVendorModal}
+              className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Register Vendor
+            </button>
+          ) : activeTab === 'purchases' ? (
             <button
               onClick={() => { purchaseForm.reset(); setIsPurchaseModalOpen(true); }}
               className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
@@ -287,8 +368,40 @@ export const PurchasesDashboard = () => {
         </div>
       </div>
 
+      {/* KPI Cards Row */}
+      {activeTab === 'vendors' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
+            <div className="space-y-1">
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Total Payables</span>
+              <h3 className="text-2xl font-black text-foreground">{formatCurrency(totalPayable)}</h3>
+            </div>
+            <div className="p-3 bg-accent/10 text-accent rounded-xl">
+              <DollarSign className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
+            <div className="space-y-1">
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Active Vendors</span>
+              <h3 className="text-2xl font-black text-foreground">{vendors.length}</h3>
+            </div>
+            <div className="p-3 bg-accent/10 text-accent rounded-xl">
+              <ShoppingCart className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+      )}
+ 
       {/* Tabs Row */}
       <div className="flex border-b border-border">
+        <button
+          onClick={() => { setActiveTab('vendors'); setSearchQuery(''); }}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'vendors' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Vendor Directory
+        </button>
         <button
           onClick={() => { setActiveTab('purchases'); setSearchQuery(''); }}
           className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
@@ -306,7 +419,7 @@ export const PurchasesDashboard = () => {
           Vendor Payouts
         </button>
       </div>
-
+ 
       {/* Search Input Filter */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-border w-full max-w-md focus-within:border-accent transition-colors">
         <Search className="w-4 h-4 text-muted-foreground" />
@@ -326,6 +439,51 @@ export const PurchasesDashboard = () => {
             <div key={i} className="glass-panel p-6 rounded-2xl border border-border h-32 animate-pulse" />
           ))}
         </div>
+      ) : activeTab === 'vendors' ? (
+        vendors.length === 0 ? (
+          <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
+            <h3 className="font-semibold text-lg">No Vendors Registered</h3>
+            <button onClick={handleOpenAddVendorModal} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-xs font-semibold">
+              Register First Vendor
+            </button>
+          </div>
+        ) : (
+          <div className="bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-background bg-opacity-35 border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  <th className="py-4 px-6">Vendor Code</th>
+                  <th className="py-4 px-6">Name</th>
+                  <th className="py-4 px-6">GSTIN</th>
+                  <th className="py-4 px-6">Contact details</th>
+                  <th className="py-4 px-6 text-right">Payable Balance</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendors.filter(v => v.name.toLowerCase().includes(searchQuery.toLowerCase()) || v.vendorCode.toLowerCase().includes(searchQuery.toLowerCase())).map((v) => (
+                  <tr key={v.id} className="border-b border-border/50 hover:bg-background/20 transition-colors">
+                    <td className="py-4 px-6 font-semibold text-foreground">{v.vendorCode}</td>
+                    <td className="py-4 px-6 font-medium text-foreground">{v.name}</td>
+                    <td className="py-4 px-6 text-xs text-foreground font-mono">{v.gstin || '-'}</td>
+                    <td className="py-4 px-6 text-xs text-foreground">{v.contactDetails || '-'}</td>
+                    <td className="py-4 px-6 text-right font-bold text-foreground">
+                      {formatCurrency(Number(v.payableBalance || 0))}
+                    </td>
+                    <td className="py-4 px-6 text-right space-x-1.5">
+                      <button onClick={() => handleOpenEditVendorModal(v)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer inline-flex">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteVendor(v.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer inline-flex">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       ) : activeTab === 'purchases' ? (
         purchases.length === 0 ? (
           <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
@@ -640,7 +798,7 @@ export const PurchasesDashboard = () => {
 
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Select Purchase Invoice Bill *</label>
-                  <select {...paymentForm.register('purchaseId')} disabled={!selectedVendorId} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-40">
+                  <select {...paymentForm.register('purchaseId')} disabled={!selectedVendorId} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-40 font-mono">
                     <option value="">Select invoice bill...</option>
                     {vendorPurchases.map(p => (
                       <option key={p.id} value={p.id}>
@@ -689,6 +847,56 @@ export const PurchasesDashboard = () => {
                 <button type="submit" disabled={isSubmitting} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm flex items-center gap-2 cursor-pointer">
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                   Submit Payout
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor Registration Modal */}
+      {isVendorModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsVendorModalOpen(false)} />
+          
+          <div className="bg-surface rounded-2xl border border-border shadow-premium w-full max-w-md z-10 overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-background bg-opacity-35">
+              <h2 className="font-bold text-lg text-foreground">
+                {editingId ? 'Modify Vendor Details' : 'Register New Vendor'}
+              </h2>
+              <button onClick={() => setIsVendorModalOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
+            </div>
+
+            <form onSubmit={vendorForm.handleSubmit(handleVendorSubmit)} className="p-6 space-y-4 text-left">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Vendor Code *</label>
+                  <input type="text" {...vendorForm.register('vendorCode')} placeholder="e.g. VEND-001" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-mono" />
+                  {vendorForm.formState.errors.vendorCode && <p className="text-xs text-red-500 mt-1">{vendorForm.formState.errors.vendorCode.message}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Vendor / Supplier Name *</label>
+                  <input type="text" {...vendorForm.register('name')} placeholder="e.g. Global Distributors" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  {vendorForm.formState.errors.name && <p className="text-xs text-red-500 mt-1">{vendorForm.formState.errors.name.message}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">GSTIN</label>
+                  <input type="text" {...vendorForm.register('gstin')} placeholder="e.g. 27BBBBB2222B2Z2" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-mono" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Contact Details</label>
+                  <textarea {...vendorForm.register('contactDetails')} placeholder="Email, Mobile, or Address memo..." rows={3} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-border pt-4 mt-6">
+                <button type="button" onClick={() => setIsVendorModalOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm flex items-center gap-2 cursor-pointer">
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Save Vendor
                 </button>
               </div>
             </form>

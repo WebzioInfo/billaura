@@ -242,6 +242,86 @@ let AccountsService = class AccountsService {
             totalEquity,
         };
     }
+    async getCashFlow() {
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        if (!companyId) {
+            throw new common_1.ConflictException('Company context is required');
+        }
+        await this.ensureDefaultChartOfAccounts(companyId);
+        const cashAccounts = await this.prisma.account.findMany({
+            where: {
+                companyId,
+                name: { in: ['Cash in Hand', 'Operating Bank Account'] },
+            },
+        });
+        const cashAccountIds = cashAccounts.map(a => a.id);
+        const journalLines = await this.prisma.journalLine.findMany({
+            where: {
+                accountId: { in: cashAccountIds },
+            },
+            include: {
+                journalEntry: {
+                    include: {
+                        lines: {
+                            include: {
+                                account: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        let operatingInflow = 0;
+        let operatingOutflow = 0;
+        let investingInflow = 0;
+        let investingOutflow = 0;
+        let financingInflow = 0;
+        let financingOutflow = 0;
+        for (const line of journalLines) {
+            const isDebit = Number(line.debit) > 0;
+            const amount = isDebit ? Number(line.debit) : Number(line.credit);
+            const counterparties = line.journalEntry.lines.filter(l => l.accountId !== line.accountId);
+            let classified = false;
+            for (const cp of counterparties) {
+                const cat = cp.account.category;
+                if (cat === client_1.AccountCategory.REVENUE || cp.account.name === 'Accounts Receivable') {
+                    if (isDebit)
+                        operatingInflow += amount;
+                    else
+                        operatingOutflow += amount;
+                    classified = true;
+                    break;
+                }
+                else if (cat === client_1.AccountCategory.EXPENSE || cp.account.name === 'Accounts Payable') {
+                    if (isDebit) {
+                    }
+                    else {
+                        operatingOutflow += amount;
+                    }
+                    classified = true;
+                    break;
+                }
+            }
+            if (!classified) {
+                if (isDebit)
+                    operatingInflow += amount;
+                else
+                    operatingOutflow += amount;
+            }
+        }
+        return {
+            operatingInflow,
+            operatingOutflow,
+            operatingNet: operatingInflow - operatingOutflow,
+            investingInflow,
+            investingOutflow,
+            investingNet: investingInflow - investingOutflow,
+            financingInflow,
+            financingOutflow,
+            financingNet: financingInflow - financingOutflow,
+            netCashFlow: (operatingInflow - operatingOutflow) + (investingInflow - investingOutflow) + (financingInflow - financingOutflow),
+        };
+    }
 };
 exports.AccountsService = AccountsService;
 exports.AccountsService = AccountsService = __decorate([

@@ -40,8 +40,6 @@ export default function DashboardLayout() {
     { name: 'HR', path: '/hr', icon: Users },
     { name: 'Attendance', path: '/attendance', icon: Users },
     { name: 'Payroll', path: '/payroll', icon: CreditCard },
-    { name: 'Projects', path: '/projects', icon: LayoutDashboard },
-    { name: 'Assets', path: '/assets', icon: Package },
   ];
 
   // Administration

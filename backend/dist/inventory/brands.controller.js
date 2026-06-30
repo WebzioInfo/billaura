@@ -14,52 +14,61 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BrandsController = void 0;
 const common_1 = require("@nestjs/common");
-const brands_service_1 = require("./brands.service");
-const brand_dto_1 = require("./dto/brand.dto");
-const pagination_query_dto_1 = require("../common/dto/pagination-query.dto");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const tenant_guard_1 = require("../common/guards/tenant.guard");
+const prisma_service_1 = require("../database/prisma.service");
+const company_context_1 = require("../common/context/company-context");
 let BrandsController = class BrandsController {
-    brandsService;
-    constructor(brandsService) {
-        this.brandsService = brandsService;
+    prisma;
+    constructor(prisma) {
+        this.prisma = prisma;
     }
-    async findAll(query) {
-        return this.brandsService.findAll(query);
+    async findAll(search) {
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        const where = { companyId };
+        if (search) {
+            where.name = { contains: search };
+        }
+        const items = await this.prisma.brand.findMany({ where });
+        return { success: true, data: { items } };
     }
-    async findOne(id) {
-        return this.brandsService.findOne(id);
+    async create(data) {
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        const item = await this.prisma.brand.create({
+            data: { ...data, companyId }
+        });
+        return { success: true, data: item, id: item.id };
     }
-    async create(dto) {
-        return this.brandsService.create(dto);
-    }
-    async update(id, dto) {
-        return this.brandsService.update(id, dto);
+    async update(id, data) {
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        const { id: _, companyId: __, createdAt, updatedAt, ...updateData } = data;
+        const item = await this.prisma.brand.updateMany({
+            where: { id, companyId },
+            data: updateData
+        });
+        return { success: true, data: item };
     }
     async remove(id) {
-        await this.brandsService.remove(id);
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        await this.prisma.brand.deleteMany({
+            where: { id, companyId }
+        });
+        return { success: true };
     }
 };
 exports.BrandsController = BrandsController;
 __decorate([
     (0, common_1.Get)(),
-    __param(0, (0, common_1.Query)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [pagination_query_dto_1.PaginationQueryDto]),
-    __metadata("design:returntype", Promise)
-], BrandsController.prototype, "findAll", null);
-__decorate([
-    (0, common_1.Get)(':id'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, common_1.Query)('search')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
-], BrandsController.prototype, "findOne", null);
+], BrandsController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [brand_dto_1.CreateBrandDto]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], BrandsController.prototype, "create", null);
 __decorate([
@@ -67,12 +76,11 @@ __decorate([
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, brand_dto_1.UpdateBrandDto]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], BrandsController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -81,6 +89,6 @@ __decorate([
 exports.BrandsController = BrandsController = __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, tenant_guard_1.TenantGuard),
     (0, common_1.Controller)('brands'),
-    __metadata("design:paramtypes", [brands_service_1.BrandsService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
 ], BrandsController);
 //# sourceMappingURL=brands.controller.js.map

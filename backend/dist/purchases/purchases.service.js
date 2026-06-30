@@ -246,7 +246,7 @@ let PurchasesService = class PurchasesService {
                 data: { balance: { decrement: grandTotal } },
             });
             return purchase;
-        });
+        }, { timeout: 20000 });
     }
     async remove(id) {
         const purchase = await this.findOne(id);

@@ -208,7 +208,7 @@ let ExpensesService = class ExpensesService {
                 data: { balance: { decrement: totalAmount } },
             });
             return expense;
-        });
+        }, { timeout: 20000 });
     }
     async remove(id) {
         const expense = await this.findOne(id);

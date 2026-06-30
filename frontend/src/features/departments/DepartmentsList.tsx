@@ -132,15 +132,15 @@ export const DepartmentsList = () => {
         api.get<any>('/departments'),
         api.get<any>('/designations'),
       ]);
-      setDepartments(deptRes || []);
-      setDesignations(desRes || []);
+      setDepartments(Array.isArray(deptRes) ? deptRes : (deptRes?.data || []));
+      setDesignations(Array.isArray(desRes) ? desRes : (desRes?.data || []));
 
       const empRes = await api.get<any>('/employees');
-      setEmployees(empRes || []);
+      setEmployees(Array.isArray(empRes) ? empRes : (empRes?.data || []));
 
-      if (activeTab === 'attendance') {
+      if (activeTab === 'attendance' || activeTab === 'payroll') {
         const attRes = await api.get<any>('/attendances');
-        setAttendances(attRes || []);
+        setAttendances(Array.isArray(attRes) ? attRes : (attRes?.data || []));
       }
     } catch (err) {
       toast.error('Failed to load HR details');
@@ -218,7 +218,7 @@ export const DepartmentsList = () => {
       // Debit: Salary overheads, Credit: Bank account
       // Find cash/bank and salary accounts
       const accountsRes = await api.get<any>('/accounts');
-      const accountsList = accountsRes.items || [];
+      const accountsList = accountsRes?.data?.items || accountsRes?.items || [];
       
       const salaryAcc = accountsList.find((a: any) => a.name.toLowerCase().includes('salary') || a.name.toLowerCase().includes('overhead'));
       const bankAcc = accountsList.find((a: any) => a.name.toLowerCase().includes('bank') || a.name.toLowerCase().includes('cash'));

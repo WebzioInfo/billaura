@@ -14,6 +14,7 @@ const contacts_service_1 = require("./contacts.service");
 const contacts_controller_1 = require("./contacts.controller");
 const crm_activities_service_1 = require("./crm-activities.service");
 const crm_activities_controller_1 = require("./crm-activities.controller");
+const customers_controller_1 = require("./customers.controller");
 const database_module_1 = require("../database/database.module");
 let CrmModule = class CrmModule {
 };
@@ -21,7 +22,7 @@ exports.CrmModule = CrmModule;
 exports.CrmModule = CrmModule = __decorate([
     (0, common_1.Module)({
         imports: [database_module_1.DatabaseModule],
-        controllers: [leads_controller_1.LeadsController, contacts_controller_1.ContactsController, crm_activities_controller_1.CrmActivitiesController],
+        controllers: [leads_controller_1.LeadsController, contacts_controller_1.ContactsController, crm_activities_controller_1.CrmActivitiesController, customers_controller_1.CustomersController],
         providers: [leads_service_1.LeadsService, contacts_service_1.ContactsService, crm_activities_service_1.CrmActivitiesService],
         exports: [leads_service_1.LeadsService, contacts_service_1.ContactsService, crm_activities_service_1.CrmActivitiesService],
     })

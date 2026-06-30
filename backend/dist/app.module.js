@@ -28,6 +28,7 @@ const accounting_module_1 = require("./accounting/accounting.module");
 const taxes_module_1 = require("./taxes/taxes.module");
 const expenses_module_1 = require("./expenses/expenses.module");
 const hr_module_1 = require("./hr/hr.module");
+const platform_module_1 = require("./platform/platform.module");
 let AppModule = class AppModule {
     configure(consumer) {
         consumer
@@ -58,6 +59,7 @@ exports.AppModule = AppModule = __decorate([
             taxes_module_1.TaxesModule,
             expenses_module_1.ExpensesModule,
             hr_module_1.HrModule,
+            platform_module_1.PlatformModule,
         ],
     })
 ], AppModule);

@@ -35,7 +35,7 @@ export const VerifyEmail = () => {
         otp: data.otp,
       });
 
-      setSession(response.data.user, response.data.access_token, response.data.refresh_token);
+      setSession(response.data.user, response.data.access_token);
       
       setSuccess(true);
       setTimeout(() => {

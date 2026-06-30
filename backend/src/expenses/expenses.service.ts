@@ -236,7 +236,7 @@ export class ExpensesService {
       });
 
       return expense;
-    });
+    }, { timeout: 20000 });
   }
 
   async remove(id: string) {

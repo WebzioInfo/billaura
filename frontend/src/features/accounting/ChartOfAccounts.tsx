@@ -57,11 +57,11 @@ interface JournalEntry {
 }
 
 export const ChartOfAccounts = () => {
-  const [activeTab, setActiveTab] = useState<'coa' | 'journal' | 'trial' | 'pl' | 'bs'>('coa');
+  const [activeTab, setActiveTab] = useState<'coa' | 'journal' | 'trial' | 'pl' | 'bs' | 'cf'>('coa');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+ 
   // Data lists
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
@@ -70,18 +70,19 @@ export const ChartOfAccounts = () => {
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
   const [profitLoss, setProfitLoss] = useState<any>({ revenue: [], expense: [], totalRevenue: 0, totalExpense: 0, netProfit: 0 });
   const [balanceSheet, setBalanceSheet] = useState<any>({ assets: [], liabilities: [], equity: [], totalAssets: 0, totalLiabilities: 0, totalEquity: 0 });
-
+  const [cashFlow, setCashFlow] = useState<any>({ operatingInflow: 0, operatingOutflow: 0, operatingNet: 0, investingInflow: 0, investingOutflow: 0, investingNet: 0, financingInflow: 0, financingOutflow: 0, financingNet: 0, netCashFlow: 0 });
+ 
   // Modal controls
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
+ 
   // Forms hooks
   const accountForm = useForm<AccountFormValues>({
     resolver: zodResolver(accountSchema),
     defaultValues: { name: '', category: 'ASSET', balance: 0 }
   });
-
+ 
   const journalForm = useForm<JournalEntryFormValues>({
     resolver: zodResolver(journalEntrySchema),
     defaultValues: {
@@ -94,12 +95,12 @@ export const ChartOfAccounts = () => {
       ]
     }
   });
-
+ 
   const { fields, append, remove } = useFieldArray({
     control: journalForm.control,
     name: 'lines'
   });
-
+ 
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -122,6 +123,9 @@ export const ChartOfAccounts = () => {
       } else if (activeTab === 'bs') {
         const res = await api.get<any>('/accounts/balance-sheet');
         setBalanceSheet(res || { assets: [], liabilities: [], equity: [], totalAssets: 0, totalLiabilities: 0, totalEquity: 0 });
+      } else if (activeTab === 'cf') {
+        const res = await api.get<any>('/accounts/cash-flow');
+        setCashFlow(res || { operatingInflow: 0, operatingOutflow: 0, operatingNet: 0, investingInflow: 0, investingOutflow: 0, investingNet: 0, financingInflow: 0, financingOutflow: 0, financingNet: 0, netCashFlow: 0 });
       }
     } catch (err) {
       toast.error('Failed to load ledger data');
@@ -129,7 +133,7 @@ export const ChartOfAccounts = () => {
       setIsLoading(false);
     }
   };
-
+ 
   useEffect(() => {
     fetchData();
   }, [activeTab]);
@@ -273,8 +277,16 @@ export const ChartOfAccounts = () => {
         >
           Balance Sheet
         </button>
+        <button
+          onClick={() => setActiveTab('cf')}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'cf' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Cash Flow
+        </button>
       </div>
-
+ 
       {/* Main Tab Renderings */}
       {isLoading ? (
         <div className="p-12 text-center text-muted-foreground flex justify-center items-center gap-2">
@@ -335,7 +347,7 @@ export const ChartOfAccounts = () => {
                     <Calendar className="w-3.5 h-3.5" /> {je.date.split('T')[0]}
                   </span>
                 </div>
-
+ 
                 <table className="w-full text-xs text-left border-t border-border mt-4">
                   <thead>
                     <tr className="text-muted-foreground uppercase py-2">
@@ -398,7 +410,7 @@ export const ChartOfAccounts = () => {
               ))}
             </div>
           </div>
-
+ 
           <div className="bg-surface p-6 rounded-2xl border border-border space-y-4">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
               Operating Expenses
@@ -412,7 +424,7 @@ export const ChartOfAccounts = () => {
               ))}
             </div>
           </div>
-
+ 
           <div className="col-span-1 md:col-span-2 bg-background p-6 rounded-2xl border border-border flex justify-between items-center">
             <div>
               <h3 className="text-lg font-bold text-foreground">Net Operating Profit</h3>
@@ -423,8 +435,7 @@ export const ChartOfAccounts = () => {
             </span>
           </div>
         </div>
-      ) : (
-        // Balance Sheet tab
+      ) : activeTab === 'bs' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-surface p-6 rounded-2xl border border-border space-y-4">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
@@ -439,7 +450,7 @@ export const ChartOfAccounts = () => {
               ))}
             </div>
           </div>
-
+ 
           <div className="bg-surface p-6 rounded-2xl border border-border space-y-4">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
               Liabilities & Equity Ledger
@@ -453,7 +464,7 @@ export const ChartOfAccounts = () => {
               ))}
             </div>
           </div>
-
+ 
           <div className="col-span-1 md:col-span-2 bg-background p-6 rounded-2xl border border-border flex justify-between items-center">
             <div>
               <h3 className="text-lg font-bold text-foreground">Statement Integrity Check</h3>
@@ -469,6 +480,86 @@ export const ChartOfAccounts = () => {
                 <p className="text-base font-bold text-accent">{formatCurrency(Math.abs(balanceSheet.totalLiabilities) + Math.abs(balanceSheet.totalEquity))}</p>
               </div>
             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-surface p-6 rounded-2xl border border-border space-y-4">
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
+                Operating Activities
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cash Inflow:</span>
+                  <span className="font-semibold text-green-500">{formatCurrency(cashFlow.operatingInflow)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cash Outflow:</span>
+                  <span className="font-semibold text-red-500">{formatCurrency(cashFlow.operatingOutflow)}</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-2 font-bold">
+                  <span className="text-foreground">Net Operating Cash:</span>
+                  <span className={cashFlow.operatingNet >= 0 ? 'text-green-500' : 'text-red-500'}>
+                    {formatCurrency(cashFlow.operatingNet)}
+                  </span>
+                </div>
+              </div>
+            </div>
+ 
+            <div className="bg-surface p-6 rounded-2xl border border-border space-y-4">
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
+                Investing Activities
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cash Inflow:</span>
+                  <span className="font-semibold text-green-500">{formatCurrency(cashFlow.investingInflow)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cash Outflow:</span>
+                  <span className="font-semibold text-red-500">{formatCurrency(cashFlow.investingOutflow)}</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-2 font-bold">
+                  <span className="text-foreground">Net Investing Cash:</span>
+                  <span className={cashFlow.investingNet >= 0 ? 'text-green-500' : 'text-red-500'}>
+                    {formatCurrency(cashFlow.investingNet)}
+                  </span>
+                </div>
+              </div>
+            </div>
+ 
+            <div className="bg-surface p-6 rounded-2xl border border-border space-y-4">
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
+                Financing Activities
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cash Inflow:</span>
+                  <span className="font-semibold text-green-500">{formatCurrency(cashFlow.financingInflow)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cash Outflow:</span>
+                  <span className="font-semibold text-red-500">{formatCurrency(cashFlow.financingOutflow)}</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-2 font-bold">
+                  <span className="text-foreground">Net Financing Cash:</span>
+                  <span className={cashFlow.financingNet >= 0 ? 'text-green-500' : 'text-red-500'}>
+                    {formatCurrency(cashFlow.financingNet)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+ 
+          <div className="bg-background p-6 rounded-2xl border border-border flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Net Cash Flow Summary</h3>
+              <p className="text-xs text-muted-foreground">Net change in cash and bank balances for the period</p>
+            </div>
+            <span className={`text-2xl font-black ${cashFlow.netCashFlow >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {formatCurrency(cashFlow.netCashFlow)}
+            </span>
           </div>
         </div>
       )}

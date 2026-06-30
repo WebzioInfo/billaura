@@ -259,7 +259,7 @@ let InvoicesService = class InvoicesService {
                 data: { balance: { decrement: grandTotal } },
             });
             return invoice;
-        });
+        }, { timeout: 20000 });
     }
     async remove(id) {
         const invoice = await this.findOne(id);

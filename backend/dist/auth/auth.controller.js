@@ -21,6 +21,37 @@ const register_dto_1 = require("./dto/register.dto");
 const verify_email_dto_1 = require("./dto/verify-email.dto");
 const onboard_dto_1 = require("./dto/onboard.dto");
 const jwt_auth_guard_1 = require("./jwt-auth.guard");
+function parseCookies(cookieHeader) {
+    const cookies = {};
+    if (!cookieHeader)
+        return cookies;
+    cookieHeader.split(';').forEach(cookie => {
+        const parts = cookie.split('=');
+        const name = parts[0].trim();
+        const value = parts.slice(1).join('=').trim();
+        if (name) {
+            cookies[name] = decodeURIComponent(value);
+        }
+    });
+    return cookies;
+}
+function setRefreshCookie(res, token) {
+    res.cookie('refresh_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: '/',
+    });
+}
+function clearRefreshCookie(res) {
+    res.clearCookie('refresh_token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+    });
+}
 let AuthController = class AuthController {
     authService;
     sessionService;
@@ -28,21 +59,45 @@ let AuthController = class AuthController {
         this.authService = authService;
         this.sessionService = sessionService;
     }
-    async login(loginDto, userAgent, ip) {
-        return this.authService.login(loginDto, userAgent, ip);
+    async login(loginDto, userAgent, ip, res) {
+        const result = await this.authService.login(loginDto, userAgent, ip);
+        setRefreshCookie(res, result.refresh_token);
+        const { refresh_token, ...responseBody } = result;
+        return responseBody;
     }
     async register(registerDto) {
         return this.authService.register(registerDto);
     }
-    async verifyEmail(verifyEmailDto) {
-        return this.authService.verifyEmail(verifyEmailDto);
+    async verifyEmail(verifyEmailDto, res) {
+        const result = await this.authService.verifyEmail(verifyEmailDto);
+        setRefreshCookie(res, result.refresh_token);
+        const { refresh_token, ...responseBody } = result;
+        return responseBody;
     }
-    async refresh(refreshToken) {
-        return this.authService.refreshTokens(refreshToken);
+    async refresh(req, userAgent, ip, res) {
+        const cookies = parseCookies(req.headers.cookie);
+        const refreshToken = cookies['refresh_token'];
+        if (!refreshToken) {
+            throw new common_1.UnauthorizedException('No refresh token found');
+        }
+        const result = await this.authService.refreshTokens(refreshToken, userAgent, ip);
+        setRefreshCookie(res, result.refresh_token);
+        const { refresh_token, ...responseBody } = result;
+        return responseBody;
     }
-    async logout(refreshToken) {
-        await this.sessionService.revokeSessionByToken(refreshToken);
+    async logout(req, res) {
+        const cookies = parseCookies(req.headers.cookie);
+        const refreshToken = cookies['refresh_token'];
+        if (refreshToken) {
+            await this.sessionService.revokeSessionByToken(refreshToken);
+        }
+        clearRefreshCookie(res);
         return { success: true, message: 'Logged out successfully' };
+    }
+    async logoutAll(req, res) {
+        await this.sessionService.revokeAllSessions(req.user.userId);
+        clearRefreshCookie(res);
+        return { success: true, message: 'Logged out from all devices successfully' };
     }
     async listSessions(req) {
         return this.sessionService.listActiveSessions(req.user.userId);
@@ -80,8 +135,9 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Headers)('user-agent')),
     __param(2, (0, common_1.Ip)()),
+    __param(3, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [login_dto_1.LoginDto, String, String]),
+    __metadata("design:paramtypes", [login_dto_1.LoginDto, String, String, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
@@ -95,27 +151,42 @@ __decorate([
     (0, common_1.Post)('verify-email'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [verify_email_dto_1.VerifyEmailDto]),
+    __metadata("design:paramtypes", [verify_email_dto_1.VerifyEmailDto, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "verifyEmail", null);
 __decorate([
     (0, common_1.Post)('refresh'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    __param(0, (0, common_1.Body)('refresh_token')),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Headers)('user-agent')),
+    __param(2, (0, common_1.Ip)()),
+    __param(3, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String, String, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "refresh", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Post)('logout'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    __param(0, (0, common_1.Body)('refresh_token')),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logout", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Post)('logout-all'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "logoutAll", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Get)('sessions'),

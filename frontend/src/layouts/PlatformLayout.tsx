@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, LogOut, Menu, X, ChevronDown, User, Bell, Search, Shield 
+  LayoutDashboard, Users, LogOut, Menu, X, ChevronDown, User, Bell, Search, Shield,
+  CreditCard, Layers, LifeBuoy, DollarSign, Activity, FileText, Settings
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
 
@@ -18,9 +19,18 @@ export default function PlatformLayout() {
   };
 
   const coreNavItems = [
-    { name: 'Platform Dashboard', path: '/platform/dashboard', icon: LayoutDashboard },
-    { name: 'Tenants (Companies)', path: '/platform/tenants', icon: Users },
+    { name: 'Dashboard', path: '/platform/dashboard', icon: LayoutDashboard },
+    { name: 'Companies', path: '/platform/companies', icon: Users },
     { name: 'Subscriptions', path: '/platform/subscriptions', icon: Shield },
+    { name: 'Plans', path: '/platform/plans', icon: CreditCard },
+    { name: 'Users', path: '/platform/users', icon: Users },
+    { name: 'Support', path: '/platform/support', icon: LifeBuoy },
+    { name: 'Revenue', path: '/platform/revenue', icon: DollarSign },
+    { name: 'System Monitoring', path: '/platform/monitoring', icon: Activity },
+    { name: 'Audit Logs', path: '/platform/logs', icon: FileText },
+    { name: 'Settings', path: '/platform/settings', icon: Settings },
+    { name: 'Notifications', path: '/platform/notifications', icon: Bell },
+    { name: 'Platform Profile', path: '/platform/profile', icon: User },
   ];
 
   const userInitials = user?.name 

@@ -102,7 +102,7 @@ let JournalEntriesService = class JournalEntriesService {
                 });
             }
             return entry;
-        });
+        }, { timeout: 20000 });
     }
 };
 exports.JournalEntriesService = JournalEntriesService;

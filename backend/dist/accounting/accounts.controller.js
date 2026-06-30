@@ -33,6 +33,9 @@ let AccountsController = class AccountsController {
     async getBalanceSheet() {
         return this.accountsService.getBalanceSheet();
     }
+    async getCashFlow() {
+        return this.accountsService.getCashFlow();
+    }
     async findAll(query) {
         return this.accountsService.findAll(query);
     }
@@ -68,6 +71,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], AccountsController.prototype, "getBalanceSheet", null);
+__decorate([
+    (0, common_1.Get)('cash-flow'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AccountsController.prototype, "getCashFlow", null);
 __decorate([
     (0, common_1.Get)(),
     __param(0, (0, common_1.Query)()),

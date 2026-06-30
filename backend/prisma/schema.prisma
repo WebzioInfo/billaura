@@ -360,14 +360,21 @@ model User {
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique
-  userAgent String?
-  ipAddress String?
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  isRevoked Boolean  @default(false)
+  id           String    @id @default(cuid())
+  userId       String
+  companyId    String?
+  tokenHash    String    @unique
+  userAgent    String?
+  deviceName   String?
+  browser      String?
+  os           String?
+  ipAddress    String?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  revokedBy    String?
+  isRevoked    Boolean   @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

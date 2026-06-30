@@ -42,6 +42,12 @@ const LoadingFallback = () => (
   </div>
 );
 
+const AppRedirect = () => {
+  const path = window.location.pathname;
+  const newPath = path.startsWith('/app') ? path.substring(4) : path;
+  return <Navigate to={newPath + window.location.search} replace />;
+};
+
 export const router = createBrowserRouter([
   // Public Landing / Pricing / Docs Section
   {
@@ -80,13 +86,23 @@ export const router = createBrowserRouter([
     errorElement: <ErrorBoundary />,
     children: [
       { path: 'dashboard', element: <PlatformDashboard /> },
-      // other platform routes can be mapped to placeholders or implemented later
+      { path: 'companies', element: <PlatformDashboard /> },
+      { path: 'subscriptions', element: <PlatformDashboard /> },
+      { path: 'plans', element: <PlatformDashboard /> },
+      { path: 'users', element: <PlatformDashboard /> },
+      { path: 'support', element: <PlatformDashboard /> },
+      { path: 'revenue', element: <PlatformDashboard /> },
+      { path: 'monitoring', element: <PlatformDashboard /> },
+      { path: 'logs', element: <PlatformDashboard /> },
+      { path: 'settings', element: <PlatformDashboard /> },
+      { path: 'notifications', element: <PlatformDashboard /> },
+      { path: 'profile', element: <PlatformDashboard /> },
       { path: '*', element: <PlatformDashboard /> }
     ],
   },
-  // Accounting Protected Workspace Modules
+  // Accounting Protected Workspace Modules (Pathless Layout)
   {
-    path: '/app',
+    id: 'app',
     element: (
       <ProtectedRoute enabled requireCompletedOnboarding>
         <Suspense fallback={<LoadingFallback />}><ErrorBoundary><DashboardLayout /></ErrorBoundary></Suspense>
@@ -95,21 +111,58 @@ export const router = createBrowserRouter([
     errorElement: <ErrorBoundary />,
     children: [
       { path: 'dashboard', element: <ExecutiveDashboard /> },
-      { path: 'crm', element: <CrmDashboard /> },
+      { path: 'customers', element: <CrmDashboard /> },
+      { path: 'vendors', element: <PurchasesDashboard /> },
       { path: 'products', element: <InventoryDashboard /> },
+      { path: 'services', element: <InventoryDashboard /> },
+      { path: 'categories', element: <InventoryDashboard /> },
+      { path: 'inventory', element: <InventoryDashboard /> },
+      { path: 'warehouses', element: <InventoryDashboard /> },
       { path: 'sales', element: <SalesDashboard /> },
+      { path: 'quotations', element: <SalesDashboard /> },
+      { path: 'sales-orders', element: <SalesDashboard /> },
+      { path: 'delivery-challans', element: <SalesDashboard /> },
+      { path: 'invoices', element: <SalesDashboard /> },
+      { path: 'recurring-invoices', element: <SalesDashboard /> },
+      { path: 'payments', element: <SalesDashboard /> },
       { path: 'purchases', element: <PurchasesDashboard /> },
-      { path: 'hr', element: <DepartmentsList /> },
-      { path: 'accounting', element: <ChartOfAccounts /> },
-      { path: 'taxes', element: <TaxesDashboard /> },
+      { path: 'purchase-orders', element: <PurchasesDashboard /> },
+      { path: 'bills', element: <PurchasesDashboard /> },
+      { path: 'vendor-payments', element: <PurchasesDashboard /> },
       { path: 'expenses', element: <ExpensesDashboard /> },
+      { path: 'banking', element: <ChartOfAccounts /> },
+      { path: 'chart-of-accounts', element: <ChartOfAccounts /> },
+      { path: 'accounting', element: <ChartOfAccounts /> },
+      { path: 'journal-entries', element: <ChartOfAccounts /> },
+      { path: 'general-ledger', element: <ChartOfAccounts /> },
+      { path: 'trial-balance', element: <ChartOfAccounts /> },
+      { path: 'balance-sheet', element: <ChartOfAccounts /> },
+      { path: 'profit-loss', element: <ChartOfAccounts /> },
+      { path: 'cash-flow', element: <ChartOfAccounts /> },
+      { path: 'gst', element: <TaxesDashboard /> },
+      { path: 'taxes', element: <TaxesDashboard /> },
+      { path: 'reports', element: <ExecutiveDashboard /> },
+      { path: 'hr', element: <DepartmentsList /> },
+      { path: 'employees', element: <DepartmentsList /> },
+      { path: 'attendance', element: <DepartmentsList /> },
+      { path: 'payroll', element: <DepartmentsList /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'company', element: <SettingsPage /> },
+      { path: 'branches', element: <SettingsPage /> },
+      { path: 'users', element: <SettingsPage /> },
+      { path: 'roles', element: <SettingsPage /> },
+      { path: 'profile', element: <SettingsPage /> },
+      { path: 'subscription', element: <SettingsPage /> },
+      { path: 'help', element: <ExecutiveDashboard /> },
+      { path: 'notifications', element: <ExecutiveDashboard /> },
+      { path: 'search', element: <ExecutiveDashboard /> },
+      { path: 'crm', element: <CrmDashboard /> }
     ],
   },
-  // Catch all and redirects
+  // Legacy URL Redirects
   {
-    path: '/dashboard',
-    element: <Navigate to="/app/dashboard" replace />
+    path: '/app/*',
+    element: <AppRedirect />
   },
   {
     path: '/unauthorized',

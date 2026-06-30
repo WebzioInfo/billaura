@@ -6,6 +6,7 @@ export interface SessionUser extends BaseSessionUser {
   onboardingStep?: string;
   name?: string;
   email?: string;
+  globalRole?: string;
 }
 
 export interface SessionState {

@@ -26,7 +26,7 @@ let PrismaService = PrismaService_1 = class PrismaService extends client_1.Prism
                 ? ["query", "error", "warn"]
                 : ["error", "warn"],
         });
-        const globalModels = ['User', 'SystemSetting', 'SubscriptionPlan', 'Company'];
+        const globalModels = ['User', 'SystemSetting', 'SubscriptionPlan', 'Company', 'PaymentAllocation', 'PurchasePaymentAllocation', 'JournalEntryLine', 'InvoiceItem', 'PurchaseItem'];
         this.extendedClient = this.$extends({
             query: {
                 $allModels: {

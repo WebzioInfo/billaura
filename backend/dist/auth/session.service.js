@@ -46,6 +46,45 @@ exports.SessionService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../database/prisma.service");
 const crypto = __importStar(require("crypto"));
+function parseUserAgent(userAgent) {
+    if (!userAgent) {
+        return { deviceName: 'Unknown Device', browser: 'Unknown Browser', os: 'Unknown OS' };
+    }
+    let os = 'Unknown OS';
+    let browser = 'Unknown Browser';
+    let deviceName = 'Desktop';
+    if (userAgent.includes('Windows'))
+        os = 'Windows';
+    else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS'))
+        os = 'macOS';
+    else if (userAgent.includes('Linux'))
+        os = 'Linux';
+    else if (userAgent.includes('Android')) {
+        os = 'Android';
+        deviceName = 'Mobile';
+    }
+    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) {
+        os = 'iOS';
+        deviceName = 'Mobile';
+    }
+    if (userAgent.includes('Firefox'))
+        browser = 'Firefox';
+    else if (userAgent.includes('Chrome') && !userAgent.includes('Chromium'))
+        browser = 'Chrome';
+    else if (userAgent.includes('Safari') && !userAgent.includes('Chrome'))
+        browser = 'Safari';
+    else if (userAgent.includes('Edge'))
+        browser = 'Edge';
+    else if (userAgent.includes('Trident') || userAgent.includes('MSIE'))
+        browser = 'Internet Explorer';
+    if (userAgent.includes('Mobile')) {
+        deviceName = 'Mobile Device';
+    }
+    else if (userAgent.includes('Tablet')) {
+        deviceName = 'Tablet';
+    }
+    return { deviceName, browser, os };
+}
 let SessionService = class SessionService {
     prisma;
     constructor(prisma) {
@@ -57,22 +96,28 @@ let SessionService = class SessionService {
     hashToken(token) {
         return crypto.createHash('sha256').update(token).digest('hex');
     }
-    async createSession(userId, userAgent, ipAddress) {
+    async createSession(userId, userAgent, ipAddress, companyId) {
         const rawToken = this.generateToken();
         const tokenHash = this.hashToken(rawToken);
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const { deviceName, browser, os } = parseUserAgent(userAgent);
         await this.prisma.session.create({
             data: {
                 userId,
+                companyId: companyId || null,
                 tokenHash,
                 userAgent,
+                deviceName,
+                browser,
+                os,
                 ipAddress,
                 expiresAt,
+                isRevoked: false,
             },
         });
         return rawToken;
     }
-    async validateRefreshToken(rawToken) {
+    async rotateSession(rawToken, userAgent, ipAddress) {
         const tokenHash = this.hashToken(rawToken);
         const session = await this.prisma.session.findUnique({
             where: { tokenHash },
@@ -82,18 +127,39 @@ let SessionService = class SessionService {
             if (session && !session.isRevoked) {
                 await this.prisma.session.update({
                     where: { id: session.id },
-                    data: { isRevoked: true },
+                    data: { isRevoked: true, revokedAt: new Date() },
                 });
             }
             throw new common_1.UnauthorizedException('Invalid or expired session');
         }
-        return session.userId;
+        const newRawToken = this.generateToken();
+        const newTokenHash = this.hashToken(newRawToken);
+        const { deviceName, browser, os } = parseUserAgent(userAgent);
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        await this.prisma.session.update({
+            where: { id: session.id },
+            data: {
+                tokenHash: newTokenHash,
+                lastUsedAt: new Date(),
+                expiresAt,
+                ipAddress: ipAddress || session.ipAddress,
+                userAgent: userAgent || session.userAgent,
+                deviceName: deviceName || session.deviceName,
+                browser: browser || session.browser,
+                os: os || session.os,
+            },
+        });
+        return {
+            newRefreshToken: newRawToken,
+            userId: session.userId,
+            companyId: session.companyId,
+        };
     }
     async revokeSessionByToken(rawToken) {
         const tokenHash = this.hashToken(rawToken);
         await this.prisma.session.updateMany({
             where: { tokenHash },
-            data: { isRevoked: true },
+            data: { isRevoked: true, revokedAt: new Date() },
         });
     }
     async listActiveSessions(userId) {
@@ -105,7 +171,9 @@ let SessionService = class SessionService {
             },
             select: {
                 id: true,
-                userAgent: true,
+                deviceName: true,
+                browser: true,
+                os: true,
                 ipAddress: true,
                 createdAt: true,
                 expiresAt: true,
@@ -119,7 +187,16 @@ let SessionService = class SessionService {
                 id: sessionId,
                 userId,
             },
-            data: { isRevoked: true },
+            data: { isRevoked: true, revokedAt: new Date() },
+        });
+    }
+    async revokeAllSessions(userId) {
+        await this.prisma.session.updateMany({
+            where: {
+                userId,
+                isRevoked: false,
+            },
+            data: { isRevoked: true, revokedAt: new Date() },
         });
     }
 };

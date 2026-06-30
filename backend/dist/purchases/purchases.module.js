@@ -12,6 +12,7 @@ const purchases_service_1 = require("./purchases.service");
 const purchases_controller_1 = require("./purchases.controller");
 const purchase_payments_service_1 = require("./purchase-payments.service");
 const purchase_payments_controller_1 = require("./purchase-payments.controller");
+const vendors_controller_1 = require("./vendors.controller");
 const database_module_1 = require("../database/database.module");
 let PurchasesModule = class PurchasesModule {
 };
@@ -22,6 +23,7 @@ exports.PurchasesModule = PurchasesModule = __decorate([
         controllers: [
             purchases_controller_1.PurchasesController,
             purchase_payments_controller_1.PurchasePaymentsController,
+            vendors_controller_1.VendorsController,
         ],
         providers: [
             purchases_service_1.PurchasesService,

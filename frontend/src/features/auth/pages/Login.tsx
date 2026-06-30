@@ -29,14 +29,14 @@ export const Login = () => {
     setError(null);
     try {
       const response = await authService.login(data);
-      setSession(response.user, response.access_token, response.refresh_token);
+      setSession(response.user, response.access_token);
       
       if (response.user.globalRole === 'SUPER_ADMIN') {
         navigate('/platform/dashboard');
       } else {
         const step = response.user.onboardingStep;
         if (step === 'COMPLETED') {
-          navigate('/app/dashboard');
+          navigate('/dashboard');
         } else {
           navigate('/auth/onboard');
         }

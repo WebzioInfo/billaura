@@ -121,7 +121,7 @@ export const OnboardingWizard = () => {
         setSession({ ...user, onboardingStep: response.data.onboardingStep });
       }
       setTimeout(() => {
-        navigate('/app/dashboard');
+        navigate('/dashboard');
       }, 1500);
     } catch (err: any) {
       setErrorMessage(err.response?.data?.message || 'Failed to complete subscription');

@@ -6,6 +6,22 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting Enterprise Accounting Seed...');
 
+  console.log('Cleaning up legacy Webzio seed data...');
+  await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
+  await prisma.company.deleteMany({
+    where: {
+      companyName: 'Webzio Accounting Demo'
+    }
+  });
+  await prisma.user.deleteMany({
+    where: {
+      email: {
+        in: ['admin@webzio.com', 'admin@billaura.com', 'accountant@billaura.com']
+      }
+    }
+  });
+  await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1;');
+
   // 1. Core Structure
   console.log('Seeding core company structure...');
   const company = await prisma.company.create({
@@ -97,6 +113,42 @@ async function main() {
           companyId: company.id,
           role: 'SUPER_ADMIN',
           customRoleId: superAdminRole.id,
+        }
+      }
+    }
+  });
+
+  const companyAdmin = await prisma.user.create({
+    data: {
+      email: 'admin@billaura.com',
+      passwordHash,
+      name: 'Demo Admin',
+      isActive: true,
+      emailVerified: true,
+      globalRole: 'ADMIN',
+      companies: {
+        create: {
+          companyId: company.id,
+          role: 'ADMIN',
+          customRoleId: adminRole.id,
+        }
+      }
+    }
+  });
+
+  const companyAccountant = await prisma.user.create({
+    data: {
+      email: 'accountant@billaura.com',
+      passwordHash,
+      name: 'Demo Accountant',
+      isActive: true,
+      emailVerified: true,
+      globalRole: 'ACCOUNTANT',
+      companies: {
+        create: {
+          companyId: company.id,
+          role: 'ACCOUNTANT',
+          customRoleId: accountantRole.id,
         }
       }
     }

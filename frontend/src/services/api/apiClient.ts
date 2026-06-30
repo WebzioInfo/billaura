@@ -129,19 +129,15 @@ export class ApiClient {
 export const apiClient = new ApiClient({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api/v1",
   refreshSession: async () => {
-    const refreshToken = localStorage.getItem("refresh_token");
-    if (!refreshToken) {
-      throw new Error("No refresh token stored");
-    }
-
     try {
       const response = await axios.post<{ success: boolean; data: { access_token: string; user: any } }>(
         `${import.meta.env.VITE_API_BASE_URL ?? "/api/v1"}/auth/refresh`,
-        { refresh_token: refreshToken }
+        {},
+        { withCredentials: true }
       );
       
       const { access_token, user } = response.data.data;
-      useSessionStore.getState().setSession(user, access_token, refreshToken);
+      useSessionStore.getState().setSession(user, access_token);
     } catch (err) {
       useSessionStore.getState().clearSession();
       throw err;

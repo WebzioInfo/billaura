@@ -52,19 +52,37 @@ export const TaxesDashboard = () => {
     try {
       if (activeTab === 'summary') {
         const res = await api.get<any>('/taxes/summary');
-        setSummary(res || {
-          outwardTaxable: 0,
-          inwardTaxable: 0,
-          liability: { cgst: 0, sgst: 0, igst: 0, total: 0 },
-          itc: { cgst: 0, sgst: 0, igst: 0, total: 0 },
-          netPayable: { cgst: 0, sgst: 0, igst: 0, total: 0 },
+        const data = res?.data || res;
+        setSummary({
+          outwardTaxable: data?.outwardTaxable ?? 0,
+          inwardTaxable: data?.inwardTaxable ?? 0,
+          liability: {
+            cgst: data?.liability?.cgst ?? 0,
+            sgst: data?.liability?.sgst ?? 0,
+            igst: data?.liability?.igst ?? 0,
+            total: data?.liability?.total ?? 0,
+          },
+          itc: {
+            cgst: data?.itc?.cgst ?? 0,
+            sgst: data?.itc?.sgst ?? 0,
+            igst: data?.itc?.igst ?? 0,
+            total: data?.itc?.total ?? 0,
+          },
+          netPayable: {
+            cgst: data?.netPayable?.cgst ?? 0,
+            sgst: data?.netPayable?.sgst ?? 0,
+            igst: data?.netPayable?.igst ?? 0,
+            total: data?.netPayable?.total ?? 0,
+          },
         });
       } else if (activeTab === 'gstr1') {
         const res = await api.get<any>('/taxes/gstr-1');
-        setGstr1List(res || []);
+        const list = Array.isArray(res) ? res : (res?.data || []);
+        setGstr1List(list);
       } else if (activeTab === 'gstr2') {
         const res = await api.get<any>('/taxes/gstr-2');
-        setGstr2List(res || []);
+        const list = Array.isArray(res) ? res : (res?.data || []);
+        setGstr2List(list);
       }
     } catch (err) {
       toast.error('Failed to load GST tax reports');

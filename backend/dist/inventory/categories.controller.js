@@ -14,52 +14,61 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CategoriesController = void 0;
 const common_1 = require("@nestjs/common");
-const categories_service_1 = require("./categories.service");
-const category_dto_1 = require("./dto/category.dto");
-const pagination_query_dto_1 = require("../common/dto/pagination-query.dto");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const tenant_guard_1 = require("../common/guards/tenant.guard");
+const prisma_service_1 = require("../database/prisma.service");
+const company_context_1 = require("../common/context/company-context");
 let CategoriesController = class CategoriesController {
-    categoriesService;
-    constructor(categoriesService) {
-        this.categoriesService = categoriesService;
+    prisma;
+    constructor(prisma) {
+        this.prisma = prisma;
     }
-    async findAll(query) {
-        return this.categoriesService.findAll(query);
+    async findAll(search) {
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        const where = { companyId };
+        if (search) {
+            where.name = { contains: search };
+        }
+        const items = await this.prisma.category.findMany({ where });
+        return { success: true, data: { items } };
     }
-    async findOne(id) {
-        return this.categoriesService.findOne(id);
+    async create(data) {
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        const item = await this.prisma.category.create({
+            data: { ...data, companyId }
+        });
+        return { success: true, data: item, id: item.id };
     }
-    async create(dto) {
-        return this.categoriesService.create(dto);
-    }
-    async update(id, dto) {
-        return this.categoriesService.update(id, dto);
+    async update(id, data) {
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        const { id: _, companyId: __, createdAt, updatedAt, ...updateData } = data;
+        const item = await this.prisma.category.updateMany({
+            where: { id, companyId },
+            data: updateData
+        });
+        return { success: true, data: item };
     }
     async remove(id) {
-        await this.categoriesService.remove(id);
+        const companyId = company_context_1.CompanyContext.getCompanyId();
+        await this.prisma.category.deleteMany({
+            where: { id, companyId }
+        });
+        return { success: true };
     }
 };
 exports.CategoriesController = CategoriesController;
 __decorate([
     (0, common_1.Get)(),
-    __param(0, (0, common_1.Query)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [pagination_query_dto_1.PaginationQueryDto]),
-    __metadata("design:returntype", Promise)
-], CategoriesController.prototype, "findAll", null);
-__decorate([
-    (0, common_1.Get)(':id'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, common_1.Query)('search')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
-], CategoriesController.prototype, "findOne", null);
+], CategoriesController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [category_dto_1.CreateCategoryDto]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], CategoriesController.prototype, "create", null);
 __decorate([
@@ -67,12 +76,11 @@ __decorate([
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, category_dto_1.UpdateCategoryDto]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], CategoriesController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -81,6 +89,6 @@ __decorate([
 exports.CategoriesController = CategoriesController = __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, tenant_guard_1.TenantGuard),
     (0, common_1.Controller)('categories'),
-    __metadata("design:paramtypes", [categories_service_1.CategoriesService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
 ], CategoriesController);
 //# sourceMappingURL=categories.controller.js.map

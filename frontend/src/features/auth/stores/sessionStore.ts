@@ -3,7 +3,7 @@ import type { Permission, SessionState, SessionUser } from "../types";
 
 interface SessionStore extends SessionState {
   accessToken: string | null;
-  setSession: (user: SessionUser | null, accessToken?: string | null, refreshToken?: string | null, permissions?: Permission[]) => void;
+  setSession: (user: SessionUser | null, accessToken?: string | null, permissions?: Permission[]) => void;
   setLoading: (isLoading: boolean) => void;
   clearSession: () => void;
 }
@@ -14,13 +14,11 @@ export const useSessionStore = create<SessionStore>((set) => ({
   permissions: [],
   isLoading: false,
   isAuthenticated: false,
-  setSession: (user, accessToken, refreshToken, permissions = []) => {
-    if (refreshToken !== undefined) {
-      if (refreshToken) {
-        localStorage.setItem("refresh_token", refreshToken);
-      } else {
-        localStorage.removeItem("refresh_token");
-      }
+  setSession: (user, accessToken, permissions = []) => {
+    if (user) {
+      localStorage.setItem("logged_in", "true");
+    } else {
+      localStorage.removeItem("logged_in");
     }
     set((state) => ({
       user,
@@ -32,7 +30,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
   },
   setLoading: (isLoading) => set({ isLoading }),
   clearSession: () => {
-    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("logged_in");
     set({
       user: null,
       accessToken: null,

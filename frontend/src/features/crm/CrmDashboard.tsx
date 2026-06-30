@@ -10,6 +10,23 @@ import {
 import api from '../../services/api';
 
 // --- SCHEMAS ---
+const customerSchema = z.object({
+  customerCode: z.string().min(1, 'Customer code is required'),
+  name: z.string().min(2, 'Name is too short'),
+  mobile: z.string().optional(),
+  whatsapp: z.string().optional(),
+  email: z.string().email('Invalid email address').optional().or(z.string().length(0)),
+  gstin: z.string().optional(),
+  panNumber: z.string().optional(),
+  customerType: z.string(),
+  tradeName: z.string().optional(),
+  address: z.string().optional(),
+  pinCode: z.string().optional(),
+  state: z.string().optional(),
+  stateCode: z.string().optional(),
+  placeOfSupply: z.string().optional(),
+});
+
 const leadSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
   companyName: z.string().optional(),
@@ -40,11 +57,31 @@ const activitySchema = z.object({
   customerId: z.string().optional(),
 });
 
+type CustomerFormValues = z.infer<typeof customerSchema>;
 type LeadFormValues = z.infer<typeof leadSchema>;
 type ContactFormValues = z.infer<typeof contactSchema>;
 type ActivityFormValues = z.infer<typeof activitySchema>;
 
 // --- TYPES ---
+interface Customer {
+  id: string;
+  customerCode: string;
+  name: string;
+  mobile?: string;
+  whatsapp?: string;
+  email?: string;
+  gstin?: string;
+  panNumber?: string;
+  customerType: string;
+  tradeName?: string;
+  address?: string;
+  pinCode?: string;
+  state?: string;
+  stateCode?: string;
+  placeOfSupply?: string;
+  outstandingAmount?: number;
+}
+
 interface Lead {
   id: string;
   name: string;
@@ -80,12 +117,14 @@ interface Activity {
 }
 
 export const CrmDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'leads' | 'contacts' | 'activities'>('leads');
+  const isCustomersPath = window.location.pathname.includes('/customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'leads' | 'contacts' | 'activities'>(isCustomersPath ? 'customers' : 'leads');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Lists states
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -95,6 +134,11 @@ export const CrmDashboard = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Forms hooks
+  const customerForm = useForm<CustomerFormValues>({
+    resolver: zodResolver(customerSchema),
+    defaultValues: { customerCode: '', name: '', mobile: '', whatsapp: '', email: '', gstin: '', panNumber: '', customerType: 'UNREGISTERED', tradeName: '', address: '', pinCode: '', state: '', stateCode: '', placeOfSupply: '' }
+  });
+
   const leadForm = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
     defaultValues: { name: '', companyName: '', email: '', phone: '', status: 'NEW', source: 'WEBSITE', value: 0, notes: '' }
@@ -113,7 +157,10 @@ export const CrmDashboard = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      if (activeTab === 'leads') {
+      if (activeTab === 'customers') {
+        const res = await api.get<{ success: boolean; data: { items: Customer[] } }>('/customers');
+        setCustomers(res.data?.items || []);
+      } else if (activeTab === 'leads') {
         const res = await api.get<{ success: boolean; data: { items: Lead[] } }>('/crm/leads');
         setLeads(res.data?.items || []);
       } else if (activeTab === 'contacts') {
@@ -136,6 +183,7 @@ export const CrmDashboard = () => {
 
   const handleOpenAddModal = () => {
     setEditingId(null);
+    customerForm.reset();
     leadForm.reset();
     contactForm.reset();
     activityForm.reset();
@@ -144,7 +192,24 @@ export const CrmDashboard = () => {
 
   const handleOpenEditModal = (item: any) => {
     setEditingId(item.id);
-    if (activeTab === 'leads') {
+    if (activeTab === 'customers') {
+      customerForm.reset({
+        customerCode: item.customerCode,
+        name: item.name,
+        mobile: item.mobile || '',
+        whatsapp: item.whatsapp || '',
+        email: item.email || '',
+        gstin: item.gstin || '',
+        panNumber: item.panNumber || '',
+        customerType: item.customerType || 'UNREGISTERED',
+        tradeName: item.tradeName || '',
+        address: item.address || '',
+        pinCode: item.pinCode || '',
+        state: item.state || '',
+        stateCode: item.stateCode || '',
+        placeOfSupply: item.placeOfSupply || '',
+      });
+    } else if (activeTab === 'leads') {
       leadForm.reset({
         name: item.name,
         companyName: item.companyName || '',
@@ -176,6 +241,25 @@ export const CrmDashboard = () => {
       });
     }
     setIsModalOpen(true);
+  };
+
+  const handleCustomerSubmit = async (values: CustomerFormValues) => {
+    setIsSubmitting(true);
+    try {
+      if (editingId) {
+        await api.patch(`/customers/${editingId}`, values);
+        toast.success('Customer updated successfully');
+      } else {
+        await api.post('/customers', values);
+        toast.success('Customer registered successfully');
+      }
+      setIsModalOpen(false);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Action failed');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleLeadSubmit = async (values: LeadFormValues) => {
@@ -238,7 +322,7 @@ export const CrmDashboard = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this item?')) return;
     try {
-      const endpoint = activeTab === 'leads' ? '/crm/leads' : activeTab === 'contacts' ? '/crm/contacts' : '/crm/activities';
+      const endpoint = activeTab === 'customers' ? '/customers' : activeTab === 'leads' ? '/crm/leads' : activeTab === 'contacts' ? '/crm/contacts' : '/crm/activities';
       await api.delete(`${endpoint}/${id}`);
       toast.success('Item deleted successfully');
       fetchData();
@@ -261,10 +345,9 @@ export const CrmDashboard = () => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
   };
 
-  // Pipeline total value calculation
-  const totalPipelineValue = leads
-    .filter(l => l.status === 'NEW' || l.status === 'CONTACTED' || l.status === 'QUALIFIED')
-    .reduce((sum, l) => sum + Number(l.value || 0), 0);
+  // Outstanding balance calculation
+  const totalOutstanding = customers.reduce((sum, c) => sum + Number(c.outstandingAmount || 0), 0);
+  const totalPipelineValue = leads.reduce((sum, l) => sum + Number(l.value || 0), 0);
 
   return (
     <div className="space-y-6 text-left">
@@ -273,10 +356,12 @@ export const CrmDashboard = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Users className="w-6 h-6 text-accent" />
-            CRM Pipeline & Contacts
+            {activeTab === 'customers' ? 'Customer Directory & Relations' : 'CRM Pipeline & Contacts'}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage prospective leads, track customer follow-up actions, and view the pipeline health.
+            {activeTab === 'customers' 
+              ? 'Manage registered business clients, credit limits, outstanding balances, and GST registry profiles.'
+              : 'Manage prospective leads, track customer follow-up actions, and view the pipeline health.'}
           </p>
         </div>
         <button
@@ -284,11 +369,11 @@ export const CrmDashboard = () => {
           className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          {activeTab === 'leads' ? 'Add Prospect Lead' : activeTab === 'contacts' ? 'Add Contact' : 'Schedule Activity'}
+          {activeTab === 'customers' ? 'Add Customer' : activeTab === 'leads' ? 'Add Prospect Lead' : activeTab === 'contacts' ? 'Add Contact' : 'Schedule Activity'}
         </button>
       </div>
-
-      {/* KPI Cards Row (If Leads is active) */}
+ 
+      {/* KPI Cards Row */}
       {activeTab === 'leads' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
@@ -312,8 +397,39 @@ export const CrmDashboard = () => {
         </div>
       )}
 
+      {activeTab === 'customers' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
+            <div className="space-y-1">
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Outstanding Balance</span>
+              <h3 className="text-2xl font-black text-foreground">{formatCurrency(totalOutstanding)}</h3>
+            </div>
+            <div className="p-3 bg-accent/10 text-accent rounded-xl">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
+            <div className="space-y-1">
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Total Customers</span>
+              <h3 className="text-2xl font-black text-foreground">{customers.length}</h3>
+            </div>
+            <div className="p-3 bg-accent/10 text-accent rounded-xl">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+      )}
+ 
       {/* Tabs Row */}
       <div className="flex border-b border-border">
+        <button
+          onClick={() => { setActiveTab('customers'); setSearchQuery(''); }}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'customers' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Customer Directory
+        </button>
         <button
           onClick={() => { setActiveTab('leads'); setSearchQuery(''); }}
           className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
@@ -339,7 +455,7 @@ export const CrmDashboard = () => {
           Activities & Tasks
         </button>
       </div>
-
+ 
       {/* Search Input Filter */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-border w-full max-w-md focus-within:border-accent transition-colors">
         <Search className="w-4 h-4 text-muted-foreground" />
@@ -351,7 +467,7 @@ export const CrmDashboard = () => {
           onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
-
+ 
       {/* Content Panels */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -363,6 +479,65 @@ export const CrmDashboard = () => {
             </div>
           ))}
         </div>
+      ) : activeTab === 'customers' ? (
+        customers.length === 0 ? (
+          <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
+            <h3 className="font-semibold text-lg">No customers registered</h3>
+            <button onClick={handleOpenAddModal} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-xs font-semibold">
+              Register First Customer
+            </button>
+          </div>
+        ) : (
+          <div className="bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-background bg-opacity-35 border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  <th className="py-4 px-6">Customer Code</th>
+                  <th className="py-4 px-6">Name</th>
+                  <th className="py-4 px-6">Type</th>
+                  <th className="py-4 px-6">Contact details</th>
+                  <th className="py-4 px-6">GSTIN</th>
+                  <th className="py-4 px-6 text-right">Outstanding</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.customerCode.toLowerCase().includes(searchQuery.toLowerCase())).map((c) => (
+                  <tr key={c.id} className="border-b border-border/50 hover:bg-background/20 transition-colors">
+                    <td className="py-4 px-6 font-semibold text-foreground">{c.customerCode}</td>
+                    <td className="py-4 px-6">
+                      <div className="font-medium text-foreground">{c.name}</div>
+                      {c.tradeName && <div className="text-[10px] text-muted-foreground">{c.tradeName}</div>}
+                    </td>
+                    <td className="py-4 px-6">
+                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full ${
+                        c.customerType === 'REGISTERED' ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {c.customerType}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 text-xs space-y-0.5">
+                      {c.email && <div className="text-foreground">{c.email}</div>}
+                      {c.mobile && <div className="text-muted-foreground">{c.mobile}</div>}
+                    </td>
+                    <td className="py-4 px-6 text-xs text-foreground font-mono">{c.gstin || '-'}</td>
+                    <td className="py-4 px-6 text-right font-bold text-foreground">
+                      {formatCurrency(Number(c.outstandingAmount || 0))}
+                    </td>
+                    <td className="py-4 px-6 text-right space-x-1.5">
+                      <button onClick={() => handleOpenEditModal(c)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer inline-flex">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(c.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer inline-flex">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       ) : activeTab === 'leads' ? (
         leads.length === 0 ? (
           <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
@@ -516,6 +691,97 @@ export const CrmDashboard = () => {
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
             </div>
+
+            {/* Render conditional forms based on activeTab */}
+            {activeTab === 'customers' && (
+              <form onSubmit={customerForm.handleSubmit(handleCustomerSubmit)} className="p-6 space-y-4 text-left max-h-[70vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Customer Code *</label>
+                    <input type="text" {...customerForm.register('customerCode')} placeholder="e.g. CUST-001" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-mono" />
+                    {customerForm.formState.errors.customerCode && <p className="text-xs text-red-500 mt-1">{customerForm.formState.errors.customerCode.message}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Customer Type</label>
+                    <select {...customerForm.register('customerType')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
+                      <option value="UNREGISTERED">Unregistered / Consumer</option>
+                      <option value="REGISTERED">Registered Business</option>
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Customer Name *</label>
+                    <input type="text" {...customerForm.register('name')} placeholder="e.g. Acme Corporation" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                    {customerForm.formState.errors.name && <p className="text-xs text-red-500 mt-1">{customerForm.formState.errors.name.message}</p>}
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Trade / Business Name</label>
+                    <input type="text" {...customerForm.register('tradeName')} placeholder="e.g. Acme Corp" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Email Address</label>
+                    <input type="text" {...customerForm.register('email')} placeholder="billing@acme.com" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                    {customerForm.formState.errors.email && <p className="text-xs text-red-500 mt-1">{customerForm.formState.errors.email.message}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Mobile Number</label>
+                    <input type="text" {...customerForm.register('mobile')} placeholder="+91 99999 99999" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Whatsapp</label>
+                    <input type="text" {...customerForm.register('whatsapp')} placeholder="+91 99999 99999" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">GSTIN</label>
+                    <input type="text" {...customerForm.register('gstin')} placeholder="e.g. 27AAAAA1111A1Z1" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-mono" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">PAN Number</label>
+                    <input type="text" {...customerForm.register('panNumber')} placeholder="e.g. ABCDE1234F" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-mono" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Place of Supply</label>
+                    <input type="text" {...customerForm.register('placeOfSupply')} placeholder="e.g. Maharashtra" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">State Code</label>
+                    <input type="text" {...customerForm.register('stateCode')} placeholder="e.g. 27" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-mono" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Pin Code</label>
+                    <input type="text" {...customerForm.register('pinCode')} placeholder="e.g. 400001" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">State</label>
+                    <input type="text" {...customerForm.register('state')} placeholder="e.g. Maharashtra" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Billing Address</label>
+                    <textarea {...customerForm.register('address')} placeholder="Enter complete billing details..." rows={2} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none" />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 border-t border-border pt-4 mt-6">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer">Cancel</button>
+                  <button type="submit" disabled={isSubmitting} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer">
+                    {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Save Customer
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Render conditional forms based on activeTab */}
             {activeTab === 'leads' && (

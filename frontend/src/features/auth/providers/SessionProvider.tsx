@@ -12,14 +12,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
     apiClient.setUnauthorizedHandler(clearSession);
 
     const initSession = async () => {
-      const refreshToken = localStorage.getItem("refresh_token");
-      if (refreshToken) {
+      const isLoggedIn = localStorage.getItem("logged_in") === "true";
+      if (isLoggedIn) {
         try {
-          const res = await apiClient.post<{ success: boolean; data: { access_token: string; user: any } }>("/v1/auth/refresh", {
-            refresh_token: refreshToken,
-          });
+          const res = await apiClient.post<{ success: boolean; data: { access_token: string; user: any } }>("/auth/refresh", {});
           if (res.success && res.data) {
-            setSession(res.data.user, res.data.access_token, refreshToken);
+            setSession(res.data.user, res.data.access_token);
           } else {
             clearSession();
           }

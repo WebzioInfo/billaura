@@ -122,17 +122,20 @@ let AuthService = class AuthService {
                 status: 'SUCCESS',
             },
         });
-        const refreshToken = await this.sessionService.createSession(user.id, userAgent, ipAddress);
         const firstCompanyUser = user.companies[0];
-        const companyId = firstCompanyUser?.companyId || null;
-        const companyRole = firstCompanyUser?.role || null;
-        const onboardingStep = firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS';
+        const companyId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.companyId || null);
+        const companyRole = user.globalRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (firstCompanyUser?.role || null);
+        const customRoleId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.customRoleId || null);
+        const onboardingStep = user.globalRole === 'SUPER_ADMIN' ? 'COMPLETED' : (firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS');
+        const refreshToken = await this.sessionService.createSession(user.id, userAgent, ipAddress, companyId || undefined);
         const payload = {
             email: user.email,
             sub: user.id,
             companyId: companyId,
             tenantId: companyId,
             role: companyRole,
+            roleId: customRoleId,
+            globalRole: user.globalRole,
             onboardingStep: onboardingStep,
         };
         return {
@@ -145,6 +148,7 @@ let AuthService = class AuthService {
                 companyId: companyId,
                 tenantId: companyId,
                 role: companyRole,
+                globalRole: user.globalRole,
                 onboardingStep: payload.onboardingStep,
             }
         };
@@ -217,17 +221,20 @@ let AuthService = class AuthService {
                 otpExpiresAt: null,
             }
         });
-        const refreshToken = await this.sessionService.createSession(user.id);
         const firstCompanyUser = user.companies[0];
-        const companyId = firstCompanyUser?.companyId || null;
-        const companyRole = firstCompanyUser?.role || null;
-        const onboardingStep = firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS';
+        const companyId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.companyId || null);
+        const companyRole = user.globalRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (firstCompanyUser?.role || null);
+        const customRoleId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.customRoleId || null);
+        const onboardingStep = user.globalRole === 'SUPER_ADMIN' ? 'COMPLETED' : (firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS');
+        const refreshToken = await this.sessionService.createSession(user.id, undefined, undefined, companyId || undefined);
         const payload = {
             email: user.email,
             sub: user.id,
             companyId: companyId,
             tenantId: companyId,
             role: companyRole,
+            roleId: customRoleId,
+            globalRole: user.globalRole,
             onboardingStep,
         };
         return {
@@ -240,12 +247,13 @@ let AuthService = class AuthService {
                 companyId,
                 tenantId: companyId,
                 role: companyRole,
+                globalRole: user.globalRole,
                 onboardingStep,
             }
         };
     }
-    async refreshTokens(refreshToken) {
-        const userId = await this.sessionService.validateRefreshToken(refreshToken);
+    async refreshTokens(refreshToken, userAgent, ipAddress) {
+        const { newRefreshToken, userId, companyId } = await this.sessionService.rotateSession(refreshToken, userAgent, ipAddress);
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
             include: { companies: { include: { company: true } } },
@@ -253,27 +261,32 @@ let AuthService = class AuthService {
         if (!user || !user.isActive) {
             throw new common_1.UnauthorizedException('Invalid session owner');
         }
-        const firstCompanyUser = user.companies[0];
-        const companyId = firstCompanyUser?.companyId || null;
-        const companyRole = firstCompanyUser?.role || null;
-        const onboardingStep = firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS';
+        const activeCompanyUser = user.companies.find(c => c.companyId === companyId) || user.companies[0];
+        const activeCompanyId = user.globalRole === 'SUPER_ADMIN' ? null : (activeCompanyUser?.companyId || null);
+        const companyRole = user.globalRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (activeCompanyUser?.role || null);
+        const customRoleId = user.globalRole === 'SUPER_ADMIN' ? null : (activeCompanyUser?.customRoleId || null);
+        const onboardingStep = user.globalRole === 'SUPER_ADMIN' ? 'COMPLETED' : (activeCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS');
         const payload = {
             email: user.email,
             sub: user.id,
-            companyId: companyId,
-            tenantId: companyId,
+            companyId: activeCompanyId,
+            tenantId: activeCompanyId,
             role: companyRole,
+            roleId: customRoleId,
+            globalRole: user.globalRole,
             onboardingStep,
         };
         return {
             access_token: this.jwtService.sign(payload),
+            refresh_token: newRefreshToken,
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                companyId,
-                tenantId: companyId,
+                companyId: activeCompanyId,
+                tenantId: activeCompanyId,
                 role: companyRole,
+                globalRole: user.globalRole,
                 onboardingStep,
             }
         };
@@ -282,11 +295,34 @@ let AuthService = class AuthService {
         const company = await this.prisma.company.findUnique({ where: { id: companyId } });
         if (!company)
             throw new common_1.NotFoundException('Company not found');
+        let mappedType = 'TRADING';
+        const typeStr = dto.businessType.toLowerCase();
+        if (typeStr.includes('saas') || typeStr.includes('software')) {
+            mappedType = 'SERVICE';
+        }
+        else if (typeStr.includes('manufacturing') || typeStr.includes('production')) {
+            mappedType = 'MANUFACTURING';
+        }
+        else if (typeStr.includes('retail') || typeStr.includes('e-commerce') || typeStr.includes('commerce')) {
+            mappedType = 'RETAIL';
+        }
+        else if (typeStr.includes('service') || typeStr.includes('professional')) {
+            mappedType = 'SERVICE';
+        }
+        else if (typeStr.includes('logistics') || typeStr.includes('warehouse') || typeStr.includes('warehousing')) {
+            mappedType = 'TRADING';
+        }
+        else {
+            const upper = dto.businessType.toUpperCase();
+            if (['TRADING', 'RETAIL', 'WHOLESALE', 'MANUFACTURING', 'SERVICE', 'MIXED'].includes(upper)) {
+                mappedType = upper;
+            }
+        }
         const updated = await this.prisma.company.update({
             where: { id: companyId },
             data: {
                 companyName: dto.companyName,
-                businessType: dto.businessType,
+                businessType: mappedType,
                 onboardingStep: 'TAX_DETAILS',
             }
         });

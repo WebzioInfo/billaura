@@ -214,7 +214,7 @@ let PaymentsService = class PaymentsService {
                 data: { balance: { decrement: dto.amount } },
             });
             return payment;
-        });
+        }, { timeout: 20000 });
     }
     async remove(id) {
         const payment = await this.findOne(id);

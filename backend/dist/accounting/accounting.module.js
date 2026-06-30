@@ -12,6 +12,7 @@ const accounts_service_1 = require("./accounts.service");
 const accounts_controller_1 = require("./accounts.controller");
 const journal_entries_service_1 = require("./journal-entries.service");
 const journal_entries_controller_1 = require("./journal-entries.controller");
+const bank_accounts_controller_1 = require("./bank-accounts.controller");
 const database_module_1 = require("../database/database.module");
 let AccountingModule = class AccountingModule {
 };
@@ -22,6 +23,7 @@ exports.AccountingModule = AccountingModule = __decorate([
         controllers: [
             accounts_controller_1.AccountsController,
             journal_entries_controller_1.JournalEntriesController,
+            bank_accounts_controller_1.BankAccountsController,
         ],
         providers: [
             accounts_service_1.AccountsService,

@@ -25,6 +25,11 @@ export class AccountsController {
     return this.accountsService.getBalanceSheet();
   }
 
+  @Get('cash-flow')
+  async getCashFlow() {
+    return this.accountsService.getCashFlow();
+  }
+
   @Get()
   async findAll(@Query() query: PaginationQueryDto) {
     return this.accountsService.findAll(query);

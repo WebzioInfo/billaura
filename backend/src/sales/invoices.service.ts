@@ -298,7 +298,7 @@ export class InvoicesService {
       });
 
       return invoice;
-    });
+    }, { timeout: 20000 });
   }
 
   async remove(id: string) {

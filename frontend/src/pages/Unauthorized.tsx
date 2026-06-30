@@ -18,7 +18,7 @@ export function Unauthorized() {
         </div>
         <div className="pt-4">
           <Link
-            to="/app/dashboard"
+            to="/dashboard"
             className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 transition-colors w-full"
           >
             Return to Dashboard

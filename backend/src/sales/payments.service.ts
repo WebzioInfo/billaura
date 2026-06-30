@@ -243,7 +243,7 @@ export class PaymentsService {
       });
 
       return payment;
-    });
+    }, { timeout: 20000 });
   }
 
   async remove(id: string) {
