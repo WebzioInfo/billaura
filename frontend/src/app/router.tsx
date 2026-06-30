@@ -145,7 +145,7 @@ export const router = createBrowserRouter([
       { path: 'cash-flow', element: <ChartOfAccounts /> },
       { path: 'gst', element: <TaxesDashboard /> },
       { path: 'taxes', element: <TaxesDashboard /> },
-      { path: 'reports', element: <ExecutiveDashboard /> },
+      { path: 'reports', element: <ChartOfAccounts /> },
       { path: 'hr', element: <DepartmentsList /> },
       { path: 'employees', element: <DepartmentsList /> },
       { path: 'attendance', element: <DepartmentsList /> },

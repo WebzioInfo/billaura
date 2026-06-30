@@ -30,7 +30,7 @@ export default function DashboardLayout() {
     { name: 'Accounting', path: '/accounting', icon: Landmark },
     { name: 'GST & Taxes', path: '/taxes', icon: Shield },
     { name: 'Expenses', path: '/expenses', icon: Receipt },
-    { name: 'Reports', path: '/reports', icon: LayoutDashboard },
+    { name: 'Reports', path: '/profit-loss', icon: FileText },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 
@@ -87,7 +87,24 @@ export default function DashboardLayout() {
           {/* Core Navigation */}
           <div className="space-y-1.5">
             {coreNavItems.map((item) => {
-              const isActive = location.pathname.startsWith(item.path);
+              const checkIsActive = (itemPath: string) => {
+                const path = location.pathname;
+                if (itemPath === '/dashboard') return path === '/dashboard';
+                if (itemPath === '/customers') return path === '/customers' || path === '/crm';
+                if (itemPath === '/sales') return ['/sales', '/quotations', '/sales-orders', '/delivery-challans', '/invoices', '/recurring-invoices', '/payments'].includes(path);
+                if (itemPath === '/purchases') return ['/purchases', '/purchase-orders', '/bills', '/vendor-payments'].includes(path);
+                if (itemPath === '/banking') return path === '/banking';
+                if (itemPath === '/accounting') return ['/accounting', '/chart-of-accounts', '/journal-entries', '/general-ledger', '/trial-balance', '/balance-sheet', '/profit-loss', '/cash-flow'].includes(path);
+                if (itemPath === '/inventory') return ['/inventory', '/warehouses', '/categories'].includes(path);
+                if (itemPath === '/products') return ['/products', '/services'].includes(path);
+                if (itemPath === '/taxes') return ['/taxes', '/gst'].includes(path);
+                if (itemPath === '/hr') return ['/hr', '/employees'].includes(path);
+                if (itemPath === '/settings') return ['/settings', '/company', '/profile'].includes(path);
+                if (['/vendors', '/expenses', '/reports', '/attendance', '/payroll', '/users', '/roles', '/branches', '/subscription'].includes(itemPath)) return path === itemPath;
+                return path.startsWith(itemPath);
+              };
+              
+              const isActive = checkIsActive(item.path);
               const Icon = item.icon;
               return (
                 <Link
@@ -112,7 +129,13 @@ export default function DashboardLayout() {
             <h3 className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Supporting Modules</h3>
             <div className="space-y-1.5">
               {supportingModules.map((item) => {
-                const isActive = location.pathname.startsWith(item.path);
+                const checkIsActive = (itemPath: string) => {
+                  const path = location.pathname;
+                  if (itemPath === '/hr') return ['/hr', '/employees'].includes(path);
+                  if (itemPath === '/inventory') return ['/inventory', '/warehouses', '/categories'].includes(path);
+                  return path === itemPath;
+                };
+                const isActive = checkIsActive(item.path);
                 const Icon = item.icon;
                 return (
                   <Link
@@ -139,7 +162,7 @@ export default function DashboardLayout() {
               <h3 className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Administration</h3>
               <div className="space-y-1.5">
                 {adminModules.map((item) => {
-                  const isActive = location.pathname.startsWith(item.path);
+                  const isActive = location.pathname === item.path;
                   const Icon = item.icon;
                   return (
                     <Link

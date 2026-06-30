@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -94,7 +95,25 @@ interface Brand {
 }
 
 export const InventoryDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'products' | 'stocks' | 'warehouses' | 'categories' | 'brands'>('products');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const path = location.pathname;
+  let activeTab: 'products' | 'stocks' | 'warehouses' | 'categories' | 'brands' = 'products';
+  if (path.includes('/inventory')) activeTab = 'stocks';
+  else if (path.includes('/warehouses')) activeTab = 'warehouses';
+  else if (path.includes('/categories')) activeTab = 'categories';
+  else if (path.includes('/brands')) activeTab = 'brands';
+  else activeTab = 'products';
+
+  const setActiveTab = (tab: 'products' | 'stocks' | 'warehouses' | 'categories' | 'brands') => {
+    if (tab === 'stocks') navigate('/inventory');
+    else if (tab === 'warehouses') navigate('/warehouses');
+    else if (tab === 'categories') navigate('/categories');
+    else if (tab === 'brands') navigate('/brands');
+    else navigate('/products');
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

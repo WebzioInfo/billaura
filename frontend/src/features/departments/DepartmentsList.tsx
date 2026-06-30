@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -21,19 +22,21 @@ const designationSchema = z.object({
 });
 
 const employeeSchema = z.object({
-  employeeCode: z.string().min(2, 'Employee Code is too short'),
+  employeeCode: z.string().min(1, 'Employee code is required'),
   name: z.string().min(2, 'Name is too short'),
   mobile: z.string().optional(),
-  email: z.string().optional(),
-  departmentId: z.string().optional(),
-  designationId: z.string().optional(),
-  basicSalary: z.number(),
+  email: z.string().email('Invalid email').optional().or(z.string().length(0)),
+  departmentId: z.string().min(1, 'Department is required'),
+  designationId: z.string().min(1, 'Designation is required'),
+  basicSalary: z.number().min(0),
 });
 
 const attendanceSchema = z.object({
-  employeeId: z.string().min(1, 'Select an employee'),
-  date: z.string().nonempty('Select date'),
-  type: z.enum(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE', 'HOLIDAY']),
+  employeeId: z.string().min(1, 'Employee is required'),
+  date: z.string().nonempty('Date is required'),
+  status: z.enum(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE']),
+  checkIn: z.string().optional(),
+  checkOut: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -46,38 +49,57 @@ type AttendanceFormValues = z.infer<typeof attendanceSchema>;
 interface Department {
   id: string;
   name: string;
-  description?: string;
-  isActive: boolean;
 }
 
 interface Designation {
   id: string;
   name: string;
-  description?: string;
 }
 
 interface Employee {
   id: string;
   employeeCode: string;
   name: string;
-  email?: string;
   mobile?: string;
+  email?: string;
   basicSalary: number;
-  department?: Department;
-  designation?: Designation;
+  department: Department;
+  designation: Designation;
 }
 
 interface Attendance {
   id: string;
-  employeeId: string;
   date: string;
-  type: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | 'HOLIDAY';
-  notes?: string;
+  status: string;
+  checkIn?: string;
+  checkOut?: string;
   employee: Employee;
 }
 
 export const DepartmentsList = () => {
-  const [activeTab, setActiveTab] = useState<'employees' | 'departments' | 'designations' | 'attendance' | 'payroll'>('employees');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Derive active tab from URL path
+  const path = location.pathname;
+  let activeTab: 'employees' | 'departments' | 'designations' | 'attendance' | 'payroll' = 'employees';
+  if (path.includes('/hr')) activeTab = 'departments'; // Fallback mapping for HR module base
+  if (path.includes('/attendance')) activeTab = 'attendance';
+  if (path.includes('/payroll')) activeTab = 'payroll';
+  if (path.includes('/employees')) activeTab = 'employees';
+  
+  // Custom parsing for query tab if present
+  const searchParams = new URLSearchParams(location.search);
+  const tabParam = searchParams.get('tab');
+  if (tabParam === 'departments') activeTab = 'departments';
+  if (tabParam === 'designations') activeTab = 'designations';
+  
+  const setActiveTab = (tab: string) => {
+    if (tab === 'employees') navigate('/employees');
+    else if (tab === 'attendance') navigate('/attendance');
+    else if (tab === 'payroll') navigate('/payroll');
+    else navigate(`/hr?tab=${tab}`);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

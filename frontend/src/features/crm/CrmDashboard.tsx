@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -18,7 +19,7 @@ const customerSchema = z.object({
   email: z.string().email('Invalid email address').optional().or(z.string().length(0)),
   gstin: z.string().optional(),
   panNumber: z.string().optional(),
-  customerType: z.string(),
+  customerType: z.enum(['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT']),
   tradeName: z.string().optional(),
   address: z.string().optional(),
   pinCode: z.string().optional(),
@@ -28,20 +29,20 @@ const customerSchema = z.object({
 });
 
 const leadSchema = z.object({
-  name: z.string().min(2, 'Name is too short'),
+  name: z.string().min(1, 'Name is required'),
   companyName: z.string().optional(),
-  email: z.string().email('Invalid email address').optional().or(z.string().length(0)),
+  email: z.string().email('Invalid email').optional().or(z.string().length(0)),
   phone: z.string().optional(),
-  status: z.string(),
-  source: z.string().optional(),
-  value: z.number(),
+  status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'WON', 'LOST']),
+  source: z.enum(['WEBSITE', 'REFERRAL', 'COLD_CALL', 'EVENT', 'OTHER']),
+  value: z.number().optional(),
   notes: z.string().optional(),
 });
 
 const contactSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Invalid email address').optional().or(z.string().length(0)),
+  lastName: z.string().optional(),
+  email: z.string().email('Invalid email').optional().or(z.string().length(0)),
   phone: z.string().optional(),
   designation: z.string().optional(),
   customerId: z.string().optional(),
@@ -49,10 +50,10 @@ const contactSchema = z.object({
 });
 
 const activitySchema = z.object({
-  type: z.string().min(1, 'Activity type is required'),
-  subject: z.string().min(2, 'Subject is required'),
+  type: z.enum(['CALL', 'EMAIL', 'MEETING', 'NOTE']),
+  subject: z.string().min(1, 'Subject is required'),
   description: z.string().optional(),
-  dueDate: z.string().nonempty('Due date is required'),
+  dueDate: z.string().optional(),
   leadId: z.string().optional(),
   customerId: z.string().optional(),
 });
@@ -67,19 +68,9 @@ interface Customer {
   id: string;
   customerCode: string;
   name: string;
-  mobile?: string;
-  whatsapp?: string;
   email?: string;
-  gstin?: string;
-  panNumber?: string;
+  mobile?: string;
   customerType: string;
-  tradeName?: string;
-  address?: string;
-  pinCode?: string;
-  state?: string;
-  stateCode?: string;
-  placeOfSupply?: string;
-  outstandingAmount?: number;
 }
 
 interface Lead {
@@ -87,22 +78,19 @@ interface Lead {
   name: string;
   companyName?: string;
   email?: string;
-  phone?: string;
   status: string;
-  source?: string;
-  value: number;
-  notes?: string;
+  source: string;
+  value?: number;
 }
 
 interface Contact {
   id: string;
   firstName: string;
-  lastName: string;
+  lastName?: string;
   email?: string;
   phone?: string;
   designation?: string;
-  customerId?: string;
-  vendorId?: string;
+  customer?: { name: string };
 }
 
 interface Activity {
@@ -117,8 +105,17 @@ interface Activity {
 }
 
 export const CrmDashboard = () => {
-  const isCustomersPath = window.location.pathname.includes('/customers');
-  const [activeTab, setActiveTab] = useState<'customers' | 'leads' | 'contacts' | 'activities'>(isCustomersPath ? 'customers' : 'leads');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Derive active tab from URL path
+  const path = location.pathname;
+  let activeTab: 'customers' | 'leads' | 'contacts' | 'activities' = 'customers';
+  if (path.includes('/crm')) activeTab = 'leads';
+  if (path.includes('/customers')) activeTab = 'customers';
+  // Note: /contacts and /activities routes are not defined directly in core sidebar, they act as sub-tabs
+  
+  const setActiveTab = (tab: string) => navigate(tab === 'customers' ? '/customers' : tab === 'leads' ? '/crm' : `/customers?tab=${tab}`);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

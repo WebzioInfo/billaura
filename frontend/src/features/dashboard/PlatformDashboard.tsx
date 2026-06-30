@@ -176,6 +176,17 @@ export function PlatformDashboard() {
       case 'dashboard':
         return (
           <div className="space-y-8 animate-fadeIn">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 capitalize">
+                  Platform Operations
+                </h1>
+                <p className="text-sm text-slate-500 mt-1">
+                  Super Admin system administration control desk.
+                </p>
+              </div>
+            </div>
+            
             {/* KPI grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -336,6 +347,10 @@ export function PlatformDashboard() {
       case 'companies':
         return (
           <div className="space-y-6 animate-fadeIn">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tenant Companies</h1>
+              <p className="text-sm text-slate-500 mt-1">Manage isolated tenant environments and subscriptions.</p>
+            </div>
             {/* Header controls */}
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="relative w-full sm:w-80">
@@ -550,6 +565,10 @@ export function PlatformDashboard() {
       case 'users':
         return (
           <div className="space-y-6 animate-fadeIn">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Registered Users</h1>
+              <p className="text-sm text-slate-500 mt-1">Manage global user accounts and platform access.</p>
+            </div>
             <div className="flex justify-between items-center gap-4">
               <div className="relative w-full sm:w-80">
                 <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -804,16 +823,6 @@ export function PlatformDashboard() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 capitalize">
-            {currentTab === 'dashboard' ? 'Platform Operations' : `${currentTab} console`}
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Super Admin system administration control desk.
-          </p>
-        </div>
-      </div>
       {renderContent()}
     </div>
   );

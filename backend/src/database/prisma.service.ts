@@ -19,7 +19,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           : ["error", "warn"],
     });
 
-    const globalModels = ['User', 'SystemSetting', 'SubscriptionPlan', 'Company', 'PaymentAllocation', 'PurchasePaymentAllocation', 'JournalEntryLine', 'InvoiceItem', 'PurchaseItem'];
+    const globalModels = ['User', 'SystemSetting', 'SubscriptionPlan', 'Company', 'PaymentAllocation', 'PurchasePaymentAllocation', 'JournalEntryLine', 'InvoiceItem', 'PurchaseItem', 'RolePermission'];
 
     this.extendedClient = this.$extends({
       query: {

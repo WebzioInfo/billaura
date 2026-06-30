@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -57,7 +58,26 @@ interface JournalEntry {
 }
 
 export const ChartOfAccounts = () => {
-  const [activeTab, setActiveTab] = useState<'coa' | 'journal' | 'trial' | 'pl' | 'bs' | 'cf'>('coa');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Derive active tab from URL path
+  const path = location.pathname;
+  let activeTab: 'coa' | 'journal' | 'trial' | 'pl' | 'bs' | 'cf' = 'coa';
+  if (path.includes('/journal-entries')) activeTab = 'journal';
+  else if (path.includes('/trial-balance')) activeTab = 'trial';
+  else if (path.includes('/profit-loss')) activeTab = 'pl';
+  else if (path.includes('/balance-sheet')) activeTab = 'bs';
+  else if (path.includes('/cash-flow')) activeTab = 'cf';
+  
+  const setActiveTab = (tab: 'coa' | 'journal' | 'trial' | 'pl' | 'bs' | 'cf') => {
+    if (tab === 'journal') navigate('/journal-entries');
+    else if (tab === 'trial') navigate('/trial-balance');
+    else if (tab === 'pl') navigate('/profit-loss');
+    else if (tab === 'bs') navigate('/balance-sheet');
+    else if (tab === 'cf') navigate('/cash-flow');
+    else navigate('/chart-of-accounts');
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

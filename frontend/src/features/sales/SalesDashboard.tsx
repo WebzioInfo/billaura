@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -101,7 +102,19 @@ interface Quotation {
 }
 
 export const SalesDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'invoices' | 'payments' | 'quotations'>('invoices');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Derive active tab from URL path
+  const path = location.pathname;
+  let activeTab: 'invoices' | 'payments' | 'quotations' = 'invoices';
+  if (path.includes('/payments')) activeTab = 'payments';
+  else if (path.includes('/quotations')) activeTab = 'quotations';
+  else if (path.includes('/invoices')) activeTab = 'invoices';
+  
+  // Replace setActiveTab calls with navigate
+  const setActiveTab = (tab: string) => navigate(`/${tab}`);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

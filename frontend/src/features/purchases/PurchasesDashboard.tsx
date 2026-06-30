@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -28,17 +29,18 @@ const purchaseItemSchema = z.object({
 const purchaseSchema = z.object({
   vendorId: z.string().min(1, 'Select a vendor'),
   date: z.string().nonempty('Select date'),
+  dueDate: z.string().optional(),
   items: z.array(purchaseItemSchema).min(1, 'At least one line item is required'),
 });
 
 const paymentSchema = z.object({
   vendorId: z.string().min(1, 'Select a vendor'),
-  purchaseId: z.string().min(1, 'Select a purchase invoice'),
   bankAccountId: z.string().min(1, 'Select a bank account'),
   date: z.string().nonempty('Select date'),
   amount: z.number().min(1, 'Amount must be >= 1'),
   method: z.string().min(1, 'Select payment method'),
   reference: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 type VendorFormValues = z.infer<typeof vendorSchema>;
@@ -102,8 +104,16 @@ interface Payment {
 }
 
 export const PurchasesDashboard = () => {
-  const isVendorsPath = window.location.pathname.includes('/vendors');
-  const [activeTab, setActiveTab] = useState<'vendors' | 'purchases' | 'payments'>(isVendorsPath ? 'vendors' : 'purchases');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Derive active tab from URL path
+  const path = location.pathname;
+  let activeTab: 'vendors' | 'purchases' | 'payments' = 'purchases';
+  if (path.includes('/vendors')) activeTab = 'vendors';
+  if (path.includes('/vendor-payments')) activeTab = 'payments';
+  
+  const setActiveTab = (tab: string) => navigate(tab === 'payments' ? '/vendor-payments' : `/${tab}`);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

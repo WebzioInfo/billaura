@@ -140,7 +140,7 @@ export const OnboardingWizard = () => {
     ];
 
     return (
-      <div className="flex items-center justify-between w-full max-w-lg mx-auto mb-10 border-b border-slate-100 pb-4">
+      <div className="flex items-center justify-between w-full max-w-2xl mx-auto mb-10 border-b border-slate-100 pb-4">
         {steps.map((s, idx) => {
           const isDone = steps.findIndex(x => x.step === currentStep) > idx;
           const isActive = currentStep === s.step;
@@ -162,7 +162,7 @@ export const OnboardingWizard = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-12 px-6">
+    <div className="max-w-4xl mx-auto py-12 px-6">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Setup Workspace</h1>

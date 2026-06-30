@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { 
   Shield, Search, RefreshCw, Loader2, Download, Printer, 
@@ -32,7 +33,19 @@ interface TaxSummary {
 }
 
 export const TaxesDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'summary' | 'gstr1' | 'gstr2'>('summary');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Derive active tab from URL path/search
+  const searchParams = new URLSearchParams(location.search);
+  const path = location.pathname;
+  
+  let activeTab: 'summary' | 'gstr1' | 'gstr2' = 'summary';
+  const tabParam = searchParams.get('tab');
+  if (tabParam === 'gstr1') activeTab = 'gstr1';
+  else if (tabParam === 'gstr2') activeTab = 'gstr2';
+  
+  const setActiveTab = (tab: string) => navigate(`${path}?tab=${tab}`);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 

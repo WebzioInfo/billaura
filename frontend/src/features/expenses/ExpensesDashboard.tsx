@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -58,7 +59,16 @@ interface Expense {
 }
 
 export const ExpensesDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'claims' | 'categories'>('claims');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Derive active tab from URL search
+  const searchParams = new URLSearchParams(location.search);
+  let activeTab: 'claims' | 'categories' = 'claims';
+  const tabParam = searchParams.get('tab');
+  if (tabParam === 'categories') activeTab = 'categories';
+  
+  const setActiveTab = (tab: string) => navigate(`/expenses?tab=${tab}`);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -118,7 +118,7 @@ export const BranchesList = () => {
       setIsModalOpen(false);
       fetchBranches();
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Action failed';
+      const msg = err.response?.data?.error || err.response?.data?.message || 'Action failed';
       toast.error(msg);
     } finally {
       setIsSubmitting(false);
@@ -132,7 +132,7 @@ export const BranchesList = () => {
       toast.success('Branch removed successfully');
       fetchBranches();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to delete branch');
+      toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to delete branch');
     }
   };
 

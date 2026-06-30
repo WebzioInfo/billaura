@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -38,7 +39,20 @@ interface CompanyProfile {
 }
 
 export const SettingsPage = () => {
-  const [activeTab, setActiveTab] = useState<'branches' | 'roles' | 'profile'>('branches');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Derive active tab from URL path
+  const path = location.pathname;
+  let activeTab: 'branches' | 'roles' | 'profile' | 'users' | 'subscription' = 'branches';
+  if (path.includes('/roles')) activeTab = 'roles';
+  if (path.includes('/profile') || path.includes('/company')) activeTab = 'profile';
+  if (path.includes('/users')) activeTab = 'users';
+  if (path.includes('/subscription')) activeTab = 'subscription';
+  if (path.includes('/branches')) activeTab = 'branches';
+  
+  const setActiveTab = (tab: string) => navigate(`/${tab === 'profile' ? 'company' : tab}`);
+  
   const [companyId, setCompanyId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
