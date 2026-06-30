@@ -35,6 +35,7 @@ const purchaseSchema = z.object({
 
 const paymentSchema = z.object({
   vendorId: z.string().min(1, 'Select a vendor'),
+  purchaseId: z.string().optional(),
   bankAccountId: z.string().min(1, 'Select a bank account'),
   date: z.string().nonempty('Select date'),
   amount: z.number().min(1, 'Amount must be >= 1'),

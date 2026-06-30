@@ -71,6 +71,9 @@ interface Customer {
   email?: string;
   mobile?: string;
   customerType: string;
+  outstandingAmount?: number;
+  tradeName?: string;
+  gstin?: string;
 }
 
 interface Lead {
@@ -81,6 +84,7 @@ interface Lead {
   status: string;
   source: string;
   value?: number;
+  phone?: string;
 }
 
 interface Contact {
@@ -110,9 +114,14 @@ export const CrmDashboard = () => {
   
   // Derive active tab from URL path
   const path = location.pathname;
+  const searchParams = new URLSearchParams(location.search);
+  const tabParam = searchParams.get('tab');
+
   let activeTab: 'customers' | 'leads' | 'contacts' | 'activities' = 'customers';
   if (path.includes('/crm')) activeTab = 'leads';
   if (path.includes('/customers')) activeTab = 'customers';
+  if (tabParam === 'contacts') activeTab = 'contacts';
+  if (tabParam === 'activities') activeTab = 'activities';
   // Note: /contacts and /activities routes are not defined directly in core sidebar, they act as sub-tabs
   
   const setActiveTab = (tab: string) => navigate(tab === 'customers' ? '/customers' : tab === 'leads' ? '/crm' : `/customers?tab=${tab}`);
@@ -594,7 +603,7 @@ export const CrmDashboard = () => {
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center font-bold">
-                      {contact.firstName[0]}{contact.lastName[0]}
+                      {contact.firstName[0]}{(contact.lastName || '')[0] || ''}
                     </div>
                     <div>
                       <h3 className="font-bold text-base text-foreground">{contact.firstName} {contact.lastName}</h3>

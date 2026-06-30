@@ -49,11 +49,13 @@ type AttendanceFormValues = z.infer<typeof attendanceSchema>;
 interface Department {
   id: string;
   name: string;
+  description?: string;
 }
 
 interface Designation {
   id: string;
   name: string;
+  description?: string;
 }
 
 interface Employee {
@@ -73,6 +75,7 @@ interface Attendance {
   status: string;
   checkIn?: string;
   checkOut?: string;
+  notes?: string;
   employee: Employee;
 }
 
@@ -142,7 +145,7 @@ export const DepartmentsList = () => {
     defaultValues: {
       employeeId: '',
       date: new Date().toISOString().split('T')[0],
-      type: 'PRESENT',
+      status: 'PRESENT',
       notes: '',
     }
   });
@@ -494,10 +497,10 @@ export const DepartmentsList = () => {
                     <td className="py-4 px-6 text-sm text-foreground">{att.date.split('T')[0]}</td>
                     <td className="py-4 px-6">
                       <span className={`px-2.5 py-1 text-xs font-semibold rounded-full uppercase ${
-                        att.type === 'PRESENT' ? 'bg-green-500/10 text-green-500' :
-                        att.type === 'ABSENT' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
+                        att.status === 'PRESENT' ? 'bg-green-500/10 text-green-500' :
+                        att.status === 'ABSENT' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
                       }`}>
-                        {att.type}
+                        {att.status}
                       </span>
                     </td>
                     <td className="py-4 px-6 text-muted-foreground text-sm">{att.notes || '-'}</td>
@@ -664,7 +667,7 @@ export const DepartmentsList = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Attendance Status *</label>
-                    <select {...attendanceForm.register('type')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
+                    <select {...attendanceForm.register('status')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
                       <option value="PRESENT">Present</option>
                       <option value="ABSENT">Absent</option>
                       <option value="HALF_DAY">Half Day</option>

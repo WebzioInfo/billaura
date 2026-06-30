@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, ShoppingBag, CreditCard, Package, 
-  Settings, LogOut, Menu, X, ChevronDown, User, Bell, Search, Landmark, Shield, Receipt 
+  Settings, LogOut, Menu, X, ChevronDown, User, Bell, Search, Landmark, Shield, Receipt, FileText
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
 
