@@ -3,6 +3,8 @@ import { ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import helmet from "helmet";
+import compression from "compression";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor";
@@ -20,6 +22,10 @@ async function bootstrap() {
     origin: config.get<string>("FRONTEND_ORIGIN") ?? true,
     credentials: true,
   });
+  
+  app.use(helmet());
+  app.use(compression());
+  app.enableShutdownHooks();
 
   app.useGlobalPipes(
     new ValidationPipe({

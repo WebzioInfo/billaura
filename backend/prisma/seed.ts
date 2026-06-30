@@ -68,15 +68,6 @@ async function main() {
   const accountantRole = await prisma.role.create({
     data: { companyId: company.id, name: 'Accountant', description: 'Financial & Ledger access', isSystem: true },
   });
-  const salesRole = await prisma.role.create({
-    data: { companyId: company.id, name: 'Sales Manager', description: 'Sales & Invoicing access', isSystem: true },
-  });
-  const purchaseRole = await prisma.role.create({
-    data: { companyId: company.id, name: 'Purchase Manager', description: 'Procurement access', isSystem: true },
-  });
-  const hrRole = await prisma.role.create({
-    data: { companyId: company.id, name: 'HR Manager', description: 'HR & Payroll access', isSystem: true },
-  });
 
   const allModules = ['accounting', 'sales', 'purchases', 'inventory', 'hr', 'payroll', 'settings'];
   const actions = ['create', 'read', 'update', 'delete'];

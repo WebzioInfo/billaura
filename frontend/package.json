@@ -11,11 +11,11 @@
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
-    "@billaura/shared-api": "*",
-    "@billaura/shared-types": "*",
-    "@billaura/shared-utils": "*",
-    "@billaura/shared-validation": "*",
-    "@billaura/ui": "*",
+    "@billaura/shared-api": "file:../../packages/shared-api",
+    "@billaura/shared-types": "file:../../packages/shared-types",
+    "@billaura/shared-utils": "file:../../packages/shared-utils",
+    "@billaura/shared-validation": "file:../../packages/shared-validation",
+    "@billaura/ui": "file:../../packages/ui",
     "@hookform/resolvers": "^5.4.0",
     "@react-pdf/renderer": "^4.5.1",
     "@tanstack/react-query": "^5.101.0",

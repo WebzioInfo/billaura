@@ -157,7 +157,7 @@ export class AuthService {
         emailVerified: false,
         otpCode: otp,
         otpExpiresAt,
-        globalRole: 'COMPANY_OWNER',
+        globalRole: 'ADMIN',
       },
     });
 
@@ -176,7 +176,7 @@ export class AuthService {
       data: {
         companyId: company.id,
         userId: user.id,
-        role: 'COMPANY_OWNER',
+        role: 'ADMIN',
       }
     });
 

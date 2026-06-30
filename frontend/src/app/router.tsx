@@ -1,6 +1,9 @@
 import { createBrowserRouter, Navigate, Link } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ProtectedRoute } from '../features/auth/components/ProtectedRoute';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { NotFound } from '../pages/NotFound';
+import { Unauthorized } from '../pages/Unauthorized';
 
 // --- Lazy Loaded Enterprise Modules ---
 const DepartmentsList = lazy(() => import('../features/departments/DepartmentsList').then(m => ({ default: m.DepartmentsList })));
@@ -26,6 +29,9 @@ const ExpensesDashboard = lazy(() => import('../features/expenses/ExpensesDashbo
 const PublicLayout = lazy(() => import('../layouts/PublicLayout').then(m => ({ default: m.default })));
 const AuthLayout = lazy(() => import('../layouts/AuthLayout').then(m => ({ default: m.default })));
 const DashboardLayout = lazy(() => import('../layouts/DashboardLayout').then(m => ({ default: m.default })));
+const PlatformLayout = lazy(() => import('../layouts/PlatformLayout').then(m => ({ default: m.default })));
+
+const PlatformDashboard = lazy(() => import('../features/dashboard/PlatformDashboard').then(m => ({ default: m.PlatformDashboard })));
 
 const LoadingFallback = () => (
   <div className="h-screen w-screen flex items-center justify-center bg-background text-foreground">
@@ -40,7 +46,8 @@ export const router = createBrowserRouter([
   // Public Landing / Pricing / Docs Section
   {
     path: '/',
-    element: <Suspense fallback={<LoadingFallback />}><PublicLayout /></Suspense>,
+    element: <Suspense fallback={<LoadingFallback />}><ErrorBoundary><PublicLayout /></ErrorBoundary></Suspense>,
+    errorElement: <ErrorBoundary />,
     children: [
       { path: '', element: <LandingPage /> },
       { path: 'features', element: <div className="max-w-7xl mx-auto px-4 py-16 text-center"><h1 className="text-3xl font-bold">Accounting Platform Features</h1><p className="text-muted-foreground mt-2">Comprehensive suite of financial management tools.</p></div> },
@@ -53,7 +60,8 @@ export const router = createBrowserRouter([
   // Auth & Onboarding Flow
   {
     path: '/auth',
-    element: <Suspense fallback={<LoadingFallback />}><AuthLayout /></Suspense>,
+    element: <Suspense fallback={<LoadingFallback />}><ErrorBoundary><AuthLayout /></ErrorBoundary></Suspense>,
+    errorElement: <ErrorBoundary />,
     children: [
       { path: 'login', element: <Login /> },
       { path: 'register', element: <Register /> },
@@ -61,14 +69,30 @@ export const router = createBrowserRouter([
       { path: 'onboard', element: <OnboardingWizard /> },
     ],
   },
+  // Platform Super Admin Routes
+  {
+    path: '/platform',
+    element: (
+      <ProtectedRoute enabled>
+        <Suspense fallback={<LoadingFallback />}><ErrorBoundary><PlatformLayout /></ErrorBoundary></Suspense>
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorBoundary />,
+    children: [
+      { path: 'dashboard', element: <PlatformDashboard /> },
+      // other platform routes can be mapped to placeholders or implemented later
+      { path: '*', element: <PlatformDashboard /> }
+    ],
+  },
   // Accounting Protected Workspace Modules
   {
     path: '/app',
     element: (
       <ProtectedRoute enabled requireCompletedOnboarding>
-        <Suspense fallback={<LoadingFallback />}><DashboardLayout /></Suspense>
+        <Suspense fallback={<LoadingFallback />}><ErrorBoundary><DashboardLayout /></ErrorBoundary></Suspense>
       </ProtectedRoute>
     ),
+    errorElement: <ErrorBoundary />,
     children: [
       { path: 'dashboard', element: <ExecutiveDashboard /> },
       { path: 'crm', element: <CrmDashboard /> },
@@ -88,13 +112,11 @@ export const router = createBrowserRouter([
     element: <Navigate to="/app/dashboard" replace />
   },
   {
+    path: '/unauthorized',
+    element: <Unauthorized />
+  },
+  {
     path: '*',
-    element: (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background text-foreground">
-        <h1 className="text-4xl font-black text-red-500">404</h1>
-        <p className="text-muted-foreground mt-2 font-medium">Requested Accounting Module Not Found</p>
-        <Link to="/" className="mt-6 text-sm font-semibold text-accent hover:underline">Back to Safety</Link>
-      </div>
-    )
+    element: <NotFound />
   }
 ]);

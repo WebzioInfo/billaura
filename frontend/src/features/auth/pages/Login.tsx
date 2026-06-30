@@ -31,11 +31,15 @@ export const Login = () => {
       const response = await authService.login(data);
       setSession(response.user, response.access_token, response.refresh_token);
       
-      const step = response.user.onboardingStep;
-      if (step === 'COMPLETED') {
-        navigate('/app/dashboard');
+      if (response.user.globalRole === 'SUPER_ADMIN') {
+        navigate('/platform/dashboard');
       } else {
-        navigate('/auth/onboard');
+        const step = response.user.onboardingStep;
+        if (step === 'COMPLETED') {
+          navigate('/app/dashboard');
+        } else {
+          navigate('/auth/onboard');
+        }
       }
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to authenticate';

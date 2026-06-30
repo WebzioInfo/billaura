@@ -135,31 +135,33 @@ export default function DashboardLayout() {
             </div>
           </div>
 
-          {/* Administration */}
-          <div>
-            <h3 className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Administration</h3>
-            <div className="space-y-1.5">
-              {adminModules.map((item) => {
-                const isActive = location.pathname.startsWith(item.path);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.path}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                      isActive 
-                        ? 'bg-primary text-primary-foreground shadow-sm' 
-                        : 'text-muted-foreground hover:bg-surface hover:text-foreground'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 flex-shrink-0" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
+          {/* Administration (Admin Only) */}
+          {user?.role === 'ADMIN' && (
+            <div>
+              <h3 className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Administration</h3>
+              <div className="space-y-1.5">
+                {adminModules.map((item) => {
+                  const isActive = location.pathname.startsWith(item.path);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                        isActive 
+                          ? 'bg-primary text-primary-foreground shadow-sm' 
+                          : 'text-muted-foreground hover:bg-surface hover:text-foreground'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span>{item.name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </nav>
 
         <div className="p-4 border-t border-border bg-surface bg-opacity-30">
