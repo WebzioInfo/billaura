@@ -5,17 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
-    "build": "tsc -b && vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
-    "type-check": "tsc -b --noEmit",
+    "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
-    "@billaura/shared-api": "file:../../packages/shared-api",
-    "@billaura/shared-types": "file:../../packages/shared-types",
-    "@billaura/shared-utils": "file:../../packages/shared-utils",
-    "@billaura/shared-validation": "file:../../packages/shared-validation",
-    "@billaura/ui": "file:../../packages/ui",
     "@hookform/resolvers": "^5.4.0",
     "@react-pdf/renderer": "^4.5.1",
     "@tanstack/react-query": "^5.101.0",
@@ -34,6 +29,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "@types/node": "^26.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.2",

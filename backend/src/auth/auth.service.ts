@@ -8,6 +8,8 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { BusinessDetailsDto, TaxDetailsDto, BranchSetupDto, SubscriptionDto } from './dto/onboard.dto';
 import { BusinessType } from '@prisma/client';
 import { SessionService } from './session.service';
+import { MailService } from '../mail/mail.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +17,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly sessionService: SessionService,
+    private readonly mailService: MailService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -135,6 +138,10 @@ export class AuthService {
     };
   }
 
+  generateSecureOtp(): string {
+    return crypto.randomInt(100000, 999999).toString();
+  }
+
   async register(registerDto: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({ where: { email: registerDto.email } });
     if (existingUser) {
@@ -144,12 +151,11 @@ export class AuthService {
     const salt = await bcrypt.genSalt();
     const passwordHash = await bcrypt.hash(registerDto.password, salt);
 
-    // Generate random 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
+    const otp = this.generateSecureOtp();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins expiry
 
     console.log(`\n======================================================`);
-    console.log(`[OTP VERIFICATION] OTP for ${registerDto.email}: ${otp}`);
+    console.log(`[OTP GENERATION] Secure verification OTP generated for ${registerDto.email}`);
     console.log(`======================================================\n`);
 
     // Create the User first
@@ -183,6 +189,9 @@ export class AuthService {
         role: 'ADMIN',
       }
     });
+
+    // Send Verification Email
+    await this.mailService.sendVerificationOtp(user.email, user.name, otp);
 
     return {
       message: 'Registration successful. Verification OTP sent.',
@@ -456,5 +465,106 @@ export class AuthService {
         currency: data.currency,
       },
     });
+  }
+
+  async resendVerificationOtp(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.emailVerified) throw new BadRequestException('Email already verified');
+
+    if (user.otpExpiresAt) {
+      const lastGenerated = user.otpExpiresAt.getTime() - 10 * 60 * 1000;
+      const secondsElapsed = (Date.now() - lastGenerated) / 1000;
+      if (secondsElapsed < 60) {
+        throw new BadRequestException(`Resend cooldown active. Please wait ${Math.ceil(60 - secondsElapsed)} seconds.`);
+      }
+    }
+
+    const newOtp = this.generateSecureOtp();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otpCode: newOtp,
+        otpExpiresAt,
+      },
+    });
+
+    await this.mailService.sendVerificationOtp(user.email, user.name, newOtp);
+
+    return { success: true, message: 'New verification OTP sent.' };
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.otpExpiresAt) {
+      const lastGenerated = user.otpExpiresAt.getTime() - 10 * 60 * 1000;
+      const secondsElapsed = (Date.now() - lastGenerated) / 1000;
+      if (secondsElapsed < 60) {
+        throw new BadRequestException(`Resend cooldown active. Please wait ${Math.ceil(60 - secondsElapsed)} seconds.`);
+      }
+    }
+
+    const otp = this.generateSecureOtp();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otpCode: otp,
+        otpExpiresAt,
+      },
+    });
+
+    await this.mailService.sendResetPasswordOtp(user.email, user.name, otp);
+
+    return { success: true, message: 'Password recovery OTP sent.' };
+  }
+
+  async verifyResetOtp(email: string, otp: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new NotFoundException('User not found');
+    
+    if (!user.otpCode || user.otpCode !== otp) {
+      throw new BadRequestException('Invalid OTP code');
+    }
+    if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {
+      throw new BadRequestException('OTP code has expired');
+    }
+
+    return { success: true, message: 'OTP verified successfully' };
+  }
+
+  async resetPassword(passwordDto: any) {
+    const { email, otp, password } = passwordDto;
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (!user.otpCode || user.otpCode !== otp) {
+      throw new BadRequestException('Invalid OTP code');
+    }
+    if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {
+      throw new BadRequestException('OTP code has expired');
+    }
+
+    const salt = await bcrypt.genSalt();
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        otpCode: null,
+        otpExpiresAt: null,
+      },
+    });
+
+    return { success: true, message: 'Password reset successfully' };
   }
 }

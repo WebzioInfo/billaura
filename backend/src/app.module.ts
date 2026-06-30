@@ -20,9 +20,11 @@ import { TaxesModule } from "./taxes/taxes.module";
 import { ExpensesModule } from "./expenses/expenses.module";
 import { HrModule } from "./hr/hr.module";
 import { PlatformModule } from "./platform/platform.module";
+import { MailModule } from "./mail/mail.module";
 
 @Module({
   imports: [
+    MailModule,
     AppConfigModule,
     LoggingModule,
     CommonModule,

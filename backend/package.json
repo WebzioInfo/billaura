@@ -12,8 +12,6 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@billaura/shared-api": "file:../../packages/shared-api",
-    "@billaura/shared-types": "file:../../packages/shared-types",
     "@nestjs/common": "^11.1.9",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.9",
@@ -28,6 +26,7 @@
     "compression": "^1.8.1",
     "helmet": "^8.2.0",
     "joi": "^18.0.2",
+    "nodemailer": "^9.0.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
@@ -39,6 +38,7 @@
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.6",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
     "@types/passport-jwt": "^4.0.1",
     "prisma": "^6.19.3",
     "ts-loader": "^9.6.2",

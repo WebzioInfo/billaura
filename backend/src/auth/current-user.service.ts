@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import type { SessionUser } from "@billaura/shared-types";
+import type { SessionUser } from "./types/auth-types";
 
 @Injectable()
 export class CurrentUserService {

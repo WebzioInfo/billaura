@@ -1,1 +1,0 @@
-import{a as e}from"./index-Pz4dz4uZ.js";var t={login:async t=>(await e.post(`/auth/login`,t)).data,register:async t=>(await e.post(`/auth/register`,t)).data,verifyEmail:async t=>(await e.post(`/auth/verify-email`,t)).data},n=e;export{t as n,n as t};

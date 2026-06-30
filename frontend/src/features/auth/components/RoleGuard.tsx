@@ -1,5 +1,5 @@
 import { PropsWithChildren } from "react";
-import type { UserRole } from "@billaura/shared-types";
+import type { UserRole } from "../types/auth-types";
 import { useSessionStore } from "../stores/sessionStore";
 
 interface RoleGuardProps extends PropsWithChildren {

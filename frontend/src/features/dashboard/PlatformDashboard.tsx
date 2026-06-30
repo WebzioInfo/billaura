@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { 
-  Users, Activity, Shield, ArrowUpRight, CheckCircle, AlertTriangle, 
-  Settings, DollarSign, Plus, Search, Lock, Unlock, Mail, FileText, 
+import {
+  Users, Activity, Shield, ArrowUpRight, CheckCircle, AlertTriangle,
+  Settings, DollarSign, Plus, Search, Lock, Unlock, Mail, FileText,
   RefreshCw, Layers, LifeBuoy, Bell, Server
 } from 'lucide-react';
 import api from '@/services/api';
@@ -113,7 +113,7 @@ export function PlatformDashboard() {
     try {
       const res = await api.post(`/platform/companies/${companyId}/suspend`, {});
       toast.success(`Company operational status updated to ${res?.data?.status || 'changed'}`);
-      
+
       // Update local state list
       setCompanies(prev => prev.map(c => {
         if (c.id === companyId) {
@@ -151,13 +151,13 @@ export function PlatformDashboard() {
   };
 
   // Filtered lists based on search query
-  const filteredCompanies = companies.filter(c => 
-    c.companyName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredCompanies = companies.filter(c =>
+    c.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (c.legalName && c.legalName.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredUsers = users.filter(u =>
+    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -247,7 +247,7 @@ export function PlatformDashboard() {
                     const heightPercent = (item.revenue / maxVal) * 100;
                     return (
                       <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                        <div 
+                        <div
                           className="w-full bg-gradient-to-t from-indigo-500 to-indigo-600 rounded-lg hover:from-indigo-600 hover:to-indigo-700 transition-all cursor-pointer shadow-sm relative group"
                           style={{ height: `${heightPercent * 0.8}%` }}
                         >
@@ -340,8 +340,8 @@ export function PlatformDashboard() {
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="relative w-full sm:w-80">
                 <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Search Tenant Companies..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -375,21 +375,19 @@ export function PlatformDashboard() {
                       <td className="px-6 py-4">{c.userCount} users</td>
                       <td className="px-6 py-4">{formatDate(c.createdAt)}</td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px] ${
-                          c.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' :
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px] ${c.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' :
                           c.status === 'SUSPENDED' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                        }`}>
+                          }`}>
                           {c.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button 
+                        <button
                           onClick={() => handleToggleSuspend(c.id)}
-                          className={`font-semibold cursor-pointer text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                            c.status === 'SUSPENDED' 
-                              ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                          }`}
+                          className={`font-semibold cursor-pointer text-xs px-3 py-1.5 rounded-lg border transition-colors ${c.status === 'SUSPENDED'
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                            }`}
                         >
                           {c.status === 'SUSPENDED' ? 'Unsuspend' : 'Suspend'}
                         </button>
@@ -419,7 +417,7 @@ export function PlatformDashboard() {
                 <h2 className="text-lg font-bold text-slate-900">Subscription Plans</h2>
                 <p className="text-xs text-slate-500">Manage billing plans and SaaS boundaries.</p>
               </div>
-              <button 
+              <button
                 onClick={() => setShowAddPlanModal(true)}
                 className="flex items-center gap-2 bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-indigo-700 cursor-pointer shadow-sm"
               >
@@ -434,7 +432,7 @@ export function PlatformDashboard() {
                   <div>
                     <h4 className="font-bold text-slate-900 text-lg mb-1">{p.name}</h4>
                     <p className="text-2xl font-black text-indigo-600 mb-6">{formatCurrency(p.price)} <span className="text-xs text-slate-400 font-semibold">/{p.billingCycle.toLowerCase()}</span></p>
-                    
+
                     <ul className="space-y-3 text-xs text-slate-600 mb-8">
                       <li className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
@@ -462,8 +460,8 @@ export function PlatformDashboard() {
                   <form onSubmit={handleCreatePlan} className="space-y-4 text-xs text-slate-700">
                     <div>
                       <label className="block font-semibold mb-1">Plan Name</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         required
                         placeholder="e.g. Pro Growth"
                         value={newPlan.name}
@@ -474,8 +472,8 @@ export function PlatformDashboard() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block font-semibold mb-1">Price (USD)</label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           step="0.01"
                           required
                           value={newPlan.price}
@@ -485,7 +483,7 @@ export function PlatformDashboard() {
                       </div>
                       <div>
                         <label className="block font-semibold mb-1">Billing Cycle</label>
-                        <select 
+                        <select
                           value={newPlan.billingCycle}
                           onChange={(e) => setNewPlan({ ...newPlan, billingCycle: e.target.value })}
                           className="w-full p-2.5 border border-slate-200 rounded-xl bg-white"
@@ -498,8 +496,8 @@ export function PlatformDashboard() {
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block font-semibold mb-1">Max Users</label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           required
                           value={newPlan.maxUsers}
                           onChange={(e) => setNewPlan({ ...newPlan, maxUsers: Number(e.target.value) })}
@@ -508,8 +506,8 @@ export function PlatformDashboard() {
                       </div>
                       <div>
                         <label className="block font-semibold mb-1">Max Invoices</label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           required
                           value={newPlan.maxInvoices}
                           onChange={(e) => setNewPlan({ ...newPlan, maxInvoices: Number(e.target.value) })}
@@ -518,8 +516,8 @@ export function PlatformDashboard() {
                       </div>
                       <div>
                         <label className="block font-semibold mb-1">Max Customers</label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           required
                           value={newPlan.maxCustomers}
                           onChange={(e) => setNewPlan({ ...newPlan, maxCustomers: Number(e.target.value) })}
@@ -528,15 +526,15 @@ export function PlatformDashboard() {
                       </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setShowAddPlanModal(false)}
                         className="px-4 py-2 border border-slate-200 rounded-xl text-slate-500 cursor-pointer"
                       >
                         Cancel
                       </button>
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold cursor-pointer hover:bg-indigo-700"
                       >
                         Create Plan
@@ -555,8 +553,8 @@ export function PlatformDashboard() {
             <div className="flex justify-between items-center gap-4">
               <div className="relative w-full sm:w-80">
                 <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Search Registered Users..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -590,9 +588,8 @@ export function PlatformDashboard() {
                       </td>
                       <td className="px-6 py-4">{formatDate(u.createdAt)}</td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] ${
-                          u.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] ${u.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                          }`}>
                           {u.isActive ? 'Active' : 'Locked'}
                         </span>
                       </td>
@@ -661,7 +658,7 @@ export function PlatformDashboard() {
                 <h2 className="text-lg font-bold text-slate-900">System Logs Tail</h2>
                 <p className="text-xs text-slate-500">Live platform operations audit trail.</p>
               </div>
-              <button 
+              <button
                 onClick={loadData}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 text-xs font-bold cursor-pointer"
               >
@@ -702,8 +699,8 @@ export function PlatformDashboard() {
               <form onSubmit={handleSaveSmtp} className="space-y-4 text-xs text-slate-700">
                 <div>
                   <label className="block font-semibold mb-1">SMTP Host</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="smtp.gmail.com"
                     value={smtpSettings.SMTP_HOST}
                     onChange={(e) => setSmtpSettings({ ...smtpSettings, SMTP_HOST: e.target.value })}
@@ -713,8 +710,8 @@ export function PlatformDashboard() {
                 <div className="grid grid-cols-3 gap-4">
                   <div className="col-span-2">
                     <label className="block font-semibold mb-1">SMTP User</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="alerts@billaura.com"
                       value={smtpSettings.SMTP_USER}
                       onChange={(e) => setSmtpSettings({ ...smtpSettings, SMTP_USER: e.target.value })}
@@ -723,8 +720,8 @@ export function PlatformDashboard() {
                   </div>
                   <div>
                     <label className="block font-semibold mb-1">SMTP Port</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="587"
                       value={smtpSettings.SMTP_PORT}
                       onChange={(e) => setSmtpSettings({ ...smtpSettings, SMTP_PORT: e.target.value })}
@@ -734,8 +731,8 @@ export function PlatformDashboard() {
                 </div>
                 <div>
                   <label className="block font-semibold mb-1">SMTP Password</label>
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     placeholder="••••••••••••"
                     value={smtpSettings.SMTP_PASS}
                     onChange={(e) => setSmtpSettings({ ...smtpSettings, SMTP_PASS: e.target.value })}
@@ -743,8 +740,8 @@ export function PlatformDashboard() {
                   />
                 </div>
                 <div className="pt-4 flex justify-end">
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     className="bg-indigo-600 text-white font-bold text-xs px-5 py-2.5 rounded-xl hover:bg-indigo-700 cursor-pointer shadow-sm"
                   >
                     Save SMTP Configuration

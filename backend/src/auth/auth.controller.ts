@@ -184,4 +184,28 @@ export class AuthController {
   async updateCompany(@Request() req: any, @Body() dto: any) {
     return this.authService.updateCompany(req.user.tenantId, dto);
   }
+
+  @Post('resend-otp')
+  @HttpCode(HttpStatus.OK)
+  async resendOtp(@Body('email') email: string) {
+    return this.authService.resendVerificationOtp(email);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body('email') email: string) {
+    return this.authService.forgotPassword(email);
+  }
+
+  @Post('verify-reset-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyResetOtp(@Body('email') email: string, @Body('otp') otp: string) {
+    return this.authService.verifyResetOtp(email, otp);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: any) {
+    return this.authService.resetPassword(dto);
+  }
 }

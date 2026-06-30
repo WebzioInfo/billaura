@@ -1,12 +1,12 @@
-import type { SessionUser as BaseSessionUser, UserRole } from "@billaura/shared-types";
+import type { BaseSessionUser, UserRole } from "./types/auth-types";
 
 export type Permission = `${string}:${string}`;
 
 export interface SessionUser extends BaseSessionUser {
-  onboardingStep?: string;
-  name?: string;
-  email?: string;
-  globalRole?: string;
+  onboardingStep?: string | null;
+  name: string;
+  email: string;
+  globalRole: UserRole;
 }
 
 export interface SessionState {

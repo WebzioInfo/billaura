@@ -16,6 +16,8 @@ const LandingPage = lazy(() => import('../features/public/LandingPage').then(m =
 const Login = lazy(() => import('../features/auth/pages/Login').then(m => ({ default: m.Login })));
 const Register = lazy(() => import('../features/auth/pages/Register').then(m => ({ default: m.Register })));
 const VerifyEmail = lazy(() => import('../features/auth/pages/VerifyEmail').then(m => ({ default: m.VerifyEmail })));
+const ForgotPassword = lazy(() => import('../features/auth/pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
+const ResetPassword = lazy(() => import('../features/auth/pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const OnboardingWizard = lazy(() => import('../features/auth/pages/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const ExecutiveDashboard = lazy(() => import('../features/dashboard/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
@@ -72,6 +74,8 @@ export const router = createBrowserRouter([
       { path: 'login', element: <Login /> },
       { path: 'register', element: <Register /> },
       { path: 'verify-email', element: <VerifyEmail /> },
+      { path: 'forgot-password', element: <ForgotPassword /> },
+      { path: 'reset-password', element: <ResetPassword /> },
       { path: 'onboard', element: <OnboardingWizard /> },
     ],
   },
