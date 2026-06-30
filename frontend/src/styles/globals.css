@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --foreground: #0f172a;
+  --muted-foreground: #475569;
+  --border: #e2e8f0;
+  
+  /* Brand colors */
+  --primary: #0f172a;
+  --primary-foreground: #ffffff;
+  --accent: #2563eb;
+  --accent-muted: #dbeafe;
+  
+  /* Gradients */
+  --gradient-premium: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  --gradient-glow: radial-gradient(circle at top, rgba(37,99,235,0.05) 0%, transparent 70%);
+  
+  /* Shadows & Glassmorphism */
+  --shadow-premium: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 8px -1px rgba(15, 23, 42, 0.03);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(226, 232, 240, 0.8);
+  --glass-blur: blur(12px);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --background: #0b0f19;
+  --surface: #111827;
+  --foreground: #f8fafc;
+  --muted-foreground: #94a3b8;
+  --border: #1f2937;
+  
+  /* Brand colors */
+  --primary: #f8fafc;
+  --primary-foreground: #0f172a;
+  --accent: #3b82f6;
+  --accent-muted: #1e3a8a;
+  
+  /* Gradients */
+  --gradient-premium: linear-gradient(135deg, #111827 0%, #030712 100%);
+  --gradient-glow: radial-gradient(circle at top, rgba(59,130,246,0.15) 0%, transparent 75%);
+  
+  /* Shadows & Glassmorphism */
+  --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.3), 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  --glass-bg: rgba(17, 24, 39, 0.7);
+  --glass-border: rgba(31, 41, 55, 0.8);
+  --glass-blur: blur(16px);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-muted: var(--accent-muted);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Glassmorphism custom classes */
+.glass-panel {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.premium-glow {
+  background-image: var(--gradient-glow);
+}
+
+/* Smooth micro-animations */
+.hover-premium {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-premium);
+}
+
+@media print {
+  /* Hide UI elements that shouldn't be printed */
+  header, nav, aside, .sidebar, .navbar, .no-print {
+    display: none !important;
+  }
+  
+  /* Reset background colors and text for ink saving */
+  body, .glass-panel {
+    background: transparent !important;
+    background-color: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  
+  /* Force expand content to full width */
+  main, .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  
+  /* Avoid breaking inside cards or tables */
+  .glass-panel, table, tr, img {
+    page-break-inside: avoid;
+  }
+  
+  /* Ensure proper margins and sizing */
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
+}
