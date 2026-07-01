@@ -5,6 +5,7 @@
   "type": "commonjs",
   "main": "dist/main.js",
   "scripts": {
+    "postinstall": "npx prisma generate",
     "dev": "nest start --watch",
     "build": "npx prisma generate && npx nest build",
     "start": "node dist/src/main.js",
