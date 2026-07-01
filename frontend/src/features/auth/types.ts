@@ -7,6 +7,8 @@ export interface SessionUser extends BaseSessionUser {
   name: string;
   email: string;
   globalRole: UserRole;
+  companyName?: string | null;
+  logoBase64?: string | null;
 }
 
 export interface SessionState {

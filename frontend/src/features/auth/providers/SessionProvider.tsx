@@ -12,19 +12,18 @@ export function SessionProvider({ children }: PropsWithChildren) {
     apiClient.setUnauthorizedHandler(clearSession);
 
     const initSession = async () => {
-      const isLoggedIn = localStorage.getItem("logged_in") === "true";
-      if (isLoggedIn) {
-        try {
-          const res = await apiClient.post<{ success: boolean; data: { access_token: string; user: any } }>("/auth/refresh", {});
-          if (res.success && res.data) {
-            setSession(res.data.user, res.data.access_token);
-          } else {
-            clearSession();
-          }
-        } catch (err) {
-          console.error("Failed to restore session:", err);
+      try {
+        const res = await apiClient.post<{ access_token: string; user: any }>("/auth/refresh", {});
+        if (res && res.access_token && res.user) {
+          setSession(res.user, res.access_token);
+        } else {
           clearSession();
         }
+      } catch (err: any) {
+        // Log out only if it's explicitly an auth failure or token missing
+        // A robust app might distinguish between network errors and 401s here
+        console.error("Failed to restore session:", err);
+        clearSession();
       }
       setInitFinished(true);
     };

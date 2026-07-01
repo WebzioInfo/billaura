@@ -441,6 +441,7 @@ export class AuthService {
     });
     const company = await this.prisma.company.findUnique({
       where: { id: tenantId },
+      include: { settings: true },
     });
     return {
       ...user,
@@ -463,7 +464,16 @@ export class AuthService {
         state: data.state,
         country: data.country,
         currency: data.currency,
+        ...(data.logoBase64 !== undefined ? {
+          settings: {
+            upsert: {
+              create: { logoBase64: data.logoBase64 },
+              update: { logoBase64: data.logoBase64 },
+            }
+          }
+        } : {})
       },
+      include: { settings: true }
     });
   }
 

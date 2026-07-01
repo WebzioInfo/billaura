@@ -7,30 +7,42 @@ import { useNavigate } from 'react-router-dom';
 export function TopBar() {
   const { user } = useSessionStore();
   const navigate = useNavigate();
-  const [companyName, setCompanyName] = useState('My Company');
+  const [companyName, setCompanyName] = useState(user?.companyName || 'My Company');
+  const [logoBase64, setLogoBase64] = useState<string | null>((user as any)?.logoBase64 || null);
 
   useEffect(() => {
+    // Update local state if store updates
+    if ((user as any)?.companyName) setCompanyName((user as any).companyName);
+    if ((user as any)?.logoBase64) setLogoBase64((user as any).logoBase64);
+
     const fetchCompany = async () => {
       try {
-        const res = await apiClient.get<{ company?: { companyName?: string } }>('/auth/me');
+        const res = await apiClient.get<any>('/auth/me');
         if (res?.company?.companyName) {
           setCompanyName(res.company.companyName);
+        }
+        if (res?.company?.settings?.logoBase64) {
+          setLogoBase64(res.company.settings.logoBase64);
         }
       } catch (err) {
         // ignore
       }
     };
     fetchCompany();
-  }, []);
+  }, [user]);
 
   return (
     <div className="h-12 bg-primary text-primary-foreground flex items-center justify-between px-4 border-b border-primary/20 shrink-0">
       {/* Left: Branding & Company info */}
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => navigate('/dashboard')}>
-          <div className="w-6 h-6 bg-accent rounded flex items-center justify-center font-bold text-white text-xs">
-            BA
-          </div>
+          {logoBase64 ? (
+            <img src={logoBase64} alt="Company Logo" className="h-7 w-auto object-contain rounded-sm" />
+          ) : (
+            <div className="w-6 h-6 bg-accent rounded flex items-center justify-center font-bold text-white text-xs">
+              BA
+            </div>
+          )}
           <span className="font-bold tracking-tight">Bill Aura</span>
         </div>
         

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+
 
 describe('General Ledger Accounting Double-Entry Validation', () => {
   it('should balance debits and credits correctly', () => {

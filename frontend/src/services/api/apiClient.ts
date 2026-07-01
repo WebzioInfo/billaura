@@ -130,16 +130,28 @@ export const apiClient = new ApiClient({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api/v1",
   refreshSession: async () => {
     try {
-      const response = await axios.post<{ success: boolean; data: { access_token: string; user: any } }>(
+      const response = await axios.post<{ access_token: string; user: any }>(
         `${import.meta.env.VITE_API_BASE_URL ?? "/api/v1"}/auth/refresh`,
         {},
         { withCredentials: true }
       );
       
-      const { access_token, user } = response.data.data;
-      useSessionStore.getState().setSession(user, access_token);
-    } catch (err) {
-      useSessionStore.getState().clearSession();
+      const { access_token, user } = response.data;
+      if (access_token && user) {
+        useSessionStore.getState().setSession(user, access_token);
+      } else {
+        throw new Error("Invalid response format");
+      }
+    } catch (err: any) {
+      // Intelligently handle network failures
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        useSessionStore.getState().clearSession();
+      } else if (!err.response) {
+        // Network error (no response)
+        console.warn("Network error during refresh, not clearing session to allow retry later.");
+      } else {
+        useSessionStore.getState().clearSession();
+      }
       throw err;
     }
   },
