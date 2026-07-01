@@ -9,6 +9,8 @@ import { WorkspaceTabs } from '@/components/workspace/WorkspaceTabs';
 import { CommandPalette } from '@/components/workspace/CommandPalette';
 import { QuickCreate } from '@/components/workspace/QuickCreate';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { authService } from '../services/api';
+import { TokenService } from '../services/auth/TokenService';
 
 export default function DashboardLayout() {
   const { user, clearSession } = useSessionStore();
@@ -41,9 +43,16 @@ export default function DashboardLayout() {
     }
   }, [location.pathname]);
 
-  const handleLogout = () => {
-    clearSession();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      const refreshToken = TokenService.getRefreshToken();
+      await authService.logout(refreshToken);
+    } catch (e) {
+      console.error('Logout failed:', e);
+    } finally {
+      clearSession();
+      navigate('/auth/login');
+    }
   };
 
   const userInitials = user?.name 

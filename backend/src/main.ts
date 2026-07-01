@@ -18,9 +18,21 @@ async function bootstrap() {
 
   app.useLogger(logger);
   app.setGlobalPrefix(config.getOrThrow<string>("API_PREFIX"));
+  const allowedOriginsStr = config.getOrThrow<string>("ALLOWED_ORIGINS");
+  const allowedOrigins = allowedOriginsStr.split(',').map(o => o.trim()).filter(Boolean);
+
   app.enableCors({
-    origin: config.get<string>("FRONTEND_ORIGIN") ?? true,
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization, x-tenant-id, x-company-id',
   });
   
   app.use(helmet());

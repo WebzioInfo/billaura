@@ -37,9 +37,9 @@ export default function PublicLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <Link to="/" className="flex items-center gap-2 text-foreground font-bold text-xl tracking-tight">
-                <Landmark className="w-6 h-6 text-accent" />
-                <span>Bill <span className="text-accent">Aura</span></span>
+              <Link to="/" className="flex items-center justify-center">
+                <img src="/logo.png" alt="Bill Aura Logo" className="h-8 w-auto dark:hidden" />
+                <img src="/logo2.png" alt="Bill Aura Logo" className="h-8 w-auto hidden dark:block" />
               </Link>
             </div>
 
@@ -146,9 +146,9 @@ export default function PublicLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1 space-y-4">
-              <span className="flex items-center gap-2 font-bold text-lg tracking-tight">
-                <Landmark className="w-5 h-5 text-accent" />
-                Bill Aura
+              <span className="flex items-center gap-2">
+                <img src="/logo.png" alt="Bill Aura Logo" className="h-8 w-auto dark:hidden" />
+                <img src="/logo2.png" alt="Bill Aura Logo" className="h-8 w-auto hidden dark:block" />
               </span>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Smart Cloud Accounting SaaS Solution for modern startups, SMEs, and large-scale enterprises. Complete compliance and financial intelligence.

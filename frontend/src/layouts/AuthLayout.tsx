@@ -11,9 +11,9 @@ export default function AuthLayout() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
         <div className="flex justify-center items-center gap-2">
-          <Link to="/" className="flex items-center gap-2 font-bold text-2xl tracking-tight">
-            <Landmark className="w-8 h-8 text-accent" />
-            <span>Bill <span className="text-accent">Aura</span></span>
+          <Link to="/" className="flex items-center justify-center">
+            <img src="/logo.png" alt="Bill Aura" className="h-12 w-auto dark:hidden" />
+            <img src="/logo2.png" alt="Bill Aura" className="h-12 w-auto hidden dark:block" />
           </Link>
         </div>
         <p className="mt-2 text-center text-xs text-muted-foreground uppercase tracking-widest font-semibold">

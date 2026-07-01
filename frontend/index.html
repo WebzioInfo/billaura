@@ -3,10 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Professional accounting software by Webzio." />
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <link rel="icon" type="image/png" href="/icons/icon-192x192.png" />
     <title>Bill Aura</title>
+    <style>
+      #root:empty {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #ffffff;
+      }
+      .splash-logo {
+        width: 150px;
+        height: auto;
+        animation: pulse 2s infinite ease-in-out;
+      }
+      @keyframes pulse {
+        0% { transform: scale(0.95); opacity: 0.8; }
+        50% { transform: scale(1.05); opacity: 1; }
+        100% { transform: scale(0.95); opacity: 0.8; }
+      }
+      @media (prefers-color-scheme: dark) {
+        #root:empty {
+          background-color: #0f172a; /* Tailwind slate-900 */
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <img src="/logo.png" alt="Bill Aura Logo" class="splash-logo" />
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

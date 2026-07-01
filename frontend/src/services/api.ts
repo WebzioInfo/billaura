@@ -13,6 +13,11 @@ export const authService = {
     const res = await apiClient.post<{ success: boolean; data: any }>('/auth/verify-email', data);
     return res.data;
   },
+  logout: async (refreshToken: string | null) => {
+    if (refreshToken) {
+      await apiClient.post<{ success: boolean; message: string }>('/auth/logout', { refreshToken });
+    }
+  },
 };
 
 export const productService = {

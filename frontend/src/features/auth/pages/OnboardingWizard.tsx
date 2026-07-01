@@ -9,6 +9,7 @@ import {
   Building2, Percent, Calendar, CheckCircle2, CreditCard, 
   ArrowRight, Loader2, LogOut, DollarSign, Globe
 } from 'lucide-react';
+import { TokenService } from '../../../services/auth/TokenService';
 
 // Steps definition
 type Step = 'BUSINESS_DETAILS' | 'TAX_DETAILS' | 'BRANCH_SETUP' | 'SUBSCRIPTION' | 'COMPLETED';
@@ -57,10 +58,18 @@ export const OnboardingWizard = () => {
     }
   });
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    clearSession();
-    navigate('/auth/login');
+  const handleLogout = async () => {
+    try {
+      const refreshToken = TokenService.getRefreshToken();
+      if (refreshToken) {
+        await api.post('/auth/logout', { refreshToken });
+      }
+    } catch (e) {
+      console.error('Logout failed:', e);
+    } finally {
+      clearSession();
+      navigate('/auth/login');
+    }
   };
 
   const onBusinessSubmit = async (data: any) => {

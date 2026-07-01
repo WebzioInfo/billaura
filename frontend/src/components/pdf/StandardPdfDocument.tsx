@@ -241,10 +241,15 @@ export const StandardPdfDocument: React.FC<PdfDocumentProps> = ({
         </View>
       </View>
       
-      {/* Page Numbers */}
-      <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
-        `Page ${pageNumber} of ${totalPages}`
-      )} fixed />
+      {/* Page Numbers & Footer Branding */}
+      <View style={{ position: 'absolute', bottom: 15, left: 30, right: 30, display: 'flex', flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 8 }} fixed>
+        <Text style={{ fontSize: 8, color: '#94a3b8', fontStyle: 'italic' }}>
+          Generated via Bill Aura Accounting Platform
+        </Text>
+        <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
+          `Page ${pageNumber} of ${totalPages}`
+        )} />
+      </View>
     </Page>
   </Document>
 );

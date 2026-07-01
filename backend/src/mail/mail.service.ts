@@ -1,16 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter;
+  private readonly fromEmail: string;
 
-  constructor() {
-    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const port = parseInt(process.env.SMTP_PORT || '587', 10);
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
+  constructor(private readonly configService: ConfigService) {
+    const host = this.configService.getOrThrow<string>('SMTP_HOST');
+    const port = this.configService.getOrThrow<number>('SMTP_PORT');
+    const user = this.configService.getOrThrow<string>('SMTP_USER');
+    const pass = this.configService.getOrThrow<string>('SMTP_PASSWORD');
+    this.fromEmail = user;
 
     if (!user || !pass) {
       this.logger.warn('SMTP credentials are missing. Emails will be logged to console instead.');
@@ -19,7 +22,7 @@ export class MailService {
     this.transporter = nodemailer.createTransport({
       host,
       port,
-      secure: port === 465, // True for port 465, false for other ports (like 587)
+      secure: Number(port) === 465,
       auth: {
         user,
         pass,
@@ -183,13 +186,8 @@ export class MailService {
     const html = this.getHtmlTemplate(title, greeting, intro, code, validity, actionText);
 
     try {
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        this.logger.log(`[CONSOLED EMAIL] Send verification email to ${email}. Code: ${code}`);
-        return true;
-      }
-
       await this.transporter.sendMail({
-        from: `"Bill Aura Accounts" <${process.env.SMTP_USER}>`,
+        from: `"Bill Aura Accounts" <${this.fromEmail}>`,
         to: email,
         subject: title,
         html,
@@ -213,13 +211,8 @@ export class MailService {
     const html = this.getHtmlTemplate(title, greeting, intro, code, validity, actionText);
 
     try {
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        this.logger.log(`[CONSOLED EMAIL] Send reset password email to ${email}. Code: ${code}`);
-        return true;
-      }
-
       await this.transporter.sendMail({
-        from: `"Bill Aura Accounts" <${process.env.SMTP_USER}>`,
+        from: `"Bill Aura Accounts" <${this.fromEmail}>`,
         to: email,
         subject: title,
         html,

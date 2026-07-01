@@ -1,5 +1,7 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import { useSessionStore } from "../../features/auth/stores/sessionStore";
+import { env } from "../../config/env";
+import { TokenService } from "../auth/TokenService";
 
 export interface ApiClientOptions {
   baseURL: string;
@@ -18,7 +20,6 @@ export class ApiClient {
   constructor(private readonly options: ApiClientOptions) {
     this.instance = axios.create({
       baseURL: options.baseURL,
-      withCredentials: true,
       timeout: 30_000,
       headers: {
         Accept: "application/json",
@@ -28,7 +29,7 @@ export class ApiClient {
     // Request interceptor to inject Authorization and Company headers
     this.instance.interceptors.request.use(
       (config) => {
-        const token = useSessionStore.getState().accessToken;
+        const token = TokenService.getAccessToken();
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -127,35 +128,43 @@ export class ApiClient {
 }
 
 export const apiClient = new ApiClient({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api/v1",
+  baseURL: env.API_BASE_URL,
   refreshSession: async () => {
     try {
-      const response = await axios.post<{ access_token: string; user: any }>(
-        `${import.meta.env.VITE_API_BASE_URL ?? "/api/v1"}/auth/refresh`,
-        {},
-        { withCredentials: true }
+      const refreshToken = TokenService.getRefreshToken();
+      if (!refreshToken) {
+        throw new Error("No refresh token available");
+      }
+
+      const response = await axios.post<{ access_token: string; refresh_token: string; user: any }>(
+        `${env.API_BASE_URL}/auth/refresh`,
+        { refreshToken }
       );
       
-      const { access_token, user } = response.data;
-      if (access_token && user) {
+      const { access_token, refresh_token, user } = response.data;
+      if (access_token && refresh_token && user) {
+        TokenService.setTokens(access_token, refresh_token);
         useSessionStore.getState().setSession(user, access_token);
       } else {
         throw new Error("Invalid response format");
       }
     } catch (err: any) {
       // Intelligently handle network failures
-      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+      if (err.response && (err.response.status === 401 || err.response.status === 403 || err.response.status === 400)) {
+        TokenService.clearTokens();
         useSessionStore.getState().clearSession();
       } else if (!err.response) {
         // Network error (no response)
         console.warn("Network error during refresh, not clearing session to allow retry later.");
       } else {
+        TokenService.clearTokens();
         useSessionStore.getState().clearSession();
       }
       throw err;
     }
   },
   onUnauthorized: () => {
+    TokenService.clearTokens();
     useSessionStore.getState().clearSession();
   }
 });

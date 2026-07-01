@@ -8,44 +8,14 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { BusinessDetailsDto, TaxDetailsDto, BranchSetupDto, SubscriptionDto } from './dto/onboard.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
-function parseCookies(cookieHeader?: string): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  if (!cookieHeader) return cookies;
-  cookieHeader.split(';').forEach(cookie => {
-    const parts = cookie.split('=');
-    const name = parts[0].trim();
-    const value = parts.slice(1).join('=').trim();
-    if (name) {
-      cookies[name] = decodeURIComponent(value);
-    }
-  });
-  return cookies;
-}
-
-function setRefreshCookie(res: Response, token: string) {
-  res.cookie('refresh_token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    path: '/',
-  });
-}
-
-function clearRefreshCookie(res: Response) {
-  res.clearCookie('refresh_token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-  });
-}
+import { ConfigService } from '@nestjs/config';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly sessionService: SessionService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post('login')
@@ -54,14 +24,11 @@ export class AuthController {
     @Body() loginDto: LoginDto,
     @Headers('user-agent') userAgent: string,
     @Ip() ip: string,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
     const safeIp = ip ? ip.substring(0, 45) : undefined;
     const result = await this.authService.login(loginDto, safeUserAgent, safeIp);
-    setRefreshCookie(res, result.refresh_token);
-    const { refresh_token, ...responseBody } = result;
-    return responseBody;
+    return result;
   }
 
   @Post('register')
@@ -73,48 +40,36 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async verifyEmail(
     @Body() verifyEmailDto: VerifyEmailDto,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.verifyEmail(verifyEmailDto);
-    setRefreshCookie(res, result.refresh_token);
-    const { refresh_token, ...responseBody } = result;
-    return responseBody;
+    return result;
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
-    @Request() req: any,
+    @Body('refreshToken') refreshToken: string,
     @Headers('user-agent') userAgent: string,
     @Ip() ip: string,
-    @Res({ passthrough: true }) res: Response,
   ) {
-    const cookies = parseCookies(req.headers.cookie);
-    const refreshToken = cookies['refresh_token'];
     if (!refreshToken) {
-      throw new UnauthorizedException('No refresh token found');
+      throw new UnauthorizedException('No refresh token provided');
     }
     const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
     const safeIp = ip ? ip.substring(0, 45) : undefined;
     const result = await this.authService.refreshTokens(refreshToken, safeUserAgent, safeIp);
-    setRefreshCookie(res, result.refresh_token);
-    const { refresh_token, ...responseBody } = result;
-    return responseBody;
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(
-    @Request() req: any,
-    @Res({ passthrough: true }) res: Response,
+    @Body('refreshToken') refreshToken: string,
   ) {
-    const cookies = parseCookies(req.headers.cookie);
-    const refreshToken = cookies['refresh_token'];
     if (refreshToken) {
       await this.sessionService.revokeSessionByToken(refreshToken);
     }
-    clearRefreshCookie(res);
     return { success: true, message: 'Logged out successfully' };
   }
 
@@ -123,10 +78,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async logoutAll(
     @Request() req: any,
-    @Res({ passthrough: true }) res: Response,
   ) {
     await this.sessionService.revokeAllSessions(req.user.userId);
-    clearRefreshCookie(res);
     return { success: true, message: 'Logged out from all devices successfully' };
   }
 

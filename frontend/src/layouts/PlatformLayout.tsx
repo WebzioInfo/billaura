@@ -5,6 +5,8 @@ import {
   CreditCard, Layers, LifeBuoy, DollarSign, Activity, FileText, Settings
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
+import { authService } from '../services/api';
+import { TokenService } from '../services/auth/TokenService';
 
 export default function PlatformLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -13,9 +15,16 @@ export default function PlatformLayout() {
   const navigate = useNavigate();
   const { user, clearSession } = useSessionStore();
 
-  const handleLogout = () => {
-    clearSession();
-    navigate('/auth/login');
+  const handleLogout = async () => {
+    try {
+      const refreshToken = TokenService.getRefreshToken();
+      await authService.logout(refreshToken);
+    } catch (e) {
+      console.error('Logout failed:', e);
+    } finally {
+      clearSession();
+      navigate('/auth/login');
+    }
   };
 
   const coreNavItems = [
@@ -52,8 +61,8 @@ export default function PlatformLayout() {
       `}>
         <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800">
           <div className="flex items-center gap-2 font-bold text-lg tracking-tight">
-            <Shield className="w-5 h-5 text-indigo-400" />
-            <span>Bill Aura <span className="text-indigo-400 text-xs uppercase tracking-widest ml-1">Platform</span></span>
+            <img src="/logo2.png" alt="Bill Aura Logo" className="h-8 w-auto object-contain" />
+            <span><span className="text-indigo-400 text-xs uppercase tracking-widest ml-1">Platform</span></span>
           </div>
           <button 
             onClick={() => setSidebarOpen(false)}

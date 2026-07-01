@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import api from '../../../services/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { TokenService } from '../../../services/auth/TokenService';
 import { BarChart3, Shield, Mail, AlertCircle, Loader2, CheckCircle2, RotateCw } from 'lucide-react';
 
 const verifySchema = z.object({
@@ -53,6 +54,7 @@ export const VerifyEmail = () => {
         otp: data.otp,
       });
 
+      TokenService.setTokens(response.data.access_token, response.data.refresh_token);
       setSession(response.data.user, response.data.access_token);
       
       setSuccess(true);

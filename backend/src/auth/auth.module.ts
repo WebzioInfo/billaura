@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
@@ -11,9 +12,12 @@ import { SessionService } from './session.service';
   imports: [
     DatabaseModule,
     PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'super-secret-enterprise-key',
-      signOptions: { expiresIn: '15m' }, // Short-lived access tokens (15 minutes)
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
+        signOptions: { expiresIn: configService.getOrThrow<string>('JWT_EXPIRES_IN') as any },
+      }),
     }),
   ],
   controllers: [AuthController],

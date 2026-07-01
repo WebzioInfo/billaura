@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Permission, SessionState, SessionUser } from "../types";
+import { TokenService } from "../../../services/auth/TokenService";
 
 interface SessionStore extends SessionState {
   accessToken: string | null;
@@ -25,6 +26,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
   },
   setLoading: (isLoading) => set({ isLoading }),
   clearSession: () => {
+    TokenService.clearTokens();
     set({
       user: null,
       accessToken: null,

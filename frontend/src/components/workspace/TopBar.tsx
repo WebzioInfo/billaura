@@ -37,13 +37,14 @@ export function TopBar() {
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => navigate('/dashboard')}>
           {logoBase64 ? (
-            <img src={logoBase64} alt="Company Logo" className="h-7 w-auto object-contain rounded-sm" />
+            <img src={logoBase64} alt="Company Logo" className="h-7 w-auto max-w-[120px] object-contain rounded-sm" />
           ) : (
-            <div className="w-6 h-6 bg-accent rounded flex items-center justify-center font-bold text-white text-xs">
-              BA
-            </div>
+            <>
+              <img src="/logo.png" alt="Bill Aura" className="h-7 w-auto object-contain dark:hidden" />
+              <img src="/logo2.png" alt="Bill Aura" className="h-7 w-auto object-contain hidden dark:block" />
+            </>
           )}
-          <span className="font-bold tracking-tight">Bill Aura</span>
+          {!logoBase64 && <span className="font-bold tracking-tight">Bill Aura</span>}
         </div>
         
         <div className="w-[1px] h-6 bg-primary-foreground/20"></div>

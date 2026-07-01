@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { authService } from '../../../services/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { TokenService } from '../../../services/auth/TokenService';
 import { BarChart3, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 
 const loginSchema = z.object({
@@ -29,6 +30,7 @@ export const Login = () => {
     setError(null);
     try {
       const response = await authService.login(data);
+      TokenService.setTokens(response.access_token, response.refresh_token);
       setSession(response.user, response.access_token);
       
       if (response.user.globalRole === 'SUPER_ADMIN') {
