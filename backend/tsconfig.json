@@ -13,12 +13,11 @@
     "allowSyntheticDefaultImports": true,
     "strictPropertyInitialization": false,
     "baseUrl": "./",
-    "rootDir": "src",
     "paths": {},
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "api/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }
