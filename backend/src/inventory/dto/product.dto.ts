@@ -1,5 +1,10 @@
 import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsEnum } from 'class-validator';
-import { ItemType, TaxCategory, UnitType } from '@prisma/client';
+import { TaxCategory, UnitType } from '@prisma/client';
+
+export enum ItemType {
+  PRODUCT = 'PRODUCT',
+  SERVICE = 'SERVICE'
+}
 
 export class CreateProductDto {
   @IsString()

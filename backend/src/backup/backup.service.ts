@@ -3,7 +3,6 @@ import { PrismaService } from '../database/prisma.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import * as fs from 'fs';
-import archiver = require('archiver');
 import * as path from 'path';
 import * as crypto from 'crypto';
 
@@ -60,7 +59,8 @@ export class BackupService {
       const filePath = path.join(backupsDir, fileName);
       
       const output = fs.createWriteStream(filePath);
-      const archive = (archiver as any)('zip', { zlib: { level: 9 } });
+      const { ZipArchive } = await import('archiver');
+      const archive = new ZipArchive({ zlib: { level: 9 } });
       
       archive.pipe(output);
 
