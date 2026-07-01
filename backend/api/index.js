@@ -25,12 +25,30 @@ try {
 const expressApp = express();
 let isInitialized = false;
 let initPromise = null;
+let bootstrapLog = [];
+
+function logProgress(msg) {
+    console.log(`[Bootstrap] ${msg}`);
+    bootstrapLog.push(msg);
+}
+
+async function withTimeout(promise, ms, name) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms during: ${name}`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bufferLogs: true });
+    logProgress("Starting NestFactory.create");
+    const app = await withTimeout(NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bufferLogs: true }), 4000, "NestFactory.create");
+    
+    logProgress("NestFactory.create finished. Getting providers");
     const logger = app.get(AppLogger);
     const config = app.get(ConfigService);
   
+    logProgress("Applying middleware and config");
     app.useLogger(logger);
     app.setGlobalPrefix(config.getOrThrow("API_PREFIX"));
     
@@ -58,7 +76,10 @@ async function bootstrap() {
     app.useGlobalFilters(new AllExceptionsFilter(logger));
     app.useGlobalInterceptors(new RequestContextInterceptor(), new ResponseEnvelopeInterceptor());
   
-    await app.init();
+    logProgress("Starting app.init()");
+    await withTimeout(app.init(), 4000, "app.init()");
+    logProgress("app.init() finished");
+    
     isInitialized = true;
 }
 
@@ -73,7 +94,12 @@ expressApp.use(async (req, res, next) => {
         next();
     } catch (err) {
         console.error("Vercel Startup Error:", err);
-        res.status(500).json({ error: "Startup Crash", message: err.message, stack: err.stack });
+        res.status(500).json({ 
+            error: "Startup Crash", 
+            message: err.message, 
+            stack: err.stack,
+            progress: bootstrapLog
+        });
     }
 });
 
