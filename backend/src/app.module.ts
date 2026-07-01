@@ -52,7 +52,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ReportsModule,
     IncomeModule,
     BackupModule,
-    ScheduleModule.forRoot(),
+    ...(process.env.VERCEL ? [] : [ScheduleModule.forRoot()]),
   ],
 })
 export class AppModule implements NestModule {
