@@ -16,15 +16,25 @@ export class AccountsService {
     if (count > 0) return;
 
     const defaults = [
-      { name: 'Cash in Hand', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
-      { name: 'Operating Bank Account', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
-      { name: 'Inventory Asset', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Cash', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Bank Accounts', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
       { name: 'Accounts Receivable', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Inventory', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Machinery', category: AccountCategory.ASSET, subCategory: AccountSubCategory.FIXED_ASSET },
       { name: 'Accounts Payable', category: AccountCategory.LIABILITY, subCategory: AccountSubCategory.CURRENT_LIABILITY },
-      { name: 'Sales Revenue', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SALES_REVENUE },
-      { name: 'Cost of Goods Sold', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.COGS },
-      { name: 'Office Overheads', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
+      { name: 'GST Payable', category: AccountCategory.LIABILITY, subCategory: AccountSubCategory.CURRENT_LIABILITY },
+      { name: 'Owners Capital', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
+      { name: 'Drawings', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
       { name: 'Retained Earnings', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
+      { name: 'Opening Balance Equity', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
+      { name: 'Sales Revenue', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SALES_REVENUE },
+      { name: 'Service Revenue', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SERVICE_REVENUE },
+      { name: 'Cost of Goods Sold', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.COGS },
+      { name: 'Salary Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
+      { name: 'Rent Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
+      { name: 'Utilities Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
+      { name: 'Bank Charges', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OTHER_EXPENSE },
+      { name: 'Travel Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
     ];
 
     await this.prisma.account.createMany({
@@ -221,12 +231,20 @@ export class AccountsService {
       return {
         name: acc.name,
         category: acc.category,
+        subCategory: acc.subCategory,
         balance: balanceVal,
       };
     });
 
+    const revenueItems = items.filter(i => i.category === AccountCategory.REVENUE);
+    
     return {
-      revenue: items.filter(i => i.category === AccountCategory.REVENUE),
+      revenue: {
+        salesRevenue: revenueItems.filter(i => i.subCategory === 'SALES_REVENUE'),
+        serviceRevenue: revenueItems.filter(i => i.subCategory === 'SERVICE_REVENUE'),
+        otherIncome: revenueItems.filter(i => i.subCategory === 'OTHER_INCOME'),
+        unclassified: revenueItems.filter(i => !['SALES_REVENUE', 'SERVICE_REVENUE', 'OTHER_INCOME'].includes(i.subCategory as string)),
+      },
       expense: items.filter(i => i.category === AccountCategory.EXPENSE),
       totalRevenue,
       totalExpense,
@@ -295,7 +313,7 @@ export class AccountsService {
     const cashAccounts = await this.prisma.account.findMany({
       where: {
         companyId,
-        name: { in: ['Cash in Hand', 'Operating Bank Account'] },
+        name: { in: ['Cash', 'Bank Accounts'] },
       },
     });
 

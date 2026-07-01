@@ -23,7 +23,7 @@ export class CustomersController {
   @Post()
   async create(@Body() data: any) {
     const companyId = CompanyContext.getCompanyId() as string;
-    const { name, customerCode, mobile, whatsapp, email, gstin, gstNumber, panNumber, customerType, tradeName, address, pinCode, state, stateCode, placeOfSupply } = data;
+    const { name, customerCode, mobile, whatsapp, email, gstin, gstNumber, panNumber, customerType, tradeName, address, pinCode, state, stateCode, placeOfSupply, creditLimit } = data;
     const item = await this.prisma.businessPartner.create({
       data: {
         name,
@@ -41,6 +41,7 @@ export class CustomersController {
         state,
         stateCode,
         placeOfSupply,
+        creditLimit: creditLimit ? Number(creditLimit) : 0,
         companyId,
       }
     });
@@ -50,7 +51,7 @@ export class CustomersController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() data: any) {
     const companyId = CompanyContext.getCompanyId() as string;
-    const { name, customerCode, mobile, whatsapp, email, gstin, gstNumber, panNumber, customerType, tradeName, address, pinCode, state, stateCode, placeOfSupply } = data;
+    const { name, customerCode, mobile, whatsapp, email, gstin, gstNumber, panNumber, customerType, tradeName, address, pinCode, state, stateCode, placeOfSupply, creditLimit } = data;
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (customerCode !== undefined) updateData.bpCode = customerCode;
@@ -66,6 +67,7 @@ export class CustomersController {
     if (state !== undefined) updateData.state = state;
     if (stateCode !== undefined) updateData.stateCode = stateCode;
     if (placeOfSupply !== undefined) updateData.placeOfSupply = placeOfSupply;
+    if (creditLimit !== undefined) updateData.creditLimit = Number(creditLimit);
 
     const item = await this.prisma.businessPartner.updateMany({
       where: { id, companyId, deletedAt: null, bpType: 'CUSTOMER' },

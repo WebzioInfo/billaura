@@ -104,6 +104,7 @@ export class InvoicesService {
       // 2. Fetch products and calculate totals
       let subTotal = 0;
       let taxTotal = 0;
+      let totalCogs = 0;
       const itemsToCreate = [];
 
       for (const item of dto.items) {
@@ -125,6 +126,9 @@ export class InvoicesService {
 
         subTotal += lineTotal;
         taxTotal += taxAmount;
+        if (product.itemType === 'FINISHED_GOOD' || product.itemType === 'RAW_MATERIAL') {
+          totalCogs += (Number(product.purchasePrice || 0) * qty);
+        }
 
         itemsToCreate.push({
           productId: product.id,
@@ -284,8 +288,42 @@ export class InvoicesService {
 
       await tx.account.update({
         where: { id: salesAccount.id },
-        data: { balance: { decrement: grandTotal } },
+        data: { balance: { decrement: grandTotal } }, // Revenue credit is negative balance or handled as decrement
       });
+
+      // 8. Post automatic COGS journal entry
+      if (totalCogs > 0) {
+        let cogsAccount = await tx.account.findFirst({ where: { companyId, name: 'Cost of Goods Sold' } });
+        if (!cogsAccount) {
+          cogsAccount = await tx.account.create({
+            data: { companyId, name: 'Cost of Goods Sold', category: 'EXPENSE', subCategory: 'COGS', balance: 0 },
+          });
+        }
+        let invAccount = await tx.account.findFirst({ where: { companyId, name: 'Inventory' } });
+        if (!invAccount) {
+          invAccount = await tx.account.create({
+            data: { companyId, name: 'Inventory', category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+          });
+        }
+
+        await tx.journalEntry.create({
+          data: {
+            companyId,
+            date: new Date(dto.date),
+            reference: invoiceNo,
+            description: `Automatic COGS posting ${invoiceNo}`,
+            lines: {
+              create: [
+                { accountId: cogsAccount.id, debit: totalCogs, credit: 0 },
+                { accountId: invAccount.id, debit: 0, credit: totalCogs },
+              ],
+            },
+          },
+        });
+
+        await tx.account.update({ where: { id: cogsAccount.id }, data: { balance: { increment: totalCogs } } });
+        await tx.account.update({ where: { id: invAccount.id }, data: { balance: { decrement: totalCogs } } });
+      }
 
       return invoice;
     }, { timeout: 20000 });

@@ -10,10 +10,7 @@ import { TenantGuard } from '../common/guards/tenant.guard';
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 
-  @Get('categories')
-  async findCategories() {
-    return this.expensesService.findCategories();
-  }
+  // Categories are now static
 
   @Get()
   async findAll(@Query() query: PaginationQueryDto) {

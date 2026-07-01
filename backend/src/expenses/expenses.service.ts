@@ -10,42 +10,7 @@ import type { Prisma } from '@prisma/client';
 export class ExpensesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async ensureDefaultCategories(companyId: string) {
-    const count = await this.prisma.expenseCategory.count({
-      where: { OR: [{ companyId }, { companyId: null }] },
-    });
-    if (count > 0) return;
-
-    const defaults = [
-      { name: 'Rent & Workspace', description: 'Office rent and coworking passes' },
-      { name: 'Travel & Utilities', description: 'Fuel, flights, electricity, internet' },
-      { name: 'Subscriptions & SaaS', description: 'Software license fees and cloud tools' },
-      { name: 'Office & Admin Overheads', description: 'Stationery, cleaning, refreshments' },
-      { name: 'Professional Services', description: 'Legal, audit, advisory retainers' },
-    ];
-
-    await this.prisma.expenseCategory.createMany({
-      data: defaults.map(d => ({
-        companyId,
-        name: d.name,
-        description: d.description,
-      })),
-    });
-  }
-
-  async findCategories() {
-    const companyId = CompanyContext.getCompanyId();
-    if (!companyId) {
-      throw new ConflictException('Company context is required');
-    }
-
-    await this.ensureDefaultCategories(companyId);
-
-    return this.prisma.expenseCategory.findMany({
-      where: { OR: [{ companyId }, { companyId: null }] },
-      orderBy: { name: 'asc' },
-    });
-  }
+  // Categories removed and replaced by static string in DTO
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -73,7 +38,7 @@ export class ExpensesService {
         where,
         skip,
         take,
-        include: { category: true, bankAccount: true },
+        include: { bankAccount: true },
         orderBy: { date: 'desc' },
       }),
       this.prisma.expense.count({ where }),
@@ -90,7 +55,7 @@ export class ExpensesService {
 
     const expense = await this.prisma.expense.findFirst({
       where: { id, companyId, deletedAt: null },
-      include: { category: true, bankAccount: true },
+      include: { bankAccount: true },
     });
 
     if (!expense) {
@@ -106,13 +71,7 @@ export class ExpensesService {
       throw new ConflictException('Company context is required');
     }
 
-    // Check category exists
-    const category = await this.prisma.expenseCategory.findFirst({
-      where: { id: dto.categoryId, OR: [{ companyId }, { companyId: null }] },
-    });
-    if (!category) {
-      throw new NotFoundException(`Expense Category with ID ${dto.categoryId} not found`);
-    }
+    // category is now a string
 
     // Check bank account if provided
     let bank = null;
@@ -156,7 +115,7 @@ export class ExpensesService {
       const expense = await tx.expense.create({
         data: {
           companyId,
-          categoryId: dto.categoryId,
+          category: dto.category,
           bankAccountId: dto.bankAccountId || null,
           expenseNo,
           billNumber: dto.billNumber || null,
@@ -188,11 +147,11 @@ export class ExpensesService {
       // Debit: Expense Account (category name)
       // Credit: Cash/Bank Account (Operating Bank Account or Cash in Hand)
       let expenseAccount = await tx.account.findFirst({
-        where: { companyId, name: category.name },
+        where: { companyId, name: dto.category },
       });
       if (!expenseAccount) {
         expenseAccount = await tx.account.create({
-          data: { companyId, name: category.name, category: 'EXPENSE', balance: 0 },
+          data: { companyId, name: dto.category, category: 'EXPENSE', balance: 0 },
         });
       }
 

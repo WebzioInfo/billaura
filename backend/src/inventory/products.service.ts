@@ -37,7 +37,7 @@ export class ProductsService {
         where,
         skip,
         take,
-        include: { category: true, brand: true, stocks: true },
+        include: { stocks: true },
         orderBy: { name: 'asc' },
       }),
       this.prisma.product.count({ where }),
@@ -54,7 +54,7 @@ export class ProductsService {
 
     const product = await this.prisma.product.findFirst({
       where: { id, companyId, deletedAt: null },
-      include: { category: true, brand: true, stocks: true },
+      include: { stocks: true },
     });
 
     if (!product) {
@@ -84,9 +84,9 @@ export class ProductsService {
       const product = await tx.product.create({
         data: {
           name: dto.name,
-          categoryId: dto.categoryId || null,
-          brandId: dto.brandId || null,
-          unitId: dto.unitId || null,
+          category: dto.category || null,
+          brand: dto.brand || null,
+          unit: dto.unit || 'PCS',
           taxGroupId: dto.taxGroupId || null,
           sku: dto.sku || null,
           alias: dto.alias || null,

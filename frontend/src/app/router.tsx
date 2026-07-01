@@ -9,7 +9,11 @@ import { Unauthorized } from '../pages/Unauthorized';
 const DepartmentsList = lazy(() => import('../features/departments/DepartmentsList').then(m => ({ default: m.DepartmentsList })));
 const LeadsList = lazy(() => import('../features/crm/LeadsList').then(m => ({ default: m.LeadsList })));
 const CrmDashboard = lazy(() => import('../features/crm/CrmDashboard').then(m => ({ default: m.CrmDashboard })));
+const IncomeDashboard = lazy(() => import('../features/income/IncomeDashboard').then(m => ({ default: m.IncomeDashboard })));
 const ChartOfAccounts = lazy(() => import('../features/accounting/ChartOfAccounts').then(m => ({ default: m.ChartOfAccounts })));
+const JournalVouchersList = lazy(() => import('../features/accounting/JournalVouchersList').then(m => ({ default: m.JournalVouchersList })));
+const JournalVoucherForm = lazy(() => import('../features/accounting/JournalVoucherForm').then(m => ({ default: m.JournalVoucherForm })));
+const CapitalDashboard = lazy(() => import('../features/accounting/CapitalDashboard').then(m => ({ default: m.CapitalDashboard })));
 const ProfitLossDashboard = lazy(() => import('../features/reports/ProfitLossDashboard'));
 const LandingPage = lazy(() => import('../features/public/LandingPage').then(m => ({ default: m.LandingPage })));
 
@@ -23,6 +27,7 @@ const TrialBalance = lazy(() => import('../features/reports/TrialBalance').then(
 const BalanceSheet = lazy(() => import('../features/reports/BalanceSheet').then(m => ({ default: m.BalanceSheet })));
 const GeneralLedger = lazy(() => import('../features/reports/GeneralLedger').then(m => ({ default: m.GeneralLedger })));
 const DayBook = lazy(() => import('../features/reports/DayBook').then(m => ({ default: m.DayBook })));
+const FinancialReports = lazy(() => import('../features/reports/FinancialReports').then(m => ({ default: m.FinancialReports })));
 
 // --- Onboarding & Auth Pages ---
 const Login = lazy(() => import('../features/auth/pages/Login').then(m => ({ default: m.Login })));
@@ -32,6 +37,7 @@ const ForgotPassword = lazy(() => import('../features/auth/pages/ForgotPassword'
 const ResetPassword = lazy(() => import('../features/auth/pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const OnboardingWizard = lazy(() => import('../features/auth/pages/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const BackupRestoreCenter = lazy(() => import('../features/settings/BackupRestoreCenter').then(m => ({ default: m.BackupRestoreCenter })));
 const ExecutiveDashboard = lazy(() => import('../features/dashboard/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
 const InventoryDashboard = lazy(() => import('../features/inventory/InventoryDashboard').then(m => ({ default: m.InventoryDashboard })));
 const SalesDashboard = lazy(() => import('../features/sales/SalesDashboard').then(m => ({ default: m.SalesDashboard })));
@@ -148,10 +154,13 @@ export const router = createBrowserRouter([
       { path: 'bills/new', element: <BillForm /> },
       { path: 'vendor-payments', element: <PurchasesDashboard /> },
       { path: 'expenses', element: <ExpensesDashboard /> },
+      { path: 'other-income', element: <IncomeDashboard /> },
       { path: 'banking', element: <ChartOfAccounts /> },
       { path: 'chart-of-accounts', element: <ChartOfAccounts /> },
       { path: 'accounting', element: <ChartOfAccounts /> },
-      { path: 'journal-entries', element: <ChartOfAccounts /> },
+      { path: 'journal-entries', element: <JournalVouchersList /> },
+      { path: 'journal-entries/new', element: <JournalVoucherForm /> },
+      { path: 'capital', element: <CapitalDashboard /> },
       { path: 'general-ledger', element: <GeneralLedger /> },
       { path: 'day-book', element: <DayBook /> },
       { path: 'trial-balance', element: <TrialBalance /> },
@@ -160,7 +169,13 @@ export const router = createBrowserRouter([
       { path: 'cash-flow', element: <ChartOfAccounts /> },
       { path: 'gst', element: <TaxesDashboard /> },
       { path: 'taxes', element: <TaxesDashboard /> },
-      { path: 'reports', element: <ChartOfAccounts /> },
+      { path: 'reports', element: <FinancialReports /> },
+      { path: 'reports/financial', element: <FinancialReports /> },
+      { path: 'reports/sales', element: <SalesDashboard /> },
+      { path: 'reports/purchases', element: <PurchasesDashboard /> },
+      { path: 'reports/gst', element: <TaxesDashboard /> },
+      { path: 'reports/inventory', element: <InventoryDashboard /> },
+      { path: 'reports/payroll', element: <DepartmentsList /> },
       { path: 'hr', element: <DepartmentsList /> },
       { path: 'employees', element: <DepartmentsList /> },
       { path: 'attendance', element: <DepartmentsList /> },
@@ -172,6 +187,7 @@ export const router = createBrowserRouter([
       { path: 'roles', element: <SettingsPage /> },
       { path: 'profile', element: <SettingsPage /> },
       { path: 'subscription', element: <SettingsPage /> },
+      { path: 'backup-restore', element: <BackupRestoreCenter /> },
       { path: 'help', element: <ExecutiveDashboard /> },
       { path: 'notifications', element: <ExecutiveDashboard /> },
       { path: 'search', element: <ExecutiveDashboard /> },

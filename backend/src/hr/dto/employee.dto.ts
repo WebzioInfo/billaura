@@ -19,11 +19,11 @@ export class CreateEmployeeDto {
 
   @IsString()
   @IsOptional()
-  departmentId?: string;
+  department?: string;
 
   @IsString()
   @IsOptional()
-  designationId?: string;
+  designation?: string;
 
   @IsNumber()
   @IsOptional()

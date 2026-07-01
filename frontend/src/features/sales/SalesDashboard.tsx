@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
+import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
 
 // --- SCHEMAS ---
 const invoiceItemSchema = z.object({
@@ -130,6 +132,147 @@ export const SalesDashboard = () => {
   // Modal controls
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  // DataTable columns for Invoices
+  const invoiceColumns: ColumnDef<Invoice>[] = [
+    {
+      accessorKey: 'invoiceNo',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Invoice No" />,
+      cell: ({ row }) => <span className="font-mono font-medium">{row.getValue('invoiceNo')}</span>,
+    },
+    {
+      accessorKey: 'customer.name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
+      cell: ({ row }) => <span className="font-semibold">{row.original.customer?.name}</span>,
+    },
+    {
+      accessorKey: 'date',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
+      cell: ({ row }) => <span>{(row.getValue('date') as string).split('T')[0]}</span>,
+    },
+    {
+      accessorKey: 'grandTotal',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Total Value" />,
+      cell: ({ row }) => <span className="font-bold">{formatCurrency(Number(row.getValue('grandTotal')))}</span>,
+    },
+    {
+      accessorKey: 'amountPaid',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Amount Paid" />,
+      cell: ({ row }) => <span className="font-semibold text-green-500">{formatCurrency(Number(row.getValue('amountPaid')))}</span>,
+    },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      cell: ({ row }) => (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+          row.getValue('status') === 'PAID' ? 'bg-green-500/10 text-green-500' : 'bg-amber-500/10 text-amber-500'
+        }`}>
+          {row.getValue('status')}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => {
+        const inv = row.original;
+        return (
+          <div className="flex items-center justify-end gap-2">
+            <PdfDownloadButton 
+              className="p-1.5"
+              filename={`${inv.invoiceNo}.pdf`}
+              data={{
+                company: { name: 'Webzio Accounting Demo', address: '123 Wall Street', email: 'admin@webzio.com' },
+                customer: { name: inv.customer?.name || 'Unknown', address: 'N/A' },
+                document: { title: 'Tax Invoice', documentNo: inv.invoiceNo, date: inv.date, status: inv.status },
+                items: inv.items?.map(i => ({
+                  id: i.id, description: i.description || 'Item', qty: Number(i.qty), rate: Number(i.rate),
+                  taxPercent: Number(i.taxAmount) > 0 ? 10 : 0, taxAmount: Number(i.taxAmount), total: Number(i.total)
+                })) || [],
+                totals: {
+                  subTotal: Number(inv.grandTotal) - (inv.items?.reduce((acc, i) => acc + Number(i.taxAmount), 0) || 0),
+                  taxTotal: inv.items?.reduce((acc, i) => acc + Number(i.taxAmount), 0) || 0,
+                  grandTotal: Number(inv.grandTotal), amountPaid: Number(inv.amountPaid || 0),
+                  balance: Number(inv.grandTotal) - Number(inv.amountPaid || 0), currency: 'USD'
+                }
+              }} 
+            />
+            <button onClick={() => handleDeleteInvoice(inv.id)} disabled={inv.status === 'PAID'} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  // DataTable columns for Payments
+  const paymentColumns: ColumnDef<Payment>[] = [
+    {
+      accessorKey: 'paymentNo',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Receipt No" />,
+      cell: ({ row }) => <span className="font-mono font-medium">{row.getValue('paymentNo')}</span>,
+    },
+    {
+      accessorKey: 'customer.name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
+      cell: ({ row }) => <span className="font-semibold">{row.original.customer?.name}</span>,
+    },
+    {
+      accessorKey: 'date',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
+      cell: ({ row }) => <span>{(row.getValue('date') as string).split('T')[0]}</span>,
+    },
+    {
+      accessorKey: 'amount',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
+      cell: ({ row }) => <span className="font-bold text-green-500">{formatCurrency(Number(row.getValue('amount')))}</span>,
+    },
+    {
+      accessorKey: 'method',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Method" />,
+      cell: ({ row }) => (
+        <span className="bg-green-500/10 text-green-500 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
+          {row.getValue('method')}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'reference',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Reference" />,
+      cell: ({ row }) => <span>{row.getValue('reference') || '-'}</span>,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => {
+        const pay = row.original;
+        return (
+          <div className="flex items-center justify-end gap-2">
+            <PdfDownloadButton 
+              className="p-1.5"
+              filename={`Receipt-${pay.paymentNo}.pdf`}
+              data={{
+                company: { name: 'Webzio Accounting Demo', address: '123 Wall Street', email: 'admin@webzio.com' },
+                customer: { name: pay.customer?.name || 'Unknown', address: 'N/A' },
+                document: { title: 'Payment Receipt', documentNo: pay.paymentNo, date: pay.date, status: 'PAID' },
+                items: [{
+                  id: '1', description: `Payment via ${pay.method} ${pay.reference ? `(Ref: ${pay.reference})` : ''}`,
+                  qty: 1, rate: Number(pay.amount), taxPercent: 0, taxAmount: 0, total: Number(pay.amount)
+                }],
+                totals: {
+                  subTotal: Number(pay.amount), taxTotal: 0, grandTotal: Number(pay.amount),
+                  amountPaid: Number(pay.amount), balance: 0, currency: 'USD'
+                },
+                watermark: 'PAID'
+              }} 
+            />
+            <button onClick={() => handleDeletePayment(pay.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
 
   // Forms hooks
   const invoiceForm = useForm<InvoiceFormValues>({
@@ -344,74 +487,18 @@ export const SalesDashboard = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {invoices.filter(i => i.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) || i.customer?.name.toLowerCase().includes(searchQuery.toLowerCase())).map((inv) => (
-              <div key={inv.id} className="glass-panel p-6 rounded-2xl border border-border hover-premium flex flex-col justify-between">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-lg text-foreground">{inv.invoiceNo}</h3>
-                      <p className="text-xs text-muted-foreground">Customer: <span className="font-semibold text-foreground">{inv.customer?.name}</span></p>
-                    </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      inv.status === 'PAID' ? 'bg-green-500/10 text-green-500' : 'bg-amber-500/10 text-amber-500'
-                    }`}>
-                      {inv.status}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5 text-xs text-muted-foreground border-t border-border pt-4">
-                    <p>Total Invoice Value: <span className="text-foreground font-bold">{formatCurrency(Number(inv.grandTotal))}</span></p>
-                    <p>Amount Paid: <span className="text-foreground font-semibold text-green-500">{formatCurrency(Number(inv.amountPaid || 0))}</span></p>
-                    <p>Posting Date: <span className="text-foreground">{inv.date.split('T')[0]}</span></p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 border-t border-border mt-6 pt-4">
-                  <PdfDownloadButton 
-                    className="mr-auto"
-                    filename={`${inv.invoiceNo}.pdf`}
-                    data={{
-                      company: {
-                        name: 'Webzio Accounting Demo',
-                        address: '123 Wall Street',
-                        email: 'admin@webzio.com'
-                      },
-                      customer: {
-                        name: inv.customer?.name || 'Unknown',
-                        address: 'N/A'
-                      },
-                      document: {
-                        title: 'Tax Invoice',
-                        documentNo: inv.invoiceNo,
-                        date: inv.date,
-                        status: inv.status
-                      },
-                      items: inv.items?.map(i => ({
-                        id: i.id,
-                        description: i.description || 'Item',
-                        qty: Number(i.qty),
-                        rate: Number(i.rate),
-                        taxPercent: Number(i.taxAmount) > 0 ? 10 : 0, // Mocked for now
-                        taxAmount: Number(i.taxAmount),
-                        total: Number(i.total)
-                      })) || [],
-                      totals: {
-                        subTotal: Number(inv.grandTotal) - (inv.items?.reduce((acc, i) => acc + Number(i.taxAmount), 0) || 0),
-                        taxTotal: inv.items?.reduce((acc, i) => acc + Number(i.taxAmount), 0) || 0,
-                        grandTotal: Number(inv.grandTotal),
-                        amountPaid: Number(inv.amountPaid || 0),
-                        balance: Number(inv.grandTotal) - Number(inv.amountPaid || 0),
-                        currency: 'USD'
-                      }
-                    }} 
-                  />
-                  <button onClick={() => handleDeleteInvoice(inv.id)} disabled={inv.status === 'PAID'} className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="col-span-full bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
+            <FilterPanel 
+              fields={[
+                { id: 'status', label: 'Status', type: 'select', options: [{label: 'PAID', value: 'PAID'}, {label: 'DRAFT', value: 'DRAFT'}, {label: 'SENT', value: 'SENT'}] },
+                { id: 'dateRange', label: 'Date Range', type: 'date-range' }
+              ]} 
+              onApply={() => {}} 
+              className="border-none shadow-none border-b rounded-none mb-0" 
+            />
+            <div className="p-4">
+              <DataTable columns={invoiceColumns} data={invoices} searchKey="invoiceNo" exportFilename="invoices_export" />
+            </div>
           </div>
         )
       ) : (
@@ -424,73 +511,18 @@ export const SalesDashboard = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {payments.filter(p => p.paymentNo.toLowerCase().includes(searchQuery.toLowerCase()) || p.customer?.name.toLowerCase().includes(searchQuery.toLowerCase())).map((pay) => (
-              <div key={pay.id} className="glass-panel p-6 rounded-2xl border border-border hover-premium flex flex-col justify-between">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-lg text-foreground">{pay.paymentNo}</h3>
-                      <p className="text-xs text-muted-foreground">From: <span className="font-semibold text-foreground">{pay.customer?.name}</span></p>
-                    </div>
-                    <span className="bg-green-500/10 text-green-500 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
-                      {pay.method}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5 text-xs text-muted-foreground border-t border-border pt-4">
-                    <p>Amount Received: <span className="text-green-500 font-bold text-sm">{formatCurrency(Number(pay.amount))}</span></p>
-                    <p>Posting Date: <span className="text-foreground">{pay.date.split('T')[0]}</span></p>
-                    {pay.reference && <p>Reference No: <span className="text-foreground">{pay.reference}</span></p>}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 border-t border-border mt-6 pt-4">
-                  <PdfDownloadButton 
-                    className="mr-auto"
-                    filename={`Receipt-${pay.paymentNo}.pdf`}
-                    data={{
-                      company: {
-                        name: 'Webzio Accounting Demo',
-                        address: '123 Wall Street',
-                        email: 'admin@webzio.com'
-                      },
-                      customer: {
-                        name: pay.customer?.name || 'Unknown',
-                        address: 'N/A'
-                      },
-                      document: {
-                        title: 'Payment Receipt',
-                        documentNo: pay.paymentNo,
-                        date: pay.date,
-                        status: 'RECEIVED'
-                      },
-                      items: [{
-                        id: '1',
-                        description: `Payment via ${pay.method} ${pay.reference ? `(Ref: ${pay.reference})` : ''}`,
-                        qty: 1,
-                        rate: Number(pay.amount),
-                        taxPercent: 0,
-                        taxAmount: 0,
-                        total: Number(pay.amount)
-                      }],
-                      totals: {
-                        subTotal: Number(pay.amount),
-                        taxTotal: 0,
-                        grandTotal: Number(pay.amount),
-                        amountPaid: Number(pay.amount),
-                        balance: 0,
-                        currency: 'USD'
-                      },
-                      watermark: 'PAID'
-                    }} 
-                  />
-                  <button onClick={() => handleDeletePayment(pay.id)} className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="col-span-full bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
+            <FilterPanel 
+              fields={[
+                { id: 'method', label: 'Method', type: 'select', options: [{label: 'BANK_TRANSFER', value: 'BANK_TRANSFER'}, {label: 'CASH', value: 'CASH'}, {label: 'CHEQUE', value: 'CHEQUE'}] },
+                { id: 'dateRange', label: 'Date Range', type: 'date-range' }
+              ]} 
+              onApply={() => {}} 
+              className="border-none shadow-none border-b rounded-none mb-0" 
+            />
+            <div className="p-4">
+              <DataTable columns={paymentColumns} data={payments} searchKey="paymentNo" exportFilename="receipts_export" />
+            </div>
           </div>
         )
       )}

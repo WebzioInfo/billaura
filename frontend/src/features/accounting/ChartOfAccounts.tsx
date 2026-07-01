@@ -9,6 +9,8 @@ import {
   RefreshCw, Landmark, Calculator, AlertTriangle, FileText, ArrowRightLeft, Calendar 
 } from 'lucide-react';
 import api from '../../services/api';
+import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
 
 // --- SCHEMAS ---
 const accountSchema = z.object({
@@ -120,6 +122,75 @@ export const ChartOfAccounts = () => {
     control: journalForm.control,
     name: 'lines'
   });
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+  };
+
+  const accountColumns: ColumnDef<Account>[] = [
+    {
+      accessorKey: 'name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Account Name" />,
+      cell: ({ row }) => <span className="font-medium text-foreground">{row.getValue('name')}</span>,
+    },
+    {
+      accessorKey: 'category',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Category Type" />,
+      cell: ({ row }) => {
+        const cat = row.getValue('category') as string;
+        return (
+          <span className={`px-2.5 py-1 text-xs font-semibold rounded-full uppercase ${
+            cat === 'ASSET' ? 'bg-blue-500/10 text-blue-500' :
+            cat === 'LIABILITY' ? 'bg-amber-500/10 text-amber-500' :
+            cat === 'REVENUE' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+          }`}>
+            {cat}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: 'balance',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Balance" />,
+      cell: ({ row }) => <span className="font-bold text-foreground block text-right">{formatCurrency(Number(row.getValue('balance') || 0))}</span>,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => {
+        return (
+          <div className="flex justify-end">
+            <button onClick={() => handleDeleteAccount(row.original.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  const trialBalanceColumns: ColumnDef<any>[] = [
+    {
+      accessorKey: 'name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Account Ledger" />,
+      cell: ({ row }) => <span className="font-medium text-foreground">{row.getValue('name')}</span>,
+    },
+    {
+      id: 'debit',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Debit" />,
+      cell: ({ row }) => {
+        const bal = row.original.balance;
+        return <span className="font-bold text-foreground block text-right">{bal > 0 ? formatCurrency(bal) : ''}</span>;
+      },
+    },
+    {
+      id: 'credit',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Credit" />,
+      cell: ({ row }) => {
+        const bal = row.original.balance;
+        return <span className="font-bold text-foreground block text-right">{bal < 0 ? formatCurrency(Math.abs(bal)) : ''}</span>;
+      },
+    },
+  ];
  
   const fetchData = async () => {
     setIsLoading(true);
@@ -212,9 +283,6 @@ export const ChartOfAccounts = () => {
     }
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
-  };
 
   const watchedLines = journalForm.watch('lines') || [];
   const totalDebit = watchedLines.reduce((s, l) => s + Number(l.debit || 0), 0);
@@ -314,40 +382,16 @@ export const ChartOfAccounts = () => {
         </div>
       ) : activeTab === 'coa' ? (
         <div className="bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-background bg-opacity-35 border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                <th className="py-4 px-6">Account Name</th>
-                <th className="py-4 px-6">Category Type</th>
-                <th className="py-4 px-6 text-right">Balance</th>
-                <th className="py-4 px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((acc) => (
-                <tr key={acc.id} className="border-b border-border/50 hover:bg-background/20 transition-colors">
-                  <td className="py-4 px-6 font-medium text-foreground">{acc.name}</td>
-                  <td className="py-4 px-6">
-                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full uppercase ${
-                      acc.category === 'ASSET' ? 'bg-blue-500/10 text-blue-500' :
-                      acc.category === 'LIABILITY' ? 'bg-amber-500/10 text-amber-500' :
-                      acc.category === 'REVENUE' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                    }`}>
-                      {acc.category}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-right font-bold text-foreground">
-                    {formatCurrency(Number(acc.balance || 0))}
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    <button onClick={() => handleDeleteAccount(acc.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <FilterPanel 
+            fields={[
+              { id: 'category', label: 'Category', type: 'select', options: [{label: 'ASSET', value: 'ASSET'}, {label: 'LIABILITY', value: 'LIABILITY'}, {label: 'EQUITY', value: 'EQUITY'}, {label: 'REVENUE', value: 'REVENUE'}, {label: 'EXPENSE', value: 'EXPENSE'}] }
+            ]} 
+            onApply={() => {}} 
+            className="border-none shadow-none border-b rounded-none mb-0" 
+          />
+          <div className="p-4">
+            <DataTable columns={accountColumns} data={accounts} searchKey="name" exportFilename="chart_of_accounts" />
+          </div>
         </div>
       ) : activeTab === 'journal' ? (
         journalEntries.length === 0 ? (
@@ -392,28 +436,9 @@ export const ChartOfAccounts = () => {
         )
       ) : activeTab === 'trial' ? (
         <div className="bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-background bg-opacity-35 border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                <th className="py-4 px-6">Account Ledger</th>
-                <th className="py-4 px-6 text-right">Debit</th>
-                <th className="py-4 px-6 text-right">Credit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trialBalance.map((row) => (
-                <tr key={row.id} className="border-b border-border/50">
-                  <td className="py-4 px-6 font-medium text-foreground">{row.name}</td>
-                  <td className="py-4 px-6 text-right text-foreground font-bold">
-                    {row.balance > 0 ? formatCurrency(row.balance) : ''}
-                  </td>
-                  <td className="py-4 px-6 text-right text-foreground font-bold">
-                    {row.balance < 0 ? formatCurrency(Math.abs(row.balance)) : ''}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="p-4">
+            <DataTable columns={trialBalanceColumns} data={trialBalance} searchKey="name" exportFilename="trial_balance" />
+          </div>
         </div>
       ) : activeTab === 'pl' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

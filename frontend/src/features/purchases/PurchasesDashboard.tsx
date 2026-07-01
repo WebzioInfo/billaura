@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
+import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
 
 // --- SCHEMAS ---
 const vendorSchema = z.object({
@@ -17,6 +19,8 @@ const vendorSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
   gstin: z.string().optional(),
   contactDetails: z.string().optional(),
+  customerType: z.enum(['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT']),
+  creditLimit: z.number().optional(),
 });
 
 const purchaseItemSchema = z.object({
@@ -56,6 +60,8 @@ interface Vendor {
   gstin?: string;
   contactDetails?: string;
   payableBalance: number;
+  customerType?: 'REGISTERED' | 'UNREGISTERED' | 'COMPOSITION' | 'SEZ' | 'EXPORT';
+  creditLimit?: number;
 }
 
 interface Product {
@@ -132,10 +138,155 @@ export const PurchasesDashboard = () => {
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+  };
+
+  // DataTable columns for Purchases
+  const purchaseColumns: ColumnDef<Purchase>[] = [
+    {
+      accessorKey: 'purchaseNo',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Bill No" />,
+      cell: ({ row }) => <span className="font-mono font-medium">{row.getValue('purchaseNo')}</span>,
+    },
+    {
+      accessorKey: 'vendor.name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Vendor" />,
+      cell: ({ row }) => <span className="font-semibold">{row.original.vendor?.name}</span>,
+    },
+    {
+      accessorKey: 'date',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
+      cell: ({ row }) => <span>{(row.getValue('date') as string).split('T')[0]}</span>,
+    },
+    {
+      accessorKey: 'grandTotal',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Total Value" />,
+      cell: ({ row }) => <span className="font-bold">{formatCurrency(Number(row.getValue('grandTotal')))}</span>,
+    },
+    {
+      accessorKey: 'amountPaid',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Amount Paid" />,
+      cell: ({ row }) => <span className="font-semibold text-green-500">{formatCurrency(Number(row.getValue('amountPaid')))}</span>,
+    },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      cell: ({ row }) => (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+          row.getValue('status') === 'PAID' ? 'bg-green-500/10 text-green-500' : 'bg-amber-500/10 text-amber-500'
+        }`}>
+          {row.getValue('status')}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => {
+        const p = row.original;
+        return (
+          <div className="flex items-center justify-end gap-2">
+            <PdfDownloadButton 
+              className="p-1.5"
+              filename={`Bill-${p.purchaseNo}.pdf`}
+              data={{
+                company: { name: 'Webzio Accounting Demo', address: '123 Wall Street', email: 'admin@webzio.com' },
+                customer: { name: p.vendor?.name || 'Unknown', address: 'N/A' },
+                document: { title: 'Purchase Bill', documentNo: p.purchaseNo, date: p.date, status: p.status },
+                items: p.items?.map(i => ({
+                  id: i.id, description: i.description || 'Item', qty: Number(i.qty), rate: Number(i.rate),
+                  taxPercent: Number(i.taxAmount) > 0 ? 10 : 0, taxAmount: Number(i.taxAmount), total: Number(i.total)
+                })) || [],
+                totals: {
+                  subTotal: Number(p.grandTotal) - (p.items?.reduce((acc, i) => acc + Number(i.taxAmount), 0) || 0),
+                  taxTotal: p.items?.reduce((acc, i) => acc + Number(i.taxAmount), 0) || 0,
+                  grandTotal: Number(p.grandTotal), amountPaid: Number(p.amountPaid || 0),
+                  balance: Number(p.grandTotal) - Number(p.amountPaid || 0), currency: 'USD'
+                }
+              }} 
+            />
+            <button onClick={() => handleDeletePurchase(p.id)} disabled={p.status === 'PAID'} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  // DataTable columns for Payments
+  const paymentColumns: ColumnDef<Payment>[] = [
+    {
+      accessorKey: 'paymentNo',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Payment No" />,
+      cell: ({ row }) => <span className="font-mono font-medium">{row.getValue('paymentNo')}</span>,
+    },
+    {
+      accessorKey: 'vendor.name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Vendor" />,
+      cell: ({ row }) => <span className="font-semibold">{row.original.vendor?.name}</span>,
+    },
+    {
+      accessorKey: 'date',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
+      cell: ({ row }) => <span>{(row.getValue('date') as string).split('T')[0]}</span>,
+    },
+    {
+      accessorKey: 'amount',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
+      cell: ({ row }) => <span className="font-bold text-green-500">{formatCurrency(Number(row.getValue('amount')))}</span>,
+    },
+    {
+      accessorKey: 'method',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Method" />,
+      cell: ({ row }) => (
+        <span className="bg-green-500/10 text-green-500 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
+          {row.getValue('method')}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'reference',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Reference" />,
+      cell: ({ row }) => <span>{row.getValue('reference') || '-'}</span>,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => {
+        const pay = row.original;
+        return (
+          <div className="flex items-center justify-end gap-2">
+            <PdfDownloadButton 
+              className="p-1.5"
+              filename={`Payment-${pay.paymentNo}.pdf`}
+              data={{
+                company: { name: 'Webzio Accounting Demo', address: '123 Wall Street', email: 'admin@webzio.com' },
+                customer: { name: pay.vendor?.name || 'Unknown', address: 'N/A' },
+                document: { title: 'Payment Voucher', documentNo: pay.paymentNo, date: pay.date, status: 'PAID' },
+                items: [{
+                  id: '1', description: `Payment to vendor via ${pay.method} ${pay.reference ? `(Ref: ${pay.reference})` : ''}`,
+                  qty: 1, rate: Number(pay.amount), taxPercent: 0, taxAmount: 0, total: Number(pay.amount)
+                }],
+                totals: {
+                  subTotal: Number(pay.amount), taxTotal: 0, grandTotal: Number(pay.amount),
+                  amountPaid: Number(pay.amount), balance: 0, currency: 'USD'
+                },
+                watermark: 'PAID'
+              }} 
+            />
+            <button onClick={() => handleDeletePayment(pay.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
   // Forms hooks
   const vendorForm = useForm<VendorFormValues>({
     resolver: zodResolver(vendorSchema),
-    defaultValues: { vendorCode: '', name: '', gstin: '', contactDetails: '' }
+    defaultValues: { vendorCode: '', name: '', gstin: '', contactDetails: '', customerType: 'UNREGISTERED', creditLimit: 0 }
   });
 
   const purchaseForm = useForm<PurchaseFormValues>({
@@ -232,6 +383,8 @@ export const PurchasesDashboard = () => {
       name: item.name,
       gstin: item.gstin || '',
       contactDetails: item.contactDetails || '',
+      customerType: item.customerType || 'UNREGISTERED',
+      creditLimit: Number(item.creditLimit || 0),
     });
     setIsVendorModalOpen(true);
   };
@@ -324,9 +477,6 @@ export const PurchasesDashboard = () => {
     }
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
-  };
 
   const watchedItems = purchaseForm.watch('items') || [];
   const formSubTotal = watchedItems.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.rate || 0)), 0);
@@ -504,74 +654,18 @@ export const PurchasesDashboard = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {purchases.filter(p => p.purchaseNo.toLowerCase().includes(searchQuery.toLowerCase()) || p.vendor?.name.toLowerCase().includes(searchQuery.toLowerCase())).map((pur) => (
-              <div key={pur.id} className="glass-panel p-6 rounded-2xl border border-border hover-premium flex flex-col justify-between">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-lg text-foreground">{pur.purchaseNo}</h3>
-                      <p className="text-xs text-muted-foreground">Supplier: <span className="font-semibold text-foreground">{pur.vendor?.name}</span></p>
-                    </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      pur.status === 'PAID' ? 'bg-green-500/10 text-green-500' : 'bg-amber-500/10 text-amber-500'
-                    }`}>
-                      {pur.status}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5 text-xs text-muted-foreground border-t border-border pt-4">
-                    <p>Total Bill Value: <span className="text-foreground font-bold">{formatCurrency(Number(pur.grandTotal))}</span></p>
-                    <p>Amount Paid: <span className="text-foreground font-semibold text-green-500">{formatCurrency(Number(pur.amountPaid || 0))}</span></p>
-                    <p>Posting Date: <span className="text-foreground">{pur.date.split('T')[0]}</span></p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 border-t border-border mt-6 pt-4">
-                  <PdfDownloadButton 
-                    className="mr-auto"
-                    filename={`PurchaseBill-${pur.purchaseNo}.pdf`}
-                    data={{
-                      company: {
-                        name: 'Webzio Accounting Demo',
-                        address: '123 Wall Street',
-                        email: 'admin@webzio.com'
-                      },
-                      customer: {
-                        name: pur.vendor?.name || 'Unknown Vendor',
-                        address: 'N/A'
-                      },
-                      document: {
-                        title: 'Purchase Bill',
-                        documentNo: pur.purchaseNo,
-                        date: pur.date,
-                        status: pur.status
-                      },
-                      items: pur.items?.map(i => ({
-                        id: i.id,
-                        description: i.description || 'Item',
-                        qty: Number(i.qty),
-                        rate: Number(i.rate),
-                        taxPercent: Number(i.taxAmount) > 0 ? 10 : 0, 
-                        taxAmount: Number(i.taxAmount),
-                        total: Number(i.total)
-                      })) || [],
-                      totals: {
-                        subTotal: Number(pur.grandTotal) - (pur.items?.reduce((acc, i) => acc + Number(i.taxAmount), 0) || 0),
-                        taxTotal: pur.items?.reduce((acc, i) => acc + Number(i.taxAmount), 0) || 0,
-                        grandTotal: Number(pur.grandTotal),
-                        amountPaid: Number(pur.amountPaid || 0),
-                        balance: Number(pur.grandTotal) - Number(pur.amountPaid || 0),
-                        currency: 'USD'
-                      }
-                    }} 
-                  />
-                  <button onClick={() => handleDeletePurchase(pur.id)} disabled={pur.status === 'PAID'} className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="col-span-full bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
+            <FilterPanel 
+              fields={[
+                { id: 'status', label: 'Status', type: 'select', options: [{label: 'PAID', value: 'PAID'}, {label: 'DRAFT', value: 'DRAFT'}, {label: 'SENT', value: 'SENT'}] },
+                { id: 'dateRange', label: 'Date Range', type: 'date-range' }
+              ]} 
+              onApply={() => {}} 
+              className="border-none shadow-none border-b rounded-none mb-0" 
+            />
+            <div className="p-4">
+              <DataTable columns={purchaseColumns} data={purchases} searchKey="purchaseNo" exportFilename="purchases_export" />
+            </div>
           </div>
         )
       ) : (
@@ -584,73 +678,18 @@ export const PurchasesDashboard = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {payments.filter(p => p.paymentNo.toLowerCase().includes(searchQuery.toLowerCase()) || p.vendor?.name.toLowerCase().includes(searchQuery.toLowerCase())).map((pay) => (
-              <div key={pay.id} className="glass-panel p-6 rounded-2xl border border-border hover-premium flex flex-col justify-between">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-lg text-foreground">{pay.paymentNo}</h3>
-                      <p className="text-xs text-muted-foreground">To Supplier: <span className="font-semibold text-foreground">{pay.vendor?.name}</span></p>
-                    </div>
-                    <span className="bg-green-500/10 text-green-500 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
-                      {pay.method}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5 text-xs text-muted-foreground border-t border-border pt-4">
-                    <p>Amount Paid: <span className="text-red-500 font-bold text-sm">{formatCurrency(Number(pay.amount))}</span></p>
-                    <p>Posting Date: <span className="text-foreground">{pay.date.split('T')[0]}</span></p>
-                    {pay.reference && <p>UTR Reference: <span className="text-foreground">{pay.reference}</span></p>}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 border-t border-border mt-6 pt-4">
-                  <PdfDownloadButton 
-                    className="mr-auto"
-                    filename={`Payout-${pay.paymentNo}.pdf`}
-                    data={{
-                      company: {
-                        name: 'Webzio Accounting Demo',
-                        address: '123 Wall Street',
-                        email: 'admin@webzio.com'
-                      },
-                      customer: {
-                        name: pay.vendor?.name || 'Unknown',
-                        address: 'N/A'
-                      },
-                      document: {
-                        title: 'Vendor Payout Voucher',
-                        documentNo: pay.paymentNo,
-                        date: pay.date,
-                        status: 'PAID'
-                      },
-                      items: [{
-                        id: '1',
-                        description: `Payout via ${pay.method} ${pay.reference ? `(Ref: ${pay.reference})` : ''}`,
-                        qty: 1,
-                        rate: Number(pay.amount),
-                        taxPercent: 0,
-                        taxAmount: 0,
-                        total: Number(pay.amount)
-                      }],
-                      totals: {
-                        subTotal: Number(pay.amount),
-                        taxTotal: 0,
-                        grandTotal: Number(pay.amount),
-                        amountPaid: Number(pay.amount),
-                        balance: 0,
-                        currency: 'USD'
-                      },
-                      watermark: 'PAID OUT'
-                    }} 
-                  />
-                  <button onClick={() => handleDeletePayment(pay.id)} className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="col-span-full bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
+            <FilterPanel 
+              fields={[
+                { id: 'method', label: 'Method', type: 'select', options: [{label: 'BANK_TRANSFER', value: 'BANK_TRANSFER'}, {label: 'CASH', value: 'CASH'}, {label: 'CHEQUE', value: 'CHEQUE'}] },
+                { id: 'dateRange', label: 'Date Range', type: 'date-range' }
+              ]} 
+              onApply={() => {}} 
+              className="border-none shadow-none border-b rounded-none mb-0" 
+            />
+            <div className="p-4">
+              <DataTable columns={paymentColumns} data={payments} searchKey="paymentNo" exportFilename="vendor_payouts_export" />
+            </div>
           </div>
         )
       )}
@@ -895,6 +934,24 @@ export const PurchasesDashboard = () => {
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">GSTIN</label>
                   <input type="text" {...vendorForm.register('gstin')} placeholder="e.g. 27BBBBB2222B2Z2" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-mono" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Vendor Type</label>
+                    <select {...vendorForm.register('customerType')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
+                      <option value="UNREGISTERED">Unregistered / Consumer</option>
+                      <option value="REGISTERED">Regular / Registered</option>
+                      <option value="COMPOSITION">Composition Dealer</option>
+                      <option value="SEZ">SEZ (Special Economic Zone)</option>
+                      <option value="EXPORT">Overseas / Import</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Credit Limit</label>
+                    <input type="number" {...vendorForm.register('creditLimit', { valueAsNumber: true })} placeholder="e.g. 100000" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  </div>
                 </div>
 
                 <div>

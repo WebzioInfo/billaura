@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Command } from 'cmdk';
 import { Modal } from '@/components/ui/Modal';
-import { Search, Home, Users, FileText, ShoppingCart, TrendingUp } from 'lucide-react';
+import { Search, Home, Users, FileText, ShoppingCart, TrendingUp, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import api from '@/services/api';
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { openTab } = useWorkspaceStore();
 
@@ -21,9 +25,31 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', down);
   }, []);
 
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (query.length < 2) {
+        setResults([]);
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const res = await api.get<any>(`/search?q=${encodeURIComponent(query)}`);
+        setResults(res.results || []);
+      } catch (error) {
+        console.error("Search failed", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const debounce = setTimeout(fetchResults, 300);
+    return () => clearTimeout(debounce);
+  }, [query]);
+
   const runCommand = (action: () => void) => {
     action();
     setOpen(false);
+    setQuery('');
   };
 
   const navigateTo = (path: string, label: string, id: string) => {
@@ -41,12 +67,33 @@ export function CommandPalette() {
           <Command.Input 
             autoFocus
             className="flex h-14 w-full rounded-md bg-transparent py-3 text-lg outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0 ring-0" 
-            placeholder="Type a command or search..." 
+            placeholder="Type a command or search customers, vendors, invoices..." 
+            value={query}
+            onValueChange={setQuery}
           />
+          {isLoading && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mr-2" />}
         </div>
         <Command.List className="max-h-[400px] overflow-y-auto p-2">
-          <Command.Empty className="py-6 text-center text-sm">No results found.</Command.Empty>
+          <Command.Empty className="py-6 text-center text-sm text-muted-foreground">No results found.</Command.Empty>
           
+          {results.length > 0 && (
+            <Command.Group heading="Global Search Results" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:text-primary">
+              {results.map((item, idx) => (
+                <Command.Item 
+                  key={`${item.id}-${idx}`}
+                  onSelect={() => navigateTo(item.url, item.title, `${item.type.toLowerCase()}-${item.id}`)}
+                  className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-3 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+                >
+                  <Search className="mr-3 h-4 w-4 text-muted-foreground" />
+                  <div className="flex flex-col">
+                    <span className="font-medium">{item.title}</span>
+                    <span className="text-xs text-muted-foreground">{item.type}</span>
+                  </div>
+                </Command.Item>
+              ))}
+            </Command.Group>
+          )}
+
           <Command.Group heading="Navigation" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:text-muted-foreground">
             <Command.Item 
               onSelect={() => navigateTo('/app/dashboard', 'Dashboard', 'dashboard')}

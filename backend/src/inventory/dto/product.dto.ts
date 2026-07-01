@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsEnum } from 'class-validator';
-import { ItemType, TaxCategory } from '@prisma/client';
+import { ItemType, TaxCategory, UnitType } from '@prisma/client';
 
 export class CreateProductDto {
   @IsString()
@@ -8,15 +8,15 @@ export class CreateProductDto {
 
   @IsString()
   @IsOptional()
-  categoryId?: string;
+  category?: string;
 
   @IsString()
   @IsOptional()
-  brandId?: string;
+  brand?: string;
 
-  @IsString()
+  @IsEnum(UnitType)
   @IsOptional()
-  unitId?: string;
+  unit?: UnitType;
 
   @IsString()
   @IsOptional()

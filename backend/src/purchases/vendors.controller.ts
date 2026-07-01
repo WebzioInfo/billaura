@@ -23,7 +23,7 @@ export class VendorsController {
   @Post()
   async create(@Body() data: any) {
     const companyId = CompanyContext.getCompanyId() as string;
-    const { name, vendorCode, gstin, contactDetails, payableBalance } = data;
+    const { name, vendorCode, gstin, contactDetails, payableBalance, customerType, creditLimit } = data;
     const item = await this.prisma.businessPartner.create({
       data: {
         name,
@@ -31,6 +31,8 @@ export class VendorsController {
         bpType: 'VENDOR',
         gstin,
         phone: contactDetails,
+        customerType: customerType || 'UNREGISTERED',
+        creditLimit: creditLimit ? Number(creditLimit) : 0,
         payableBalance: payableBalance !== undefined ? payableBalance : 0,
         companyId,
       }
@@ -41,13 +43,15 @@ export class VendorsController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() data: any) {
     const companyId = CompanyContext.getCompanyId() as string;
-    const { name, vendorCode, gstin, contactDetails, payableBalance } = data;
+    const { name, vendorCode, gstin, contactDetails, payableBalance, customerType, creditLimit } = data;
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (vendorCode !== undefined) updateData.bpCode = vendorCode;
     if (gstin !== undefined) updateData.gstin = gstin;
     if (contactDetails !== undefined) updateData.phone = contactDetails;
     if (payableBalance !== undefined) updateData.payableBalance = payableBalance;
+    if (customerType !== undefined) updateData.customerType = customerType;
+    if (creditLimit !== undefined) updateData.creditLimit = Number(creditLimit);
 
     const item = await this.prisma.businessPartner.updateMany({
       where: { id, companyId, deletedAt: null, bpType: 'VENDOR' },

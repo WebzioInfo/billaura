@@ -29,6 +29,17 @@ const MENUS = [
     ]
   },
   {
+    id: 'income',
+    label: 'Income',
+    items: [
+      { label: 'Other Income', path: '/other-income', id: 'other-income' },
+      { label: 'Service Income', path: '/other-income', id: 'service-income' },
+      { label: 'Recurring Income', path: '/recurring-invoices', id: 'recurring-income' },
+      { label: 'Income Categories', path: '/other-income', id: 'income-categories' },
+      { label: 'Income Reports', path: '/reports', id: 'income-reports' },
+    ]
+  },
+  {
     id: 'purchases',
     label: 'Purchases',
     items: [
@@ -112,6 +123,7 @@ const MENUS = [
       { label: 'Company Profile', path: '/company', id: 'settings-company' },
       { label: 'Users & Roles', path: '/users', id: 'settings-users' },
       { label: 'Document Sequences', path: '/sequences', id: 'settings-sequences' },
+      { label: 'Backup & Restore', path: '/backup-restore', id: 'settings-backup' },
     ]
   }
 ];

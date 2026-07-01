@@ -123,6 +123,36 @@ enum PaymentMethod {
   CREDIT_CARD
   UPI
   CHEQUE
+  NEFT
+  RTGS
+  IMPS
+  WALLET
+}
+
+enum UnitType {
+  PCS
+  BOX
+  PACK
+  DOZEN
+  KG
+  GRAM
+  TON
+  LTR
+  ML
+  METER
+  FEET
+  SQFT
+  CFT
+  ROLL
+  BAG
+  BUNDLE
+  SET
+  PAIR
+  HOUR
+  DAY
+  MONTH
+  YEAR
+  OTHER
 }
 
 enum TicketStatus {
@@ -299,8 +329,6 @@ model Company {
   settings            CompanySettings?
   users               CompanyUser[]
   roles               Role[]
-  departments         Department[]
-  designations        Designation[]
   employees           Employee[]
   subscriptions       Subscription[]
   featureUsages       FeatureUsage[]
@@ -314,7 +342,6 @@ model Company {
   purchases           Purchase[]
   transactionPayments TransactionPayment[]
   expenses            Expense[]
-  expenseCategories   ExpenseCategory[]
   accounts            Account[]
   bankAccounts        BankAccount[]
   journalEntries      JournalEntry[]
@@ -353,16 +380,19 @@ model Company {
   archiveLogs         ArchiveLog[]
   taxOverrideLogs     TaxOverrideLog[]
   branches            Branch[]
+  incomeCategories    IncomeCategory[]
+  otherIncomes        OtherIncome[]
 
   contacts      Contact[]
   crmActivities CrmActivity[]
-  units         Unit[]
   taxGroups     TaxGroup[]
-  categories    Category[]
-  brands        Brand[]
 
   @@index([status])
   @@index([createdAt])
+  backupJobs        BackupJob[]
+  backupSchedules   BackupSchedule[]
+  backupAuditLogs   BackupAuditLog[]
+
   @@map("companies")
 }
 
@@ -381,7 +411,8 @@ model Branch {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  otherIncomes OtherIncome[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -462,6 +493,10 @@ model User {
   taxOverrideLogs     TaxOverrideLog[]
   sessions            Session[]
   loginHistories      LoginHistory[]
+
+  backupJobs        BackupJob[]
+  backupSchedules   BackupSchedule[]
+  backupAuditLogs   BackupAuditLog[]
 
   @@map("users")
 }
@@ -718,6 +753,7 @@ model BusinessPartner {
   purchaseReturns     PurchaseReturn[]
   contacts            Contact[]
   crmActivities       CrmActivity[]
+  otherIncomes        OtherIncome[]
 
   @@index([companyId])
   @@index([bpType])
@@ -783,55 +819,7 @@ model CrmActivity {
   @@map("crm_activities")
 }
 
-// --- INVENTORY REDESIGN ---
-model Category {
-  id          String   @id @default(cuid())
-  companyId   String
-  name        String
-  description String?  @db.Text
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  products Product[]
-
-  @@unique([companyId, name])
-  @@map("categories")
-}
-
-model Brand {
-  id          String   @id @default(cuid())
-  companyId   String
-  name        String
-  description String?  @db.Text
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  products Product[]
-
-  @@unique([companyId, name])
-  @@map("brands")
-}
-
-model Unit {
-  id           String   @id @default(cuid())
-  companyId    String
-  name         String
-  abbreviation String
-  decimals     Int      @default(2)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  products Product[]
-
-  @@unique([companyId, abbreviation])
-  @@map("units")
-}
+// Removed Category, Brand, Unit tables - converted to scalar strings/enums.
 
 model TaxGroup {
   id        String   @id @default(cuid())
@@ -852,11 +840,11 @@ model TaxGroup {
 }
 
 model Product {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   companyId   String
-  categoryId  String?
-  brandId     String?
-  unitId      String?
+  category    String?
+  brand       String?
+  unit        UnitType @default(PCS)
   taxGroupId  String?
   sku         String?
   alias       String?
@@ -897,9 +885,6 @@ model Product {
   deletedAt DateTime?
 
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  category            Category?            @relation(fields: [categoryId], references: [id])
-  brand               Brand?               @relation(fields: [brandId], references: [id])
-  unit                Unit?                @relation(fields: [unitId], references: [id])
   taxGroup            TaxGroup?            @relation(fields: [taxGroupId], references: [id])
   stocks              Stock[]
   stockLedgers        StockLedger[]
@@ -912,8 +897,6 @@ model Product {
   bomItems            BOMItem[]
 
   @@index([companyId, sku])
-  @@index([categoryId])
-  @@index([brandId])
   @@map("products")
 }
 
@@ -1243,28 +1226,13 @@ model PaymentAllocation {
 }
 
 // --- EXPENSE MODULE ---
-model ExpenseCategory {
-  id          String   @id @default(cuid())
-  companyId   String? // null for default system categories
-  name        String
-  description String?  @db.Text
-  isDefault   Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company  Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  expenses Expense[]
-
-  @@unique([companyId, name])
-  @@map("expense_categories")
-}
+// Removed ExpenseCategory table - converted to scalar string
 
 model Expense {
   id            String   @id @default(cuid())
   companyId     String
   branchId      String?
-  categoryId    String
+  category      String
   subCategory   String?
   bankAccountId String?
   expenseNo     String
@@ -1288,13 +1256,11 @@ model Expense {
   deletedAt    DateTime?
 
   company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  category    ExpenseCategory     @relation(fields: [categoryId], references: [id])
   bankAccount BankAccount?        @relation(fields: [bankAccountId], references: [id])
   approvedBy  User?               @relation("ExpenseApprover", fields: [approvedById], references: [id])
   attachments ExpenseAttachment[]
 
   @@unique([companyId, expenseNo])
-  @@index([companyId, categoryId])
   @@index([approvedById])
   @@map("expenses")
 }
@@ -1333,6 +1299,7 @@ model BankAccount {
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   transactionPayments TransactionPayment[]
   expenses            Expense[]
+  otherIncomes        OtherIncome[]
 
   @@index([companyId])
   @@map("bank_accounts")
@@ -1347,8 +1314,9 @@ model Account {
   subCategory AccountSubCategory?
   balance     Decimal             @default(0) @db.Decimal(15, 2)
 
-  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  journalLines JournalLine[]
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  journalLines     JournalLine[]
+  incomeCategories IncomeCategory[]
 
   @@unique([companyId, name])
   @@map("accounts")
@@ -1606,54 +1574,24 @@ model ScheduledTask {
 }
 
 // --- PAYROLL MODULE ---
-model Department {
-  id          String   @id @default(cuid())
-  companyId   String
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees Employee[]
-
-  @@unique([companyId, name])
-  @@map("departments")
-}
-
-model Designation {
-  id          String   @id @default(cuid())
-  companyId   String
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees Employee[]
-
-  @@unique([companyId, name])
-  @@map("designations")
-}
+// Removed Department and Designation tables - converted to scalar strings
 
 model Employee {
-  id            String    @id @default(cuid())
-  companyId     String
-  employeeCode  String
-  name          String
-  photo         String?   @db.Text
-  mobile        String?
-  email         String?
-  address       String?   @db.Text
-  dateOfBirth   DateTime?
-  gender        String?
-  joiningDate   DateTime?
-  departmentId  String?
-  designationId String?
-  shiftId       String?
-  employeeType  String    @default("PERMANENT")
+  id           String    @id @default(cuid())
+  companyId    String
+  employeeCode String
+  name         String
+  photo        String?   @db.Text
+  mobile       String?
+  email        String?
+  address      String?   @db.Text
+  dateOfBirth  DateTime?
+  gender       String?
+  joiningDate  DateTime?
+  department   String?
+  designation  String?
+  shiftId      String?
+  employeeType String    @default("PERMANENT")
 
   salaryType  SalaryType @default(MONTHLY)
   basicSalary Decimal    @default(0) @db.Decimal(15, 2)
@@ -1670,18 +1608,17 @@ model Employee {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  company          Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  department       Department?  @relation(fields: [departmentId], references: [id])
-  designation      Designation? @relation(fields: [designationId], references: [id])
-  reportingManager Employee?    @relation("ReportingManager", fields: [reportingManagerId], references: [id])
-  reportees        Employee[]   @relation("ReportingManager")
-  shift            Shift?       @relation(fields: [shiftId], references: [id])
+  company          Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reportingManager Employee?  @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+  reportees        Employee[] @relation("ReportingManager")
+  shift            Shift?     @relation(fields: [shiftId], references: [id])
 
   attendances       Attendance[]
   leaveApplications LeaveApplication[]
   salarySlips       SalarySlip[]
   advances          StaffAdvance[]
   loans             EmployeeLoan[]
+  otherIncomes      OtherIncome[]
 
   @@unique([companyId, employeeCode])
   @@map("employees")
@@ -2075,4 +2012,193 @@ model ImportLog {
 
   @@index([companyId])
   @@map("import_logs")
+}
+
+// --- OTHER INCOME / SERVICE INCOME ---
+enum IncomeType {
+  SERVICE
+  RENTAL
+  COMMISSION
+  INTEREST
+  MISC
+  OTHER
+}
+
+model IncomeCategory {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?  @db.Text
+  accountId   String // GL account for posting (Service Revenue, Other Income, etc.)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account Account       @relation(fields: [accountId], references: [id])
+  incomes OtherIncome[]
+
+  @@unique([companyId, name])
+  @@map("income_categories")
+}
+
+model OtherIncome {
+  id                String     @id @default(cuid())
+  companyId         String
+  categoryId        String
+  businessPartnerId String?
+  branchId          String?
+  department        String?
+  employeeId        String?
+  incomeNo          String
+  date              DateTime
+  incomeType        IncomeType @default(SERVICE)
+
+  walkInCustomer String?
+  description    String? @db.Text
+  reference      String?
+
+  taxMode    TaxMode @default(CGST_SGST)
+  subTotal   Decimal @default(0) @db.Decimal(15, 2)
+  taxTotal   Decimal @default(0) @db.Decimal(15, 2)
+  cgstAmount Decimal @default(0) @db.Decimal(15, 2)
+  sgstAmount Decimal @default(0) @db.Decimal(15, 2)
+  igstAmount Decimal @default(0) @db.Decimal(15, 2)
+  cessAmount Decimal @default(0) @db.Decimal(15, 2)
+  discount   Decimal @default(0) @db.Decimal(15, 2)
+  freight    Decimal @default(0) @db.Decimal(15, 2)
+  grandTotal Decimal @default(0) @db.Decimal(15, 2)
+
+  status        DocumentStatus @default(DRAFT)
+  paymentStatus String         @default("UNPAID") // PAID, UNPAID, PARTIAL
+  paymentMethod PaymentMethod?
+  bankAccountId String?
+
+  notes       String? @db.Text
+  attachments Json? // Simple array of URLs for now
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category        IncomeCategory   @relation(fields: [categoryId], references: [id])
+  businessPartner BusinessPartner? @relation(fields: [businessPartnerId], references: [id])
+  bankAccount     BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  branch          Branch?          @relation(fields: [branchId], references: [id])
+  employee        Employee?        @relation(fields: [employeeId], references: [id])
+
+  @@unique([companyId, incomeNo])
+  @@index([companyId, categoryId])
+  @@map("other_incomes")
+}
+
+// --- BACKUP & DISASTER RECOVERY ---
+
+enum BackupOperation {
+  BACKUP
+  RESTORE
+  EXPORT
+  IMPORT
+}
+
+enum SystemBackupType {
+  FULL
+  INCREMENTAL
+  MODULE
+  TRANSACTIONS
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+model BackupJob {
+  id              String   @id @default(cuid())
+  companyId       String?  // Null means it's a Platform/Super Admin backup
+  createdById     String
+  
+  name            String
+  operation       BackupOperation 
+  type            SystemBackupType      
+  status          JobStatus       
+  
+  progress        Int      @default(0) // 0 to 100
+  sizeBytes       BigInt?
+  durationMs      Int?
+  
+  checksum        String?
+  fileUrl         String?
+  encryptionMeta  Json?    
+  
+  errorLog        String?  @db.Text
+  targetModules   Json?    
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User     @relation(fields: [createdById], references: [id])
+
+  @@index([companyId])
+  @@index([status])
+  @@map("backup_jobs")
+}
+
+model BackupSchedule {
+  id              String   @id @default(cuid())
+  companyId       String?
+  createdById     String
+  
+  frequency       ScheduleFrequency 
+  cronExpression  String?
+  retentionDays   Int      @default(30)
+  
+  lastRun         DateTime?
+  nextRun         DateTime?
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User     @relation(fields: [createdById], references: [id])
+
+  @@index([companyId])
+  @@map("backup_schedules")
+}
+
+model BackupAuditLog {
+  id              String   @id @default(cuid())
+  companyId       String?
+  userId          String
+  
+  action          String   
+  targetName      String?
+  
+  ipAddress       String?
+  userAgent       String?
+  device          String?
+  
+  success         Boolean
+  details         Json?
+  
+  createdAt       DateTime @default(now())
+
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("backup_audit_logs")
 }

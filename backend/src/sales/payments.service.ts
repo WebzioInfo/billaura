@@ -210,12 +210,13 @@ export class PaymentsService {
         });
       }
 
+      const assetLedgerName = dto.method === 'CASH' ? 'Cash' : 'Bank Accounts';
       let bankAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Operating Bank Account' },
+        where: { companyId, name: assetLedgerName },
       });
       if (!bankAccount) {
         bankAccount = await tx.account.create({
-          data: { companyId, name: 'Operating Bank Account', category: 'ASSET', balance: 0 },
+          data: { companyId, name: assetLedgerName, category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
         });
       }
 

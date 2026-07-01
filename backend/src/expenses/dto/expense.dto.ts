@@ -4,7 +4,7 @@ import { PaymentMethod } from '@prisma/client';
 export class CreateExpenseDto {
   @IsString()
   @IsNotEmpty()
-  categoryId: string;
+  category: string;
 
   @IsString()
   @IsOptional()

@@ -6,9 +6,10 @@ import * as z from 'zod';
 import { toast } from 'sonner';
 import { 
   Users, UserPlus, Search, Plus, Edit2, Trash2, CheckCircle2, 
-  Phone, Mail, Calendar, Loader2, AlertCircle, TrendingUp, Check, Briefcase 
+  Phone, Mail, Calendar, Loader2, AlertCircle, TrendingUp, Check, Briefcase, Eye 
 } from 'lucide-react';
 import api from '../../services/api';
+import { CustomerDetailModal } from './CustomerDetailModal';
 
 // --- SCHEMAS ---
 const customerSchema = z.object({
@@ -26,6 +27,7 @@ const customerSchema = z.object({
   state: z.string().optional(),
   stateCode: z.string().optional(),
   placeOfSupply: z.string().optional(),
+  creditLimit: z.number().optional(),
 });
 
 const leadSchema = z.object({
@@ -70,10 +72,11 @@ interface Customer {
   name: string;
   email?: string;
   mobile?: string;
-  customerType: string;
+  customerType: 'REGISTERED' | 'UNREGISTERED' | 'COMPOSITION' | 'SEZ' | 'EXPORT';
   outstandingAmount?: number;
   tradeName?: string;
   gstin?: string;
+  creditLimit?: number;
 }
 
 interface Lead {
@@ -138,11 +141,15 @@ export const CrmDashboard = () => {
   // Modal control
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Ledger/Ageing Modal
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   // Forms hooks
   const customerForm = useForm<CustomerFormValues>({
     resolver: zodResolver(customerSchema),
-    defaultValues: { customerCode: '', name: '', mobile: '', whatsapp: '', email: '', gstin: '', panNumber: '', customerType: 'UNREGISTERED', tradeName: '', address: '', pinCode: '', state: '', stateCode: '', placeOfSupply: '' }
+    defaultValues: { customerCode: '', name: '', mobile: '', whatsapp: '', email: '', gstin: '', panNumber: '', customerType: 'UNREGISTERED', tradeName: '', address: '', pinCode: '', state: '', stateCode: '', placeOfSupply: '', creditLimit: 0 }
   });
 
   const leadForm = useForm<LeadFormValues>({
@@ -214,6 +221,7 @@ export const CrmDashboard = () => {
         state: item.state || '',
         stateCode: item.stateCode || '',
         placeOfSupply: item.placeOfSupply || '',
+        creditLimit: Number(item.creditLimit || 0),
       });
     } else if (activeTab === 'leads') {
       leadForm.reset({
@@ -247,6 +255,11 @@ export const CrmDashboard = () => {
       });
     }
     setIsModalOpen(true);
+  };
+
+  const handleOpenDetailModal = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setIsDetailModalOpen(true);
   };
 
   const handleCustomerSubmit = async (values: CustomerFormValues) => {
@@ -530,7 +543,10 @@ export const CrmDashboard = () => {
                     <td className="py-4 px-6 text-right font-bold text-foreground">
                       {formatCurrency(Number(c.outstandingAmount || 0))}
                     </td>
-                    <td className="py-4 px-6 text-right space-x-1.5">
+                    <td className="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                      <button onClick={() => handleOpenDetailModal(c)} className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded-lg cursor-pointer inline-flex" title="View 360 & Ledger">
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
                       <button onClick={() => handleOpenEditModal(c)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer inline-flex">
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
@@ -712,7 +728,10 @@ export const CrmDashboard = () => {
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Customer Type</label>
                     <select {...customerForm.register('customerType')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
                       <option value="UNREGISTERED">Unregistered / Consumer</option>
-                      <option value="REGISTERED">Registered Business</option>
+                      <option value="REGISTERED">Regular / Registered</option>
+                      <option value="COMPOSITION">Composition Dealer</option>
+                      <option value="SEZ">SEZ (Special Economic Zone)</option>
+                      <option value="EXPORT">Overseas / Export</option>
                     </select>
                   </div>
 
@@ -771,6 +790,11 @@ export const CrmDashboard = () => {
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">State</label>
                     <input type="text" {...customerForm.register('state')} placeholder="e.g. Maharashtra" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Credit Limit</label>
+                    <input type="number" {...customerForm.register('creditLimit', { valueAsNumber: true })} placeholder="e.g. 50000" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
                   </div>
 
                   <div className="col-span-2">
@@ -937,6 +961,12 @@ export const CrmDashboard = () => {
           </div>
         </div>
       )}
+
+      <CustomerDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => setIsDetailModalOpen(false)}
+        customer={selectedCustomer}
+      />
     </div>
   );
 };

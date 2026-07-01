@@ -1,7 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateDepartmentDto } from './dto/department.dto';
-import { CreateDesignationDto } from './dto/designation.dto';
 import { CreateEmployeeDto } from './dto/employee.dto';
 import { RecordAttendanceDto } from './dto/attendance.dto';
 import { CompanyContext } from '../common/context/company-context';
@@ -10,112 +8,7 @@ import { CompanyContext } from '../common/context/company-context';
 export class HrService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // --- DEPARTMENTS ---
-
-  async findDepartments() {
-    const companyId = CompanyContext.getCompanyId();
-    if (!companyId) {
-      throw new ConflictException('Company context is required');
-    }
-    return this.prisma.department.findMany({
-      where: { companyId },
-      orderBy: { name: 'asc' },
-    });
-  }
-
-  async createDepartment(dto: CreateDepartmentDto) {
-    const companyId = CompanyContext.getCompanyId();
-    if (!companyId) {
-      throw new ConflictException('Company context is required');
-    }
-
-    const existing = await this.prisma.department.findFirst({
-      where: { companyId, name: dto.name },
-    });
-    if (existing) {
-      throw new ConflictException(`Department '${dto.name}' already exists`);
-    }
-
-    return this.prisma.department.create({
-      data: {
-        ...dto,
-        companyId,
-      },
-    });
-  }
-
-  async removeDepartment(id: string) {
-    const companyId = CompanyContext.getCompanyId();
-    if (!companyId) {
-      throw new ConflictException('Company context is required');
-    }
-
-    // Check if employees belong to department
-    const inUse = await this.prisma.employee.findFirst({
-      where: { departmentId: id, deletedAt: null },
-    });
-    if (inUse) {
-      throw new ConflictException('Cannot delete department with active employees');
-    }
-
-    return this.prisma.department.deleteMany({
-      where: { id, companyId },
-    });
-  }
-
-  // --- DESIGNATIONS ---
-
-  async findDesignations() {
-    const companyId = CompanyContext.getCompanyId();
-    if (!companyId) {
-      throw new ConflictException('Company context is required');
-    }
-    return this.prisma.designation.findMany({
-      where: { companyId },
-      orderBy: { name: 'asc' },
-    });
-  }
-
-  async createDesignation(dto: CreateDesignationDto) {
-    const companyId = CompanyContext.getCompanyId();
-    if (!companyId) {
-      throw new ConflictException('Company context is required');
-    }
-
-    const existing = await this.prisma.designation.findFirst({
-      where: { companyId, name: dto.name },
-    });
-    if (existing) {
-      throw new ConflictException(`Designation '${dto.name}' already exists`);
-    }
-
-    return this.prisma.designation.create({
-      data: {
-        ...dto,
-        companyId,
-      },
-    });
-  }
-
-  async removeDesignation(id: string) {
-    const companyId = CompanyContext.getCompanyId();
-    if (!companyId) {
-      throw new ConflictException('Company context is required');
-    }
-
-    const inUse = await this.prisma.employee.findFirst({
-      where: { designationId: id, deletedAt: null },
-    });
-    if (inUse) {
-      throw new ConflictException('Cannot delete designation assigned to active employees');
-    }
-
-    return this.prisma.designation.deleteMany({
-      where: { id, companyId },
-    });
-  }
-
-  // --- EMPLOYEES ---
+// Removed Departments & Designations
 
   async findEmployees() {
     const companyId = CompanyContext.getCompanyId();
@@ -124,7 +17,6 @@ export class HrService {
     }
     return this.prisma.employee.findMany({
       where: { companyId, deletedAt: null },
-      include: { department: true, designation: true },
       orderBy: { name: 'asc' },
     });
   }
@@ -149,8 +41,8 @@ export class HrService {
         name: dto.name,
         mobile: dto.mobile || null,
         email: dto.email || null,
-        departmentId: dto.departmentId || null,
-        designationId: dto.designationId || null,
+        department: dto.department || null,
+        designation: dto.designation || null,
         basicSalary: dto.basicSalary || 0,
         salaryType: 'MONTHLY',
         status: 'ACTIVE',

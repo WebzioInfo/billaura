@@ -22,6 +22,9 @@ import { HrModule } from "./hr/hr.module";
 import { PlatformModule } from "./platform/platform.module";
 import { MailModule } from "./mail/mail.module";
 import { ReportsModule } from './reports/reports.module';
+import { IncomeModule } from './income/income.module';
+import { BackupModule } from './backup/backup.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -47,6 +50,9 @@ import { ReportsModule } from './reports/reports.module';
     HrModule,
     PlatformModule,
     ReportsModule,
+    IncomeModule,
+    BackupModule,
+    ScheduleModule.forRoot(),
   ],
 })
 export class AppModule implements NestModule {
