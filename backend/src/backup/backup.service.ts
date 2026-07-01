@@ -59,8 +59,9 @@ export class BackupService {
       const filePath = path.join(backupsDir, fileName);
       
       const output = fs.createWriteStream(filePath);
-      const { ZipArchive } = await import('archiver');
-      const archive = new ZipArchive({ zlib: { level: 9 } });
+      const archiverModule = await Function('return import("archiver")')();
+      const archiver = archiverModule.default || archiverModule;
+      const archive = archiver('zip', { zlib: { level: 9 } });
       
       archive.pipe(output);
 
