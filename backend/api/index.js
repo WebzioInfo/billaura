@@ -25,9 +25,13 @@ try {
 const expressApp = express();
 let isInitialized = false;
 let initPromise = null;
+let startupLogs = [];
+const log = (msg) => { startupLogs.push(`[${new Date().toISOString()}] ${msg}`); };
 
 async function bootstrap() {
+    log("bootstrap started");
     const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bufferLogs: true });
+    log("NestFactory.create finished");
     
     const logger = app.get(AppLogger);
     const config = app.get(ConfigService);
@@ -59,25 +63,38 @@ async function bootstrap() {
     app.useGlobalFilters(new AllExceptionsFilter(logger));
     app.useGlobalInterceptors(new RequestContextInterceptor(), new ResponseEnvelopeInterceptor());
   
+    log("Before app.init()");
     await app.init();
+    log("After app.init()");
     isInitialized = true;
+}
+
+async function withTimeout(promise, ms) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 module.exports = async (req, res) => {
     try {
         if (!isInitialized) {
+            log("Initializing...");
             if (!initPromise) {
                 initPromise = bootstrap();
             }
-            await initPromise;
+            await withTimeout(initPromise, 5000);
         }
         return expressApp(req, res);
     } catch (err) {
-        console.error("Vercel Startup Error:", err);
-        return res.status(500).json({ 
-            error: "Startup Crash", 
+        // If it's a timeout, return 500 immediately with the logs
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = 500;
+        return res.end(JSON.stringify({ 
+            error: "Startup Crash or Timeout", 
             message: err.message, 
-            stack: err.stack
-        });
+            logs: startupLogs
+        }));
     }
 };
