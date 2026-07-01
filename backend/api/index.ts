@@ -28,16 +28,10 @@ async function bootstrap() {
     const allowedOrigins = allowedOriginsStr.split(',').map(o => o.trim()).filter(Boolean);
 
     app.enableCors({
-      origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      },
-      credentials: true,
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-      allowedHeaders: 'Content-Type, Accept, Authorization, x-tenant-id, x-company-id',
+      origin: true,
+      credentials: false,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: '*',
     });
     
     app.use(helmet());
