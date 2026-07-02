@@ -444,7 +444,7 @@ export class ReceiptsService {
       });
 
       // 5. Revert General Ledger Journal entries
-      let arAccount = await tx.account.findFirst({
+      const arAccount = await tx.account.findFirst({
         where: { companyId, name: 'Accounts Receivable' },
       });
       if (arAccount) {

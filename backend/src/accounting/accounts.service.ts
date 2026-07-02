@@ -338,10 +338,10 @@ export class AccountsService {
 
     let operatingInflow = 0;
     let operatingOutflow = 0;
-    let investingInflow = 0;
-    let investingOutflow = 0;
-    let financingInflow = 0;
-    let financingOutflow = 0;
+    const investingInflow = 0;
+    const investingOutflow = 0;
+    const financingInflow = 0;
+    const financingOutflow = 0;
 
     for (const line of journalLines) {
       const isDebit = Number(line.debit) > 0;

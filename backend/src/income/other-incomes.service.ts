@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
 export class OtherIncomesService {
+  constructor(private readonly prisma: PrismaService) {}
+
   async findAll(companyId: string) {
-    return prisma.otherIncome.findMany({
+    return this.prisma.otherIncome.findMany({
       where: { companyId },
       include: {
         category: {
@@ -22,7 +22,7 @@ export class OtherIncomesService {
   }
 
   async findOne(companyId: string, id: string) {
-    const income = await prisma.otherIncome.findFirst({
+    const income = await this.prisma.otherIncome.findFirst({
       where: { id, companyId },
       include: {
         category: {
@@ -41,7 +41,7 @@ export class OtherIncomesService {
   }
 
   async create(companyId: string, data: any) {
-    return prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       // Create the Other Income record
       const income = await tx.otherIncome.create({
         data: {
@@ -66,7 +66,7 @@ export class OtherIncomesService {
   }
 
   async update(companyId: string, id: string, data: any) {
-    return prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const existing = await tx.otherIncome.findFirst({
         where: { id, companyId }
       });
@@ -103,7 +103,7 @@ export class OtherIncomesService {
   }
 
   async remove(companyId: string, id: string) {
-    return prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const existing = await tx.otherIncome.findFirst({
         where: { id, companyId }
       });

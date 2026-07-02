@@ -1,3 +1,7 @@
+const moduleLoadStartedAt = performance.now();
+const moduleLog = (message) => console.log(`[${new Date().toISOString()}] ${message}`);
+moduleLog("MODULE LOAD START");
+
 require("reflect-metadata");
 const { NestFactory } = require('@nestjs/core');
 const { ExpressAdapter } = require('@nestjs/platform-express');
@@ -6,8 +10,10 @@ const { ConfigService } = require('@nestjs/config');
 const helmet = require('helmet');
 const compression = require('compression');
 const express = require('express');
+moduleLog(`FRAMEWORK MODULES LOADED (${(performance.now() - moduleLoadStartedAt).toFixed(2)} ms)`);
 
 let AppModule, AllExceptionsFilter, ResponseEnvelopeInterceptor, RequestContextInterceptor, AppLogger;
+const applicationModulesStartedAt = performance.now();
 try {
   AppModule = require('../dist/app.module').AppModule;
   AllExceptionsFilter = require('../dist/common/filters/all-exceptions.filter').AllExceptionsFilter;
@@ -21,26 +27,36 @@ try {
   RequestContextInterceptor = require('../dist/src/common/interceptors/request-context.interceptor').RequestContextInterceptor;
   AppLogger = require('../dist/src/logging/app-logger.service').AppLogger;
 }
+moduleLog(`APPLICATION MODULES LOADED (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
 
 const expressApp = express();
 let isInitialized = false;
 let initPromise = null;
 let startupLogs = [];
-const log = (msg) => { startupLogs.push(`[${new Date().toISOString()}] ${msg}`); };
+const log = (msg) => {
+    const entry = `[${new Date().toISOString()}] ${msg}`;
+    startupLogs.push(entry);
+    console.log(entry);
+};
 
 async function bootstrap() {
-    log("bootstrap started");
+    const bootstrapStartedAt = performance.now();
+    log("BOOTSTRAP START");
     const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bufferLogs: true });
-    log("NestFactory.create finished");
+    log(`Nest Initialized (${(performance.now() - bootstrapStartedAt).toFixed(2)} ms)`);
     
     const logger = app.get(AppLogger);
     const config = app.get(ConfigService);
   
     app.useLogger(logger);
     app.setGlobalPrefix(config.getOrThrow("API_PREFIX"));
+    const allowedOrigins = config.getOrThrow("ALLOWED_ORIGINS")
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
     
     app.enableCors({
-      origin: true,
+      origin: allowedOrigins,
       credentials: false,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: '*',
@@ -63,10 +79,13 @@ async function bootstrap() {
     app.useGlobalFilters(new AllExceptionsFilter(logger));
     app.useGlobalInterceptors(new RequestContextInterceptor(), new ResponseEnvelopeInterceptor());
   
-    log("Before app.init()");
+    const initStartedAt = performance.now();
+    log("START app.init");
     await app.init();
-    log("After app.init()");
+    log(`END app.init (${(performance.now() - initStartedAt).toFixed(2)} ms)`);
+    log("Routes Registered");
     isInitialized = true;
+    log(`BOOTSTRAP COMPLETE (${(performance.now() - bootstrapStartedAt).toFixed(2)} ms)`);
 }
 
 async function withTimeout(promise, ms) {

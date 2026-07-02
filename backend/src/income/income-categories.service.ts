@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
 export class IncomeCategoriesService {
+  constructor(private readonly prisma: PrismaService) {}
+
   async findAll(companyId: string) {
-    return prisma.incomeCategory.findMany({
+    return this.prisma.incomeCategory.findMany({
       where: { companyId },
       include: {
         account: true,
@@ -16,7 +16,7 @@ export class IncomeCategoriesService {
   }
 
   async findOne(companyId: string, id: string) {
-    const category = await prisma.incomeCategory.findFirst({
+    const category = await this.prisma.incomeCategory.findFirst({
       where: { id, companyId },
       include: {
         account: true,
@@ -29,7 +29,7 @@ export class IncomeCategoriesService {
   }
 
   async create(companyId: string, data: any) {
-    return prisma.incomeCategory.create({
+    return this.prisma.incomeCategory.create({
       data: {
         ...data,
         companyId,
@@ -42,7 +42,7 @@ export class IncomeCategoriesService {
 
   async update(companyId: string, id: string, data: any) {
     const existing = await this.findOne(companyId, id);
-    return prisma.incomeCategory.update({
+    return this.prisma.incomeCategory.update({
       where: { id: existing.id },
       data,
       include: {
@@ -53,7 +53,7 @@ export class IncomeCategoriesService {
 
   async remove(companyId: string, id: string) {
     const existing = await this.findOne(companyId, id);
-    return prisma.incomeCategory.delete({
+    return this.prisma.incomeCategory.delete({
       where: { id: existing.id },
     });
   }

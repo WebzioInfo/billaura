@@ -22,7 +22,7 @@ async function bootstrap() {
   const allowedOrigins = allowedOriginsStr.split(',').map(o => o.trim()).filter(Boolean);
 
   app.enableCors({
-    origin: true,
+    origin: allowedOrigins,
     credentials: false,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: '*',
