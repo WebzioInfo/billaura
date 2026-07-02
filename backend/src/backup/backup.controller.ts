@@ -3,15 +3,15 @@ import { BackupService } from './backup.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../database/prisma.service';
 import { Response } from 'express';
-import * as path from 'path';
-import * as fs from 'fs';
+import { StorageService } from '../storage/storage.service';
 
 @Controller('backups')
 @UseGuards(JwtAuthGuard)
 export class BackupController {
   constructor(
     private readonly backupService: BackupService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService
   ) {}
 
   @Post('request')
@@ -66,8 +66,8 @@ export class BackupController {
       throw new ForbiddenException('Backup is not ready for download');
     }
 
-    const filePath = path.join(process.cwd(), 'backups', job.fileUrl);
-    if (!fs.existsSync(filePath)) {
+    const exists = await this.storage.fileExists(job.fileUrl);
+    if (!exists) {
       throw new ForbiddenException('Backup file missing from storage');
     }
 
@@ -82,6 +82,6 @@ export class BackupController {
       }
     });
 
-    res.download(filePath, `BillAura_Backup_${job.name}.zip`);
+    res.download(this.storage.getFilePath(job.fileUrl), `BillAura_Backup_${job.name}.zip`);
   }
 }

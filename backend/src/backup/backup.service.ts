@@ -2,22 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as crypto from 'crypto';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
   private isProcessing = false;
 
-  constructor(private prisma: PrismaService) {
-    // Ensure backups directory exists
-    const backupsDir = path.join(process.cwd(), 'backups');
-    if (!fs.existsSync(backupsDir)) {
-      fs.mkdirSync(backupsDir, { recursive: true });
-    }
-  }
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService
+  ) {}
 
   async requestBackup(companyId: string | null, userId: string, type: any) {
     return this.prisma.backupJob.create({
@@ -53,12 +48,9 @@ export class BackupService {
       const startTime = Date.now();
       this.logger.log(`Starting backup job ${job.id}`);
 
-      // Perform backup
-      const backupsDir = path.join(process.cwd(), 'backups');
       const fileName = `${job.id}.zip`;
-      const filePath = path.join(backupsDir, fileName);
       
-      const output = fs.createWriteStream(filePath);
+      const output = this.storage.createWriteStream(fileName);
       const archiverModule = await Function('return import("archiver")')();
       const archiver = archiverModule.default || archiverModule;
       const archive = archiver('zip', { zlib: { level: 9 } });
@@ -113,13 +105,8 @@ export class BackupService {
       // Wait for output stream to close
       await new Promise<void>((resolve) => output.on('close', () => resolve()));
 
-      const stats = fs.statSync(filePath);
-      
-      // Calculate checksum
-      const fileBuffer = fs.readFileSync(filePath);
-      const hashSum = crypto.createHash('sha256');
-      hashSum.update(fileBuffer);
-      const checksum = hashSum.digest('hex');
+      const size = await this.storage.getFileSize(fileName);
+      const checksum = await this.storage.calculateChecksum(fileName);
 
       await this.prisma.backupJob.update({
         where: { id: job.id },
@@ -127,7 +114,7 @@ export class BackupService {
           status: 'COMPLETED',
           progress: 100,
           durationMs: Date.now() - startTime,
-          sizeBytes: stats.size,
+          sizeBytes: size,
           checksum,
           fileUrl: fileName
         }
