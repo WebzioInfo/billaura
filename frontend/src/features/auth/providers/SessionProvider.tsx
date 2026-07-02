@@ -7,7 +7,12 @@ import { TokenService } from "../../../services/auth/TokenService";
 export function SessionProvider({ children }: PropsWithChildren) {
   const clearSession = useSessionStore((state) => state.clearSession);
   const setSession = useSessionStore((state) => state.setSession);
-  const [initFinished, setInitFinished] = useState(false);
+  const isAuthenticated = useSessionStore((state) => state.isAuthenticated);
+  const [initFinished, setInitFinished] = useState(() => {
+    // If we have a persisted session and a refresh token, we can render immediately.
+    // The refresh will happen silently in the background.
+    return isAuthenticated && !!TokenService.getRefreshToken();
+  });
 
   useEffect(() => {
     apiClient.setUnauthorizedHandler(clearSession);
@@ -22,10 +27,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
           return;
         }
 
-        const res = await apiClient.post<{ access_token: string; refresh_token: string; user: any }>("/auth/refresh", { refreshToken });
-        if (res && res.access_token && res.refresh_token && res.user) {
-          TokenService.setTokens(res.access_token, res.refresh_token);
-          setSession(res.user, res.access_token);
+        const res: any = await apiClient.post("/auth/refresh", { refreshToken });
+        const payload = res?.data || res;
+        
+        if (payload && payload.access_token && payload.refresh_token && payload.user) {
+          TokenService.setTokens(payload.access_token, payload.refresh_token);
+          setSession(payload.user, payload.access_token);
         } else {
           TokenService.clearTokens();
           clearSession();

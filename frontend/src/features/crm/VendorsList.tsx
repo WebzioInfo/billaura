@@ -12,7 +12,8 @@ export const VendorsList = () => {
     const fetchData = async () => {
       try {
         const res = await apiClient.get('/crm/vendors');
-        setVendors(res.data || []);
+        const items = res.data?.data || res.data || [];
+        setVendors(Array.isArray(items) ? items : []);
       } catch (err) {
         console.error(err);
       } finally {

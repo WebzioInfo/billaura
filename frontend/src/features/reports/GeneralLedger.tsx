@@ -12,7 +12,8 @@ export const GeneralLedger = () => {
     const fetchData = async () => {
       try {
         const res = await apiClient.get('/reports/general-ledger');
-        setData(res.data || []);
+        const items = res.data?.data || res.data || [];
+        setData(Array.isArray(items) ? items : []);
       } catch (err) {
         console.error(err);
       } finally {

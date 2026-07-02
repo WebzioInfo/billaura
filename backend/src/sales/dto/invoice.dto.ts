@@ -17,6 +17,10 @@ export class InvoiceItemDto {
   @IsNumber()
   @IsNotEmpty()
   rate: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxPercent?: number;
 }
 
 export class CreateInvoiceDto {
@@ -31,6 +35,14 @@ export class CreateInvoiceDto {
   @IsDateString()
   @IsOptional()
   dueDate?: string;
+
+  @IsString()
+  @IsOptional()
+  invoiceType?: string;
+
+  @IsString()
+  @IsOptional()
+  placeOfSupply?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

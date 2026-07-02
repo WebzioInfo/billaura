@@ -208,12 +208,13 @@ export const apiClient = new ApiClient({
         throw new Error("No refresh token available");
       }
 
-      const response = await axios.post<{ access_token: string; refresh_token: string; user: any }>(
+      const response = await axios.post(
         `${env.API_BASE_URL}/auth/refresh`,
         { refreshToken }
       );
       
-      const { access_token, refresh_token, user } = response.data;
+      const payload = response.data?.data || response.data;
+      const { access_token, refresh_token, user } = payload;
       if (access_token && refresh_token && user) {
         TokenService.setTokens(access_token, refresh_token);
         useSessionStore.getState().setSession(user, access_token);

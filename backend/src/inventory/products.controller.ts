@@ -1,3 +1,4 @@
+
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, HttpStatus, HttpCode } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
@@ -8,7 +9,7 @@ import { TenantGuard } from '../common/guards/tenant.guard';
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(private readonly productsService: ProductsService) { }
 
   @Get()
   async findAll(@Query() query: PaginationQueryDto) {

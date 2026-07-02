@@ -14,7 +14,8 @@ export const CustomersList = () => {
     const fetchData = async () => {
       try {
         const res = await apiClient.get('/crm/customers');
-        setCrm(res.data || []);
+        const items = res.data?.data || res.data || [];
+        setCrm(Array.isArray(items) ? items : []);
       } catch (err) {
         console.error(err);
       } finally {

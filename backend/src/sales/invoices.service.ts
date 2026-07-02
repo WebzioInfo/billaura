@@ -120,8 +120,12 @@ export class InvoicesService {
         const qty = Number(item.qty);
         const lineTotal = rate * qty;
         
-        // Use product taxRate or default to 18%
-        const taxRate = Number(product.taxRate || product.gstRate || 18);
+        // Respect provided tax percent, fallback to product, or 0 if BILL_OF_SUPPLY
+        let taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.taxRate || product.gstRate || 18);
+        if (dto.invoiceType === 'BILL_OF_SUPPLY') {
+          taxRate = 0;
+        }
+        
         const taxAmount = (lineTotal * taxRate) / 100;
 
         subTotal += lineTotal;
@@ -146,12 +150,17 @@ export class InvoicesService {
 
       const grandTotal = subTotal + taxTotal;
 
+      // Determine Enums
+      const invoiceTypeEnum = (dto.invoiceType as any) || 'TAX_INVOICE';
+
       // 3. Create Invoice record
       const invoice = await tx.invoice.create({
         data: {
           companyId,
           businessPartnerId: dto.customerId,
           invoiceNo,
+          invoiceType: invoiceTypeEnum,
+          placeOfSupply: dto.placeOfSupply,
           date: new Date(dto.date),
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           status: 'SENT', // Default to sent

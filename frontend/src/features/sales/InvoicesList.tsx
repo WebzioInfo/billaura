@@ -3,8 +3,10 @@ import { Plus } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import apiClient from '@/services/api';
+import { useNavigate } from 'react-router-dom';
 
 export const InvoicesList = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -12,7 +14,8 @@ export const InvoicesList = () => {
     const fetchData = async () => {
       try {
         const res = await apiClient.get('/sales/invoices');
-        setData(res.data || []);
+        const items = res.data?.data || res.data || [];
+        setData(Array.isArray(items) ? items : []);
       } catch (err) {
         console.error(err);
       } finally {
@@ -28,7 +31,10 @@ export const InvoicesList = () => {
         title="Invoices"
         description="Manage your sales invoices"
         primaryAction={
-          <button className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm">
+          <button 
+            onClick={() => navigate('/app/invoices/new')}
+            className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm"
+          >
             <Plus className="w-4 h-4" /> New Invoice
           </button>
         }
