@@ -89,9 +89,20 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    // Connect eagerly to prevent first-query latency overhead
-    await this.$connect();
-    this.logger.log("Prisma eager connection established");
+    const startedAt = performance.now();
+    this.logger.log(`[${new Date().toISOString()}] START prisma.$connect`);
+    try {
+      await this.$connect();
+      this.logger.log(
+        `[${new Date().toISOString()}] END prisma.$connect (${(performance.now() - startedAt).toFixed(2)} ms)`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[${new Date().toISOString()}] ERROR prisma.$connect (${(performance.now() - startedAt).toFixed(2)} ms)`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
   }
 
   async onModuleDestroy() {

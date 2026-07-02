@@ -25,6 +25,7 @@ import { ReportsModule } from './reports/reports.module';
 import { IncomeModule } from './income/income.module';
 import { BackupModule } from './backup/backup.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { DbTestController } from './db-test.controller';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     BackupModule,
     ...(process.env.VERCEL ? [] : [ScheduleModule.forRoot()]),
   ],
+  controllers: [DbTestController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
