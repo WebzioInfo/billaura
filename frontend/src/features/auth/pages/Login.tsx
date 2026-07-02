@@ -26,13 +26,25 @@ export const Login = () => {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
+    console.groupCollapsed('[LOGIN FLOW]');
+    console.log('Login button clicked');
+    console.log('Validation passed');
+    console.log('Calling login()');
+    console.log('Entering API service');
+    
     setIsLoading(true);
     setError(null);
     try {
+      console.log('Axios request started');
       const response = await authService.login(data);
+      console.log('Axios request finished');
+      console.log('Token received');
+      console.log('User received');
+      
       TokenService.setTokens(response.access_token, response.refresh_token);
       setSession(response.user, response.access_token);
       
+      console.log('Navigation started');
       if (response.user.globalRole === 'SUPER_ADMIN') {
         navigate('/platform/dashboard');
       } else {
@@ -43,6 +55,7 @@ export const Login = () => {
           navigate('/auth/onboard');
         }
       }
+      console.log('Navigation finished');
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to authenticate';
       setError(msg);
@@ -55,6 +68,7 @@ export const Login = () => {
       }
     } finally {
       setIsLoading(false);
+      console.groupEnd();
     }
   };
 
