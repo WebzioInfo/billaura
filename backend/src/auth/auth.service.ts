@@ -32,11 +32,17 @@ export class AuthService {
     return null;
   }
 
-  async login(loginDto: LoginDto, userAgent?: string, ipAddress?: string) {
+  async login(loginDto: LoginDto, userAgent?: string, ipAddress?: string, requestId: string = 'unknown') {
+    const startTime = performance.now();
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Entered auth service`);
+
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Database query start for user lookup (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
     const user = await this.prisma.user.findUnique({ 
       where: { email: loginDto.email },
       include: { companies: { include: { company: true } } }
     });
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Database query end for user lookup (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -51,7 +57,10 @@ export class AuthService {
       throw new UnauthorizedException('User account is disabled');
     }
 
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Password verification start (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
     const isMatch = await bcrypt.compare(loginDto.password, user.passwordHash);
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Password verification end (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+
     if (!isMatch) {
       // Record failed attempt
       const attempts = user.failedLoginAttempts + 1;
@@ -109,7 +118,9 @@ export class AuthService {
     const onboardingStep = user.globalRole === 'SUPER_ADMIN' ? 'COMPLETED' : (firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS');
 
     // Create session & refresh token with companyId
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Cookie generation / Session creation start (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
     const refreshToken = await this.sessionService.createSession(user.id, userAgent, ipAddress, companyId || undefined);
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Cookie generation / Session creation end (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
 
     const payload = { 
       email: user.email, 
@@ -122,8 +133,12 @@ export class AuthService {
       onboardingStep: onboardingStep,
     };
 
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] JWT generation start (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    const accessToken = this.jwtService.sign(payload);
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] JWT generation end (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: accessToken,
       refresh_token: refreshToken,
       user: {
         id: user.id,

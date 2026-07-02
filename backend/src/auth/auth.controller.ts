@@ -24,10 +24,19 @@ export class AuthController {
     @Body() loginDto: LoginDto,
     @Headers('user-agent') userAgent: string,
     @Ip() ip: string,
+    @Request() req: any,
   ) {
+    const startTime = performance.now();
+    const requestId = req.headers['x-request-id'] || 'unknown';
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Entered auth controller for email: ${loginDto.email}`);
+
     const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
     const safeIp = ip ? ip.substring(0, 45) : undefined;
-    const result = await this.authService.login(loginDto, safeUserAgent, safeIp);
+    
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Entering auth service (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    const result = await this.authService.login(loginDto, safeUserAgent, safeIp, requestId);
+    
+    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Response sent successfully (Total Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
     return result;
   }
 
