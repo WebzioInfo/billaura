@@ -44,6 +44,10 @@ export class CreateInvoiceDto {
   @IsOptional()
   placeOfSupply?: string;
 
+  @IsString()
+  @IsOptional()
+  status?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => InvoiceItemDto)

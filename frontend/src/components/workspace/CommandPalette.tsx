@@ -110,7 +110,7 @@ export function CommandPalette() {
               <span>Customers</span>
             </Command.Item>
             <Command.Item 
-              onSelect={() => navigateTo('/app/invoices', 'Invoices', 'invoices')}
+              onSelect={() => navigateTo('/invoices', 'Invoices', 'invoices')}
               className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-3 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
             >
               <FileText className="mr-3 h-4 w-4" />
@@ -127,7 +127,7 @@ export function CommandPalette() {
           
           <Command.Group heading="Quick Actions" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:text-muted-foreground mt-2 border-t pt-2">
             <Command.Item 
-              onSelect={() => navigateTo('/app/invoices/new', 'New Invoice', 'invoices')}
+              onSelect={() => navigateTo('/invoices/new', 'New Invoice', 'invoices')}
               className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-3 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
             >
               <ShoppingCart className="mr-3 h-4 w-4" />

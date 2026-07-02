@@ -101,6 +101,14 @@ export class InvoicesService {
 
       const invoiceNo = `INV-${String(nextNumber).padStart(5, '0')}`;
 
+      // Fetch company profile to verify placeOfSupply relative to companyState for GST routing
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+      });
+      const companyState = company?.state?.trim().toLowerCase() || '';
+      const supplyState = dto.placeOfSupply?.trim().toLowerCase() || '';
+      const isInterState = supplyState && companyState && supplyState !== companyState;
+
       // 2. Fetch products and calculate totals
       let subTotal = 0;
       let taxTotal = 0;
@@ -134,6 +142,10 @@ export class InvoicesService {
           totalCogs += (Number(product.purchasePrice || 0) * qty);
         }
 
+        const lineCgst = isInterState ? 0 : taxAmount / 2;
+        const lineSgst = isInterState ? 0 : taxAmount / 2;
+        const lineIgst = isInterState ? taxAmount : 0;
+
         itemsToCreate.push({
           productId: product.id,
           description: item.description || product.name,
@@ -142,9 +154,9 @@ export class InvoicesService {
           taxPercent: taxRate,
           taxAmount,
           total: lineTotal + taxAmount,
-          cgstAmount: taxAmount / 2,
-          sgstAmount: taxAmount / 2,
-          igstAmount: 0,
+          cgstAmount: lineCgst,
+          sgstAmount: lineSgst,
+          igstAmount: lineIgst,
         });
       }
 
@@ -163,14 +175,14 @@ export class InvoicesService {
           placeOfSupply: dto.placeOfSupply,
           date: new Date(dto.date),
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-          status: 'SENT', // Default to sent
+          status: (dto as any).status || 'SENT', // Use status from DTO or default to SENT
           subTotal,
           taxTotal,
           grandTotal,
           amountPaid: 0,
-          cgstAmount: taxTotal / 2,
-          sgstAmount: taxTotal / 2,
-          igstAmount: 0,
+          cgstAmount: isInterState ? 0 : taxTotal / 2,
+          sgstAmount: isInterState ? 0 : taxTotal / 2,
+          igstAmount: isInterState ? taxTotal : 0,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
           items: {
