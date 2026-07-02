@@ -32,22 +32,51 @@ export class AuthService {
     return null;
   }
 
+  async measurePrisma<T>(name: string, operation: () => Promise<T>): Promise<T> {
+    const tBefore = Date.now();
+    const pBefore = performance.now();
+    
+    // Get metrics before
+    const metricsBefore = await (this.prisma as any).$metrics.json();
+    const activeBefore = metricsBefore.gauges.find((g: any) => g.name === 'prisma_pool_connections_busy')?.value || 0;
+    const idleBefore = metricsBefore.gauges.find((g: any) => g.name === 'prisma_pool_connections_idle')?.value || 0;
+    const openBefore = metricsBefore.gauges.find((g: any) => g.name === 'prisma_pool_connections_open')?.value || 0;
+    
+    const result = await operation();
+    
+    const pAfter = performance.now();
+    const tAfter = Date.now();
+    const metricsAfter = await (this.prisma as any).$metrics.json();
+    const activeAfter = metricsAfter.gauges.find((g: any) => g.name === 'prisma_pool_connections_busy')?.value || 0;
+    const idleAfter = metricsAfter.gauges.find((g: any) => g.name === 'prisma_pool_connections_idle')?.value || 0;
+    const openAfter = metricsAfter.gauges.find((g: any) => g.name === 'prisma_pool_connections_open')?.value || 0;
+    
+    console.log(`\n--- Prisma Operation: ${name} ---`);
+    console.log(`Timestamp Before: ${new Date(tBefore).toISOString()}`);
+    console.log(`Timestamp After:  ${new Date(tAfter).toISOString()}`);
+    console.log(`Operation Duration: ${(pAfter - pBefore).toFixed(2)} ms`);
+    console.log(`Connections Open: Before=${openBefore}, After=${openAfter}`);
+    console.log(`Connections Idle: Before=${idleBefore}, After=${idleAfter}`);
+    console.log(`Connections Busy: Before=${activeBefore}, After=${activeAfter}`);
+    
+    return result;
+  }
+
   async login(loginDto: LoginDto, userAgent?: string, ipAddress?: string, requestId: string = 'unknown') {
     const startTime = performance.now();
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Entered auth service`);
+    console.log(`\n[${new Date().toISOString()}] [Req: ${requestId}] START Login Request`);
 
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Database query start for user lookup (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
-    const user = await this.prisma.user.findUnique({ 
-      where: { email: loginDto.email },
-      include: { companies: { include: { company: true } } }
-    });
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Database query end for user lookup (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    const user = await this.measurePrisma('Find User', () => 
+      this.prisma.user.findUnique({ 
+        where: { email: loginDto.email },
+        include: { companies: { include: { company: true } } }
+      })
+    );
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
     
-    // Check account lockout
     if (user.lockoutUntil && user.lockoutUntil > new Date()) {
       const remainingTime = Math.ceil((user.lockoutUntil.getTime() - Date.now()) / 60 / 1000);
       throw new UnauthorizedException(`Account is temporarily locked. Try again in ${remainingTime} minutes.`);
@@ -57,33 +86,27 @@ export class AuthService {
       throw new UnauthorizedException('User account is disabled');
     }
 
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Password verification start (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    const compareStart = performance.now();
     const isMatch = await bcrypt.compare(loginDto.password, user.passwordHash);
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Password verification end (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    console.log(`\n--- Operation: Password Compare ---`);
+    console.log(`Duration: ${(performance.now() - compareStart).toFixed(2)} ms`);
 
     if (!isMatch) {
-      // Record failed attempt
       const attempts = user.failedLoginAttempts + 1;
       const data: any = { failedLoginAttempts: attempts };
-      
       if (attempts >= 5) {
-        data.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 mins lockout
+        data.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
       }
 
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data,
-      });
+      await this.measurePrisma('Update Failed Login', () =>
+        this.prisma.user.update({ where: { id: user.id }, data })
+      );
 
-      // Record to history
-      await this.prisma.loginHistory.create({
-        data: {
-          userId: user.id,
-          ipAddress,
-          userAgent,
-          status: 'FAILED',
-        },
-      });
+      await this.measurePrisma('Failed Login History', () =>
+        this.prisma.loginHistory.create({
+          data: { userId: user.id, ipAddress, userAgent, status: 'FAILED' },
+        })
+      );
 
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -92,24 +115,18 @@ export class AuthService {
       throw new UnauthorizedException('Email not verified. Please verify your OTP first.');
     }
 
-    // Reset login failures on success
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        failedLoginAttempts: 0,
-        lockoutUntil: null,
-      },
-    });
+    await this.measurePrisma('Reset Login Failures', () =>
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockoutUntil: null },
+      })
+    );
 
-    // Record login history
-    await this.prisma.loginHistory.create({
-      data: {
-        userId: user.id,
-        ipAddress,
-        userAgent,
-        status: 'SUCCESS',
-      },
-    });
+    await this.measurePrisma('Login History', () =>
+      this.prisma.loginHistory.create({
+        data: { userId: user.id, ipAddress, userAgent, status: 'SUCCESS' },
+      })
+    );
 
     const firstCompanyUser = user.companies[0];
     const companyId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.companyId || null);
@@ -117,26 +134,29 @@ export class AuthService {
     const customRoleId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.customRoleId || null);
     const onboardingStep = user.globalRole === 'SUPER_ADMIN' ? 'COMPLETED' : (firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS');
 
-    // Create session & refresh token with companyId
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Cookie generation / Session creation start (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    // Create session wraps prisma.session.create
+    const sessionStart = performance.now();
     const refreshToken = await this.sessionService.createSession(user.id, userAgent, ipAddress, companyId || undefined);
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] Cookie generation / Session creation end (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    console.log(`\n--- Operation: Session Creation ---`);
+    console.log(`Duration: ${(performance.now() - sessionStart).toFixed(2)} ms`);
 
     const payload = { 
       email: user.email, 
       sub: user.id, 
       companyId: companyId,
-      tenantId: companyId, // legacy support
+      tenantId: companyId, 
       role: companyRole,
       roleId: customRoleId,
       globalRole: user.globalRole,
       onboardingStep: onboardingStep,
     };
 
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] JWT generation start (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    const jwtStart = performance.now();
     const accessToken = this.jwtService.sign(payload);
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] JWT generation end (Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
+    console.log(`\n--- Operation: JWT Generation ---`);
+    console.log(`Duration: ${(performance.now() - jwtStart).toFixed(2)} ms`);
 
+    console.log(`\n[${new Date().toISOString()}] [Req: ${requestId}] END Login Request (Total Duration: ${(performance.now() - startTime).toFixed(2)}ms)`);
     return {
       access_token: accessToken,
       refresh_token: refreshToken,

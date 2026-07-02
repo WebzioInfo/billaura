@@ -89,10 +89,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    // In Serverless environments, lazy connection is preferred to prevent cold start hangs.
-    // Prisma will automatically connect on the first query.
-    // await this.$connect();
-    this.logger.log("Prisma lazy connection enabled for Serverless");
+    // Connect eagerly to prevent first-query latency overhead
+    await this.$connect();
+    this.logger.log("Prisma eager connection established");
   }
 
   async onModuleDestroy() {

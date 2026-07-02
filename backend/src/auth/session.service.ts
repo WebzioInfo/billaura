@@ -52,6 +52,7 @@ export class SessionService {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const { deviceName, browser, os } = parseUserAgent(userAgent);
 
+    console.log(`[SessionService] START prisma.session.create`);
     await this.prisma.session.create({
       data: {
         userId,
@@ -66,6 +67,7 @@ export class SessionService {
         isRevoked: false,
       },
     });
+    console.log(`[SessionService] END prisma.session.create`);
 
     return rawToken;
   }
