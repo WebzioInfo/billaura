@@ -393,6 +393,7 @@ model Company {
   backupJobs        BackupJob[]
   backupSchedules   BackupSchedule[]
   backupAuditLogs   BackupAuditLog[]
+  receipts          Receipt[]
 
   @@map("companies")
 }
@@ -498,6 +499,8 @@ model User {
   backupJobs        BackupJob[]
   backupSchedules   BackupSchedule[]
   backupAuditLogs   BackupAuditLog[]
+  receivedReceipts  Receipt[]
+  receiptAudits     ReceiptAudit[]
 
   @@map("users")
 }
@@ -755,6 +758,7 @@ model BusinessPartner {
   contacts            Contact[]
   crmActivities       CrmActivity[]
   otherIncomes        OtherIncome[]
+  receipts            Receipt[]
 
   @@index([companyId])
   @@index([bpType])
@@ -1000,6 +1004,7 @@ model Invoice {
   items           InvoiceItem[]
   allocations     PaymentAllocation[]
   salesReturns    SalesReturn[]
+  receiptAllocations ReceiptAllocation[]
 
   @@unique([companyId, invoiceNo])
   @@index([companyId, businessPartnerId])
@@ -1318,6 +1323,7 @@ model Account {
   company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   journalLines     JournalLine[]
   incomeCategories IncomeCategory[]
+  receipts         Receipt[]
 
   @@unique([companyId, name])
   @@map("accounts")
@@ -2202,4 +2208,86 @@ model BackupAuditLog {
 
   @@index([companyId])
   @@map("backup_audit_logs")
+}
+
+model Receipt {
+  id                String              @id @default(cuid())
+  companyId         String
+  receiptNo         String
+  date              DateTime
+  businessPartnerId String
+  accountId         String
+  paymentMethod     String
+  amount            Decimal             @db.Decimal(15, 2)
+  referenceNo       String?
+  chequeNo          String?
+  transactionId     String?
+  clearanceDate     DateTime?
+  bankCharges       Decimal             @default(0) @db.Decimal(15, 2)
+  cashier           String?
+  notes             String?             @db.Text
+  currency          String              @default("INR")
+  exchangeRate      Decimal             @default(1.0) @db.Decimal(10, 4)
+  receivedById      String
+  status            String              @default("COMPLETED") // DRAFT, COMPLETED, VOID
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  deletedAt         DateTime?
+
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  account           Account             @relation(fields: [accountId], references: [id])
+  receivedBy        User                @relation(fields: [receivedById], references: [id])
+  allocations       ReceiptAllocation[]
+  attachments       ReceiptAttachment[]
+  audits            ReceiptAudit[]
+
+  @@unique([companyId, receiptNo])
+  @@index([companyId, date])
+  @@map("receipts")
+}
+
+model ReceiptAllocation {
+  id          String   @id @default(cuid())
+  receiptId   String
+  invoiceId   String
+  amount      Decimal  @db.Decimal(15, 2)
+  createdAt   DateTime @default(now())
+
+  receipt     Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@index([invoiceId])
+  @@map("receipt_allocations")
+}
+
+model ReceiptAttachment {
+  id        String   @id @default(cuid())
+  receiptId String
+  fileName  String
+  fileUrl   String
+  fileSize  Int
+  mimeType  String?
+  createdAt DateTime @default(now())
+
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@map("receipt_attachments")
+}
+
+model ReceiptAudit {
+  id        String   @id @default(cuid())
+  receiptId String
+  userId    String
+  action    String   // CREATE, UPDATE, DELETE, PRINT, EMAIL, VOID
+  details   Json?
+  createdAt DateTime @default(now())
+
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@map("receipt_audits")
 }

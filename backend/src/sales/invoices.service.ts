@@ -29,6 +29,8 @@ export class InvoicesService {
             ],
           }
         : {}),
+      ...((query as any).customerId ? { businessPartnerId: (query as any).customerId } : {}),
+      ...((query as any).status ? { status: (query as any).status } : {}),
     };
 
     const [data, total] = await this.prisma.$transaction([

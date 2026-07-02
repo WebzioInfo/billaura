@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import ProductFormModal from './ProductFormModal';
+import { useQueryClient } from '@tanstack/react-query';
 
 // --- SCHEMAS ---
 const categorySchema = z.object({
@@ -130,6 +131,15 @@ export const InventoryDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Inline Warehouse Modal State
+  const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
+  const [warehouseName, setWarehouseName] = useState('');
+  const [warehouseLocation, setWarehouseLocation] = useState('');
+  const [warehouseDefault, setWarehouseDefault] = useState(false);
+  const [isSubmittingWarehouse, setIsSubmittingWarehouse] = useState(false);
+  const queryClient = useQueryClient();
 
   // Forms hooks
   const productForm = useForm<ProductFormValues>({
@@ -163,12 +173,12 @@ export const InventoryDashboard = () => {
       // Load dependencies
       const [whRes, catRes, brandRes] = await Promise.all([
         api.get<{ success: boolean; data: { items: Warehouse[] } }>('/warehouses'),
-        api.get<{ success: boolean; data: { items: Category[] } }>('/categories'),
-        api.get<{ success: boolean; data: { items: Brand[] } }>('/brands'),
+        api.get<any>('/inventory/categories'),
+        api.get<any>('/inventory/brands'),
       ]);
       setWarehouses(whRes.data?.items || []);
-      setCategories(catRes.data?.items || []);
-      setBrands(brandRes.data?.items || []);
+      setCategories(Array.isArray(catRes) ? catRes : (catRes?.data || []));
+      setBrands(Array.isArray(brandRes) ? brandRes : (brandRes?.data || []));
 
       if (activeTab === 'products') {
         const res = await api.get<{ success: boolean; data: { items: Product[] } }>('/products');
@@ -180,11 +190,11 @@ export const InventoryDashboard = () => {
         const res = await api.get<{ success: boolean; data: { items: Warehouse[] } }>('/warehouses');
         setWarehouses(res.data?.items || []);
       } else if (activeTab === 'categories') {
-        const res = await api.get<{ success: boolean; data: { items: Category[] } }>('/categories');
-        setCategories(res.data?.items || []);
+        const res = await api.get<any>('/inventory/categories');
+        setCategories(Array.isArray(res) ? res : (res?.data || []));
       } else if (activeTab === 'brands') {
-        const res = await api.get<{ success: boolean; data: { items: Brand[] } }>('/brands');
-        setBrands(res.data?.items || []);
+        const res = await api.get<any>('/inventory/brands');
+        setBrands(Array.isArray(res) ? res : (res?.data || []));
       }
     } catch (err) {
       toast.error('Failed to load inventory data');
@@ -270,10 +280,10 @@ export const InventoryDashboard = () => {
     setIsSubmitting(true);
     try {
       if (editingId) {
-        await api.patch(`/categories/${editingId}`, values);
+        await api.patch(`/inventory/categories/${editingId}`, values);
         toast.success('Category updated successfully');
       } else {
-        await api.post('/categories', values);
+        await api.post('/inventory/categories', values);
         toast.success('Category created successfully');
       }
       setIsModalOpen(false);
@@ -289,10 +299,10 @@ export const InventoryDashboard = () => {
     setIsSubmitting(true);
     try {
       if (editingId) {
-        await api.patch(`/brands/${editingId}`, values);
+        await api.patch(`/inventory/brands/${editingId}`, values);
         toast.success('Brand updated successfully');
       } else {
-        await api.post('/brands', values);
+        await api.post('/inventory/brands', values);
         toast.success('Brand created successfully');
       }
       setIsModalOpen(false);
@@ -301,6 +311,44 @@ export const InventoryDashboard = () => {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateWarehouse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!warehouseName.trim()) {
+      toast.error('Warehouse Name is required');
+      return;
+    }
+    setIsSubmittingWarehouse(true);
+    try {
+      const res = await api.post('/warehouses', {
+        name: warehouseName.trim(),
+        location: warehouseLocation.trim(),
+        isDefault: warehouseDefault,
+      });
+      toast.success('Warehouse created successfully');
+      
+      // Invalidate queries
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+      
+      // Select it automatically in the adjust stock form
+      const newId = res.data?.data?.id || res.data?.id;
+      if (newId) {
+        adjustStockForm.setValue('warehouseId', newId);
+      }
+      
+      // Refresh local dashboard data
+      fetchData();
+      
+      setIsWarehouseModalOpen(false);
+      setWarehouseName('');
+      setWarehouseLocation('');
+      setWarehouseDefault(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to create warehouse');
+    } finally {
+      setIsSubmittingWarehouse(false);
     }
   };
 
@@ -318,19 +366,8 @@ export const InventoryDashboard = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this?')) return;
-    try {
-      const endpoint = activeTab === 'products' ? '/products' 
-                     : activeTab === 'warehouses' ? '/warehouses'
-                     : activeTab === 'categories' ? '/categories'
-                     : '/brands';
-      await api.delete(`${endpoint}/${id}`);
-      toast.success('Item deleted successfully');
-      fetchData();
-    } catch (err) {
-      toast.error('Deletion failed');
-    }
+  const handleDelete = (id: string) => {
+    setDeleteConfirmId(id);
   };
 
   const getProductTotalStock = (p: Product) => {
@@ -438,7 +475,7 @@ export const InventoryDashboard = () => {
 
       {/* Main Grid Panels */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-4">
           {[1, 2].map((i) => (
             <div key={i} className="glass-panel p-6 rounded-2xl border border-border animate-pulse space-y-4">
               <div className="h-5 bg-border rounded w-1/3" />
@@ -753,7 +790,10 @@ export const InventoryDashboard = () => {
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Warehouse *</label>
+                  <div className="flex justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Warehouse *</label>
+                    <button type="button" onClick={() => setIsWarehouseModalOpen(true)} className="text-xs text-accent font-bold hover:underline cursor-pointer flex items-center gap-1"><Plus className="w-3 h-3" /> New</button>
+                  </div>
                   <select {...adjustStockForm.register('warehouseId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
                     <option value="">Select warehouse...</option>
                     {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -792,6 +832,97 @@ export const InventoryDashboard = () => {
             fetchData();
           }}
         />
+      )}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/45 backdrop-blur-sm" onClick={() => setDeleteConfirmId(null)} />
+          <div className="bg-surface border border-border rounded-2xl w-full max-w-sm z-10 overflow-hidden shadow-2xl text-foreground">
+            <div className="p-6 space-y-4">
+              <h3 className="font-bold text-lg">Confirm Deletion</h3>
+              <p className="text-sm text-muted-foreground">Are you sure you want to delete this item? This action cannot be undone.</p>
+            </div>
+            <div className="p-6 border-t border-border flex justify-end gap-3 bg-muted/10">
+              <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-2 rounded-xl border border-border text-foreground font-semibold hover:bg-muted text-sm cursor-pointer">
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const id = deleteConfirmId;
+                  setDeleteConfirmId(null);
+                  try {
+                    const endpoint = activeTab === 'products' ? '/products' 
+                                   : activeTab === 'warehouses' ? '/warehouses'
+                                   : activeTab === 'categories' ? '/inventory/categories'
+                                   : '/inventory/brands';
+                    await api.delete(`${endpoint}/${id}`);
+                    toast.success('Item deleted successfully');
+                    fetchData();
+                  } catch (err) {
+                    toast.error('Deletion failed');
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-red-650 text-white font-bold hover:bg-red-700 text-sm cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isWarehouseModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/45 backdrop-blur-sm" onClick={() => setIsWarehouseModalOpen(false)} />
+          <div className="bg-surface border border-border rounded-2xl w-full max-w-md z-10 overflow-hidden shadow-2xl text-foreground">
+            <form onSubmit={handleCreateWarehouse}>
+              <div className="flex justify-between items-center p-6 border-b border-border bg-background bg-opacity-35">
+                <h3 className="font-bold text-lg text-foreground">New Warehouse</h3>
+                <button type="button" onClick={() => setIsWarehouseModalOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
+              </div>
+              <div className="p-6 space-y-4 text-left">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Warehouse Name *</label>
+                  <input
+                    type="text"
+                    value={warehouseName}
+                    onChange={(e) => setWarehouseName(e.target.value)}
+                    placeholder="e.g. Main Warehouse"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Location</label>
+                  <input
+                    type="text"
+                    value={warehouseLocation}
+                    onChange={(e) => setWarehouseLocation(e.target.value)}
+                    placeholder="e.g. Ground Floor, Sector 4"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer pt-2">
+                  <input
+                    type="checkbox"
+                    checked={warehouseDefault}
+                    onChange={(e) => setWarehouseDefault(e.target.checked)}
+                    className="w-4 h-4 text-accent border-border rounded focus:ring-accent"
+                  />
+                  <span className="text-sm font-semibold text-foreground">Set as Default Warehouse</span>
+                </label>
+              </div>
+              <div className="p-6 border-t border-border flex justify-end gap-3 bg-muted/10">
+                <button type="button" onClick={() => setIsWarehouseModalOpen(false)} className="px-4 py-2 rounded-xl border border-border text-foreground font-semibold hover:bg-muted text-sm cursor-pointer">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSubmittingWarehouse} className="px-4 py-2 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 text-sm cursor-pointer shadow-lg shadow-accent/20 flex items-center gap-2">
+                  {isSubmittingWarehouse && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create Warehouse
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

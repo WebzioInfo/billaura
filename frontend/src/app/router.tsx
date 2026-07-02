@@ -21,6 +21,8 @@ const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m 
 const VendorsList = lazy(() => import('../features/crm/VendorsList').then(m => ({ default: m.VendorsList })));
 const InvoicesList = lazy(() => import('../features/sales/InvoicesList').then(m => ({ default: m.InvoicesList })));
 const InvoiceForm = lazy(() => import('../features/sales/InvoiceForm').then(m => ({ default: m.InvoiceForm })));
+const ReceiptsList = lazy(() => import('../features/sales/ReceiptsList').then(m => ({ default: m.ReceiptsList })));
+const ReceiptForm = lazy(() => import('../features/sales/ReceiptForm').then(m => ({ default: m.ReceiptForm })));
 const BillsList = lazy(() => import('../features/purchases/BillsList').then(m => ({ default: m.BillsList })));
 const BillForm = lazy(() => import('../features/purchases/BillForm').then(m => ({ default: m.BillForm })));
 const TrialBalance = lazy(() => import('../features/reports/TrialBalance').then(m => ({ default: m.TrialBalance })));
@@ -146,7 +148,8 @@ export const router = createBrowserRouter([
       { path: 'vendors', element: <VendorsList /> },
       { path: 'products', element: <InventoryDashboard /> },
       { path: 'services', element: <InventoryDashboard /> },
-      { path: 'categories', element: <InventoryDashboard /> },
+      {path: 'categories', element: <InventoryDashboard /> },
+      { path: 'brands', element: <InventoryDashboard /> },
       { path: 'inventory', element: <InventoryDashboard /> },
       { path: 'warehouses', element: <InventoryDashboard /> },
       { path: 'sales', element: <SalesDashboard /> },
@@ -155,6 +158,10 @@ export const router = createBrowserRouter([
       { path: 'delivery-challans', element: <SalesDashboard /> },
       { path: 'invoices', element: <InvoicesList /> },
       { path: 'invoices/new', element: <InvoiceForm /> },
+      { path: 'receipts', element: <ReceiptsList /> },
+      { path: 'receipts/new', element: <ReceiptForm /> },
+      { path: 'receipts/:id', element: <ReceiptForm /> },
+      { path: 'receipts/:id/edit', element: <ReceiptForm /> },
       { path: 'recurring-invoices', element: <SalesDashboard /> },
       { path: 'payments', element: <SalesDashboard /> },
       { path: 'purchases', element: <PurchasesDashboard /> },

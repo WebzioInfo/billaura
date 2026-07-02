@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Plus, Package, Box, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck } from 'lucide-react';
+import { X, Plus, Package, Box, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface ProductFormModalProps {
   onClose: () => void;
@@ -12,13 +13,59 @@ interface ProductFormModalProps {
 
 export default function ProductFormModal({ onClose, onSuccess, product }: ProductFormModalProps) {
   const [activeTab, setActiveTab] = useState('general');
-  const [categories, setCategories] = useState<any[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
-  const [units, setUnits] = useState<any[]>([]);
-  const [taxGroups, setTaxGroups] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { register, handleSubmit, reset } = useForm({
+  // Custom inline modals state
+  const [activeInlineModal, setActiveInlineModal] = useState<'category' | 'brand' | 'unit' | 'taxGroup' | null>(null);
+
+  // Category inline state
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryCode, setCategoryCode] = useState('');
+  const [categoryDesc, setCategoryDesc] = useState('');
+  const [categoryActive, setCategoryActive] = useState(true);
+
+  // Brand inline state
+  const [brandName, setBrandName] = useState('');
+  const [brandDesc, setBrandDesc] = useState('');
+  const [brandWebsite, setBrandWebsite] = useState('');
+
+  // Unit inline state
+  const [unitName, setUnitName] = useState('');
+  const [unitShort, setUnitShort] = useState('');
+  const [unitSymbol, setUnitSymbol] = useState('');
+  const [unitPrecision, setUnitPrecision] = useState(2);
+
+  // Tax Group inline state
+  const [taxGroupName, setTaxGroupName] = useState('');
+  const [taxGroupRate, setTaxGroupRate] = useState(0);
+
+  const queryClient = useQueryClient();
+
+  // Load categories list via TanStack Query
+  const { data: categories = [] } = useQuery<any[]>({
+    queryKey: ['categories'],
+    queryFn: () => api.get('/inventory/categories').then(res => res.data?.data || res.data || []),
+  });
+
+  // Load brands list via TanStack Query
+  const { data: brands = [] } = useQuery<any[]>({
+    queryKey: ['brands'],
+    queryFn: () => api.get('/inventory/brands').then(res => res.data?.data || res.data || []),
+  });
+
+  // Load units list via TanStack Query
+  const { data: units = [] } = useQuery<any[]>({
+    queryKey: ['units'],
+    queryFn: () => api.get('/units').then(res => res.data?.data || res.data || []),
+  });
+
+  // Load tax groups via TanStack Query
+  const { data: taxGroupsData = [] } = useQuery<any[]>({
+    queryKey: ['tax-groups'],
+    queryFn: () => api.get('/tax-groups').then(res => res.data?.data || res.data || []),
+  });
+
+  const { register, handleSubmit, reset, setValue } = useForm({
     defaultValues: product || {
       name: '',
       sku: '',
@@ -27,9 +74,9 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       eInvoiceHsn: '',
       barcode: '',
       itemType: 'FINISHED_GOOD',
-      categoryId: '',
-      brandId: '',
-      unitId: '',
+      category: '',
+      brand: '',
+      unit: 'PCS',
       taxGroupId: '',
       scheduleNo: '',
       weight: 0,
@@ -52,44 +99,123 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   });
 
   useEffect(() => {
-    fetchMasterData();
-  }, []);
+    // Set ESC key listener for accessibility
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (activeInlineModal) setActiveInlineModal(null);
+        else onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeInlineModal]);
 
-  const fetchMasterData = async () => {
-    try {
-      const [catRes, brandRes, unitRes, taxRes] = await Promise.all([
-        api.get('/inventory/categories'),
-        api.get('/inventory/brands'),
-        api.get('/units').catch(() => ({ data: [] })),
-        api.get('/tax-groups').catch(() => ({ data: [] })),
-      ]);
-      setCategories(catRes.data?.data || catRes.data || []);
-      setBrands(brandRes.data?.data || brandRes.data || []);
-      setUnits(unitRes.data?.data || unitRes.data || []);
-      setTaxGroups(taxRes.data?.data || taxRes.data || []);
-    } catch (err) {
-      toast.error('Failed to load master data for product form');
+  const handleInlineCreate = (type: string) => {
+    if (type === 'Category') {
+      setCategoryName('');
+      setCategoryCode('');
+      setCategoryDesc('');
+      setCategoryActive(true);
+      setActiveInlineModal('category');
+    } else if (type === 'Brand') {
+      setBrandName('');
+      setBrandDesc('');
+      setBrandWebsite('');
+      setActiveInlineModal('brand');
+    } else if (type === 'Unit') {
+      setUnitName('');
+      setUnitShort('');
+      setUnitSymbol('');
+      setUnitPrecision(2);
+      setActiveInlineModal('unit');
+    } else if (type === 'Tax Group') {
+      setTaxGroupName('');
+      setTaxGroupRate(0);
+      setActiveInlineModal('taxGroup');
     }
   };
 
-  const handleInlineCreate = async (type: string) => {
-    const name = window.prompt(`Enter new ${type} name:`);
-    if (!name) return;
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!categoryName.trim()) {
+      toast.error('Category Name is required');
+      return;
+    }
     try {
-      if (type === 'Category') {
-        await api.post('/inventory/categories', { name });
-      } else if (type === 'Brand') {
-        await api.post('/inventory/brands', { name });
-      } else if (type === 'Unit') {
-        const abbreviation = window.prompt('Enter abbreviation (e.g., kg, pcs):') || name.substring(0, 3);
-        await api.post('/units', { name, abbreviation, decimals: 2 });
-      } else if (type === 'Tax Group') {
-        await api.post('/tax-groups', { name, totalRate: 0 });
+      const res = await api.post('/inventory/categories', { name: categoryName.trim() });
+      toast.success('Category created successfully');
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      const newId = res.data?.data?.id || res.data?.id;
+      if (newId) {
+        setValue('category', newId);
       }
-      toast.success(`${type} created successfully`);
-      fetchMasterData();
-    } catch (err) {
-      toast.error(`Failed to create ${type}`);
+      setActiveInlineModal(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to create Category');
+    }
+  };
+
+  const handleCreateBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brandName.trim()) {
+      toast.error('Brand Name is required');
+      return;
+    }
+    try {
+      const res = await api.post('/inventory/brands', { name: brandName.trim() });
+      toast.success('Brand created successfully');
+      queryClient.invalidateQueries({ queryKey: ['brands'] });
+      const newId = res.data?.data?.id || res.data?.id;
+      if (newId) {
+        setValue('brand', newId);
+      }
+      setActiveInlineModal(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to create Brand');
+    }
+  };
+
+  const handleCreateUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unitName.trim() || !unitShort.trim()) {
+      toast.error('Unit Name and Short Name are required');
+      return;
+    }
+    try {
+      const res = await api.post('/units', {
+        name: unitName.trim(),
+        abbreviation: unitShort.trim(),
+        decimals: Number(unitPrecision),
+      });
+      toast.success('Unit created successfully');
+      queryClient.invalidateQueries({ queryKey: ['units'] });
+      const newId = res.data?.data?.id || res.data?.id;
+      if (newId) {
+        setValue('unit', newId);
+      }
+      setActiveInlineModal(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to create Unit');
+    }
+  };
+
+  const handleCreateTaxGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taxGroupName.trim()) {
+      toast.error('Tax Group Name is required');
+      return;
+    }
+    try {
+      const res = await api.post('/tax-groups', { name: taxGroupName.trim(), totalRate: Number(taxGroupRate) });
+      toast.success('Tax Group created successfully');
+      queryClient.invalidateQueries({ queryKey: ['tax-groups'] });
+      const newId = res.data?.data?.id || res.data?.id;
+      if (newId) {
+        setValue('taxGroupId', newId);
+      }
+      setActiveInlineModal(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to create Tax Group');
     }
   };
 
@@ -109,12 +235,13 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       };
 
       if (product?.id) {
-        await api.put(`/inventory/products/${product.id}`, payload);
+        await api.put(`/products/${product.id}`, payload);
         toast.success('Product updated successfully');
       } else {
-        await api.post('/inventory/products', payload);
+        await api.post('/products', payload);
         toast.success('Product created successfully');
       }
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       onSuccess();
     } catch (error) {
       toast.error('Failed to save product');
@@ -125,8 +252,8 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center p-6 border-b border-border">
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-foreground">
+        <div className="flex justify-between items-center p-6 border-b border-border bg-background bg-opacity-35">
           <div>
             <h2 className="text-xl font-bold text-foreground">
               {product ? 'Edit Master Product' : 'New Master Product'}
@@ -193,7 +320,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category (Item Group)</label>
                       <button type="button" onClick={() => handleInlineCreate('Category')} className="text-xs text-accent font-bold hover:underline cursor-pointer flex items-center gap-1"><Plus className="w-3 h-3" /> New</button>
                     </div>
-                    <select {...register('categoryId')} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent">
+                    <select {...register('category')} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent">
                       <option value="">Select Category...</option>
                       {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
@@ -203,7 +330,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Brand</label>
                       <button type="button" onClick={() => handleInlineCreate('Brand')} className="text-xs text-accent font-bold hover:underline cursor-pointer flex items-center gap-1"><Plus className="w-3 h-3" /> New</button>
                     </div>
-                    <select {...register('brandId')} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent">
+                    <select {...register('brand')} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent">
                       <option value="">Select Brand...</option>
                       {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
@@ -213,7 +340,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Unit of Measure</label>
                       <button type="button" onClick={() => handleInlineCreate('Unit')} className="text-xs text-accent font-bold hover:underline cursor-pointer flex items-center gap-1"><Plus className="w-3 h-3" /> New</button>
                     </div>
-                    <select {...register('unitId')} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent">
+                    <select {...register('unit')} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent">
                       <option value="">Select Unit (e.g. kg)</option>
                       {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>)}
                     </select>
@@ -309,7 +436,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                     </div>
                     <select {...register('taxGroupId')} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent">
                       <option value="">Select Tax Group...</option>
-                      {taxGroups.map(t => <option key={t.id} value={t.id}>{t.name} ({t.totalRate}%)</option>)}
+                      {taxGroupsData.map(t => <option key={t.id} value={t.id}>{t.name} ({t.totalRate}%)</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -348,6 +475,232 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
           </div>
         </div>
       </div>
+
+      {/* Styled Dialog Overlays */}
+      {activeInlineModal && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/45 backdrop-blur-sm" onClick={() => setActiveInlineModal(null)} />
+          <div className="bg-surface border border-border rounded-2xl w-full max-w-md z-10 overflow-hidden shadow-2xl text-foreground">
+            {activeInlineModal === 'category' && (
+              <form onSubmit={handleCreateCategory}>
+                <div className="flex justify-between items-center p-6 border-b border-border bg-background bg-opacity-35">
+                  <h3 className="font-bold text-lg text-foreground">New Category</h3>
+                  <button type="button" onClick={() => setActiveInlineModal(null)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
+                </div>
+                <div className="p-6 space-y-4 text-left">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Category Name *</label>
+                    <input
+                      type="text"
+                      value={categoryName}
+                      onChange={(e) => setCategoryName(e.target.value)}
+                      placeholder="e.g. Electronics, Raw Materials"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Category Code</label>
+                    <input
+                      type="text"
+                      value={categoryCode}
+                      onChange={(e) => setCategoryCode(e.target.value)}
+                      placeholder="e.g. CAT001"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Description</label>
+                    <textarea
+                      value={categoryDesc}
+                      onChange={(e) => setCategoryDesc(e.target.value)}
+                      placeholder="Optional details..."
+                      rows={2}
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent resize-none"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer pt-2">
+                    <input
+                      type="checkbox"
+                      checked={categoryActive}
+                      onChange={(e) => setCategoryActive(e.target.checked)}
+                      className="w-4 h-4 text-accent border-border rounded focus:ring-accent"
+                    />
+                    <span className="text-sm font-semibold text-foreground">Active</span>
+                  </label>
+                </div>
+                <div className="p-6 border-t border-border flex justify-end gap-3 bg-muted/10">
+                  <button type="button" onClick={() => setActiveInlineModal(null)} className="px-4 py-2 rounded-xl border border-border text-foreground font-semibold hover:bg-muted text-sm cursor-pointer">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-4 py-2 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 text-sm cursor-pointer shadow-lg shadow-accent/20">
+                    Create Category
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {activeInlineModal === 'brand' && (
+              <form onSubmit={handleCreateBrand}>
+                <div className="flex justify-between items-center p-6 border-b border-border bg-background bg-opacity-35">
+                  <h3 className="font-bold text-lg text-foreground">New Brand</h3>
+                  <button type="button" onClick={() => setActiveInlineModal(null)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
+                </div>
+                <div className="p-6 space-y-4 text-left">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Brand Name *</label>
+                    <input
+                      type="text"
+                      value={brandName}
+                      onChange={(e) => setBrandName(e.target.value)}
+                      placeholder="e.g. Sony, Tata Steel"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Description</label>
+                    <textarea
+                      value={brandDesc}
+                      onChange={(e) => setBrandDesc(e.target.value)}
+                      placeholder="Optional details..."
+                      rows={2}
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Website</label>
+                    <input
+                      type="text"
+                      value={brandWebsite}
+                      onChange={(e) => setBrandWebsite(e.target.value)}
+                      placeholder="e.g. https://brand.com"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                </div>
+                <div className="p-6 border-t border-border flex justify-end gap-3 bg-muted/10">
+                  <button type="button" onClick={() => setActiveInlineModal(null)} className="px-4 py-2 rounded-xl border border-border text-foreground font-semibold hover:bg-muted text-sm cursor-pointer">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-4 py-2 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 text-sm cursor-pointer shadow-lg shadow-accent/20">
+                    Create Brand
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {activeInlineModal === 'unit' && (
+              <form onSubmit={handleCreateUnit}>
+                <div className="flex justify-between items-center p-6 border-b border-border bg-background bg-opacity-35">
+                  <h3 className="font-bold text-lg text-foreground">New Unit</h3>
+                  <button type="button" onClick={() => setActiveInlineModal(null)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
+                </div>
+                <div className="p-6 space-y-4 text-left">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Unit Name *</label>
+                    <input
+                      type="text"
+                      value={unitName}
+                      onChange={(e) => setUnitName(e.target.value)}
+                      placeholder="e.g. Pieces, Kilograms"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Short Name / Symbol *</label>
+                    <input
+                      type="text"
+                      value={unitShort}
+                      onChange={(e) => setUnitShort(e.target.value)}
+                      placeholder="e.g. PCS, KG"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent font-mono"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Symbol</label>
+                    <input
+                      type="text"
+                      value={unitSymbol}
+                      onChange={(e) => setUnitSymbol(e.target.value)}
+                      placeholder="e.g. pc, kg"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Decimal Precision</label>
+                    <input
+                      type="number"
+                      value={unitPrecision}
+                      onChange={(e) => setUnitPrecision(Number(e.target.value))}
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                      min={0}
+                      max={6}
+                    />
+                  </div>
+                </div>
+                <div className="p-6 border-t border-border flex justify-end gap-3 bg-muted/10">
+                  <button type="button" onClick={() => setActiveInlineModal(null)} className="px-4 py-2 rounded-xl border border-border text-foreground font-semibold hover:bg-muted text-sm cursor-pointer">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-4 py-2 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 text-sm cursor-pointer shadow-lg shadow-accent/20">
+                    Create Unit
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {activeInlineModal === 'taxGroup' && (
+              <form onSubmit={handleCreateTaxGroup}>
+                <div className="flex justify-between items-center p-6 border-b border-border bg-background bg-opacity-35">
+                  <h3 className="font-bold text-lg text-foreground">New Tax Group</h3>
+                  <button type="button" onClick={() => setActiveInlineModal(null)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
+                </div>
+                <div className="p-6 space-y-4 text-left">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Tax Group Name *</label>
+                    <input
+                      type="text"
+                      value={taxGroupName}
+                      onChange={(e) => setTaxGroupName(e.target.value)}
+                      placeholder="e.g. GST 18%"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total Rate (%) *</label>
+                    <input
+                      type="number"
+                      value={taxGroupRate}
+                      onChange={(e) => setTaxGroupRate(Number(e.target.value))}
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="p-6 border-t border-border flex justify-end gap-3 bg-muted/10">
+                  <button type="button" onClick={() => setActiveInlineModal(null)} className="px-4 py-2 rounded-xl border border-border text-foreground font-semibold hover:bg-muted text-sm cursor-pointer">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-4 py-2 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 text-sm cursor-pointer shadow-lg shadow-accent/20">
+                    Create Tax Group
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

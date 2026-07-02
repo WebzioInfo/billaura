@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -111,7 +112,7 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: 
       onSuccess();
     } catch (error) {
       console.error('Failed to save income', error);
-      alert('Failed to save income. Check console for details.');
+      toast.error('Failed to save income. Check console for details.');
     } finally {
       setIsLoading(false);
     }
