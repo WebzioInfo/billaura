@@ -6,7 +6,13 @@
 export const env = {
   // API Configuration
   API_URL: import.meta.env.VITE_API_URL ?? 'http://localhost:4000',
-  API_BASE_URL: import.meta.env.VITE_API_BASE_URL ?? '/api/v1',
+  API_BASE_URL: (() => {
+    const rawUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
+    if (rawUrl.startsWith('http') && !rawUrl.endsWith('/api') && !rawUrl.includes('/api/')) {
+      return `${rawUrl.replace(/\/$/, '')}/api`;
+    }
+    return rawUrl;
+  })(),
 
   // App Meta
   APP_NAME: import.meta.env.VITE_APP_NAME ?? 'Bill Aura',
