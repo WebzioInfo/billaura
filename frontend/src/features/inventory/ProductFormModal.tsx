@@ -4,6 +4,7 @@ import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck } from
 import api from '../../services/api';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAsyncForm } from '../../hooks/useAsyncForm';
 
 interface ProductFormModalProps {
   onClose: () => void;
@@ -65,38 +66,44 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     queryFn: () => api.get('/tax-groups').then(res => res.data?.data || res.data || []),
   });
 
-  const { register, handleSubmit, setValue } = useForm({
-    defaultValues: product || {
-      name: '',
-      sku: '',
-      alias: '',
-      hsnCode: '',
-      eInvoiceHsn: '',
-      barcode: '',
-      itemType: 'FINISHED_GOOD',
-      category: '',
-      brand: '',
-      unit: 'PCS',
-      taxGroupId: '',
-      scheduleNo: '',
-      weight: 0,
-      weightType: 'kg',
-      taxRate: 0,
-      gstRate: 0,
-      taxCategory: 'TAXABLE',
-      isExempt: false,
-      isNilRated: false,
-      isNonGst: false,
-      purchasePrice: 0,
-      sellingPrice: 0,
-      minStock: 0,
-      maxStock: 0,
-      reorderLevel: 0,
-      pluNo: '',
-      valuationMethod: 'AVERAGE',
-      isActive: true,
-    }
-  });
+  const { register, handleSubmit, setValue, reset } = useAsyncForm(
+    {
+      defaultValues: {
+        name: '',
+        sku: '',
+        alias: '',
+        hsnCode: '',
+        eInvoiceHsn: '',
+        barcode: '',
+        itemType: 'FINISHED_GOOD',
+        category: '',
+        brand: '',
+        unit: 'PCS',
+        taxGroupId: '',
+        scheduleNo: '',
+        weight: 0,
+        weightType: 'kg',
+        taxRate: 0,
+        gstRate: 0,
+        taxCategory: 'TAXABLE',
+        isExempt: false,
+        isNilRated: false,
+        isNonGst: false,
+        purchasePrice: 0,
+        sellingPrice: 0,
+        minStock: 0,
+        maxStock: 0,
+        reorderLevel: 0,
+        pluNo: '',
+        valuationMethod: 'AVERAGE',
+        isActive: true,
+      }
+    },
+    product,
+    (data: any) => ({
+      ...data
+    })
+  );
 
   useEffect(() => {
     // Set ESC key listener for accessibility

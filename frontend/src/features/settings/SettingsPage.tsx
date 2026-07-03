@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import apiClient from '../../services/api';
 import { useSessionStore } from '../auth/stores/sessionStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAsyncForm } from '../../hooks/useAsyncForm';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -54,29 +55,11 @@ export const SettingsPage = () => {
     }
   };
   
-  const [companyId, setCompanyId] = useState('');
+  // Define local state ONLY for unsaved logo uploads. 
+  // We do not copy API state into here.
+  const [localLogoBase64, setLocalLogoBase64] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Logo State
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<CompanyFormValues>({
-    resolver: zodResolver(companySchema),
-    defaultValues: {
-      companyName: '',
-      legalName: '',
-      gstin: '',
-      pan: '',
-      email: '',
-      phone: '',
-      address: '',
-      state: '',
-      country: '',
-      currency: 'INR',
-    }
-  });
 
   const { data: profileData, isLoading } = useQuery({
     queryKey: ['company-profile'],
@@ -87,28 +70,42 @@ export const SettingsPage = () => {
     enabled: activeTab === 'profile',
   });
 
-  useEffect(() => {
-    if (profileData?.company) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCompanyId(profileData.company.id);
-      reset({
-        companyName: profileData.company.companyName || '',
-        legalName: profileData.company.legalName || '',
-        gstin: profileData.company.gstin || '',
-        pan: profileData.company.pan || '',
-        email: profileData.company.email || '',
-        phone: profileData.company.phone || '',
-        address: profileData.company.address || '',
-        state: profileData.company.state || '',
-        country: profileData.company.country || '',
-        currency: profileData.company.currency || 'INR',
-      });
-      if (profileData.company.settings?.logoBase64) {
-        setLogoPreview(profileData.company.settings.logoBase64);
-        setLogoBase64(profileData.company.settings.logoBase64);
+  const companyData = profileData?.data?.company || profileData?.company;
+  const companyId = companyData?.id || '';
+  const displayLogo = localLogoBase64 || companyData?.settings?.logoBase64;
+
+  const { register, handleSubmit, reset, formState: { errors } } = useAsyncForm<CompanyFormValues>(
+    {
+      resolver: zodResolver(companySchema),
+      defaultValues: {
+        companyName: '',
+        legalName: '',
+        gstin: '',
+        pan: '',
+        email: '',
+        phone: '',
+        address: '',
+        state: '',
+        country: '',
+        currency: 'INR',
       }
+    },
+    companyData, 
+    (company: any) => {
+      return {
+        companyName: company.companyName || '',
+        legalName: company.legalName || '',
+        gstin: company.gstin || '',
+        pan: company.pan || '',
+        email: company.email || '',
+        phone: company.phone || '',
+        address: company.address || '',
+        state: company.state || '',
+        country: company.country || '',
+        currency: company.currency || 'INR',
+      };
     }
-  }, [profileData, reset]);
+  );
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,18 +123,13 @@ export const SettingsPage = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
-      setLogoPreview(result);
-      setLogoBase64(result);
-      // We don't submit yet, just set dirty state conceptually.
-      // react-hook-form's isDirty only tracks registered fields, so we might need to manually handle this if we want the Save button to activate.
-      // But we can rely on form submission anyway if they edit other fields.
+      setLocalLogoBase64(result);
     };
     reader.readAsDataURL(file);
   };
 
   const removeLogo = () => {
-    setLogoPreview(null);
-    setLogoBase64(null);
+    setLocalLogoBase64(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -148,9 +140,10 @@ export const SettingsPage = () => {
   const onSubmit = async (values: CompanyFormValues) => {
     setIsSubmitting(true);
     try {
+      const finalLogo = localLogoBase64 !== null ? localLogoBase64 : companyData?.settings?.logoBase64;
       const payload = {
         ...values,
-        logoBase64: logoBase64
+        logoBase64: finalLogo
       };
       await apiClient.patch('/auth/company', payload);
       toast.success('Workspace profile settings updated successfully');
@@ -160,8 +153,9 @@ export const SettingsPage = () => {
       
       // Update session store to reflect new company name/logo immediately in UI
       if (user) {
-        setSession({ ...user, companyName: values.companyName, logoBase64: logoBase64 }, accessToken);
+        setSession({ ...user, companyName: values.companyName, logoBase64: finalLogo }, accessToken);
       }
+
       
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to update company profile');
@@ -248,9 +242,9 @@ export const SettingsPage = () => {
                   <h3 className="text-sm font-semibold text-foreground mb-4">Company Logo</h3>
                   <div className="flex flex-col sm:flex-row gap-6 items-start">
                     <div className="w-32 h-32 rounded-xl border-2 border-dashed border-border bg-muted/50 flex flex-col items-center justify-center relative overflow-hidden group">
-                      {logoPreview ? (
+                      {displayLogo ? (
                         <>
-                          <img src={logoPreview} alt="Company Logo" className="w-full h-full object-contain p-2" />
+                          <img src={displayLogo} alt="Company Logo" className="w-full h-full object-contain p-2" />
                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <button 
                               type="button" 
