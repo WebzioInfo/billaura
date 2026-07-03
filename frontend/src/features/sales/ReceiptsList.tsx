@@ -1,18 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, Search, Printer, Mail, Trash2, Edit3, Filter, Calendar, 
+  Plus, Search, Printer, Mail, Trash2, Edit3, 
   DollarSign, CheckCircle, RefreshCw, FileSpreadsheet, Eye, ChevronLeft, ChevronRight 
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 
 export const ReceiptsList = () => {
   const navigate = useNavigate();
-  const [receipts, setReceipts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
@@ -20,9 +19,9 @@ export const ReceiptsList = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  const fetchReceipts = async () => {
-    setLoading(true);
-    try {
+  const { data, isLoading: loading, refetch: fetchReceipts } = useQuery({
+    queryKey: ['receipts', search, statusFilter, methodFilter, page],
+    queryFn: async () => {
       const res = await apiClient.get('/receipts', {
         params: {
           search: search || undefined,
@@ -32,26 +31,25 @@ export const ReceiptsList = () => {
           limit: 10
         }
       });
-      const data = res.data?.data || res.data || {};
-      setReceipts(data.items || data || []);
-      setTotalPages(data.meta?.totalPages || 1);
-      setTotalItems(data.meta?.totalItems || (data.items || data).length || 0);
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to load receipts');
-    } finally {
-      setLoading(false);
+      return res.data?.data || res.data || {};
     }
-  };
+  });
+
+  const receipts = data?.items || data || [];
+  const totalPagesValue = data?.meta?.totalPages || 1;
+  const totalItemsValue = data?.meta?.totalItems || receipts.length || 0;
 
   useEffect(() => {
-    fetchReceipts();
-  }, [search, statusFilter, methodFilter, page]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTotalPages(totalPagesValue);
+    setTotalItems(totalItemsValue);
+  }, [totalPagesValue, totalItemsValue]);
 
   const handlePrint = async (id: string) => {
     try {
       const res = await apiClient.post(`/receipts/${id}/print`);
       toast.success(res.data?.message || 'Receipt sent to printer spool');
-    } catch (err) {
+    } catch {
       toast.error('Failed to trigger receipt print');
     }
   };
@@ -60,7 +58,7 @@ export const ReceiptsList = () => {
     try {
       const res = await apiClient.post(`/receipts/${id}/email`);
       toast.success(res.data?.message || 'Receipt emailed to customer');
-    } catch (err) {
+    } catch {
       toast.error('Failed to send receipt email');
     }
   };
@@ -73,7 +71,7 @@ export const ReceiptsList = () => {
       await apiClient.delete(`/receipts/${id}`);
       toast.success('Receipt voided and reversed successfully');
       fetchReceipts();
-    } catch (err) {
+    } catch {
       toast.error('Failed to void receipt');
     }
   };
@@ -84,7 +82,7 @@ export const ReceiptsList = () => {
       return;
     }
     const headers = ['Receipt No', 'Date', 'Customer', 'Payment Method', 'Account', 'Amount', 'Status'];
-    const rows = receipts.map(r => [
+    const rows = receipts.map((r: any) => [
       r.receiptNo,
       new Date(r.date).toLocaleDateString(),
       r.businessPartner?.name || 'N/A',
@@ -94,7 +92,7 @@ export const ReceiptsList = () => {
       r.status
     ]);
     const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      + [headers.join(','), ...rows.map((e: any) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -127,7 +125,7 @@ export const ReceiptsList = () => {
           <div>
             <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Received</p>
             <h3 className="text-2xl font-bold text-foreground mt-1">
-              ₹{receipts.reduce((acc, curr) => acc + (curr.status === 'COMPLETED' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN')}
+              ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'COMPLETED' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN')}
             </h3>
           </div>
         </div>
@@ -136,7 +134,7 @@ export const ReceiptsList = () => {
           <div>
             <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active Receipts</p>
             <h3 className="text-2xl font-bold text-foreground mt-1">
-              {receipts.filter(r => r.status === 'COMPLETED').length} / {totalItems}
+              {receipts.filter((r: any) => r.status === 'COMPLETED').length} / {totalItems}
             </h3>
           </div>
         </div>
@@ -155,7 +153,7 @@ export const ReceiptsList = () => {
               className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent"
             />
           </div>
-          <button onClick={fetchReceipts} className="p-2 border border-border hover:bg-muted rounded-xl transition-all cursor-pointer">
+          <button onClick={() => fetchReceipts()} className="p-2 border border-border hover:bg-muted rounded-xl transition-all cursor-pointer">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>

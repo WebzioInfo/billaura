@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import { Shield, Plus, Edit2, Trash2, Search, Loader2, Check } from 'lucide-react';
 import apiClient from '../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const roleSchema = z.object({
   name: z.string().min(2, 'Role name must be at least 2 characters'),
@@ -56,12 +57,9 @@ const ACTIONS = [
 ];
 
 export const RolesList = () => {
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedPermissions, setSelectedPermissions] = useState<Omit<RolePermission, 'id'>[]>([]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<RoleFormValues>({
@@ -73,23 +71,49 @@ export const RolesList = () => {
     }
   });
 
-  const fetchRoles = async () => {
-    setIsLoading(true);
-    try {
+  const queryClient = useQueryClient();
+
+  const { data: roles = [], isLoading } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => {
       const response = await apiClient.get<{ success: boolean; data: { items: Role[] } }>('/roles');
       if (response.success && response.data?.items) {
-        setRoles(response.data.items);
+        return response.data.items;
       }
-    } catch (err) {
-      toast.error('Failed to load authorization roles');
-    } finally {
-      setIsLoading(false);
+      return [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchRoles();
-  }, []);
+  const mutation = useMutation({
+    mutationFn: async (dataToSend: any) => {
+      if (editingRole) {
+        return apiClient.patch(`/roles/${editingRole.id}`, dataToSend);
+      } else {
+        return apiClient.post('/roles', dataToSend);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      toast.success(editingRole ? 'Access role updated successfully' : 'Custom access role configured successfully');
+      setIsModalOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Action failed');
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/roles/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      toast.success('Role removed successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to delete role');
+    }
+  });
 
   const openAddModal = () => {
     setEditingRole(null);
@@ -138,39 +162,19 @@ export const RolesList = () => {
   };
 
   const onSubmit = async (values: RoleFormValues) => {
-    setIsSubmitting(true);
     const dataToSend = {
       ...values,
       permissions: selectedPermissions,
     };
-
-    try {
-      if (editingRole) {
-        await apiClient.patch(`/roles/${editingRole.id}`, dataToSend);
-        toast.success('Access role updated successfully');
-      } else {
-        await apiClient.post('/roles', dataToSend);
-        toast.success('Custom access role configured successfully');
-      }
-      setIsModalOpen(false);
-      fetchRoles();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
-    } finally {
-      setIsSubmitting(false);
-    }
+    mutation.mutate(dataToSend);
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this custom role? This will revoke access from all mapped users.')) return;
-    try {
-      await apiClient.delete(`/roles/${id}`);
-      toast.success('Role removed successfully');
-      fetchRoles();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to delete role');
-    }
+    deleteMutation.mutate(id);
   };
+
+  const isSubmitting = mutation.isPending;
 
   const filteredRoles = roles.filter(role => 
     role.name.toLowerCase().includes(searchQuery.toLowerCase())

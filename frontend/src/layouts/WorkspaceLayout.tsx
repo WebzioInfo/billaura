@@ -7,7 +7,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts';
 
 export function WorkspaceLayout() {
-  const { tabs, activeTabId, setActiveTab, openTab } = useWorkspaceStore();
+  const { tabs, activeTabId } = useWorkspaceStore();
   const location = useLocation();
   const navigate = useNavigate();
   useGlobalShortcuts();

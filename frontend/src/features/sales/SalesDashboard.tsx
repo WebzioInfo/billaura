@@ -5,13 +5,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import { 
-  FileText, Search, Plus, Edit2, Trash2, Landmark, 
-  Loader2, RefreshCw, AlertTriangle, Calendar, CreditCard, DollarSign, ArrowUpRight, Download 
+  FileText, Search, Plus, Trash2,
+  Loader2
 } from 'lucide-react';
 import api from '../../services/api';
 import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
 import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useApiList } from '../../hooks/useApiList';
 
 // --- SCHEMAS ---
 const invoiceItemSchema = z.object({
@@ -118,20 +120,26 @@ export const SalesDashboard = () => {
   const setActiveTab = (tab: string) => navigate(`/${tab}`);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { data: invoices = [], isLoading: isLoadingInvoices } = useApiList<Invoice>(['invoices'], '/sales/invoices');
+  const { data: payments = [], isLoading: isLoadingPayments } = useApiList<Payment>(['payments'], '/sales/payments');
+  const { data: quotations = [], isLoading: isLoadingQuotations } = useApiList<Quotation>(['quotations'], '/sales/quotations');
+  const { data: customers = [], isLoading: isLoadingCustomers } = useApiList<Customer>(['customers'], '/customers');
+  const { data: products = [], isLoading: isLoadingProducts } = useApiList<Product>(['products'], '/products');
+  const { data: bankAccounts = [], isLoading: isLoadingBankAccounts } = useApiList<BankAccount>(['bankAccounts'], '/bank-accounts');
 
-  // Data lists
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const isLoading = isLoadingInvoices || isLoadingPayments || isLoadingQuotations || isLoadingCustomers || isLoadingProducts || isLoadingBankAccounts;
+  const queryClient = useQueryClient();
 
   // Modal controls
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  const { data: meData } = useQuery<any>({
+    queryKey: ['auth', 'me'],
+    queryFn: () => api.get('/auth/me'),
+    staleTime: 5 * 60 * 1000,
+  });
+  const companyProfile = meData?.company || meData?.data?.company || { name: 'Your Company', address: 'N/A', email: 'N/A' };
 
   // DataTable columns for Invoices
   const invoiceColumns: ColumnDef<Invoice>[] = [
@@ -181,7 +189,7 @@ export const SalesDashboard = () => {
               className="p-1.5"
               filename={`${inv.invoiceNo}.pdf`}
               data={{
-                company: { name: 'Webzio Accounting Demo', address: '123 Wall Street', email: 'admin@webzio.com' },
+                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
                 customer: { name: inv.customer?.name || 'Unknown', address: 'N/A' },
                 document: { title: 'Tax Invoice', documentNo: inv.invoiceNo, date: inv.date, status: inv.status },
                 items: inv.items?.map(i => ({
@@ -251,7 +259,7 @@ export const SalesDashboard = () => {
               className="p-1.5"
               filename={`Receipt-${pay.paymentNo}.pdf`}
               data={{
-                company: { name: 'Webzio Accounting Demo', address: '123 Wall Street', email: 'admin@webzio.com' },
+                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
                 customer: { name: pay.customer?.name || 'Unknown', address: 'N/A' },
                 document: { title: 'Payment Receipt', documentNo: pay.paymentNo, date: pay.date, status: 'PAID' },
                 items: [{
@@ -303,38 +311,10 @@ export const SalesDashboard = () => {
     }
   });
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      // Load shared catalog dependencies
-      const [custRes, prodRes, bankRes] = await Promise.all([
-        api.get<{ success: boolean; data: { items: Customer[] } }>('/customers'),
-        api.get<{ success: boolean; data: { items: Product[] } }>('/products'),
-        api.get<{ success: boolean; data: { items: BankAccount[] } }>('/bank-accounts'),
-      ]);
-      setCustomers(custRes.data?.items || []);
-      setProducts(prodRes.data?.items || []);
-      setBankAccounts(bankRes.data?.items || []);
-
-      if (activeTab === 'invoices') {
-        const res = await api.get<{ success: boolean; data: { items: Invoice[] } }>('/sales/invoices');
-        setInvoices(res.data?.items || []);
-      } else if (activeTab === 'payments') {
-        const res = await api.get<{ success: boolean; data: { items: Payment[] } }>('/sales/payments');
-        setPayments(res.data?.items || []);
-      } else if (activeTab === 'quotations') {
-        const res = await api.get<{ success: boolean; data: { items: Quotation[] } }>('/sales/quotations');
-        setQuotations(res.data?.items || []);
-      }
-    } catch (err) {
-      toast.error('Failed to load sales data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    queryClient.invalidateQueries({ queryKey: [activeTab] });
   }, [activeTab]);
 
   const handleInvoiceProductChange = (index: number, productId: string) => {
@@ -351,7 +331,7 @@ export const SalesDashboard = () => {
       await api.post('/sales/invoices', values);
       toast.success('Tax invoice generated and posted successfully');
       setIsInvoiceModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Invoice posting failed');
     } finally {
@@ -365,7 +345,7 @@ export const SalesDashboard = () => {
       await api.post('/sales/payments', values);
       toast.success('Payment received and auto-allocated successfully');
       setIsPaymentModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Payment posting failed');
     } finally {
@@ -378,7 +358,7 @@ export const SalesDashboard = () => {
     try {
       await api.delete(`/sales/invoices/${id}`);
       toast.success('Invoice deleted successfully');
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to delete invoice');
     }
@@ -389,7 +369,7 @@ export const SalesDashboard = () => {
     try {
       await api.delete(`/sales/payments/${id}`);
       toast.success('Payment reverted successfully');
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to revert payment');
     }
@@ -400,6 +380,7 @@ export const SalesDashboard = () => {
   };
 
   // Compute form totals watch
+  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedItems = invoiceForm.watch('items') || [];
   const formSubTotal = watchedItems.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.rate || 0)), 0);
   const formTaxTotal = formSubTotal * 0.18; // Default 18% GST display

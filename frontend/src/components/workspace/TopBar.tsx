@@ -12,6 +12,7 @@ export function TopBar() {
 
   useEffect(() => {
     // Update local state if store updates
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if ((user as any)?.companyName) setCompanyName((user as any).companyName);
     if ((user as any)?.logoBase64) setLogoBase64((user as any).logoBase64);
 
@@ -24,7 +25,7 @@ export function TopBar() {
         if (res?.company?.settings?.logoBase64) {
           setLogoBase64(res.company.settings.logoBase64);
         }
-      } catch (err) {
+      } catch {
         // ignore
       }
     };
@@ -40,15 +41,15 @@ export function TopBar() {
             <img src={logoBase64} alt="Company Logo" className="h-7 w-auto max-w-[120px] object-contain rounded-sm" />
           ) : (
             <>
-              <img src="/logo.png" alt="Bill Aura" className="h-7 w-auto object-contain dark:hidden" />
-              <img src="/logo2.png" alt="Bill Aura" className="h-7 w-auto object-contain hidden dark:block" />
+              <img src="/logo.png" alt="BillAura" className="h-7 w-auto object-contain dark:hidden" />
+              <img src="/logo2.png" alt="BillAura" className="h-7 w-auto object-contain hidden dark:block" />
             </>
           )}
-          {!logoBase64 && <span className="font-bold tracking-tight">Bill Aura</span>}
+          {!logoBase64 && <span className="font-bold tracking-tight">BillAura</span>}
         </div>
-        
+
         <div className="w-[1px] h-6 bg-primary-foreground/20"></div>
-        
+
         <div className="flex items-center gap-2 text-sm">
           <Building2 className="w-4 h-4 text-primary-foreground/70" />
           <span className="font-medium truncate max-w-[150px]">{companyName.split(' ')[0]}</span>
@@ -60,9 +61,9 @@ export function TopBar() {
       <div className="flex-1 max-w-xl mx-4">
         <div className="relative group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Search transactions, customers, or press Ctrl+K..." 
+          <input
+            type="text"
+            placeholder="Search transactions, customers, or press Ctrl+K..."
             className="w-full h-8 bg-surface text-foreground pl-9 pr-4 rounded-sm text-[13px] border-none outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-muted-foreground/70"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
@@ -85,7 +86,7 @@ export function TopBar() {
           <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
         </button>
 
-        <button 
+        <button
           className="flex items-center gap-2 p-1 pl-2 pr-1 ml-1 rounded-sm hover:bg-primary-foreground/10 transition-colors"
           onClick={() => navigate('/profile')}
         >

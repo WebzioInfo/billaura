@@ -15,12 +15,12 @@ export const LandingPage = () => {
         </h1>
 
         <p className="mt-8 text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-          Bill Aura replaces your entire fragmented software stack. Manage Accounting, Billing, GST, and Banking on a single, blazing-fast cloud SaaS platform.
+          BillAura replaces your entire fragmented software stack. Manage Accounting, Billing, GST, and Banking on a single, blazing-fast cloud SaaS platform.
         </p>
 
         <div className="mt-12 flex flex-col sm:flex-row items-center gap-4">
           <button
-            onClick={() => navigate('/auth/register')}
+            onClick={() => navigate('/register')}
             className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-full text-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-xl shadow-slate-900/10"
           >
             Start Your Free Trial

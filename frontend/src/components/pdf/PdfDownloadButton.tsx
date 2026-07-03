@@ -9,8 +9,8 @@ interface PdfDownloadButtonProps {
   className?: string;
 }
 
-export const PdfDownloadButton: React.FC<PdfDownloadButtonProps> = ({ 
-  data, 
+export const PdfDownloadButton: React.FC<PdfDownloadButtonProps> = ({
+  data,
   filename = 'document.pdf',
   className = ''
 }) => {
@@ -20,8 +20,7 @@ export const PdfDownloadButton: React.FC<PdfDownloadButtonProps> = ({
       fileName={filename}
       className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors ${className}`}
     >
-      {/* @ts-ignore */}
-      {({ blob, url, loading, error }) =>
+      {({ loading }: any) =>
         loading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Receipt, FileText, CreditCard, ChevronRight } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
 
@@ -68,11 +68,12 @@ export function CustomerDetailModal({ customer, isOpen, onClose }: CustomerDetai
     }))
   ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  let runningBalance = 0;
-  const ledgerWithBalance = ledgerEntries.map(entry => {
-    runningBalance += (entry.debit - entry.credit);
-    return { ...entry, balance: runningBalance };
-  });
+  const ledgerWithBalance = ledgerEntries.reduce((acc, entry) => {
+    const prevBalance = acc.length > 0 ? acc[acc.length - 1].balance : 0;
+    const balance = prevBalance + (entry.debit - entry.credit);
+    acc.push({ ...entry, balance });
+    return acc;
+  }, [] as (typeof ledgerEntries[0] & { balance: number })[]);
 
   // Calculate Ageing (0-30, 31-60, 61-90, >90)
   const unpaidInvoices = invoices.filter(i => i.status !== 'PAID');
@@ -122,7 +123,7 @@ export function CustomerDetailModal({ customer, isOpen, onClose }: CustomerDetai
         <div className="grid grid-cols-3 gap-4 p-6 shrink-0 border-b border-border bg-background/20">
            <div className="p-4 rounded-xl border border-border bg-surface flex flex-col justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase">Outstanding Balance</span>
-              <h3 className="text-2xl font-black text-red-500 mt-1">{formatCurrency(Number(customer.outstandingAmount || runningBalance))}</h3>
+              <h3 className="text-2xl font-black text-red-500 mt-1">{formatCurrency(Number(customer.outstandingAmount || 0))}</h3>
            </div>
            <div className="p-4 rounded-xl border border-border bg-surface flex flex-col justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase">Credit Limit</span>
@@ -131,7 +132,7 @@ export function CustomerDetailModal({ customer, isOpen, onClose }: CustomerDetai
            <div className="p-4 rounded-xl border border-border bg-surface flex flex-col justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase">Available Credit</span>
               <h3 className="text-2xl font-black text-green-500 mt-1">
-                {formatCurrency(Math.max(0, Number(customer.creditLimit || 0) - Number(customer.outstandingAmount || runningBalance)))}
+                {formatCurrency(Math.max(0, Number(customer.creditLimit || 0) - Number(customer.outstandingAmount || 0)))}
               </h3>
            </div>
         </div>

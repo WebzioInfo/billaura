@@ -244,7 +244,7 @@ export const StandardPdfDocument: React.FC<PdfDocumentProps> = ({
       {/* Page Numbers & Footer Branding */}
       <View style={{ position: 'absolute', bottom: 15, left: 30, right: 30, display: 'flex', flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 8 }} fixed>
         <Text style={{ fontSize: 8, color: '#94a3b8', fontStyle: 'italic' }}>
-          Generated via Bill Aura Accounting Platform
+          Generated via BillAura Accounting Platform
         </Text>
         <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
           `Page ${pageNumber} of ${totalPages}`

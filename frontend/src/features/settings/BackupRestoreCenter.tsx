@@ -11,7 +11,7 @@ export const BackupRestoreCenter = () => {
   const queryClient = useQueryClient();
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
 
-  const { data: backups = [], isLoading } = useQuery({
+  const { data: backups = [] } = useQuery({
     queryKey: ['backups'],
     queryFn: () => api.get('/backups/history').then(res => res.data),
     refetchInterval: 5000 // Poll every 5s for progress updates

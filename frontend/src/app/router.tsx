@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, Link } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ProtectedRoute } from '../features/auth/components/ProtectedRoute';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -7,7 +7,7 @@ import { Unauthorized } from '../pages/Unauthorized';
 
 // --- Lazy Loaded Enterprise Modules ---
 const DepartmentsList = lazy(() => import('../features/departments/DepartmentsList').then(m => ({ default: m.DepartmentsList })));
-const LeadsList = lazy(() => import('../features/crm/LeadsList').then(m => ({ default: m.LeadsList })));
+
 const CrmDashboard = lazy(() => import('../features/crm/CrmDashboard').then(m => ({ default: m.CrmDashboard })));
 const IncomeDashboard = lazy(() => import('../features/income/IncomeDashboard').then(m => ({ default: m.IncomeDashboard })));
 const ChartOfAccounts = lazy(() => import('../features/accounting/ChartOfAccounts').then(m => ({ default: m.ChartOfAccounts })));
@@ -17,14 +17,32 @@ const CapitalDashboard = lazy(() => import('../features/accounting/CapitalDashbo
 const ProfitLossDashboard = lazy(() => import('../features/reports/ProfitLossDashboard'));
 const LandingPage = lazy(() => import('../features/public/LandingPage').then(m => ({ default: m.LandingPage })));
 
+const WarehousesList = lazy(() => import('../features/inventory/WarehousesList').then(m => ({ default: m.WarehousesList })));
+const BatchesList = lazy(() => import('../features/inventory/BatchesList').then(m => ({ default: m.BatchesList })));
+const SerialsList = lazy(() => import('../features/inventory/SerialsList').then(m => ({ default: m.SerialsList })));
+const BomList = lazy(() => import('../features/inventory/BomList').then(m => ({ default: m.BomList })));
+
+const BankingDashboard = lazy(() => import('../features/banking/BankingDashboard').then(m => ({ default: m.BankingDashboard })));
+const BankTransactionsList = lazy(() => import('../features/banking/BankTransactionsList').then(m => ({ default: m.BankTransactionsList })));
+const ReconciliationCenter = lazy(() => import('../features/banking/ReconciliationCenter').then(m => ({ default: m.ReconciliationCenter })));
+
+const FixedAssetsList = lazy(() => import('../features/accounting/FixedAssetsList').then(m => ({ default: m.FixedAssetsList })));
+const ProjectsList = lazy(() => import('../features/accounting/ProjectsList').then(m => ({ default: m.ProjectsList })));
+const EmployeesList = lazy(() => import('../features/hr/EmployeesList').then(m => ({ default: m.EmployeesList })));
+
 const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m => ({ default: m.CustomersList })));
 const VendorsList = lazy(() => import('../features/crm/VendorsList').then(m => ({ default: m.VendorsList })));
 const InvoicesList = lazy(() => import('../features/sales/InvoicesList').then(m => ({ default: m.InvoicesList })));
 const InvoiceForm = lazy(() => import('../features/sales/InvoiceForm').then(m => ({ default: m.InvoiceForm })));
 const ReceiptsList = lazy(() => import('../features/sales/ReceiptsList').then(m => ({ default: m.ReceiptsList })));
 const ReceiptForm = lazy(() => import('../features/sales/ReceiptForm').then(m => ({ default: m.ReceiptForm })));
+const SalesOrdersList = lazy(() => import('../features/sales/SalesOrdersList').then(m => ({ default: m.SalesOrdersList })));
+const DeliveryNotesList = lazy(() => import('../features/sales/DeliveryNotesList').then(m => ({ default: m.DeliveryNotesList })));
+
 const BillsList = lazy(() => import('../features/purchases/BillsList').then(m => ({ default: m.BillsList })));
 const BillForm = lazy(() => import('../features/purchases/BillForm').then(m => ({ default: m.BillForm })));
+const PurchaseOrdersList = lazy(() => import('../features/purchases/PurchaseOrdersList').then(m => ({ default: m.PurchaseOrdersList })));
+const GoodsReceiptsList = lazy(() => import('../features/purchases/GoodsReceiptsList').then(m => ({ default: m.GoodsReceiptsList })));
 const TrialBalance = lazy(() => import('../features/reports/TrialBalance').then(m => ({ default: m.TrialBalance })));
 const BalanceSheet = lazy(() => import('../features/reports/BalanceSheet').then(m => ({ default: m.BalanceSheet })));
 const GeneralLedger = lazy(() => import('../features/reports/GeneralLedger').then(m => ({ default: m.GeneralLedger })));
@@ -94,9 +112,17 @@ export const router = createBrowserRouter([
       { path: 'contact', element: <div className="max-w-7xl mx-auto px-4 py-16 text-center"><h1 className="text-3xl font-bold">Contact Sales</h1><p className="text-muted-foreground mt-2">Get custom onboarding support.</p></div> },
     ],
   },
+  // Redirects for old /auth paths
+  { path: '/auth/login', element: <Navigate to="/login" replace /> },
+  { path: '/auth/register', element: <Navigate to="/register" replace /> },
+  { path: '/auth/verify-email', element: <Navigate to="/verify-email" replace /> },
+  { path: '/auth/onboard', element: <Navigate to="/onboard" replace /> },
+  { path: '/auth/forgot-password', element: <Navigate to="/forgot-password" replace /> },
+  { path: '/auth/reset-password', element: <Navigate to="/reset-password" replace /> },
+
   // Auth & Onboarding Flow
   {
-    path: '/auth',
+    path: '/',
     element: <Suspense fallback={<LoadingFallback />}><ErrorBoundary><AuthLayout /></ErrorBoundary></Suspense>,
     errorElement: <ErrorBoundary />,
     children: [
@@ -127,9 +153,16 @@ export const router = createBrowserRouter([
       { path: 'revenue', element: <PlatformDashboard /> },
       { path: 'monitoring', element: <PlatformDashboard /> },
       { path: 'logs', element: <PlatformDashboard /> },
-      { path: 'settings', element: <PlatformDashboard /> },
-      { path: 'notifications', element: <PlatformDashboard /> },
-      { path: 'profile', element: <PlatformDashboard /> },
+      { path: 'banking', element: <BankingDashboard /> },
+      { path: 'bank-transactions', element: <BankTransactionsList /> },
+      { path: 'reconciliation', element: <ReconciliationCenter /> },
+      
+      // Fixed Assets & Projects
+      { path: 'fixed-assets', element: <FixedAssetsList /> },
+      { path: 'projects', element: <ProjectsList /> },
+
+      // HR
+      { path: 'employees', element: <EmployeesList /> },
       { path: '*', element: <PlatformDashboard /> }
     ],
   },
@@ -151,11 +184,15 @@ export const router = createBrowserRouter([
       {path: 'categories', element: <InventoryDashboard /> },
       { path: 'brands', element: <InventoryDashboard /> },
       { path: 'inventory', element: <InventoryDashboard /> },
-      { path: 'warehouses', element: <InventoryDashboard /> },
+      { path: 'warehouses', element: <WarehousesList /> },
+      { path: 'batches', element: <BatchesList /> },
+      { path: 'serials', element: <SerialsList /> },
+      { path: 'bom', element: <BomList /> },
       { path: 'sales', element: <SalesDashboard /> },
       { path: 'quotations', element: <SalesDashboard /> },
-      { path: 'sales-orders', element: <SalesDashboard /> },
-      { path: 'delivery-challans', element: <SalesDashboard /> },
+      { path: 'sales-orders', element: <SalesOrdersList /> },
+      { path: 'delivery-challans', element: <DeliveryNotesList /> },
+      { path: 'delivery-notes', element: <DeliveryNotesList /> },
       { path: 'invoices', element: <InvoicesList /> },
       { path: 'invoices/new', element: <InvoiceForm /> },
       { path: 'receipts', element: <ReceiptsList /> },
@@ -165,7 +202,8 @@ export const router = createBrowserRouter([
       { path: 'recurring-invoices', element: <SalesDashboard /> },
       { path: 'payments', element: <SalesDashboard /> },
       { path: 'purchases', element: <PurchasesDashboard /> },
-      { path: 'purchase-orders', element: <PurchasesDashboard /> },
+      { path: 'purchase-orders', element: <PurchaseOrdersList /> },
+      { path: 'goods-receipts', element: <GoodsReceiptsList /> },
       { path: 'bills', element: <BillsList /> },
       { path: 'bills/new', element: <BillForm /> },
       { path: 'vendor-payments', element: <PurchasesDashboard /> },

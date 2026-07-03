@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import apiClient from '@/services/api';
-import { useSessionStore } from '@/features/auth/stores/sessionStore';
 import { toast } from 'sonner';
 
 const INDIAN_STATES = [
@@ -450,6 +449,7 @@ export const InvoiceForm = () => {
               </thead>
               <tbody className="divide-y divide-border">
                 {fields.map((field, index) => {
+                  // eslint-disable-next-line react-hooks/incompatible-library
                   const qty = Number(watch(`items.${index}.qty`)) || 0;
                   const rate = Number(watch(`items.${index}.rate`)) || 0;
                   const discountPercent = Number(watch(`items.${index}.discount`)) || 0;

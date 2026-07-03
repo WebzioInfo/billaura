@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { toast } from 'sonner';
 import api from '../../services/api';
-import { Landmark, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;
 

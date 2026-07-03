@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Sun, Moon, Menu, X, Landmark } from 'lucide-react';
+import { Sun, Moon, Menu, X } from 'lucide-react';
 
 export default function PublicLayout() {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -9,6 +9,7 @@ export default function PublicLayout() {
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsDarkMode(isDark);
   }, []);
 

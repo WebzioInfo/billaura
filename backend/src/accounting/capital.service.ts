@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CompanyContext } from '../common/context/company-context';
 import { CreateCapitalTransactionDto } from './capital.controller';
@@ -33,8 +33,8 @@ export class CapitalService {
       // 3. Create Journal Entry
       // Capital Introduced: Dr Bank, Cr Capital
       // Drawings: Dr Drawings, Cr Bank
-      let debitAccountId = '';
-      let creditAccountId = '';
+      let debitAccountId: string;
+      let creditAccountId: string;
       if (dto.type === 'INTRODUCED') {
         debitAccountId = bankLedger.id;
         creditAccountId = equityAccount.id;

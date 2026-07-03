@@ -11,6 +11,7 @@ import {
 import api from '../../services/api';
 import ProductFormModal from './ProductFormModal';
 import { useQueryClient } from '@tanstack/react-query';
+import { useApiList } from '../../hooks/useApiList';
 
 // --- SCHEMAS ---
 const categorySchema = z.object({
@@ -117,15 +118,13 @@ export const InventoryDashboard = () => {
   };
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Data lists
-  const [products, setProducts] = useState<Product[]>([]);
-  const [stocks, setStocks] = useState<Stock[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [brands, setBrands] = useState<Brand[]>([]);
+  const { data: products = [], isLoading: isLoadingProducts } = useApiList<Product>(['products'], '/products');
+  const { data: stocks = [], isLoading: isLoadingStocks } = useApiList<Stock>(['stocks'], '/inventory/stocks');
+  const { data: warehouses = [], isLoading: isLoadingWarehouses } = useApiList<Warehouse>(['warehouses'], '/warehouses');
+  const { data: categories = [], isLoading: isLoadingCategories } = useApiList<Category>(['categories'], '/inventory/categories');
+  const { data: brands = [], isLoading: isLoadingBrands } = useApiList<Brand>(['brands'], '/inventory/brands');
+  
+  const isLoading = isLoadingProducts || isLoadingStocks || isLoadingWarehouses || isLoadingCategories || isLoadingBrands;
 
   // Modal controls
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -167,44 +166,10 @@ export const InventoryDashboard = () => {
     defaultValues: { productId: '', warehouseId: '', quantityChange: 0, notes: '' }
   });
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      // Load dependencies
-      const [whRes, catRes, brandRes] = await Promise.all([
-        api.get<{ success: boolean; data: { items: Warehouse[] } }>('/warehouses'),
-        api.get<any>('/inventory/categories'),
-        api.get<any>('/inventory/brands'),
-      ]);
-      setWarehouses(whRes.data?.items || []);
-      setCategories(Array.isArray(catRes) ? catRes : (catRes?.data || []));
-      setBrands(Array.isArray(brandRes) ? brandRes : (brandRes?.data || []));
-
-      if (activeTab === 'products') {
-        const res = await api.get<{ success: boolean; data: { items: Product[] } }>('/products');
-        setProducts(res.data?.items || []);
-      } else if (activeTab === 'stocks') {
-        const res = await api.get<{ success: boolean; data: { items: Stock[] } }>('/inventory/stocks');
-        setStocks(res.data?.items || []);
-      } else if (activeTab === 'warehouses') {
-        const res = await api.get<{ success: boolean; data: { items: Warehouse[] } }>('/warehouses');
-        setWarehouses(res.data?.items || []);
-      } else if (activeTab === 'categories') {
-        const res = await api.get<any>('/inventory/categories');
-        setCategories(Array.isArray(res) ? res : (res?.data || []));
-      } else if (activeTab === 'brands') {
-        const res = await api.get<any>('/inventory/brands');
-        setBrands(Array.isArray(res) ? res : (res?.data || []));
-      }
-    } catch (err) {
-      toast.error('Failed to load inventory data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    queryClient.invalidateQueries({ queryKey: [activeTab] });
   }, [activeTab]);
 
   const handleOpenAddModal = () => {
@@ -249,7 +214,7 @@ export const InventoryDashboard = () => {
         toast.success('Product registered successfully');
       }
       setIsModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -268,7 +233,7 @@ export const InventoryDashboard = () => {
         toast.success('Warehouse created successfully');
       }
       setIsModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -287,7 +252,7 @@ export const InventoryDashboard = () => {
         toast.success('Category created successfully');
       }
       setIsModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -306,7 +271,7 @@ export const InventoryDashboard = () => {
         toast.success('Brand created successfully');
       }
       setIsModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['brands'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -339,7 +304,7 @@ export const InventoryDashboard = () => {
       }
       
       // Refresh local dashboard data
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
       
       setIsWarehouseModalOpen(false);
       setWarehouseName('');
@@ -358,7 +323,7 @@ export const InventoryDashboard = () => {
       await api.post('/inventory/adjust', values);
       toast.success('Stock adjusted successfully');
       setIsAdjustModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['stocks'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Adjustment failed');
     } finally {
@@ -829,7 +794,7 @@ export const InventoryDashboard = () => {
           onClose={() => setIsModalOpen(false)}
           onSuccess={() => {
             setIsModalOpen(false);
-            fetchData();
+            queryClient.invalidateQueries({ queryKey: [activeTab] });
           }}
         />
       )}
@@ -856,7 +821,7 @@ export const InventoryDashboard = () => {
                                    : '/inventory/brands';
                     await api.delete(`${endpoint}/${id}`);
                     toast.success('Item deleted successfully');
-                    fetchData();
+                    queryClient.invalidateQueries({ queryKey: [activeTab] });
                   } catch (err) {
                     toast.error('Deletion failed');
                   }

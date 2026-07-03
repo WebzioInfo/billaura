@@ -52,7 +52,7 @@ export const Login = () => {
         if (step === 'COMPLETED') {
           navigate('/dashboard');
         } else {
-          navigate('/auth/onboard');
+          navigate('/onboard');
         }
       }
       console.log('Navigation finished');
@@ -63,7 +63,7 @@ export const Login = () => {
       if (msg.includes('verify your OTP')) {
         // Redirect to verify-email with query parameter
         setTimeout(() => {
-          navigate(`/auth/verify-email?email=${encodeURIComponent(data.email)}`);
+          navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
         }, 1500);
       }
     } finally {
@@ -107,7 +107,7 @@ export const Login = () => {
         <div>
           <div className="flex justify-between items-center mb-1">
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Password</label>
-            <Link to="/auth/forgot-password" className="text-xs font-medium text-indigo-600 hover:text-indigo-500">Forgot?</Link>
+            <Link to="/forgot-password" className="text-xs font-medium text-indigo-600 hover:text-indigo-500">Forgot?</Link>
           </div>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -146,7 +146,7 @@ export const Login = () => {
 
       <div className="text-center text-xs text-slate-500">
         Don't have an accounting account?{' '}
-        <Link to="/auth/register" className="font-semibold text-indigo-600 hover:text-indigo-500">
+        <Link to="/register" className="font-semibold text-indigo-600 hover:text-indigo-500">
           Create account
         </Link>
       </div>

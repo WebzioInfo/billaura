@@ -25,7 +25,7 @@ interface WorkspaceState {
 
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       tabs: [{ id: 'dashboard', title: 'Dashboard', path: '/dashboard', isPinned: true }],
       activeTabId: 'dashboard',
 

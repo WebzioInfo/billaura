@@ -30,7 +30,7 @@ export const Register = () => {
     try {
       await api.post('/auth/register', data);
       // On success, redirect to verify-email with email parameter
-      navigate(`/auth/verify-email?email=${encodeURIComponent(data.email)}`);
+      navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to register account');
     } finally {
@@ -132,7 +132,7 @@ export const Register = () => {
 
       <div className="text-center text-xs text-slate-500">
         Already have an account?{' '}
-        <Link to="/auth/login" className="font-semibold text-indigo-600 hover:text-indigo-500">
+        <Link to="/login" className="font-semibold text-indigo-600 hover:text-indigo-500">
           Sign in
         </Link>
       </div>

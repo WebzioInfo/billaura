@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
-import { FileText, Plus, Wallet, TrendingUp, Tags } from 'lucide-react';
+import { FileText, Wallet, TrendingUp, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 // Dummy components for now, we will implement them next.

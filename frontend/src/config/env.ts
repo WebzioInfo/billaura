@@ -15,7 +15,7 @@ export const env = {
   })(),
 
   // App Meta
-  APP_NAME: import.meta.env.VITE_APP_NAME ?? 'Bill Aura',
+  APP_NAME: import.meta.env.VITE_APP_NAME ?? 'BillAura',
   COMPANY_NAME: import.meta.env.VITE_COMPANY_NAME ?? 'Webzio',
   ENVIRONMENT: import.meta.env.VITE_ENVIRONMENT ?? 'development',
 

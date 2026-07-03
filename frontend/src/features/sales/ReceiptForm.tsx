@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { 
-  ArrowLeft, Save, FileText, Loader2, Info, Plus, Trash2, 
-  DollarSign, Landmark, Wallet, CheckCircle, AlertCircle, FileCheck 
-} from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { Plus, Trash2, Calendar, Receipt, Search, ChevronDown, Check, CreditCard, Banknote, HelpCircle, Loader2, ArrowLeft, Info, Landmark, Wallet, CheckCircle, FileCheck } from 'lucide-react';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 
 interface InvoiceAllocationRow {
   invoiceId: string;
@@ -26,7 +23,7 @@ export const ReceiptForm = () => {
   const isEdit = pathname.endsWith('/edit');
   const isView = !!id && !isEdit;
 
-  const [loading, setLoading] = useState(false);
+
   const [saving, setSaving] = useState(false);
 
   // Form Fields
@@ -44,119 +41,106 @@ export const ReceiptForm = () => {
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('COMPLETED');
 
-  // Master Data Options
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<InvoiceAllocationRow[]>([]);
 
   // Selected customer details
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 
-  // Load master data
-  useEffect(() => {
-    const loadMasterData = async () => {
-      setLoading(true);
-      try {
-        const [custRes, accRes] = await Promise.all([
-          apiClient.get('/customers'),
-          apiClient.get('/accounts')
-        ]);
-        setCustomers(custRes.data?.data || custRes.data || []);
-        
-        // Filter asset accounts (cash, bank, bank accounts) for receipt debit
-        const accs = accRes.data?.data || accRes.data || [];
-        setAccounts(accs.filter((a: any) => a.category === 'ASSET'));
-      } catch (err) {
-        toast.error('Failed to load master data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadMasterData();
-  }, []);
+  const { data: masterData, isLoading: isLoadingMaster } = useQuery({
+    queryKey: ['receipt-master-data'],
+    queryFn: async () => {
+      const [custRes, accRes] = await Promise.all([
+        apiClient.get('/customers'),
+        apiClient.get('/accounts')
+      ]);
+      const accountsList = accRes.data?.data || accRes.data || [];
+      return {
+        customers: custRes.data?.data || custRes.data || [],
+        accounts: accountsList.filter((a: any) => a.category === 'ASSET')
+      };
+    }
+  });
+
+  const customers = useMemo(() => masterData?.customers || [], [masterData]);
+  const accounts = useMemo(() => masterData?.accounts || [], [masterData]);
+
+  const { data: receiptData, isLoading: isLoadingReceipt } = useQuery({
+    queryKey: ['receipt', id],
+    queryFn: async () => {
+      if (!id) return null;
+      const res = await apiClient.get(`/receipts/${id}`);
+      return res.data?.data || res.data || {};
+    },
+    enabled: !!id
+  });
 
   // Load receipt if edit/view mode
   useEffect(() => {
-    if (!id) return;
+    if (!receiptData || !id) return;
 
-    const fetchReceipt = async () => {
-      setLoading(true);
-      try {
-        const res = await apiClient.get(`/receipts/${id}`);
-        const r = res.data?.data || res.data || {};
-        
-        setDate(new Date(r.date).toISOString().split('T')[0]);
-        setBusinessPartnerId(r.businessPartnerId);
-        setAccountId(r.accountId);
-        setPaymentMethod(r.paymentMethod);
-        setAmount(Number(r.amount));
-        setReferenceNo(r.referenceNo || '');
-        setChequeNo(r.chequeNo || '');
-        setTransactionId(r.transactionId || '');
-        setClearanceDate(r.clearanceDate ? new Date(r.clearanceDate).toISOString().split('T')[0] : '');
-        setBankCharges(Number(r.bankCharges || 0));
-        setCashier(r.cashier || '');
-        setNotes(r.notes || '');
-        setStatus(r.status);
-        setSelectedCustomer(r.businessPartner);
+    const r = receiptData;
+    
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDate(new Date(r.date).toISOString().split('T')[0]);
+    setBusinessPartnerId(r.businessPartnerId);
+    setAccountId(r.accountId);
+    setPaymentMethod(r.paymentMethod);
+    setAmount(Number(r.amount));
+    setReferenceNo(r.referenceNo || '');
+    setChequeNo(r.chequeNo || '');
+    setTransactionId(r.transactionId || '');
+    setClearanceDate(r.clearanceDate ? new Date(r.clearanceDate).toISOString().split('T')[0] : '');
+    setBankCharges(Number(r.bankCharges || 0));
+    setCashier(r.cashier || '');
+    setNotes(r.notes || '');
+    setStatus(r.status);
+    setSelectedCustomer(r.businessPartner);
 
-        // Load allocations
-        if (r.allocations) {
-          const allocs = r.allocations.map((a: any) => ({
-            invoiceId: a.invoiceId,
-            invoiceNo: a.invoice?.invoiceNo || 'N/A',
-            date: a.invoice?.date ? new Date(a.invoice.date).toLocaleDateString() : 'N/A',
-            grandTotal: Number(a.invoice?.grandTotal || 0),
-            amountPaid: Number(a.invoice?.amountPaid || 0) - Number(a.amount), // Amount paid before this receipt
-            unpaidAmount: Number(a.invoice?.grandTotal || 0) - (Number(a.invoice?.amountPaid || 0) - Number(a.amount)),
-            amount: Number(a.amount)
-          }));
-          setInvoices(allocs);
-        }
-      } catch (err) {
-        toast.error('Failed to load receipt details');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchReceipt();
-  }, [id]);
-
-  // Load invoices when customer changes (only in Create mode)
-  useEffect(() => {
-    if (id || !businessPartnerId) {
-      setInvoices([]);
-      return;
+    // Load allocations
+    if (r.allocations) {
+      const allocs = r.allocations.map((a: any) => ({
+        invoiceId: a.invoiceId,
+        invoiceNo: a.invoice?.invoiceNo || 'N/A',
+        date: a.invoice?.date ? new Date(a.invoice.date).toLocaleDateString() : 'N/A',
+        grandTotal: Number(a.invoice?.grandTotal || 0),
+        amountPaid: Number(a.invoice?.amountPaid || 0) - Number(a.amount), // Amount paid before this receipt
+        unpaidAmount: Number(a.invoice?.grandTotal || 0) - (Number(a.invoice?.amountPaid || 0) - Number(a.amount)),
+        amount: Number(a.amount)
+      }));
+      setInvoices(allocs);
     }
+  }, [receiptData, id]);
 
-    const fetchInvoices = async () => {
-      try {
-        const res = await apiClient.get(`/sales/invoices`, {
-          params: { customerId: businessPartnerId }
-        });
-        const list = res.data?.data?.items || res.data?.items || [];
-        
-        // Filter invoices with outstanding balances
-        const outstanding = list
-          .filter((inv: any) => Number(inv.amountPaid) < Number(inv.grandTotal) && inv.status !== 'DRAFT')
-          .map((inv: any) => ({
-            invoiceId: inv.id,
-            invoiceNo: inv.invoiceNo,
-            date: new Date(inv.date).toLocaleDateString(),
-            grandTotal: Number(inv.grandTotal),
-            amountPaid: Number(inv.amountPaid),
-            unpaidAmount: Number(inv.grandTotal) - Number(inv.amountPaid),
-            amount: 0
-          }));
-        
-        setInvoices(outstanding);
-        setSelectedCustomer(customers.find(c => c.id === businessPartnerId));
-      } catch (err) {
-        toast.error('Failed to load outstanding invoices');
-      }
-    };
-    fetchInvoices();
-  }, [businessPartnerId, id, customers]);
+  const { data: customerInvoices } = useQuery({
+    queryKey: ['sales-invoices-outstanding', businessPartnerId],
+    queryFn: async () => {
+      if (!businessPartnerId || id) return [];
+      const res = await apiClient.get(`/sales/invoices`, {
+        params: { customerId: businessPartnerId }
+      });
+      const list = res.data?.data?.items || res.data?.items || [];
+      return list
+        .filter((inv: any) => Number(inv.amountPaid) < Number(inv.grandTotal) && inv.status !== 'DRAFT')
+        .map((inv: any) => ({
+          invoiceId: inv.id,
+          invoiceNo: inv.invoiceNo,
+          date: new Date(inv.date).toLocaleDateString(),
+          grandTotal: Number(inv.grandTotal),
+          amountPaid: Number(inv.amountPaid),
+          unpaidAmount: Number(inv.grandTotal) - Number(inv.amountPaid),
+          amount: 0
+        }));
+    },
+    enabled: !!businessPartnerId && !id
+  });
+
+  useEffect(() => {
+    if (customerInvoices) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInvoices(customerInvoices);
+      setSelectedCustomer(customers.find((c: any) => c.id === businessPartnerId));
+    }
+  }, [customerInvoices, businessPartnerId, customers]);
 
   // Auto/FIFO Allocation
   const handleAutoAllocate = () => {
@@ -257,7 +241,7 @@ export const ReceiptForm = () => {
     }
   };
 
-  if (loading) {
+  if (isLoadingMaster || isLoadingReceipt) {
     return (
       <div className="flex h-[80vh] items-center justify-center text-foreground">
         <div className="flex flex-col items-center gap-3">
@@ -269,7 +253,6 @@ export const ReceiptForm = () => {
   }
 
   const isCash = paymentMethod === 'CASH';
-  const isBank = !isCash;
 
   return (
     <div className="p-8 max-w-[1200px] mx-auto text-left text-foreground bg-background min-h-screen">
@@ -341,7 +324,7 @@ export const ReceiptForm = () => {
                   required
                 >
                   <option value="">Select Customer...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
 
@@ -355,7 +338,7 @@ export const ReceiptForm = () => {
                   required
                 >
                   <option value="">Select Ledger...</option>
-                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.category})</option>)}
+                  {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name} ({a.category})</option>)}
                 </select>
               </div>
             </div>

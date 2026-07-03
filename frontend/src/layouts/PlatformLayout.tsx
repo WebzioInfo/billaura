@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, LogOut, Menu, X, ChevronDown, User, Bell, Search, Shield,
-  CreditCard, Layers, LifeBuoy, DollarSign, Activity, FileText, Settings
+  LayoutDashboard, Users, LogOut, Menu, X, ChevronDown, User, Bell, Shield,
+  CreditCard, LifeBuoy, DollarSign, Activity, FileText, Settings
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
 import { authService } from '../services/api';
 import { TokenService } from '../services/auth/TokenService';
+import { Ribbon } from '@/components/workspace/Ribbon';
+import { AiCopilot } from '@/components/workspace/AiCopilot';
 
 export default function PlatformLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -23,7 +25,7 @@ export default function PlatformLayout() {
       console.error('Logout failed:', e);
     } finally {
       clearSession();
-      navigate('/auth/login');
+      navigate('/login');
     }
   };
 
@@ -159,6 +161,7 @@ export default function PlatformLayout() {
           <Outlet />
         </main>
       </div>
+      <AiCopilot />
     </div>
   );
 }

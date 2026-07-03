@@ -27,6 +27,7 @@ import { BackupModule } from './backup/backup.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { StorageModule } from './storage/storage.module';
 import { PrismaTestController } from './prisma-test.controller';
+import { FinanceModule } from './finance/finance.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { PrismaTestController } from './prisma-test.controller';
     BackupModule,
     StorageModule,
     ...(process.env.VERCEL ? [] : [ScheduleModule.forRoot()]),
+    FinanceModule,
   ],
   controllers: [PrismaTestController],
 })

@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
-import { 
-  Building, Users, Landmark, Search, Plus, Trash2, 
-  Loader2, RefreshCw, Briefcase, Award, Calendar, CheckSquare, FileText 
+import {
+  Building, Search, Plus, Trash2, 
+  Loader2, Briefcase 
 } from 'lucide-react';
 import api from '../../services/api';
+import { useQuery } from '@tanstack/react-query';
 
 // --- SCHEMAS ---
 const departmentSchema = z.object({
@@ -69,15 +70,7 @@ interface Employee {
   designation: Designation;
 }
 
-interface Attendance {
-  id: string;
-  date: string;
-  status: string;
-  checkIn?: string;
-  checkOut?: string;
-  notes?: string;
-  employee: Employee;
-}
+
 
 export const DepartmentsList = () => {
   const location = useLocation();
@@ -104,16 +97,7 @@ export const DepartmentsList = () => {
     else navigate(`/hr?tab=${tab}`);
   };
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Data lists
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [designations, setDesignations] = useState<Designation[]>([]);
-  const [attendances, setAttendances] = useState<Attendance[]>([]);
-
-  // Modal controls
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Forms hooks
@@ -150,33 +134,34 @@ export const DepartmentsList = () => {
     }
   });
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const [deptRes, desRes] = await Promise.all([
+  const { data, isLoading, refetch: fetchData } = useQuery({
+    queryKey: ['hr-data', activeTab],
+    queryFn: async () => {
+      const [deptRes, desRes, empRes] = await Promise.all([
         api.get<any>('/departments'),
         api.get<any>('/designations'),
+        api.get<any>('/employees')
       ]);
-      setDepartments(Array.isArray(deptRes) ? deptRes : (deptRes?.data || []));
-      setDesignations(Array.isArray(desRes) ? desRes : (desRes?.data || []));
 
-      const empRes = await api.get<any>('/employees');
-      setEmployees(Array.isArray(empRes) ? empRes : (empRes?.data || []));
-
+      let attendances: any[] = [];
       if (activeTab === 'attendance' || activeTab === 'payroll') {
         const attRes = await api.get<any>('/attendances');
-        setAttendances(Array.isArray(attRes) ? attRes : (attRes?.data || []));
+        attendances = Array.isArray(attRes) ? attRes : (attRes?.data || []);
       }
-    } catch (err) {
-      toast.error('Failed to load HR details');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
+      return {
+        departments: Array.isArray(deptRes) ? deptRes : (deptRes?.data || []),
+        designations: Array.isArray(desRes) ? desRes : (desRes?.data || []),
+        employees: Array.isArray(empRes) ? empRes : (empRes?.data || []),
+        attendances
+      };
+    }
+  });
+
+  const departments = data?.departments || [];
+  const designations = data?.designations || [];
+  const employees = data?.employees || [];
+  const attendances = data?.attendances || [];
 
   const handleDepartmentSubmit = async (values: DepartmentFormValues) => {
     setIsSubmitting(true);
@@ -239,7 +224,7 @@ export const DepartmentsList = () => {
     
     setIsSubmitting(true);
     try {
-      // Mock post double-entry entry directly:
+      // Post double-entry payroll entry directly:
       // Debit: Salary overheads, Credit: Bank account
       // Find cash/bank and salary accounts
       const accountsRes = await api.get<any>('/accounts');
@@ -265,7 +250,7 @@ export const DepartmentsList = () => {
       });
 
       toast.success(`Payslip generated. ${formatCurrency(Number(emp.basicSalary))} posted to ledger.`);
-    } catch (err) {
+    } catch {
       toast.error('Payroll run transaction error');
     } finally {
       setIsSubmitting(false);
@@ -397,7 +382,7 @@ export const DepartmentsList = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {employees.filter(e => e.name.toLowerCase().includes(searchQuery.toLowerCase()) || e.employeeCode.toLowerCase().includes(searchQuery.toLowerCase())).map((emp) => (
+            {employees.filter((e: any) => e.name.toLowerCase().includes(searchQuery.toLowerCase()) || e.employeeCode.toLowerCase().includes(searchQuery.toLowerCase())).map((emp: any) => (
               <div key={emp.id} className="glass-panel p-6 rounded-2xl border border-border hover-premium flex flex-col justify-between">
                 <div className="space-y-4">
                   <div className="flex justify-between items-start">
@@ -431,7 +416,7 @@ export const DepartmentsList = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {departments.map((dept) => (
+            {departments.map((dept: any) => (
               <div key={dept.id} className="glass-panel p-6 rounded-2xl border border-border hover-premium flex flex-col justify-between">
                 <div className="space-y-4">
                   <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
@@ -456,7 +441,7 @@ export const DepartmentsList = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {designations.map((des) => (
+            {designations.map((des: any) => (
               <div key={des.id} className="glass-panel p-6 rounded-2xl border border-border hover-premium flex flex-col justify-between">
                 <div className="space-y-4">
                   <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
@@ -527,7 +512,7 @@ export const DepartmentsList = () => {
                 </tr>
               </thead>
               <tbody>
-                {employees.map((emp) => (
+                {employees.map((emp: any) => (
                   <tr key={emp.id} className="border-b border-border/50 hover:bg-background/20 transition-colors">
                     <td className="py-4 px-6 font-bold text-foreground">
                       {emp.name}
@@ -589,14 +574,14 @@ export const DepartmentsList = () => {
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Department</label>
                     <select {...employeeForm.register('departmentId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
                       <option value="">Select...</option>
-                      {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Designation</label>
                     <select {...employeeForm.register('designationId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
                       <option value="">Select...</option>
-                      {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      {designations.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
                   </div>
                   <div className="col-span-2">
@@ -658,7 +643,7 @@ export const DepartmentsList = () => {
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Select Employee *</label>
                     <select {...attendanceForm.register('employeeId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
                       <option value="">Choose Employee...</option>
-                      {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.employeeCode})</option>)}
+                      {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} ({e.employeeCode})</option>)}
                     </select>
                   </div>
                   <div>

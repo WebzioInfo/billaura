@@ -14,7 +14,7 @@ export function ProtectedRoute({ children, enabled = false, requireCompletedOnbo
 
   if (!enabled) return children;
   if (isLoading) return <LoadingScreen />;
-  if (!isAuthenticated) return <Navigate to="/auth/login" replace state={{ from: location }} />;
+  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />;
 
   const isPlatformRoute = location.pathname.startsWith('/platform');
 
@@ -28,7 +28,7 @@ export function ProtectedRoute({ children, enabled = false, requireCompletedOnbo
       return <Navigate to="/platform/dashboard" replace />;
     }
     if (requireCompletedOnboarding && user?.onboardingStep !== "COMPLETED") {
-      return <Navigate to="/auth/onboard" replace state={{ from: location }} />;
+      return <Navigate to="/onboard" replace state={{ from: location }} />;
     }
   }
 

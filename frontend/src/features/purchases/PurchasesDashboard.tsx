@@ -5,13 +5,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import { 
-  FileText, Search, Plus, Edit2, Trash2, Landmark, 
-  Loader2, RefreshCw, AlertTriangle, Calendar, CreditCard, DollarSign, ShoppingCart, Download 
+  Search, Plus, Edit2, Trash2,
+  Loader2, DollarSign, ShoppingCart
 } from 'lucide-react';
 import api from '../../services/api';
 import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
 import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useApiList } from '../../hooks/useApiList';
 
 // --- SCHEMAS ---
 const vendorSchema = z.object({
@@ -122,21 +124,27 @@ export const PurchasesDashboard = () => {
   
   const setActiveTab = (tab: string) => navigate(tab === 'payments' ? '/vendor-payments' : `/${tab}`);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { data: purchases = [], isLoading: isLoadingPurchases } = useApiList<Purchase>(['purchases'], '/purchases');
+  const { data: payments = [], isLoading: isLoadingPayments } = useApiList<Payment>(['payments'], '/purchases/payments');
+  const { data: vendors = [], isLoading: isLoadingVendors } = useApiList<Vendor>(['vendors'], '/vendors');
+  const { data: products = [], isLoading: isLoadingProducts } = useApiList<Product>(['products'], '/products');
+  const { data: bankAccounts = [], isLoading: isLoadingBankAccounts } = useApiList<BankAccount>(['bankAccounts'], '/bank-accounts');
 
-  // Data lists
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [bankAccounts, setBankAccount] = useState<BankAccount[]>([]);
+  const isLoading = isLoadingPurchases || isLoadingPayments || isLoadingVendors || isLoadingProducts || isLoadingBankAccounts;
+  const queryClient = useQueryClient();
 
   // Modal controls
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const { data: meData } = useQuery<any>({
+    queryKey: ['auth', 'me'],
+    queryFn: () => api.get('/auth/me'),
+    staleTime: 5 * 60 * 1000,
+  });
+  const companyProfile = meData?.company || meData?.data?.company || { name: 'Your Company', address: 'N/A', email: 'N/A' };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
@@ -190,7 +198,7 @@ export const PurchasesDashboard = () => {
               className="p-1.5"
               filename={`Bill-${p.purchaseNo}.pdf`}
               data={{
-                company: { name: 'Webzio Accounting Demo', address: '123 Wall Street', email: 'admin@webzio.com' },
+                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
                 customer: { name: p.vendor?.name || 'Unknown', address: 'N/A' },
                 document: { title: 'Purchase Bill', documentNo: p.purchaseNo, date: p.date, status: p.status },
                 items: p.items?.map(i => ({
@@ -260,7 +268,7 @@ export const PurchasesDashboard = () => {
               className="p-1.5"
               filename={`Payment-${pay.paymentNo}.pdf`}
               data={{
-                company: { name: 'Webzio Accounting Demo', address: '123 Wall Street', email: 'admin@webzio.com' },
+                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
                 customer: { name: pay.vendor?.name || 'Unknown', address: 'N/A' },
                 document: { title: 'Payment Voucher', documentNo: pay.paymentNo, date: pay.date, status: 'PAID' },
                 items: [{
@@ -317,57 +325,14 @@ export const PurchasesDashboard = () => {
   });
 
   // Filter vendor purchases
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedVendorId = paymentForm.watch('vendorId');
-  const [vendorPurchases, setVendorPurchases] = useState<Purchase[]>([]);
+  const vendorPurchases = purchases.filter(p => p.vendorId === selectedVendorId && p.status !== 'PAID');
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (selectedVendorId) {
-      const fetchVendorPurchases = async () => {
-        try {
-          const res = await api.get<{ success: boolean; data: { items: Purchase[] } }>('/purchases');
-          const unpaid = (res.data?.items || []).filter(p => p.vendorId === selectedVendorId && p.status !== 'PAID');
-          setVendorPurchases(unpaid);
-        } catch (err) {
-          // Silent fail
-        }
-      };
-      fetchVendorPurchases();
-    } else {
-      setVendorPurchases([]);
-    }
-  }, [selectedVendorId]);
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const [vendRes, prodRes, bankRes] = await Promise.all([
-        api.get<{ success: boolean; data: { items: Vendor[] } }>('/vendors'),
-        api.get<{ success: boolean; data: { items: Product[] } }>('/products'),
-        api.get<{ success: boolean; data: { items: BankAccount[] } }>('/bank-accounts'),
-      ]);
-      setVendors(vendRes.data?.items || []);
-      setProducts(prodRes.data?.items || []);
-      setBankAccount(bankRes.data?.items || []);
-
-      if (activeTab === 'vendors') {
-        const res = await api.get<{ success: boolean; data: { items: Vendor[] } }>('/vendors');
-        setVendors(res.data?.items || []);
-      } else if (activeTab === 'purchases') {
-        const res = await api.get<{ success: boolean; data: { items: Purchase[] } }>('/purchases');
-        setPurchases(res.data?.items || []);
-      } else if (activeTab === 'payments') {
-        const res = await api.get<{ success: boolean; data: { items: Payment[] } }>('/purchases/payments');
-        setPayments(res.data?.items || []);
-      }
-    } catch (err) {
-      toast.error('Failed to load purchases data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
+    queryClient.invalidateQueries({ queryKey: [activeTab] });
   }, [activeTab]);
 
   const handleOpenAddVendorModal = () => {
@@ -400,7 +365,7 @@ export const PurchasesDashboard = () => {
         toast.success('Vendor registered successfully');
       }
       setIsVendorModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -413,8 +378,8 @@ export const PurchasesDashboard = () => {
     try {
       await api.delete(`/vendors/${id}`);
       toast.success('Vendor deleted successfully');
-      fetchData();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+    } catch {
       toast.error('Deletion failed');
     }
   };
@@ -433,7 +398,7 @@ export const PurchasesDashboard = () => {
       await api.post('/purchases', values);
       toast.success('Purchase bill posted and stock items updated successfully');
       setIsPurchaseModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['purchases'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Purchase posting failed');
     } finally {
@@ -447,7 +412,7 @@ export const PurchasesDashboard = () => {
       await api.post('/purchases/payments', values);
       toast.success('Vendor payout recorded successfully');
       setIsPaymentModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Payout failed');
     } finally {
@@ -460,7 +425,7 @@ export const PurchasesDashboard = () => {
     try {
       await api.delete(`/purchases/${id}`);
       toast.success('Purchase bill removed');
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['purchases'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Deletion failed');
     }
@@ -471,7 +436,7 @@ export const PurchasesDashboard = () => {
     try {
       await api.delete(`/purchases/payments/${id}`);
       toast.success('Payout deleted');
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Reversion failed');
     }

@@ -48,7 +48,7 @@ export class AuthService {
     
     const isMatch = await bcrypt.compare(pass, user.passwordHash);
     if (isMatch) {
-      const { passwordHash, ...result } = user;
+      const { passwordHash: _passwordHash, ...result } = user;
       return result;
     }
     return null;
@@ -98,7 +98,7 @@ export class AuthService {
     );
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email address');
     }
     
     if (user.lockoutUntil && user.lockoutUntil > new Date()) {
@@ -137,7 +137,7 @@ export class AuthService {
         }),
       );
 
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid password');
     }
 
     if (!user.emailVerified) {
@@ -240,8 +240,6 @@ export class AuthService {
     });
 
     // Create the Company
-    const domainPart = registerDto.email.split('@')[1];
-    const uniqueId = Math.random().toString(36).substring(2, 7);
     const company = await this.prisma.company.create({
       data: {
         companyName: `${registerDto.firstName}'s Enterprise`,
@@ -420,11 +418,21 @@ export class AuthService {
     const company = await this.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) throw new NotFoundException('Company not found');
 
+    let inferredPan = dto.pan;
+    const primaryGstin = dto.gstin || dto.taxNumber;
+    
+    // Automatically infer PAN from GSTIN if not explicitly provided
+    if (!inferredPan && primaryGstin && primaryGstin.length === 15) {
+      inferredPan = primaryGstin.substring(2, 12);
+    }
+
     const updated = await this.prisma.company.update({
       where: { id: companyId },
       data: {
-        gstin: dto.taxNumber,
-        pan: dto.taxNumber.length === 15 ? dto.taxNumber.substring(2, 12) : null,
+        gstin: primaryGstin,
+        pan: inferredPan,
+        tan: dto.tan,
+        msme: dto.msme,
         onboardingStep: 'BRANCH_SETUP',
       }
     });
@@ -481,7 +489,7 @@ export class AuthService {
     return { onboardingStep: updated.onboardingStep };
   }
 
-  async onboardSubscription(companyId: string, dto: SubscriptionDto) {
+  async onboardSubscription(companyId: string, _dto: SubscriptionDto) {
     const company = await this.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) throw new NotFoundException('Company not found');
 

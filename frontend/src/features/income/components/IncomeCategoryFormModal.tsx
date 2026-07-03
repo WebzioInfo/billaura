@@ -4,6 +4,8 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import api from '../../../services/api';
 
+import { useQuery } from '@tanstack/react-query';
+
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;
 
 interface IncomeCategoryFormModalProps {
@@ -14,48 +16,47 @@ interface IncomeCategoryFormModalProps {
 }
 
 export function IncomeCategoryFormModal({ isOpen, onClose, onSuccess, editingId }: IncomeCategoryFormModalProps) {
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     accountId: '',
     isActive: true,
   });
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts-revenue'],
+    queryFn: async () => {
+      const { data } = await api.get('/accounts?category=REVENUE');
+      return data || [];
+    },
+    enabled: isOpen
+  });
+
+  const { data: categoryData } = useQuery({
+    queryKey: ['income-category', editingId],
+    queryFn: async () => {
+      if (!editingId) return null;
+      const { data } = await api.get(`/income-categories/${editingId}`);
+      return data;
+    },
+    enabled: isOpen && !!editingId
+  });
 
   useEffect(() => {
     if (isOpen) {
-      fetchAccounts();
-      if (editingId) {
-        fetchCategory();
-      } else {
+      if (editingId && categoryData) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setFormData({
+          name: categoryData.name,
+          description: categoryData.description || '',
+          accountId: categoryData.accountId,
+          isActive: categoryData.isActive,
+        });
+      } else if (!editingId) {
         setFormData({ name: '', description: '', accountId: '', isActive: true });
       }
     }
-  }, [isOpen, editingId]);
-
-  const fetchAccounts = async () => {
-    try {
-      const { data } = await api.get('/accounts?category=REVENUE');
-      setAccounts(data);
-    } catch (error) {
-      console.error('Failed to fetch accounts', error);
-    }
-  };
-
-  const fetchCategory = async () => {
-    try {
-      const { data } = await api.get(`/income-categories/${editingId}`);
-      setFormData({
-        name: data.name,
-        description: data.description || '',
-        accountId: data.accountId,
-        isActive: data.isActive,
-      });
-    } catch (error) {
-      console.error('Failed to fetch category', error);
-    }
-  };
+  }, [isOpen, editingId, categoryData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,7 +109,7 @@ export function IncomeCategoryFormModal({ isOpen, onClose, onSuccess, editingId 
             onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
           >
             <option value="">Select Account</option>
-            {accounts.map(acc => (
+            {accounts.map((acc: any) => (
               <option key={acc.id} value={acc.id}>{acc.name}</option>
             ))}
           </select>

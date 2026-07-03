@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import { 
-  Building2, Search, Plus, Edit2, Trash2, ShieldCheck, 
-  MapPin, Phone, Mail, AlertTriangle, Loader2, Landmark 
+  Building2, Search, Plus, Edit2, Trash2, 
+  MapPin, Phone, Mail, Loader2, Landmark 
 } from 'lucide-react';
 import apiClient from '../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const branchSchema = z.object({
   name: z.string().min(2, 'Branch name must be at least 2 characters'),
@@ -36,14 +37,11 @@ interface Branch {
 }
 
 export const BranchesList = () => {
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<BranchFormValues>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<BranchFormValues>({
     resolver: zodResolver(branchSchema),
     defaultValues: {
       name: '',
@@ -57,23 +55,50 @@ export const BranchesList = () => {
     }
   });
 
-  const fetchBranches = async () => {
-    setIsLoading(true);
-    try {
+  const { data: branches = [], isLoading } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
       const response = await apiClient.get<{ success: boolean; data: { items: Branch[] } }>('/branches');
       if (response.success && response.data?.items) {
-        setBranches(response.data.items);
+        return response.data.items;
       }
-    } catch (err) {
-      toast.error('Failed to load branches');
-    } finally {
-      setIsLoading(false);
+      return [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchBranches();
-  }, []);
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async (values: BranchFormValues) => {
+      if (editingBranch) {
+        return apiClient.patch(`/branches/${editingBranch.id}`, values);
+      } else {
+        return apiClient.post('/branches', values);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
+      toast.success(editingBranch ? 'Branch details updated successfully' : 'New branch registered successfully');
+      setIsModalOpen(false);
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.error || err.response?.data?.message || 'Action failed';
+      toast.error(msg);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/branches/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
+      toast.success('Branch removed successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to delete branch');
+    }
+  });
 
   const openAddModal = () => {
     setEditingBranch(null);
@@ -106,35 +131,15 @@ export const BranchesList = () => {
   };
 
   const onSubmit = async (values: BranchFormValues) => {
-    setIsSubmitting(true);
-    try {
-      if (editingBranch) {
-        await apiClient.patch(`/branches/${editingBranch.id}`, values);
-        toast.success('Branch details updated successfully');
-      } else {
-        await apiClient.post('/branches', values);
-        toast.success('New branch registered successfully');
-      }
-      setIsModalOpen(false);
-      fetchBranches();
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.response?.data?.message || 'Action failed';
-      toast.error(msg);
-    } finally {
-      setIsSubmitting(false);
-    }
+    mutation.mutate(values);
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this branch?')) return;
-    try {
-      await apiClient.delete(`/branches/${id}`);
-      toast.success('Branch removed successfully');
-      fetchBranches();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to delete branch');
-    }
+    deleteMutation.mutate(id);
   };
+
+  const isSubmitting = mutation.isPending;
 
   const filteredBranches = branches.filter(branch => 
     branch.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -14,6 +14,12 @@ import { BrandsService } from './brands.service';
 import { BrandsController } from './brands.controller';
 import { UnitsService } from './units.service';
 import { UnitsController } from './units.controller';
+import { BatchesService } from './batches.service';
+import { BatchesController } from './batches.controller';
+import { SerialsService } from './serials.service';
+import { SerialsController } from './serials.controller';
+import { BomService } from './bom.service';
+import { BomController } from './bom.controller';
 
 @Module({
   imports: [DatabaseModule],
@@ -25,6 +31,9 @@ import { UnitsController } from './units.controller';
     CategoriesController,
     BrandsController,
     UnitsController,
+    BatchesController,
+    SerialsController,
+    BomController,
   ],
   providers: [
     WarehousesService,
@@ -34,6 +43,9 @@ import { UnitsController } from './units.controller';
     CategoriesService,
     BrandsService,
     UnitsService,
+    BatchesService,
+    SerialsService,
+    BomService,
   ],
   exports: [
     WarehousesService,

@@ -29,7 +29,7 @@ export function ReloadPrompt() {
         {offlineReady ? (
           <span>App ready to work offline.</span>
         ) : (
-          <span>A new version of Bill Aura is available. Click to update.</span>
+          <span>A new version of BillAura is available. Click to update.</span>
         )}
       </div>
       <div className="flex gap-2 mt-2">

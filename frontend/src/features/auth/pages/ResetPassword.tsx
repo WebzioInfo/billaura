@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import api from '../../../services/api';
-import { BarChart3, Lock, Shield, ArrowLeft, AlertCircle, Loader2, CheckCircle2, RotateCw } from 'lucide-react';
+import { BarChart3, Lock, ArrowLeft, AlertCircle, Loader2, CheckCircle2, RotateCw } from 'lucide-react';
 
 const resetSchema = z.object({
   otp: z.string().length(6, { message: 'Verification code must be exactly 6 digits' }),
@@ -34,6 +34,7 @@ export const ResetPassword = () => {
     defaultValues: { otp: '', password: '', confirmPassword: '' }
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const otpValue = watch('otp') || '';
 
   useEffect(() => {
@@ -59,7 +60,7 @@ export const ResetPassword = () => {
 
       setSuccess('Password reset successful. Redirecting to login...');
       setTimeout(() => {
-        navigate('/auth/login');
+        navigate('/login');
       }, 1500);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to reset password. Please check the code.');
@@ -223,7 +224,7 @@ export const ResetPassword = () => {
 
       <div className="text-center pt-2">
         <Link
-          to="/auth/login"
+          to="/login"
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />

@@ -5,11 +5,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import { 
-  Users, UserPlus, Search, Plus, Edit2, Trash2, CheckCircle2, 
-  Phone, Mail, Calendar, Loader2, AlertCircle, TrendingUp, Check, Briefcase, Eye 
+  Users, Search, Plus, Edit2, Trash2, 
+  Phone, Mail, Calendar, Loader2, TrendingUp, Check, Briefcase, Eye 
 } from 'lucide-react';
 import api from '../../services/api';
 import { CustomerDetailModal } from './CustomerDetailModal';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiList } from '../../hooks/useApiList';
 
 // --- SCHEMAS ---
 const customerSchema = z.object({
@@ -129,14 +131,13 @@ export const CrmDashboard = () => {
   
   const setActiveTab = (tab: string) => navigate(tab === 'customers' ? '/customers' : tab === 'leads' ? '/crm' : `/customers?tab=${tab}`);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { data: customers = [], isLoading: isLoadingCustomers } = useApiList<Customer>(['customers'], '/customers');
+  const { data: leads = [], isLoading: isLoadingLeads } = useApiList<Lead>(['leads'], '/crm/leads');
+  const { data: contacts = [], isLoading: isLoadingContacts } = useApiList<Contact>(['contacts'], '/crm/contacts');
+  const { data: activities = [], isLoading: isLoadingActivities } = useApiList<Activity>(['activities'], '/crm/activities');
 
-  // Lists states
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const isLoading = isLoadingCustomers || isLoadingLeads || isLoadingContacts || isLoadingActivities;
+  const queryClient = useQueryClient();
 
   // Modal control
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -167,31 +168,10 @@ export const CrmDashboard = () => {
     defaultValues: { type: 'CALL', subject: '', description: '', dueDate: new Date().toISOString().split('T')[0], leadId: '', customerId: '' }
   });
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      if (activeTab === 'customers') {
-        const res = await api.get<{ success: boolean; data: { items: Customer[] } }>('/customers');
-        setCustomers(res.data?.items || []);
-      } else if (activeTab === 'leads') {
-        const res = await api.get<{ success: boolean; data: { items: Lead[] } }>('/crm/leads');
-        setLeads(res.data?.items || []);
-      } else if (activeTab === 'contacts') {
-        const res = await api.get<{ success: boolean; data: { items: Contact[] } }>('/crm/contacts');
-        setContacts(res.data?.items || []);
-      } else {
-        const res = await api.get<{ success: boolean; data: { items: Activity[] } }>('/crm/activities');
-        setActivities(res.data?.items || []);
-      }
-    } catch (err) {
-      toast.error('Failed to load CRM data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    queryClient.invalidateQueries({ queryKey: [activeTab] });
   }, [activeTab]);
 
   const handleOpenAddModal = () => {
@@ -273,7 +253,7 @@ export const CrmDashboard = () => {
         toast.success('Customer registered successfully');
       }
       setIsModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -292,7 +272,7 @@ export const CrmDashboard = () => {
         toast.success('Lead created successfully');
       }
       setIsModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -311,7 +291,7 @@ export const CrmDashboard = () => {
         toast.success('Contact created successfully');
       }
       setIsModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -330,7 +310,7 @@ export const CrmDashboard = () => {
         toast.success('Activity created successfully');
       }
       setIsModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -344,8 +324,8 @@ export const CrmDashboard = () => {
       const endpoint = activeTab === 'customers' ? '/customers' : activeTab === 'leads' ? '/crm/leads' : activeTab === 'contacts' ? '/crm/contacts' : '/crm/activities';
       await api.delete(`${endpoint}/${id}`);
       toast.success('Item deleted successfully');
-      fetchData();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: [activeTab] });
+    } catch {
       toast.error('Deletion failed');
     }
   };
@@ -354,8 +334,8 @@ export const CrmDashboard = () => {
     try {
       await api.patch(`/crm/activities/${act.id}`, { isCompleted: !act.isCompleted });
       toast.success(act.isCompleted ? 'Task marked incomplete' : 'Task completed successfully');
-      fetchData();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+    } catch {
       toast.error('Failed to update activity status');
     }
   };

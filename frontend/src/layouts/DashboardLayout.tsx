@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  Bell, Search, Settings, LogOut, Landmark, User, Moon, Sun 
+  Bell, Search, Settings, LogOut, Landmark, User 
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
 import { Ribbon } from '@/components/workspace/Ribbon';
@@ -41,6 +41,7 @@ export default function DashboardLayout() {
         path: currentPath,
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const handleLogout = async () => {
@@ -51,7 +52,7 @@ export default function DashboardLayout() {
       console.error('Logout failed:', e);
     } finally {
       clearSession();
-      navigate('/auth/login');
+      navigate('/login');
     }
   };
 
@@ -132,7 +133,7 @@ export default function DashboardLayout() {
 
       {/* 4. Main Workspace Area */}
       <main className="flex-1 bg-[#f8f9fa] dark:bg-[#0a0a0a] overflow-auto relative shadow-inner">
-        <div className="h-full w-full">
+        <div className="h-full w-full p-4 md:p-6">
           {/* We use Outlet for the current route. In a more advanced implementation, 
               we could map through all openTabs and render them hidden to preserve state. */}
           <Outlet />

@@ -1,27 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import apiClient from '@/services/api';
+import { useQuery } from '@tanstack/react-query';
 
 export const BillsList = () => {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await apiClient.get('/purchases/bills');
-        const items = res.data?.data || res.data || [];
-        setData(Array.isArray(items) ? items : []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data = [], isLoading: loading } = useQuery({
+    queryKey: ['bills'],
+    queryFn: async () => {
+      const res = await apiClient.get('/purchases/bills');
+      const items = res.data?.data || res.data || [];
+      return Array.isArray(items) ? items : [];
+    }
+  });
 
   return (
     <div className="p-8 max-w-[1600px] mx-auto">

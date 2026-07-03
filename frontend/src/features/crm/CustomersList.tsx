@@ -1,15 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Plus, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const CustomersList = () => {
-  const [crm, setCrm] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form fields state
   const [formData, setFormData] = useState({
@@ -22,21 +21,38 @@ export const CustomersList = () => {
     notes: '',
   });
 
-  const fetchCustomers = async () => {
-    try {
+  const { data: crm = [], isLoading: loading } = useQuery({
+    queryKey: ['customers'],
+    queryFn: async () => {
       const res = await apiClient.get('/customers');
       const items = res.data?.data?.items || res.data?.items || res.data?.data || res.data || [];
-      setCrm(Array.isArray(items) ? items : []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      return Array.isArray(items) ? items : [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiClient.post('/customers', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      toast.success('Customer created successfully');
+      setIsModalOpen(false);
+      setFormData({
+        name: '',
+        tradeName: '',
+        email: '',
+        mobile: '',
+        gstin: '',
+        address: '',
+        notes: '',
+      });
+    },
+    onError: (err: any) => {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to create customer');
+    }
+  });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -49,39 +65,10 @@ export const CustomersList = () => {
       toast.error('Customer Name is required');
       return;
     }
-    setIsSubmitting(true);
-    try {
-      await apiClient.post('/customers', {
-        name: formData.name,
-        tradeName: formData.tradeName,
-        email: formData.email,
-        mobile: formData.mobile,
-        gstin: formData.gstin,
-        address: formData.address,
-        notes: formData.notes,
-      });
-      toast.success('Customer created successfully');
-      setIsModalOpen(false);
-      // Reset form
-      setFormData({
-        name: '',
-        tradeName: '',
-        email: '',
-        mobile: '',
-        gstin: '',
-        address: '',
-        notes: '',
-      });
-      // Refresh list
-      setLoading(true);
-      await fetchCustomers();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.response?.data?.message || 'Failed to create customer');
-    } finally {
-      setIsSubmitting(false);
-    }
+    createMutation.mutate(formData);
   };
+
+  const isSubmitting = createMutation.isPending;
 
   return (
     <div className="p-8 max-w-[1600px] mx-auto text-foreground">
@@ -249,3 +236,4 @@ export const CustomersList = () => {
     </div>
   );
 };
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Download, Printer, FileText, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
@@ -8,16 +8,15 @@ const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
 };
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell 
+  Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 
 export default function ProfitLossDashboard() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     revenue: true,
     cogs: true,
@@ -25,25 +24,17 @@ export default function ProfitLossDashboard() {
     otherIncome: true,
     otherExpenses: true
   });
-
   const [dateRange, setDateRange] = useState('FY');
 
-  useEffect(() => {
-    fetchData();
-  }, [dateRange]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // In production, pass actual date ranges based on dateRange state
-      const response = await apiClient.get('/api/reports/profit-loss');
-      setData(response.data);
-    } catch (error) {
-      toast.error('Failed to load Profit & Loss report');
-    } finally {
-      setLoading(false);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['reports', 'profit-loss', dateRange],
+    queryFn: async () => {
+      const response = await apiClient.get('/api/reports/profit-loss', {
+        params: { dateRange }
+      });
+      return response.data;
     }
-  };
+  });
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));

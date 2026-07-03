@@ -6,7 +6,7 @@ import * as z from 'zod';
 import api from '../../../services/api';
 import { useSessionStore } from '../stores/sessionStore';
 import { TokenService } from '../../../services/auth/TokenService';
-import { BarChart3, Shield, Mail, AlertCircle, Loader2, CheckCircle2, RotateCw } from 'lucide-react';
+import { BarChart3, Mail, AlertCircle, Loader2, CheckCircle2, RotateCw } from 'lucide-react';
 
 const verifySchema = z.object({
   otp: z.string().length(6, { message: 'OTP must be exactly 6 digits' }),
@@ -27,11 +27,12 @@ export const VerifyEmail = () => {
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<VerifyFormValues>({
+  const { handleSubmit, setValue, watch, formState: { errors } } = useForm<VerifyFormValues>({
     resolver: zodResolver(verifySchema),
     defaultValues: { otp: '' }
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const otpValue = watch('otp') || '';
 
   useEffect(() => {
@@ -59,7 +60,7 @@ export const VerifyEmail = () => {
       
       setSuccess(true);
       setTimeout(() => {
-        navigate('/auth/onboard');
+        navigate('/onboard');
       }, 1500);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Verification failed. Please check the OTP.');

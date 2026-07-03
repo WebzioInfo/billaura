@@ -9,6 +9,7 @@ import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor";
 import { RequestContextInterceptor } from "./common/interceptors/request-context.interceptor";
+import { NoCacheInterceptor } from "./common/interceptors/no-cache.interceptor";
 import { AppLogger } from "./logging/app-logger.service";
 
 async function bootstrap() {
@@ -41,7 +42,11 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter(logger));
-  app.useGlobalInterceptors(new RequestContextInterceptor(), new ResponseEnvelopeInterceptor());
+  app.useGlobalInterceptors(
+    new RequestContextInterceptor(),
+    new ResponseEnvelopeInterceptor(),
+    new NoCacheInterceptor()
+  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle("Bill Aura API")

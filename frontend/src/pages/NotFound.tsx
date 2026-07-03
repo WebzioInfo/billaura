@@ -7,8 +7,8 @@ export function NotFound() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-900 p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center space-y-6">
         <div className="flex justify-center mb-6">
-          <img src="/logo.png" alt="Bill Aura Logo" className="h-12 w-auto dark:hidden" />
-          <img src="/logo2.png" alt="Bill Aura Logo" className="h-12 w-auto hidden dark:block" />
+          <img src="/logo.png" alt="BillAura Logo" className="h-12 w-auto dark:hidden" />
+          <img src="/logo2.png" alt="BillAura Logo" className="h-12 w-auto hidden dark:block" />
         </div>
         <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-8 h-8" />

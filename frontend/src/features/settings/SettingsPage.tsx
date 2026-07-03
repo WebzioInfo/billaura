@@ -3,12 +3,13 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Building2, Settings, Landmark, ShieldAlert, Loader2, Save, RefreshCw, UploadCloud, X, AlertTriangle } from 'lucide-react';
+import { Building2, Settings, ShieldAlert, Loader2, Save, UploadCloud, X } from 'lucide-react';
 import { BranchesList } from '../branches/BranchesList';
 import { RolesList } from '../roles/RolesList';
 import { toast } from 'sonner';
 import apiClient from '../../services/api';
 import { useSessionStore } from '../auth/stores/sessionStore';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -54,7 +55,6 @@ export const SettingsPage = () => {
   };
   
   const [companyId, setCompanyId] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Logo State
@@ -62,7 +62,7 @@ export const SettingsPage = () => {
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm<CompanyFormValues>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CompanyFormValues>({
     resolver: zodResolver(companySchema),
     defaultValues: {
       companyName: '',
@@ -78,43 +78,37 @@ export const SettingsPage = () => {
     }
   });
 
-  const fetchProfile = async () => {
-    setIsLoading(true);
-    try {
+  const { data: profileData, isLoading } = useQuery({
+    queryKey: ['company-profile'],
+    queryFn: async () => {
       const res = await apiClient.get<any>('/auth/me');
-      if (res && res.company) {
-        setCompanyId(res.company.id);
-        reset({
-          companyName: res.company.companyName || '',
-          legalName: res.company.legalName || '',
-          gstin: res.company.gstin || '',
-          pan: res.company.pan || '',
-          email: res.company.email || '',
-          phone: res.company.phone || '',
-          address: res.company.address || '',
-          state: res.company.state || '',
-          country: res.company.country || '',
-          currency: res.company.currency || 'INR',
-        });
-        if (res.company.settings?.logoBase64) {
-          setLogoPreview(res.company.settings.logoBase64);
-          setLogoBase64(res.company.settings.logoBase64);
-        }
-      }
-    } catch (err: any) {
-      if (err.response?.status !== 401) {
-        toast.error('Failed to load profile details');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return res;
+    },
+    enabled: activeTab === 'profile',
+  });
 
   useEffect(() => {
-    if (activeTab === 'profile') {
-      fetchProfile();
+    if (profileData?.company) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCompanyId(profileData.company.id);
+      reset({
+        companyName: profileData.company.companyName || '',
+        legalName: profileData.company.legalName || '',
+        gstin: profileData.company.gstin || '',
+        pan: profileData.company.pan || '',
+        email: profileData.company.email || '',
+        phone: profileData.company.phone || '',
+        address: profileData.company.address || '',
+        state: profileData.company.state || '',
+        country: profileData.company.country || '',
+        currency: profileData.company.currency || 'INR',
+      });
+      if (profileData.company.settings?.logoBase64) {
+        setLogoPreview(profileData.company.settings.logoBase64);
+        setLogoBase64(profileData.company.settings.logoBase64);
+      }
     }
-  }, [activeTab]);
+  }, [profileData, reset]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -149,6 +143,8 @@ export const SettingsPage = () => {
     }
   };
 
+  const queryClient = useQueryClient();
+
   const onSubmit = async (values: CompanyFormValues) => {
     setIsSubmitting(true);
     try {
@@ -160,7 +156,7 @@ export const SettingsPage = () => {
       toast.success('Workspace profile settings updated successfully');
       
       // Fetch fresh data and reset dirty state
-      await fetchProfile();
+      queryClient.invalidateQueries({ queryKey: ['company-profile'] });
       
       // Update session store to reflect new company name/logo immediately in UI
       if (user) {

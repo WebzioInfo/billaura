@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Plus, Package, Box, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck, Loader2 } from 'lucide-react';
+import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck } from 'lucide-react';
 import api from '../../services/api';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -65,7 +65,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     queryFn: () => api.get('/tax-groups').then(res => res.data?.data || res.data || []),
   });
 
-  const { register, handleSubmit, reset, setValue } = useForm({
+  const { register, handleSubmit, setValue } = useForm({
     defaultValues: product || {
       name: '',
       sku: '',
@@ -108,6 +108,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeInlineModal]);
 
   const handleInlineCreate = (type: string) => {
@@ -243,7 +244,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       }
       queryClient.invalidateQueries({ queryKey: ['products'] });
       onSuccess();
-    } catch (error) {
+    } catch {
       toast.error('Failed to save product');
     } finally {
       setIsLoading(false);

@@ -4,6 +4,7 @@ import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import api from '../../../services/api';
+import { useQuery } from '@tanstack/react-query';
 
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;
 
@@ -15,9 +16,10 @@ interface OtherIncomeFormModalProps {
 }
 
 export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: OtherIncomeFormModalProps) {
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().substring(0, 10),
-    incomeNo: 'INC-' + Math.floor(Math.random() * 1000000), // Temp auto-gen
+    incomeNo: '', // Will generate on backend or submit
     categoryId: '',
     walkInCustomer: '',
     description: '',
@@ -30,17 +32,43 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: 
     bankAccountId: '',
   });
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: categories = [] } = useQuery({
+    queryKey: ['income-categories'],
+    queryFn: async () => {
+      const { data } = await api.get('/income-categories');
+      return data || [];
+    },
+    enabled: isOpen
+  });
+
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: async () => {
+      const { data } = await api.get('/bank-accounts');
+      return data || [];
+    },
+    enabled: isOpen
+  });
+
+  const { data: incomeData } = useQuery({
+    queryKey: ['other-income', editingId],
+    queryFn: async () => {
+      if (!editingId) return null;
+      const { data } = await api.get(`/other-incomes/${editingId}`);
+      return data;
+    },
+    enabled: isOpen && !!editingId
+  });
 
   useEffect(() => {
     if (isOpen) {
-      fetchCategories();
-      fetchBankAccounts();
-      if (editingId) {
-        fetchIncome();
-      } else {
+      if (editingId && incomeData) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setFormData({
+          ...incomeData,
+          date: new Date(incomeData.date).toISOString().substring(0, 10),
+        });
+      } else if (!editingId) {
         setFormData({
           date: new Date().toISOString().substring(0, 10),
           incomeNo: 'INC-' + Math.floor(Math.random() * 1000000),
@@ -57,37 +85,7 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: 
         });
       }
     }
-  }, [isOpen, editingId]);
-
-  const fetchCategories = async () => {
-    try {
-      const { data } = await api.get('/income-categories');
-      setCategories(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const fetchBankAccounts = async () => {
-    try {
-      const { data } = await api.get('/bank-accounts');
-      setBankAccounts(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const fetchIncome = async () => {
-    try {
-      const { data } = await api.get(`/other-incomes/${editingId}`);
-      setFormData({
-        ...data,
-        date: new Date(data.date).toISOString().substring(0, 10),
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  }, [isOpen, editingId, incomeData]);
 
   const calculateTotal = () => {
     return Number(formData.subTotal) + Number(formData.cgstAmount) + Number(formData.sgstAmount) + Number(formData.igstAmount);
@@ -156,7 +154,7 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: 
               onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
             >
               <option value="">Select Category</option>
-              {categories.map(cat => (
+              {categories.map((cat: any) => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
@@ -267,7 +265,7 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: 
                     onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
                   >
                     <option value="">Select Bank Account</option>
-                    {bankAccounts.map(acc => (
+                    {bankAccounts.map((acc: any) => (
                       <option key={acc.id} value={acc.id}>{acc.name} - {acc.accountNumber}</option>
                     ))}
                   </select>

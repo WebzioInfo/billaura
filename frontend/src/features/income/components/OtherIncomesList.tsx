@@ -1,36 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { DataTable } from '../../../components/ui/data-table';
 import { Button } from '../../../components/ui/Button';
-import { Plus, Edit, Trash2, Eye, Download } from 'lucide-react';
+import { Plus, Trash2, Edit } from 'lucide-react';
 import { OtherIncomeFormModal } from './OtherIncomeFormModal';
 import api from '../../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export function OtherIncomesList() {
-  const [incomes, setIncomes] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const fetchIncomes = async () => {
-    setIsLoading(true);
-    try {
+  const { data: incomes = [] } = useQuery({
+    queryKey: ['other-incomes'],
+    queryFn: async () => {
       const { data } = await api.get('/other-incomes');
-      setIncomes(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
+      return data || [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchIncomes();
-  }, []);
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/other-incomes/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['other-incomes'] });
+    }
+  });
 
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this income record? Associated journal entries will be removed.')) {
-      await api.delete(`/other-incomes/${id}`);
-      fetchIncomes();
+      deleteMutation.mutate(id);
     }
   };
 
@@ -72,9 +72,7 @@ export function OtherIncomesList() {
       id: 'actions',
       cell: ({ row }: any) => (
         <div className="flex gap-2 justify-end">
-          <Button variant="ghost" size="sm" onClick={() => {}}>
-            <Eye className="w-4 h-4 text-gray-600" />
-          </Button>
+
           <Button variant="ghost" size="sm" onClick={() => {
             setEditingId(row.original.id);
             setIsModalOpen(true);
@@ -114,7 +112,7 @@ export function OtherIncomesList() {
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
           setIsModalOpen(false);
-          fetchIncomes();
+          queryClient.invalidateQueries({ queryKey: ['other-incomes'] });
         }}
         editingId={editingId}
       />

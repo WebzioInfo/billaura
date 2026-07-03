@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
-  DollarSign, TrendingUp, TrendingDown, Users, Package, 
-  ArrowUpRight, AlertTriangle, Clock, RefreshCw, Landmark, ShoppingCart
+  ArrowUpRight, AlertTriangle, Clock, RefreshCw, Landmark, ShoppingCart, BarChart3, PieChart, Activity, AlertCircle, FileText, Download, CheckCircle, TrendingUp, DollarSign, TrendingDown, Users
 } from 'lucide-react';
-import { toast } from 'sonner';
 import apiClient from '../../services/api';
+import { useQuery } from '@tanstack/react-query';
 
 interface DashboardMetrics {
   salesTotal: number;
@@ -38,26 +37,16 @@ interface DashboardData {
 }
 
 export const ExecutiveDashboard = () => {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchDashboardData = async () => {
-    setIsLoading(true);
-    try {
+  const { data, isLoading, refetch: fetchDashboardData } = useQuery({
+    queryKey: ['dashboard-summary'],
+    queryFn: async () => {
       const res = await apiClient.get<{ success: boolean; data: DashboardData }>('/dashboard/summary');
-      if (res.success && res.data) {
-        setData(res.data);
+      if (res?.success && res?.data) {
+        return res.data;
       }
-    } catch (err) {
-      toast.error('Failed to load dashboard metrics');
-    } finally {
-      setIsLoading(false);
+      return null;
     }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  });
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -107,7 +96,7 @@ export const ExecutiveDashboard = () => {
           </p>
         </div>
         <button
-          onClick={fetchDashboardData}
+          onClick={() => fetchDashboardData()}
           className="p-2.5 rounded-xl border border-border bg-surface text-muted-foreground hover:text-foreground hover:bg-background transition-all cursor-pointer"
           title="Refresh Telemetry"
         >

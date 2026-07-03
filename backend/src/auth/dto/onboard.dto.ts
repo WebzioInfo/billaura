@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional, IsDateString } from 'class-validator';
+import { IsNotEmpty, IsString, IsDateString, IsOptional } from 'class-validator';
 
 export class BusinessDetailsDto {
   @IsString()
@@ -12,8 +12,24 @@ export class BusinessDetailsDto {
 
 export class TaxDetailsDto {
   @IsString()
-  @IsNotEmpty()
-  taxNumber: string;
+  @IsOptional()
+  taxNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  gstin?: string;
+
+  @IsString()
+  @IsOptional()
+  pan?: string;
+
+  @IsString()
+  @IsOptional()
+  tan?: string;
+
+  @IsString()
+  @IsOptional()
+  msme?: string;
 }
 
 export class BranchSetupDto {

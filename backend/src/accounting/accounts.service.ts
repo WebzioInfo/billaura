@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -15,34 +15,61 @@ export class AccountsService {
     const count = await this.prisma.account.count({ where: { companyId } });
     if (count > 0) return;
 
-    const defaults = [
-      { name: 'Cash', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
-      { name: 'Bank Accounts', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
-      { name: 'Accounts Receivable', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
-      { name: 'Inventory', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
-      { name: 'Machinery', category: AccountCategory.ASSET, subCategory: AccountSubCategory.FIXED_ASSET },
-      { name: 'Accounts Payable', category: AccountCategory.LIABILITY, subCategory: AccountSubCategory.CURRENT_LIABILITY },
-      { name: 'GST Payable', category: AccountCategory.LIABILITY, subCategory: AccountSubCategory.CURRENT_LIABILITY },
-      { name: 'Owners Capital', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
-      { name: 'Drawings', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
-      { name: 'Retained Earnings', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
-      { name: 'Opening Balance Equity', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
-      { name: 'Sales Revenue', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SALES_REVENUE },
-      { name: 'Service Revenue', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SERVICE_REVENUE },
-      { name: 'Cost of Goods Sold', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.COGS },
-      { name: 'Salary Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
-      { name: 'Rent Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
-      { name: 'Utilities Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
-      { name: 'Bank Charges', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OTHER_EXPENSE },
-      { name: 'Travel Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
+    // Create Groups
+    const groups = [
+      { name: 'Current Assets', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET },
+      { name: 'Fixed Assets', category: AccountCategory.ASSET, subCategory: AccountSubCategory.FIXED_ASSET },
+      { name: 'Current Liabilities', category: AccountCategory.LIABILITY, subCategory: AccountSubCategory.CURRENT_LIABILITY },
+      { name: 'Equity Accounts', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY },
+      { name: 'Revenue Accounts', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SALES_REVENUE },
+      { name: 'Direct Expenses', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.COGS },
+      { name: 'Indirect Expenses', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE },
+    ];
+
+    const groupMap = new Map();
+    for (const g of groups) {
+      const created = await this.prisma.account.create({
+        data: {
+          companyId,
+          name: g.name,
+          isGroup: true,
+          category: g.category,
+          subCategory: g.subCategory,
+          balance: 0,
+        }
+      });
+      groupMap.set(g.name, created.id);
+    }
+
+    // Create Ledgers under groups
+    const ledgers = [
+      { name: 'Cash', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET, parent: 'Current Assets' },
+      { name: 'Bank Accounts', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET, parent: 'Current Assets' },
+      { name: 'Accounts Receivable', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET, parent: 'Current Assets' },
+      { name: 'Inventory', category: AccountCategory.ASSET, subCategory: AccountSubCategory.CURRENT_ASSET, parent: 'Current Assets' },
+      { name: 'Machinery', category: AccountCategory.ASSET, subCategory: AccountSubCategory.FIXED_ASSET, parent: 'Fixed Assets' },
+      { name: 'Accounts Payable', category: AccountCategory.LIABILITY, subCategory: AccountSubCategory.CURRENT_LIABILITY, parent: 'Current Liabilities' },
+      { name: 'GST Payable', category: AccountCategory.LIABILITY, subCategory: AccountSubCategory.CURRENT_LIABILITY, parent: 'Current Liabilities' },
+      { name: 'Owners Capital', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY, parent: 'Equity Accounts' },
+      { name: 'Retained Earnings', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY, parent: 'Equity Accounts' },
+      { name: 'Opening Balance Equity', category: AccountCategory.EQUITY, subCategory: AccountSubCategory.EQUITY, parent: 'Equity Accounts' },
+      { name: 'Sales Revenue', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SALES_REVENUE, parent: 'Revenue Accounts' },
+      { name: 'Service Revenue', category: AccountCategory.REVENUE, subCategory: AccountSubCategory.SERVICE_REVENUE, parent: 'Revenue Accounts' },
+      { name: 'Cost of Goods Sold', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.COGS, parent: 'Direct Expenses' },
+      { name: 'Salary Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE, parent: 'Indirect Expenses' },
+      { name: 'Rent Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE, parent: 'Indirect Expenses' },
+      { name: 'Utilities Expense', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OPERATING_EXPENSE, parent: 'Indirect Expenses' },
+      { name: 'Bank Charges', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OTHER_EXPENSE, parent: 'Indirect Expenses' },
     ];
 
     await this.prisma.account.createMany({
-      data: defaults.map(d => ({
+      data: ledgers.map(l => ({
         companyId,
-        name: d.name,
-        category: d.category,
-        subCategory: d.subCategory,
+        name: l.name,
+        isGroup: false,
+        parentId: groupMap.get(l.parent),
+        category: l.category,
+        subCategory: l.subCategory,
         balance: 0,
       })),
     });
@@ -113,8 +140,14 @@ export class AccountsService {
 
     return this.prisma.account.create({
       data: {
-        ...dto,
         companyId,
+        name: dto.name,
+        code: dto.code,
+        category: dto.category,
+        subCategory: dto.subCategory,
+        balance: dto.balance ?? 0,
+        isGroup: dto.isGroup ?? false,
+        parentId: dto.parentId,
       },
     });
   }
@@ -138,12 +171,20 @@ export class AccountsService {
 
     return this.prisma.account.update({
       where: { id },
-      data: dto,
+      data: {
+        name: dto.name,
+        code: dto.code,
+        category: dto.category,
+        subCategory: dto.subCategory,
+        balance: dto.balance,
+        isGroup: dto.isGroup,
+        parentId: dto.parentId,
+      },
     });
   }
 
   async remove(id: string) {
-    const account = await this.findOne(id);
+    await this.findOne(id);
 
     // Check if account has journal ledger entries
     const inUse = await this.prisma.journalLine.findFirst({
@@ -171,26 +212,28 @@ export class AccountsService {
 
     const accounts = await this.prisma.account.findMany({
       where: { companyId },
-      include: {
-        journalLines: true,
+    });
+
+    const aggregates = await this.prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where: { account: { companyId } },
+      _sum: {
+        debit: true,
+        credit: true,
       },
     });
 
-    return accounts.map((acc) => {
-      let debit = 0;
-      let credit = 0;
-      acc.journalLines.forEach((l) => {
-        debit += Number(l.debit || 0);
-        credit += Number(l.credit || 0);
-      });
+    const sumMap = new Map(aggregates.map(a => [a.accountId, { debit: Number(a._sum.debit || 0), credit: Number(a._sum.credit || 0) }]));
 
+    return accounts.map((acc) => {
+      const sums = sumMap.get(acc.id) || { debit: 0, credit: 0 };
       return {
         id: acc.id,
         name: acc.name,
         category: acc.category,
-        debit,
-        credit,
-        balance: debit - credit,
+        debit: sums.debit,
+        credit: sums.credit,
+        balance: sums.debit - sums.credit,
       };
     });
   }
@@ -208,17 +251,24 @@ export class AccountsService {
         companyId,
         category: { in: [AccountCategory.REVENUE, AccountCategory.EXPENSE] },
       },
-      include: { journalLines: true },
     });
+
+    const aggregates = await this.prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where: { account: { companyId, category: { in: [AccountCategory.REVENUE, AccountCategory.EXPENSE] } } },
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    const sumMap = new Map(aggregates.map(a => [a.accountId, Number(a._sum.debit || 0) - Number(a._sum.credit || 0)]));
 
     let totalRevenue = 0;
     let totalExpense = 0;
 
     const items = accounts.map((acc) => {
-      let accSum = 0;
-      acc.journalLines.forEach((l) => {
-        accSum += Number(l.debit || 0) - Number(l.credit || 0);
-      });
+      const accSum = sumMap.get(acc.id) || 0;
 
       // Revenue standard credit balance, Expense standard debit balance
       const balanceVal = acc.category === AccountCategory.REVENUE ? -accSum : accSum;
@@ -265,14 +315,21 @@ export class AccountsService {
         companyId,
         category: { in: [AccountCategory.ASSET, AccountCategory.LIABILITY, AccountCategory.EQUITY] },
       },
-      include: { journalLines: true },
     });
 
+    const aggregates = await this.prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where: { account: { companyId, category: { in: [AccountCategory.ASSET, AccountCategory.LIABILITY, AccountCategory.EQUITY] } } },
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    const sumMap = new Map(aggregates.map(a => [a.accountId, Number(a._sum.debit || 0) - Number(a._sum.credit || 0)]));
+
     const items = accounts.map((acc) => {
-      let accSum = 0;
-      acc.journalLines.forEach((l) => {
-        accSum += Number(l.debit || 0) - Number(l.credit || 0);
-      });
+      const accSum = sumMap.get(acc.id) || 0;
 
       // Assets debit, Liabilities/Equity credit
       const balanceVal = acc.category === AccountCategory.ASSET ? accSum : -accSum;

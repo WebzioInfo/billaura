@@ -3,9 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { 
   Shield, Search, RefreshCw, Loader2, Download, Printer, 
-  ArrowUpRight, ArrowDownLeft, Landmark, Percent, FileText 
+  ArrowUpRight, ArrowDownLeft, Percent 
 } from 'lucide-react';
 import api from '../../services/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // --- TYPES ---
 interface GstrRow {
@@ -47,66 +48,69 @@ export const TaxesDashboard = () => {
   
   const setActiveTab = (tab: string) => navigate(`${path}?tab=${tab}`);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: summaryData, isLoading: isLoadingSummary } = useQuery<TaxSummary>({
+    queryKey: ['taxes', 'summary'],
+    queryFn: async () => {
+      const res = await api.get<any>('/taxes/summary');
+      const data = res?.data || res;
+      return {
+        outwardTaxable: data?.outwardTaxable ?? 0,
+        inwardTaxable: data?.inwardTaxable ?? 0,
+        liability: {
+          cgst: data?.liability?.cgst ?? 0,
+          sgst: data?.liability?.sgst ?? 0,
+          igst: data?.liability?.igst ?? 0,
+          total: data?.liability?.total ?? 0,
+        },
+        itc: {
+          cgst: data?.itc?.cgst ?? 0,
+          sgst: data?.itc?.sgst ?? 0,
+          igst: data?.itc?.igst ?? 0,
+          total: data?.itc?.total ?? 0,
+        },
+        netPayable: {
+          cgst: data?.netPayable?.cgst ?? 0,
+          sgst: data?.netPayable?.sgst ?? 0,
+          igst: data?.netPayable?.igst ?? 0,
+          total: data?.netPayable?.total ?? 0,
+        },
+      };
+    },
+    enabled: activeTab === 'summary',
+  });
 
-  // States
-  const [summary, setSummary] = useState<TaxSummary>({
+  const { data: gstr1List = [], isLoading: isLoadingGstr1 } = useQuery<GstrRow[]>({
+    queryKey: ['taxes', 'gstr1'],
+    queryFn: async () => {
+      const res = await api.get<any>('/taxes/gstr-1');
+      return Array.isArray(res) ? res : (res?.data || []);
+    },
+    enabled: activeTab === 'gstr1',
+  });
+
+  const { data: gstr2List = [], isLoading: isLoadingGstr2 } = useQuery<GstrRow[]>({
+    queryKey: ['taxes', 'gstr2'],
+    queryFn: async () => {
+      const res = await api.get<any>('/taxes/gstr-2');
+      return Array.isArray(res) ? res : (res?.data || []);
+    },
+    enabled: activeTab === 'gstr2',
+  });
+
+  const summary = summaryData || {
     outwardTaxable: 0,
     inwardTaxable: 0,
     liability: { cgst: 0, sgst: 0, igst: 0, total: 0 },
     itc: { cgst: 0, sgst: 0, igst: 0, total: 0 },
     netPayable: { cgst: 0, sgst: 0, igst: 0, total: 0 },
-  });
-  const [gstr1List, setGstr1List] = useState<GstrRow[]>([]);
-  const [gstr2List, setGstr2List] = useState<GstrRow[]>([]);
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      if (activeTab === 'summary') {
-        const res = await api.get<any>('/taxes/summary');
-        const data = res?.data || res;
-        setSummary({
-          outwardTaxable: data?.outwardTaxable ?? 0,
-          inwardTaxable: data?.inwardTaxable ?? 0,
-          liability: {
-            cgst: data?.liability?.cgst ?? 0,
-            sgst: data?.liability?.sgst ?? 0,
-            igst: data?.liability?.igst ?? 0,
-            total: data?.liability?.total ?? 0,
-          },
-          itc: {
-            cgst: data?.itc?.cgst ?? 0,
-            sgst: data?.itc?.sgst ?? 0,
-            igst: data?.itc?.igst ?? 0,
-            total: data?.itc?.total ?? 0,
-          },
-          netPayable: {
-            cgst: data?.netPayable?.cgst ?? 0,
-            sgst: data?.netPayable?.sgst ?? 0,
-            igst: data?.netPayable?.igst ?? 0,
-            total: data?.netPayable?.total ?? 0,
-          },
-        });
-      } else if (activeTab === 'gstr1') {
-        const res = await api.get<any>('/taxes/gstr-1');
-        const list = Array.isArray(res) ? res : (res?.data || []);
-        setGstr1List(list);
-      } else if (activeTab === 'gstr2') {
-        const res = await api.get<any>('/taxes/gstr-2');
-        const list = Array.isArray(res) ? res : (res?.data || []);
-        setGstr2List(list);
-      }
-    } catch (err) {
-      toast.error('Failed to load GST tax reports');
-    } finally {
-      setIsLoading(false);
-    }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
+  const isLoading = isLoadingSummary || isLoadingGstr1 || isLoadingGstr2;
+  const queryClient = useQueryClient();
+
+  const refetchData = () => {
+    queryClient.invalidateQueries({ queryKey: ['taxes'] });
+  };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
@@ -184,7 +188,7 @@ export const TaxesDashboard = () => {
             </>
           )}
           <button
-            onClick={fetchData}
+            onClick={refetchData}
             className="p-2.5 rounded-xl border border-border hover:bg-surface cursor-pointer"
           >
             <RefreshCw className="w-4 h-4 text-muted-foreground" />

@@ -71,7 +71,7 @@ export class CrmActivitiesService {
     }
 
     const businessPartnerId = (dto as any).leadId || (dto as any).customerId || (dto as any).businessPartnerId;
-    const { leadId, customerId, ...restDto } = dto as any;
+    const { leadId: _l, customerId: _c, ...restDto } = dto as any;
     
     return this.prisma.crmActivity.create({
       data: {
@@ -86,7 +86,7 @@ export class CrmActivitiesService {
   async update(id: string, dto: UpdateActivityDto) {
     await this.findOne(id);
     const businessPartnerId = (dto as any).leadId || (dto as any).customerId || (dto as any).businessPartnerId;
-    const { leadId, customerId, ...restDto } = dto as any;
+    const { leadId: _l, customerId: _c, ...restDto } = dto as any;
 
     return this.prisma.crmActivity.update({
       where: { id },

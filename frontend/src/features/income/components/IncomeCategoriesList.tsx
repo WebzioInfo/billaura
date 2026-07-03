@@ -1,36 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { DataTable } from '../../../components/ui/data-table';
 import { Button } from '../../../components/ui/Button';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { IncomeCategoryFormModal } from './IncomeCategoryFormModal';
 import api from '../../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export function IncomeCategoriesList() {
-  const [categories, setCategories] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const fetchCategories = async () => {
-    setIsLoading(true);
-    try {
+  const { data: categories = [] } = useQuery({
+    queryKey: ['income-categories'],
+    queryFn: async () => {
       const { data } = await api.get('/income-categories');
-      setCategories(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
+      return data || [];
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/income-categories/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-categories'] });
+    }
+  });
 
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this category?')) {
-      await api.delete(`/income-categories/${id}`);
-      fetchCategories();
+      deleteMutation.mutate(id);
     }
   };
 
@@ -99,7 +99,7 @@ export function IncomeCategoriesList() {
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
           setIsModalOpen(false);
-          fetchCategories();
+          queryClient.invalidateQueries({ queryKey: ['income-categories'] });
         }}
         editingId={editingId}
       />

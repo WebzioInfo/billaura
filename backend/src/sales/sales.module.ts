@@ -10,6 +10,10 @@ import { SalesReturnsController } from './sales-returns.controller';
 import { DatabaseModule } from '../database/database.module';
 import { ReceiptsService } from './receipts.service';
 import { ReceiptsController } from './receipts.controller';
+import { SalesOrdersController } from './sales-orders.controller';
+import { SalesOrdersService } from './sales-orders.service';
+import { DeliveryNotesController } from './delivery-notes.controller';
+import { DeliveryNotesService } from './delivery-notes.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -19,6 +23,8 @@ import { ReceiptsController } from './receipts.controller';
     QuotationsController,
     SalesReturnsController,
     ReceiptsController,
+    SalesOrdersController,
+    DeliveryNotesController,
   ],
   providers: [
     InvoicesService,
@@ -26,12 +32,16 @@ import { ReceiptsController } from './receipts.controller';
     QuotationsService,
     SalesReturnsService,
     ReceiptsService,
+    SalesOrdersService,
+    DeliveryNotesService,
   ],
   exports: [
     InvoicesService,
     PaymentsService,
     QuotationsService,
     ReceiptsService,
+    SalesOrdersService,
+    DeliveryNotesService,
   ],
 })
 export class SalesModule {}

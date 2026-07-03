@@ -154,7 +154,7 @@ export class OtherIncomesService {
     }
 
     // 3. Debit the Bank/Cash account (grandTotal)
-    let assetAccountId = null;
+    let assetAccountId: string;
     if (income.paymentMethod === 'CASH') {
       const cashAccount = await this.getSystemAccount(tx, income.companyId, 'Cash');
       assetAccountId = cashAccount.id;

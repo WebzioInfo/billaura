@@ -77,7 +77,7 @@ export class ContactsService {
     }
 
     const businessPartnerId = (dto as any).customerId || (dto as any).vendorId || (dto as any).businessPartnerId;
-    const { customerId, vendorId, ...restDto } = dto as any;
+    const { customerId: _c, vendorId: _v, ...restDto } = dto as any;
 
     return this.prisma.contact.create({
       data: {
@@ -91,7 +91,7 @@ export class ContactsService {
   async update(id: string, dto: UpdateContactDto) {
     await this.findOne(id);
     const businessPartnerId = (dto as any).customerId || (dto as any).vendorId || (dto as any).businessPartnerId;
-    const { customerId, vendorId, ...restDto } = dto as any;
+    const { customerId: _c, vendorId: _v, ...restDto } = dto as any;
 
     return this.prisma.contact.update({
       where: { id },

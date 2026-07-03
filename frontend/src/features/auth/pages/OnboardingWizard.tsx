@@ -5,9 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import api from '../../../services/api';
 import { useSessionStore } from '../stores/sessionStore';
-import { 
-  Building2, Percent, Calendar, CheckCircle2, CreditCard, 
-  ArrowRight, Loader2, LogOut, DollarSign, Globe
+import {
+  Building2, Percent, Calendar, CheckCircle2, CreditCard,
+  ArrowRight, Loader2, LogOut
 } from 'lucide-react';
 import { TokenService } from '../../../services/auth/TokenService';
 
@@ -38,9 +38,9 @@ export const OnboardingWizard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Sync step from user state on mount
   useEffect(() => {
     if (user?.onboardingStep) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentStep(user.onboardingStep as Step);
     }
   }, [user]);
@@ -68,7 +68,7 @@ export const OnboardingWizard = () => {
       console.error('Logout failed:', e);
     } finally {
       clearSession();
-      navigate('/auth/login');
+      navigate('/login');
     }
   };
 
@@ -155,10 +155,9 @@ export const OnboardingWizard = () => {
           const isActive = currentStep === s.step;
           return (
             <div key={s.step} className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${
-                isDone ? 'bg-indigo-600 text-white' : 
-                isActive ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-400'
-              }`}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${isDone ? 'bg-indigo-600 text-white' :
+                  isActive ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-400'
+                }`}>
                 {isDone ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
               </div>
               <span className={`text-xs font-medium ${isActive ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>{s.label}</span>
@@ -177,7 +176,7 @@ export const OnboardingWizard = () => {
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Setup Workspace</h1>
           <p className="text-sm text-slate-500 mt-1">Initialize your accounting environment</p>
         </div>
-        <button 
+        <button
           onClick={handleLogout}
           className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-55 hover:text-slate-900 rounded-lg text-slate-500 text-xs transition-colors"
         >

@@ -8,6 +8,7 @@ import { StorageService } from '../storage/storage.service';
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
   private isProcessing = false;
+  private consecutiveFailures = 0;
 
   constructor(
     private prisma: PrismaService,
@@ -33,6 +34,19 @@ export class BackupService {
     this.isProcessing = true;
 
     try {
+      // Fast-fail if prisma is unreachable to prevent deep stack traces and looping identical errors
+      try {
+        await this.prisma.$queryRaw`SELECT 1`;
+        this.consecutiveFailures = 0; // Reset counter on successful ping
+      } catch (dbError) {
+        this.consecutiveFailures++;
+        if (this.consecutiveFailures <= 1 || this.consecutiveFailures % 30 === 0) {
+          this.logger.warn(`Database unreachable. Pausing backup scheduler. (Failures: ${this.consecutiveFailures})`);
+        }
+        this.isProcessing = false;
+        return;
+      }
+
       const job = await this.prisma.backupJob.findFirst({
         where: { status: 'PENDING', operation: 'BACKUP' },
         orderBy: { createdAt: 'asc' }
@@ -51,8 +65,7 @@ export class BackupService {
       const fileName = `${job.id}.zip`;
       
       const output = this.storage.createWriteStream(fileName);
-      const archiverModule = await Function('return import("archiver")')();
-      const archiver = archiverModule.default || archiverModule;
+      const archiver = require('archiver');
       const archive = archiver('zip', { zlib: { level: 9 } });
       
       archive.pipe(output);

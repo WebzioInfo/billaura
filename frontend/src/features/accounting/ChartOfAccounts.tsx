@@ -5,12 +5,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import { 
-  BookOpen, Search, Plus, Edit2, Trash2, Loader2, 
-  RefreshCw, Landmark, Calculator, AlertTriangle, FileText, ArrowRightLeft, Calendar 
+  BookOpen, Plus, Loader2, Calendar, Trash2 
 } from 'lucide-react';
 import api from '../../services/api';
 import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // --- SCHEMAS ---
 const accountSchema = z.object({
@@ -80,8 +80,6 @@ export const ChartOfAccounts = () => {
     else if (tab === 'cf') navigate('/cash-flow');
     else navigate('/chart-of-accounts');
   };
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
  
   // Data lists
@@ -192,42 +190,87 @@ export const ChartOfAccounts = () => {
     },
   ];
  
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      if (activeTab === 'coa') {
-        const res = await api.get<any>('/accounts');
-        setAccounts(res.items || []);
-      } else if (activeTab === 'journal') {
-        // Load accounts for dropdown reference
-        const accRes = await api.get<any>('/accounts');
-        setAccounts(accRes.items || []);
-        
-        const res = await api.get<any>('/journal-entries');
-        setJournalEntries(res.items || []);
-      } else if (activeTab === 'trial') {
-        const res = await api.get<any>('/accounts/trial-balance');
-        setTrialBalance(res || []);
-      } else if (activeTab === 'pl') {
-        const res = await api.get<any>('/accounts/profit-loss');
-        setProfitLoss(res || { revenue: [], expense: [], totalRevenue: 0, totalExpense: 0, netProfit: 0 });
-      } else if (activeTab === 'bs') {
-        const res = await api.get<any>('/accounts/balance-sheet');
-        setBalanceSheet(res || { assets: [], liabilities: [], equity: [], totalAssets: 0, totalLiabilities: 0, totalEquity: 0 });
-      } else if (activeTab === 'cf') {
-        const res = await api.get<any>('/accounts/cash-flow');
-        setCashFlow(res || { operatingInflow: 0, operatingOutflow: 0, operatingNet: 0, investingInflow: 0, investingOutflow: 0, investingNet: 0, financingInflow: 0, financingOutflow: 0, financingNet: 0, netCashFlow: 0 });
-      }
-    } catch (err) {
-      toast.error('Failed to load ledger data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
- 
+  const { data: accountsData, isLoading: isLoadingAccounts } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: async () => {
+      const res = await api.get<any>('/accounts');
+      return res.items || [];
+    },
+    enabled: activeTab === 'coa' || activeTab === 'journal'
+  });
+  
   useEffect(() => {
-    fetchData();
-  }, [activeTab]);
+    if (accountsData) setAccounts(accountsData);
+  }, [accountsData]);
+
+  const { data: journalEntriesData, isLoading: isLoadingJournal } = useQuery({
+    queryKey: ['journal-entries'],
+    queryFn: async () => {
+      const res = await api.get<any>('/journal-entries');
+      return res.items || [];
+    },
+    enabled: activeTab === 'journal'
+  });
+
+  useEffect(() => {
+    if (journalEntriesData) setJournalEntries(journalEntriesData);
+  }, [journalEntriesData]);
+
+  const { data: trialBalanceData, isLoading: isLoadingTrial } = useQuery({
+    queryKey: ['trial-balance'],
+    queryFn: async () => {
+      const res = await api.get<any>('/accounts/trial-balance');
+      return res || [];
+    },
+    enabled: activeTab === 'trial'
+  });
+
+  useEffect(() => {
+    if (trialBalanceData) setTrialBalance(trialBalanceData);
+  }, [trialBalanceData]);
+
+  const { data: profitLossData, isLoading: isLoadingPL } = useQuery({
+    queryKey: ['profit-loss'],
+    queryFn: async () => {
+      const res = await api.get<any>('/accounts/profit-loss');
+      return res || { revenue: [], expense: [], totalRevenue: 0, totalExpense: 0, netProfit: 0 };
+    },
+    enabled: activeTab === 'pl'
+  });
+
+  useEffect(() => {
+    if (profitLossData) setProfitLoss(profitLossData);
+  }, [profitLossData]);
+
+  const { data: balanceSheetData, isLoading: isLoadingBS } = useQuery({
+    queryKey: ['balance-sheet'],
+    queryFn: async () => {
+      const res = await api.get<any>('/accounts/balance-sheet');
+      return res || { assets: [], liabilities: [], equity: [], totalAssets: 0, totalLiabilities: 0, totalEquity: 0 };
+    },
+    enabled: activeTab === 'bs'
+  });
+
+  useEffect(() => {
+    if (balanceSheetData) setBalanceSheet(balanceSheetData);
+  }, [balanceSheetData]);
+
+  const { data: cashFlowData, isLoading: isLoadingCF } = useQuery({
+    queryKey: ['cash-flow'],
+    queryFn: async () => {
+      const res = await api.get<any>('/accounts/cash-flow');
+      return res || { operatingInflow: 0, operatingOutflow: 0, operatingNet: 0, investingInflow: 0, investingOutflow: 0, investingNet: 0, financingInflow: 0, financingOutflow: 0, financingNet: 0, netCashFlow: 0 };
+    },
+    enabled: activeTab === 'cf'
+  });
+
+  useEffect(() => {
+    if (cashFlowData) setCashFlow(cashFlowData);
+  }, [cashFlowData]);
+
+  const isLoading = isLoadingAccounts || isLoadingJournal || isLoadingTrial || isLoadingPL || isLoadingBS || isLoadingCF;
+
+  const queryClient = useQueryClient();
 
   const handleAccountSubmit = async (values: AccountFormValues) => {
     setIsSubmitting(true);
@@ -240,7 +283,7 @@ export const ChartOfAccounts = () => {
         toast.success('New ledger account created');
       }
       setIsAccountModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -264,7 +307,11 @@ export const ChartOfAccounts = () => {
       await api.post('/journal-entries', values);
       toast.success('Journal entry posted successfully');
       setIsJournalModalOpen(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['profit-loss'] });
+      queryClient.invalidateQueries({ queryKey: ['balance-sheet'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Posting failed');
     } finally {
@@ -277,7 +324,7 @@ export const ChartOfAccounts = () => {
     try {
       await api.delete(`/accounts/${id}`);
       toast.success('Account deleted');
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Deletion failed');
     }

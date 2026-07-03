@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
-import { Landmark } from 'lucide-react';
+
 
 export default function AuthLayout() {
   return (

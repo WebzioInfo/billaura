@@ -33,7 +33,7 @@ export const ForgotPassword = () => {
 
       setSuccess('Recovery verification code sent successfully.');
       setTimeout(() => {
-        navigate(`/auth/reset-password?email=${encodeURIComponent(data.email)}`);
+        navigate(`/reset-password?email=${encodeURIComponent(data.email)}`);
       }, 1500);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to send recovery code. Please check the email.');
@@ -99,7 +99,7 @@ export const ForgotPassword = () => {
 
       <div className="text-center pt-2">
         <Link
-          to="/auth/login"
+          to="/login"
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />

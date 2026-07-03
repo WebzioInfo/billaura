@@ -20,6 +20,7 @@ const MENUS = [
       { label: 'Leads', path: '/leads', id: 'leads' },
       { label: 'Quotations', path: '/quotations', id: 'quotations' },
       { label: 'Sales Orders', path: '/sales-orders', id: 'sales-orders' },
+      { label: 'Delivery Notes', path: '/delivery-notes', id: 'delivery-notes' },
       { label: 'Invoices', path: '/invoices', id: 'invoices' },
       { label: 'Payments', path: '/payments', id: 'payments' },
       { label: 'Credit Notes', path: '/credit-notes', id: 'credit-notes' },
@@ -45,6 +46,7 @@ const MENUS = [
     items: [
       { label: 'Vendors', path: '/vendors', id: 'vendors' },
       { label: 'Purchase Orders', path: '/purchase-orders', id: 'purchase-orders' },
+      { label: 'Goods Receipts', path: '/goods-receipts', id: 'goods-receipts' },
       { label: 'Bills', path: '/bills', id: 'bills' },
       { label: 'Vendor Payments', path: '/vendor-payments', id: 'vendor-payments' },
       { label: 'Debit Notes', path: '/debit-notes', id: 'debit-notes' },
@@ -58,16 +60,24 @@ const MENUS = [
     items: [
       { label: 'Products', path: '/products', id: 'products' },
       { label: 'Services', path: '/services', id: 'services' },
+      { label: 'Categories', path: '/categories', id: 'categories' },
+      { label: 'Brands', path: '/brands', id: 'brands' },
       { label: 'Warehouses', path: '/warehouses', id: 'warehouses' },
-      { label: 'Stock Adjustments', path: '/inventory', id: 'inventory-adj' },
+      { label: 'Batches', path: '/batches', id: 'batches' },
+      { label: 'Serial Numbers', path: '/serials', id: 'serials' },
+      { label: 'BOM', path: '/bom', id: 'bom' },
+      { label: 'Inventory Adjustments', path: '/inventory', id: 'inventory-adjustments' },
     ]
   },
   {
     id: 'accounting',
     label: 'Accounting',
     items: [
-      { label: 'Chart of Accounts', path: '/chart-of-accounts', id: 'chart-of-accounts' },
-      { label: 'Journal Entries', path: '/journal-entries', id: 'journal-entries' },
+      { label: 'Chart of Accounts', path: '/chart-of-accounts', id: 'coa' },
+      { label: 'Journal Entries', path: '/journal-entries', id: 'journals' },
+      { label: 'Banking', path: '/banking', id: 'banking' },
+      { label: 'Bank Transactions', path: '/bank-transactions', id: 'bank-transactions' },
+      { label: 'Reconciliation', path: '/reconciliation', id: 'reconciliation' },
       { label: 'General Ledger', path: '/general-ledger', id: 'general-ledger' },
       { label: 'Trial Balance', path: '/trial-balance', id: 'trial-balance' },
       { label: 'Profit & Loss', path: '/profit-loss', id: 'profit-loss' },
@@ -102,6 +112,24 @@ const MENUS = [
       { label: 'Employees', path: '/employees', id: 'employees' },
       { label: 'Departments', path: '/departments', id: 'departments' },
       { label: 'Payroll', path: '/payroll', id: 'payroll' },
+    ]
+  },
+  {
+    id: 'assets-projects',
+    label: 'Assets & Projects',
+    items: [
+      { label: 'Fixed Assets', path: '/fixed-assets', id: 'fixed-assets' },
+      { label: 'Project Accounting', path: '/projects', id: 'projects' },
+    ]
+  },
+  {
+    id: 'hr-payroll',
+    label: 'HR & Payroll',
+    items: [
+      { label: 'Employees', path: '/employees', id: 'employees' },
+      { label: 'Attendance', path: '/attendance', id: 'attendance' },
+      { label: 'Leave Applications', path: '/leaves', id: 'leaves' },
+      { label: 'Salary Slips', path: '/salary-slips', id: 'salary-slips' },
     ]
   },
   {

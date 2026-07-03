@@ -1,10 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsBoolean } from 'class-validator';
 import { AccountCategory, AccountSubCategory } from '@prisma/client';
 
 export class CreateAccountDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @IsString()
+  @IsOptional()
+  code?: string;
 
   @IsEnum(AccountCategory)
   @IsNotEmpty()
@@ -17,12 +21,24 @@ export class CreateAccountDto {
   @IsNumber()
   @IsOptional()
   balance?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isGroup?: boolean;
+
+  @IsString()
+  @IsOptional()
+  parentId?: string;
 }
 
 export class UpdateAccountDto {
   @IsString()
   @IsOptional()
   name?: string;
+
+  @IsString()
+  @IsOptional()
+  code?: string;
 
   @IsEnum(AccountCategory)
   @IsOptional()
@@ -35,4 +51,12 @@ export class UpdateAccountDto {
   @IsNumber()
   @IsOptional()
   balance?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isGroup?: boolean;
+
+  @IsString()
+  @IsOptional()
+  parentId?: string;
 }

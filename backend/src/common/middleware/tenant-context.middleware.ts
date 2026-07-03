@@ -19,7 +19,7 @@ export class TenantContextMiddleware implements NestMiddleware {
           companyId = companyId || decoded.tenantId || decoded.companyId;
           userId = decoded.sub || decoded.userId || null;
         }
-      } catch (err) {
+      } catch {
         // Suppress decode errors (guards will handle signature validation later)
       }
     }
