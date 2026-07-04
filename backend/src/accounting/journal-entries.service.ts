@@ -6,9 +6,14 @@ import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
 
+import { JournalPostingService } from './journal-posting.service';
+
 @Injectable()
 export class JournalEntriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly journalPostingService: JournalPostingService
+  ) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -65,51 +70,13 @@ export class JournalEntriesService {
       throw new ConflictException('Company context is required');
     }
 
-    // Verify double-entry balancing rules
-    let sumDebit = 0;
-    let sumCredit = 0;
-
-    for (const line of dto.lines) {
-      sumDebit += Number(line.debit || 0);
-      sumCredit += Number(line.credit || 0);
-    }
-
-    if (Math.abs(sumDebit - sumCredit) > 0.01) {
-      throw new BadRequestException(`Unbalanced journal entry. Total debits (${sumDebit}) must equal total credits (${sumCredit})`);
-    }
-
     return this.prisma.$transaction(async (tx) => {
-      const entry = await tx.journalEntry.create({
-        data: {
-          companyId,
-          date: new Date(dto.date),
-          reference: dto.reference || null,
-          description: dto.description || null,
-          lines: {
-            create: dto.lines.map((l) => ({
-              accountId: l.accountId,
-              debit: Number(l.debit || 0),
-              credit: Number(l.credit || 0),
-            })),
-          },
-        },
-        include: { lines: true },
+      return this.journalPostingService.post(tx as any, companyId, {
+        date: new Date(dto.date),
+        reference: dto.reference,
+        description: dto.description,
+        lines: dto.lines,
       });
-
-      // Update account balances
-      for (const line of dto.lines) {
-        const change = Number(line.debit || 0) - Number(line.credit || 0);
-        await tx.account.update({
-          where: { id: line.accountId },
-          data: {
-            balance: {
-              increment: change,
-            },
-          },
-        });
-      }
-
-      return entry;
     }, { timeout: 20000 });
   }
 }

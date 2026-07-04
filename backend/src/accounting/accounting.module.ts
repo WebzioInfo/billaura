@@ -13,6 +13,7 @@ import { FixedAssetsService } from "./fixed-assets.service";
 import { ProjectsController } from "./projects.controller";
 import { ProjectsService } from "./projects.service";
 import { DatabaseModule } from "../database/database.module";
+import { JournalPostingService } from "./journal-posting.service";
 
 @Module({
   imports: [DatabaseModule],
@@ -28,6 +29,7 @@ import { DatabaseModule } from "../database/database.module";
   providers: [
     AccountsService,
     JournalEntriesService,
+    JournalPostingService,
     CapitalService,
     CostCentersService,
     FixedAssetsService,
@@ -36,6 +38,7 @@ import { DatabaseModule } from "../database/database.module";
   exports: [
     AccountsService,
     JournalEntriesService,
+    JournalPostingService,
     CapitalService,
     CostCentersService,
     FixedAssetsService,

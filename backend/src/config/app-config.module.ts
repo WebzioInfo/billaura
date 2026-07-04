@@ -7,7 +7,13 @@ import { appConfigValidationSchema } from "./config.validation";
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      envFilePath: [".env.local", ".env"],
+      envFilePath: [
+        ".env.local",
+        ".env",
+        "apps/backend/.env.local",
+        "apps/backend/.env",
+        "../../.env",
+      ],
       validationSchema: appConfigValidationSchema,
       validationOptions: {
         allowUnknown: true,

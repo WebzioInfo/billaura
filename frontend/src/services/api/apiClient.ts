@@ -35,6 +35,7 @@ export class ApiClient {
     this.instance = axios.create({
       baseURL: options.baseURL,
       timeout: 30_000,
+      withCredentials: true,
       headers: {
         Accept: "application/json",
         "Cache-Control": "no-cache, no-store, must-revalidate",
