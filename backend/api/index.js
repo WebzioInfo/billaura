@@ -30,6 +30,23 @@ try {
 moduleLog(`APPLICATION MODULES LOADED (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
 
 const expressApp = express();
+
+// Add early logging middleware
+expressApp.use((req, res, next) => {
+    console.log(`[ExpressApp Middleware] ${req.method} ${req.url}`);
+    console.log(`[ExpressApp Middleware] Headers: ${JSON.stringify(req.headers)}`);
+    console.log(`[ExpressApp Middleware] Body exists? ${req.body !== undefined}`);
+    if (req.body) {
+        console.log(`[ExpressApp Middleware] Body: ${JSON.stringify(req.body)}`);
+    }
+    
+    // Hook finish event to trace response
+    res.on('finish', () => {
+        console.log(`[ExpressApp Middleware] Response finished: ${res.statusCode} for ${req.method} ${req.url}`);
+    });
+    
+    next();
+});
 let isInitialized = false;
 let initPromise = null;
 let startupLogs = [];
@@ -97,6 +114,10 @@ async function withTimeout(promise, ms) {
 }
 
 module.exports = async (req, res) => {
+    console.log(`\n--- Vercel Handler: ${req.method} ${req.url} ---`);
+    console.log(`[Vercel Handler] Query: ${JSON.stringify(req.query)}`);
+    console.log(`[Vercel Handler] Headers: ${JSON.stringify(req.headers)}`);
+    console.log(`[Vercel Handler] Body exists? ${req.body !== undefined}`);
     try {
         if (!isInitialized) {
             log("Initializing...");
@@ -105,8 +126,10 @@ module.exports = async (req, res) => {
             }
             await withTimeout(initPromise, 5000);
         }
+        console.log(`[Vercel Handler] Passing to expressApp`);
         return expressApp(req, res);
     } catch (err) {
+        console.error(`[Vercel Handler] CRITICAL ERROR: ${err.message}`, err);
         // If it's a timeout, return 500 immediately with the logs
         res.setHeader('Content-Type', 'application/json');
         res.statusCode = 500;

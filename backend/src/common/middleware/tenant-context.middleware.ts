@@ -6,6 +6,9 @@ import * as jwt from "jsonwebtoken";
 @Injectable()
 export class TenantContextMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
+    console.log(`[TenantContextMiddleware] Entered for ${req.method} ${req.url}`);
+    console.log(`[TenantContextMiddleware] Headers: ${JSON.stringify(req.headers)}`);
+    console.log(`[TenantContextMiddleware] Body: ${JSON.stringify(req.body)}`);
     let companyId = (req.headers["x-company-id"] ||
       req.headers["x-tenant-id"]) as string | undefined;
     let userId: string | null = null;
