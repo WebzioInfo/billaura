@@ -176,7 +176,14 @@ export class ApiClient {
   private unwrap<T>(responseData: any): T {
     if (responseData && typeof responseData === 'object' && 'success' in responseData && 'data' in responseData) {
       const payload = responseData.data;
-      if (payload && typeof payload === 'object') {
+      if (payload && typeof payload === 'object' && payload !== null) {
+        if (!('data' in payload)) {
+          Object.defineProperty(payload, 'data', {
+            get() { return this; },
+            enumerable: false,
+            configurable: true
+          });
+        }
         Object.defineProperty(payload, 'meta', {
           value: responseData.meta,
           enumerable: false,
