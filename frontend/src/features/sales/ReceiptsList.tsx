@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, Printer, Mail, Trash2, Edit3, 
-  DollarSign, CheckCircle, RefreshCw, FileSpreadsheet, Eye, ChevronLeft, ChevronRight 
+  DollarSign, CheckCircle, RefreshCw, FileSpreadsheet, Eye, ChevronLeft, ChevronRight, Receipt 
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { PageContainer, EmptyState, LoadingState } from '@/components/ui/LayoutComponents';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -104,23 +107,24 @@ export const ReceiptsList = () => {
   };
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto text-left text-foreground bg-background min-h-screen">
+    <PageContainer maxWidth="7xl">
       <PageHeader
         title="Payment Receipts"
         description="View and manage money collections and invoice allocation audits."
         primaryAction={
-          <button 
+          <Button 
             onClick={() => navigate('/receipts/new')}
-            className="bg-accent text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 text-sm shadow-lg shadow-accent/20 cursor-pointer hover:bg-accent/90 transition-all"
+            className="flex items-center gap-2 font-bold px-5"
+            variant="primary"
           >
             <Plus className="w-4 h-4" /> New Receipt
-          </button>
+          </Button>
         }
       />
 
       {/* Quick Stats Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 mt-6">
-        <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4 shadow-sm">
           <div className="p-3.5 bg-emerald-500/10 rounded-xl text-emerald-500"><DollarSign className="w-6 h-6" /></div>
           <div>
             <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Received</p>
@@ -129,7 +133,7 @@ export const ReceiptsList = () => {
             </h3>
           </div>
         </div>
-        <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4">
+        <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4 shadow-sm">
           <div className="p-3.5 bg-accent/10 rounded-xl text-accent"><CheckCircle className="w-6 h-6" /></div>
           <div>
             <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active Receipts</p>
@@ -141,7 +145,7 @@ export const ReceiptsList = () => {
       </div>
 
       {/* Control Actions Row */}
-      <div className="bg-surface border border-border rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+      <div className="bg-surface border border-border rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm">
         <div className="flex flex-1 w-full md:w-auto items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -153,9 +157,9 @@ export const ReceiptsList = () => {
               className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent"
             />
           </div>
-          <button onClick={() => fetchReceipts()} className="p-2 border border-border hover:bg-muted rounded-xl transition-all cursor-pointer">
+          <Button onClick={() => fetchReceipts()} variant="outline" size="sm" className="h-9 w-9 p-0">
             <RefreshCw className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
 
         <div className="flex w-full md:w-auto items-center gap-3 justify-end">
@@ -182,120 +186,111 @@ export const ReceiptsList = () => {
             <option value="CREDIT_CARD">Credit Card</option>
           </select>
 
-          <button 
+          <Button 
             onClick={handleExportCSV}
-            className="px-4 py-2 border border-border hover:bg-muted text-foreground font-semibold rounded-xl text-sm flex items-center gap-2 cursor-pointer transition-all"
+            variant="outline"
+            size="sm"
+            className="h-9 font-semibold flex items-center gap-2"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Export CSV
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Receipts Table */}
-      <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-sm">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/10 border-b border-border">
-              <TableHead className="font-semibold py-4 px-6">Receipt No</TableHead>
-              <TableHead className="font-semibold py-4 px-6">Date</TableHead>
-              <TableHead className="font-semibold py-4 px-6">Customer</TableHead>
-              <TableHead className="font-semibold py-4 px-6">Method</TableHead>
-              <TableHead className="font-semibold py-4 px-6">Account Ledger</TableHead>
-              <TableHead className="font-semibold py-4 px-6 text-right">Amount</TableHead>
-              <TableHead className="font-semibold py-4 px-6 text-center">Status</TableHead>
-              <TableHead className="font-semibold py-4 px-6 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              [...Array(5)].map((_, idx) => (
-                <TableRow key={idx} className="border-b border-border/40 animate-pulse">
-                  <TableCell className="py-4 px-6"><div className="h-4 bg-border rounded w-2/3" /></TableCell>
-                  <TableCell className="py-4 px-6"><div className="h-4 bg-border rounded w-1/2" /></TableCell>
-                  <TableCell className="py-4 px-6"><div className="h-4 bg-border rounded w-3/4" /></TableCell>
-                  <TableCell className="py-4 px-6"><div className="h-4 bg-border rounded w-1/3" /></TableCell>
-                  <TableCell className="py-4 px-6"><div className="h-4 bg-border rounded w-2/3" /></TableCell>
-                  <TableCell className="py-4 px-6 text-right"><div className="h-4 bg-border rounded w-1/2 ml-auto" /></TableCell>
-                  <TableCell className="py-4 px-6 text-center"><div className="h-4 bg-border rounded w-1/3 mx-auto" /></TableCell>
-                  <TableCell className="py-4 px-6 text-right"><div className="h-4 bg-border rounded w-1/4 ml-auto" /></TableCell>
+      {loading ? (
+        <LoadingState variant="table" />
+      ) : receipts.length === 0 ? (
+        <EmptyState
+          icon={<Receipt className="w-8 h-8 text-muted-foreground" />}
+          title="No receipts found"
+          description="Record a customer payment receipt to allocate invoice balances."
+          actionLabel="Record First Receipt"
+          onActionClick={() => navigate('/receipts/new')}
+        />
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/10 border-b border-border">
+                <TableHead className="font-semibold py-4 px-6">Receipt No</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Date</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Customer</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Method</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Account Ledger</TableHead>
+                <TableHead className="font-semibold py-4 px-6 text-right">Amount</TableHead>
+                <TableHead className="font-semibold py-4 px-6 text-center">Status</TableHead>
+                <TableHead className="font-semibold py-4 px-6 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {receipts.map((r: any) => (
+                <TableRow key={r.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
+                  <TableCell className="py-4 px-6 font-mono font-bold text-foreground">{r.receiptNo}</TableCell>
+                  <TableCell className="py-4 px-6">{new Date(r.date).toLocaleDateString()}</TableCell>
+                  <TableCell className="py-4 px-6 font-semibold text-foreground">{r.businessPartner?.name || 'N/A'}</TableCell>
+                  <TableCell className="py-4 px-6 text-xs font-semibold">{r.paymentMethod}</TableCell>
+                  <TableCell className="py-4 px-6 text-xs font-mono">{r.account?.name || 'N/A'}</TableCell>
+                  <TableCell className="py-4 px-6 text-right font-bold text-foreground">₹{Number(r.amount).toLocaleString('en-IN')}</TableCell>
+                  <TableCell className="py-4 px-6 text-center">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      r.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                    }`}>
+                      {r.status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-4 px-6 text-right space-x-1.5">
+                    <Button onClick={() => navigate(`/receipts/${r.id}`)} variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <Eye className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button onClick={() => navigate(`/receipts/${r.id}/edit`)} variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button onClick={() => handlePrint(r.id)} variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <Printer className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button onClick={() => handleEmail(r.id)} variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <Mail className="w-3.5 h-3.5" />
+                    </Button>
+                    {r.status === 'COMPLETED' && (
+                      <Button onClick={() => handleVoid(r.id)} variant="ghost" size="sm" className="h-8 w-8 p-0 hover:text-red-500 hover:bg-red-500/10">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
-              ))
-            ) : receipts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="py-16 text-center">
-                  <div className="max-w-md mx-auto space-y-4">
-                    <p className="text-muted-foreground text-sm font-medium">No receipts matched the search filters or are registered in this business partner collection cycle.</p>
-                    <button 
-                      onClick={() => navigate('/receipts/new')}
-                      className="bg-accent text-white px-5 py-2.5 rounded-xl font-bold text-xs cursor-pointer shadow-lg shadow-accent/15"
-                    >
-                      Record First Receipt
-                    </button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : receipts.map((r: any) => (
-              <TableRow key={r.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
-                <TableCell className="py-4 px-6 font-mono font-bold text-foreground">{r.receiptNo}</TableCell>
-                <TableCell className="py-4 px-6">{new Date(r.date).toLocaleDateString()}</TableCell>
-                <TableCell className="py-4 px-6 font-semibold text-foreground">{r.businessPartner?.name || 'N/A'}</TableCell>
-                <TableCell className="py-4 px-6 text-xs font-semibold">{r.paymentMethod}</TableCell>
-                <TableCell className="py-4 px-6 text-xs font-mono">{r.account?.name || 'N/A'}</TableCell>
-                <TableCell className="py-4 px-6 text-right font-bold text-foreground">₹{Number(r.amount).toLocaleString('en-IN')}</TableCell>
-                <TableCell className="py-4 px-6 text-center">
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    r.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                  }`}>
-                    {r.status}
-                  </span>
-                </TableCell>
-                <TableCell className="py-4 px-6 text-right space-x-1.5">
-                  <button onClick={() => navigate(`/receipts/${r.id}`)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all cursor-pointer inline-flex">
-                    <Eye className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => navigate(`/receipts/${r.id}/edit`)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all cursor-pointer inline-flex">
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => handlePrint(r.id)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all cursor-pointer inline-flex">
-                    <Printer className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => handleEmail(r.id)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all cursor-pointer inline-flex">
-                    <Mail className="w-3.5 h-3.5" />
-                  </button>
-                  {r.status === 'COMPLETED' && (
-                    <button onClick={() => handleVoid(r.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer inline-flex">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
 
       {/* Pagination Row */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center mt-6">
           <p className="text-xs text-muted-foreground">Showing page {page} of {totalPages}</p>
           <div className="flex gap-2">
-            <button 
+            <Button 
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-2 border border-border hover:bg-muted rounded-xl cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 p-0"
             >
               <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button 
+            </Button>
+            <Button 
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="p-2 border border-border hover:bg-muted rounded-xl cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 p-0"
             >
               <ChevronRight className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };

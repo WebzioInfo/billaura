@@ -5,12 +5,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import { 
-  BookOpen, Plus, Loader2, Calendar, Trash2 
+  BookOpen, Plus, Loader2, Calendar, Trash2, Pencil 
 } from 'lucide-react';
 import api from '../../services/api';
 import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useApiList } from '../../hooks/useApiList';
+import { LedgerLookup } from '../../components/ui/LedgerLookup';
 
 // --- SCHEMAS ---
 const accountSchema = z.object({
@@ -156,7 +158,10 @@ export const ChartOfAccounts = () => {
       id: 'actions',
       cell: ({ row }) => {
         return (
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button onClick={() => handleEditAccount(row.original)} className="p-1.5 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 rounded-lg cursor-pointer">
+              <Pencil className="w-4 h-4" />
+            </button>
             <button onClick={() => handleDeleteAccount(row.original.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer">
               <Trash2 className="w-4 h-4" />
             </button>
@@ -190,14 +195,19 @@ export const ChartOfAccounts = () => {
     },
   ];
  
-  const { data: accountsData, isLoading: isLoadingAccounts } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: async () => {
-      const res = await api.get<any>('/accounts');
-      return res.data || [];
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 });
+  const [globalFilter, setGlobalFilter] = useState('');
+
+  const { data: accountsData, meta: accountsMeta, isLoading: isLoadingAccounts } = useApiList<Account>(
+    ['accounts', String(pagination.pageIndex), String(pagination.pageSize), globalFilter],
+    '/accounts',
+    { 
+      page: pagination.pageIndex + 1, 
+      limit: pagination.pageSize,
+      search: globalFilter || undefined
     },
-    enabled: activeTab === 'coa' || activeTab === 'journal'
-  });
+    { enabled: activeTab === 'coa' || activeTab === 'journal' }
+  );
   
   useEffect(() => {
     if (accountsData) setAccounts(accountsData);
@@ -272,6 +282,16 @@ export const ChartOfAccounts = () => {
 
   const queryClient = useQueryClient();
 
+  const handleEditAccount = (acc: Account) => {
+    setEditingId(acc.id);
+    accountForm.reset({
+      name: acc.name,
+      category: acc.category,
+      balance: acc.balance || 0,
+    });
+    setIsAccountModalOpen(true);
+  };
+
   const handleAccountSubmit = async (values: AccountFormValues) => {
     setIsSubmitting(true);
     try {
@@ -284,6 +304,9 @@ export const ChartOfAccounts = () => {
       }
       setIsAccountModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['receipt-master-data'] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['account-lookup'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -437,7 +460,18 @@ export const ChartOfAccounts = () => {
             className="border-none shadow-none border-b rounded-none mb-0" 
           />
           <div className="p-4">
-            <DataTable columns={accountColumns} data={accounts} searchKey="name" exportFilename="chart_of_accounts" />
+            <DataTable 
+              columns={accountColumns} 
+              data={accounts} 
+              exportFilename="chart_of_accounts" 
+              manualPagination
+              manualFiltering
+              pageCount={accountsMeta?.totalPages || 0}
+              pagination={pagination}
+              onPaginationChange={setPagination}
+              globalFilter={globalFilter}
+              onGlobalFilterChange={setGlobalFilter}
+            />
           </div>
         </div>
       ) : activeTab === 'journal' ? (
@@ -735,14 +769,11 @@ export const ChartOfAccounts = () => {
                   {fields.map((field, index) => (
                     <div key={field.id} className="grid grid-cols-12 gap-3 items-end bg-background bg-opacity-40 p-3 rounded-xl border border-border">
                       <div className="col-span-6">
-                        <label className="block text-[10px] font-semibold text-muted-foreground uppercase mb-1">Ledger Account *</label>
-                        <select
-                          {...journalForm.register(`lines.${index}.accountId` as const)}
-                          className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none"
-                        >
-                          <option value="">Select account...</option>
-                          {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name} ({acc.category})</option>)}
-                        </select>
+                        <LedgerLookup
+                          value={watchedLines[index]?.accountId || ''}
+                          onChange={(val) => journalForm.setValue(`lines.${index}.accountId`, val)}
+                          placeholder="Select account..."
+                        />
                       </div>
 
                       <div className="col-span-2">

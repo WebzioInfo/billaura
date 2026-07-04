@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { BackNavigation } from './LayoutComponents';
 
 interface BreadcrumbItem {
   label: string;
@@ -16,11 +17,27 @@ interface PageHeaderProps {
   secondaryAction?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
+  backTo?: {
+    label: string;
+    path?: string;
+  };
 }
 
-export const PageHeader = ({ title, description, breadcrumbs, primaryAction, secondaryAction, children, className }: PageHeaderProps) => {
+export const PageHeader = ({
+  title,
+  description,
+  breadcrumbs,
+  primaryAction,
+  secondaryAction,
+  children,
+  className,
+  backTo,
+}: PageHeaderProps) => {
   return (
-    <div className={cn("mb-8 space-y-4", className)}>
+    <div className={cn("mb-6 space-y-4", className)}>
+      {backTo && (
+        <BackNavigation label={backTo.label} to={backTo.path} />
+      )}
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav aria-label="Breadcrumb" className="flex items-center space-x-1 text-[13px] text-muted-foreground">
           {breadcrumbs.map((item, index) => (
@@ -28,11 +45,11 @@ export const PageHeader = ({ title, description, breadcrumbs, primaryAction, sec
               {index > 0 && <ChevronRight className="w-3.5 h-3.5 mx-1" />}
               {
                 item.href && index !== breadcrumbs.length - 1 ? (
-                  <Link to={item.href} className="hover:text-foreground transition-colors">
+                  <Link to={item.href} className="hover:text-foreground transition-colors font-medium">
                     {item.label}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">{item.label}</span>
+                  <span className="font-semibold text-foreground">{item.label}</span>
                 )
               }
             </React.Fragment>

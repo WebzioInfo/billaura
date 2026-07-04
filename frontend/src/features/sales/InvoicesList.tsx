@@ -1,7 +1,10 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Receipt } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { PageContainer, EmptyState, LoadingState } from '@/components/ui/LayoutComponents';
 import apiClient from '@/services/api';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -19,60 +22,73 @@ export const InvoicesList = () => {
   });
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <PageContainer maxWidth="7xl">
       <PageHeader
         title="Invoices"
         description="Manage your sales invoices"
         primaryAction={
-          <button 
+          <Button 
             onClick={() => navigate('/invoices/new')}
-            className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm"
+            className="flex items-center gap-2 font-bold px-5"
+            variant="primary"
           >
             <Plus className="w-4 h-4" /> New Invoice
-          </button>
+          </Button>
         }
       />
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Number</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Client</TableHead>
-            <TableHead>Total</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <TableRow><TableCell colSpan={6}><div className="text-center py-8 text-muted-foreground">Loading...</div></TableCell></TableRow>
-          ) : data.length === 0 ? (
-            <TableRow><TableCell colSpan={6}><div className="text-center py-8 text-muted-foreground">No invoices found</div></TableCell></TableRow>
-          ) : data.map((item: any) => (
-            <TableRow key={item.id}>
-              <TableCell className="font-semibold">{item.invoiceNumber}</TableCell>
-              <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-              <TableCell>{item.customer?.name}</TableCell>
-              <TableCell className="font-bold">${item.totalAmount}</TableCell>
-              <TableCell>
-                <span className={`px-2 py-1 rounded text-xs ${item.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                  {item.status}
-                </span>
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
-                  <button 
-                    onClick={() => navigate(`/invoices/${item.id}/print`)}
-                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded border border-gray-300"
-                  >
-                    View / Print
-                  </button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+      {loading ? (
+        <LoadingState variant="table" />
+      ) : data.length === 0 ? (
+        <EmptyState
+          icon={<Receipt className="w-8 h-8 text-muted-foreground" />}
+          title="No invoices found"
+          description="Create your first invoice to get started."
+          actionLabel="New Invoice"
+          onActionClick={() => navigate('/invoices/new')}
+        />
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/10 border-b border-border">
+                <TableHead className="font-semibold py-4 px-6">Number</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Date</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Client</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Total</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Status</TableHead>
+                <TableHead className="font-semibold py-4 px-6 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((item: any) => (
+                <TableRow key={item.id} className="hover:bg-muted/50 border-b border-border transition-colors">
+                  <TableCell className="font-semibold py-4 px-6">{item.invoiceNumber}</TableCell>
+                  <TableCell className="py-4 px-6">{new Date(item.date).toLocaleDateString()}</TableCell>
+                  <TableCell className="py-4 px-6">{item.customer?.name}</TableCell>
+                  <TableCell className="font-bold py-4 px-6">₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}</TableCell>
+                  <TableCell className="py-4 px-6">
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${item.status === 'PAID' ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                      {item.status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-4 px-6 text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        onClick={() => navigate(`/invoices/${item.id}/print`)}
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                      >
+                        View / Print
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+    </PageContainer>
   );
 };

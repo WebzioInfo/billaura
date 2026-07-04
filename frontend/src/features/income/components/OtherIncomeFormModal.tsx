@@ -13,9 +13,10 @@ interface OtherIncomeFormModalProps {
   onClose: () => void;
   onSuccess: () => void;
   editingId?: string | null;
+  defaultCategoryType?: string;
 }
 
-export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: OtherIncomeFormModalProps) {
+export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, defaultCategoryType }: OtherIncomeFormModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().substring(0, 10),
@@ -69,10 +70,20 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: 
           date: new Date(incomeData.date).toISOString().substring(0, 10),
         });
       } else if (!editingId) {
+        let initialCategoryId = '';
+        if (defaultCategoryType && categories.length > 0) {
+          const match = categories.find(
+            (c: any) => c.name.toLowerCase() === defaultCategoryType.toLowerCase()
+          );
+          if (match) {
+            initialCategoryId = match.id;
+          }
+        }
+
         setFormData({
           date: new Date().toISOString().substring(0, 10),
           incomeNo: 'INC-' + Math.floor(Math.random() * 1000000),
-          categoryId: '',
+          categoryId: initialCategoryId,
           walkInCustomer: '',
           description: '',
           subTotal: 0,
@@ -85,7 +96,7 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId }: 
         });
       }
     }
-  }, [isOpen, editingId, incomeData]);
+  }, [isOpen, editingId, incomeData, categories, defaultCategoryType]);
 
   const calculateTotal = () => {
     return Number(formData.subTotal) + Number(formData.cgstAmount) + Number(formData.sgstAmount) + Number(formData.igstAmount);

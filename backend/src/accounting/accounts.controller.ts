@@ -12,7 +12,7 @@ import {
   HttpCode,
 } from "@nestjs/common";
 import { AccountsService } from "./accounts.service";
-import { CreateAccountDto, UpdateAccountDto } from "./dto/account.dto";
+import { CreateAccountDto, UpdateAccountDto, AccountLookupQueryDto } from "./dto/account.dto";
 import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
@@ -40,6 +40,11 @@ export class AccountsController {
   @Get("cash-flow")
   async getCashFlow() {
     return this.accountsService.getCashFlow();
+  }
+
+  @Get("lookup")
+  async lookup(@Query() query: AccountLookupQueryDto) {
+    return this.accountsService.lookup(query);
   }
 
   @Get()

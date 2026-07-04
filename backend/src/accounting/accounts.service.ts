@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
+import { CreateAccountDto, UpdateAccountDto, AccountLookupQueryDto } from './dto/account.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
@@ -9,6 +9,8 @@ import type { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AccountsService {
+  private readonly logger = new Logger(AccountsService.name);
+  
   constructor(private readonly prisma: PrismaService) {}
 
   private async ensureDefaultChartOfAccounts(companyId: string) {
@@ -105,6 +107,175 @@ export class AccountsService {
     ]);
 
     return toPaginatedResult(data, total, query);
+  }
+
+  async lookup(query: AccountLookupQueryDto) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const search = query.search?.trim();
+    const categories: AccountCategory[] = [];
+    const subCategories: AccountSubCategory[] = [];
+
+    if (query.allowedAccountTypes) {
+      const types = query.allowedAccountTypes.split(',');
+      for (const t of types) {
+        const trimmed = t.trim().toUpperCase();
+        if (trimmed in AccountCategory) {
+          categories.push(trimmed as AccountCategory);
+        } else if (trimmed in AccountSubCategory) {
+          subCategories.push(trimmed as AccountSubCategory);
+        }
+      }
+    }
+
+    const where: Prisma.AccountWhereInput = {
+      companyId,
+      ...(query.isGroup !== undefined ? { isGroup: query.isGroup } : { isGroup: false }),
+      ...(search ? {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { code: { contains: search, mode: 'insensitive' } },
+        ]
+      } : {}),
+      ...(categories.length > 0 || subCategories.length > 0 ? {
+        OR: [
+          ...(categories.length > 0 ? [{ category: { in: categories } }] : []),
+          ...(subCategories.length > 0 ? [{ subCategory: { in: subCategories } }] : []),
+        ]
+      } : {}),
+    };
+
+    this.logger.log(`Executing lookup query for tenant ${companyId} with filters: ${JSON.stringify(query)}`);
+
+    try {
+      if (search) {
+        // Case with search term: Retrieve matches, rank in memory, and then paginate
+        const data = await this.prisma.account.findMany({
+          where,
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            category: true,
+            subCategory: true,
+            isGroup: true,
+            parentId: true,
+            parent: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              }
+            }
+          },
+          take: 500, // Capped to protect memory
+        });
+
+        const term = search.toLowerCase();
+        const score = (item: any) => {
+          const name = item.name.toLowerCase();
+          const code = (item.code || '').toLowerCase();
+          
+          if (name === term || code === term) return 10; // Exact match
+          if (name.startsWith(term) || code.startsWith(term)) return 8; // Starts with
+          
+          // Word contains (starts at word boundary)
+          const wordBoundaryRegex = new RegExp('\\b' + term);
+          if (wordBoundaryRegex.test(name) || wordBoundaryRegex.test(code)) return 5;
+          
+          if (name.includes(term) || code.includes(term)) return 3; // Contains anywhere
+          return 0;
+        };
+
+        const rankedData = data
+          .map(item => ({ item, score: score(item) }))
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return a.item.name.localeCompare(b.item.name);
+          })
+          .map(x => x.item);
+
+        const page = Number(query.page) || 1;
+        const limit = Number(query.limit) || 25;
+        const total = rankedData.length;
+        const paginatedData = rankedData.slice((page - 1) * limit, page * limit);
+
+        const mappedData = paginatedData.map(item => ({
+          id: item.id,
+          name: item.name,
+          code: item.code,
+          accountType: item.subCategory || item.category,
+          category: item.category,
+          parent: item.parent ? { id: item.parent.id, name: item.parent.name, code: item.parent.code } : null
+        }));
+
+        this.logger.log(`Lookup search successful. Found ${mappedData.length} records of ${total} total.`);
+        return {
+          data: mappedData,
+          meta: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        };
+      } else {
+        // Case without search term: Paginate directly in database for scale
+        const { skip, take, page, limit } = getPagination(query);
+
+        const [data, total] = await this.prisma.$transaction([
+          this.prisma.account.findMany({
+            where,
+            skip,
+            take,
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              category: true,
+              subCategory: true,
+              isGroup: true,
+              parentId: true,
+              parent: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                }
+              }
+            },
+            orderBy: { name: 'asc' },
+          }),
+          this.prisma.account.count({ where }),
+        ]);
+
+        const mappedData = data.map(item => ({
+          id: item.id,
+          name: item.name,
+          code: item.code,
+          accountType: item.subCategory || item.category,
+          category: item.category,
+          parent: item.parent ? { id: item.parent.id, name: item.parent.name, code: item.parent.code } : null
+        }));
+
+        this.logger.log(`Lookup standard listing successful. Found ${mappedData.length} records of ${total} total.`);
+        return {
+          data: mappedData,
+          meta: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        };
+      }
+    } catch (error: any) {
+      this.logger.error(`Lookup query failed: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   async findOne(id: string) {

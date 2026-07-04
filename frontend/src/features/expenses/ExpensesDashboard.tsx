@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -32,10 +32,11 @@ export const ExpensesDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const searchParams = new URLSearchParams(location.search);
+  const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') === 'categories' ? 'categories' : 'claims';
-  const setActiveTab = (tab: string) => navigate(`/expenses?tab=${tab}`);
+  const setActiveTab = (tab: string) => setSearchParams({ tab });
 
+  const defaultCategoryType = searchParams.get('type') || '';
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -82,6 +83,15 @@ export const ExpensesDashboard = () => {
     }
   });
   const bankAccounts = Array.isArray(bankAccountsData) ? bankAccountsData : [];
+
+  useEffect(() => {
+    if (isModalOpen && !editingId && defaultCategoryType && categories.length > 0) {
+      const match = categories.find((cat: any) => cat.name.toLowerCase() === defaultCategoryType.toLowerCase());
+      if (match) {
+        form.setValue('categoryId', match.id);
+      }
+    }
+  }, [isModalOpen, editingId, defaultCategoryType, categories, form]);
 
   const saveExpense = useMutation({
     mutationFn: async (values: ExpenseFormValues) => {

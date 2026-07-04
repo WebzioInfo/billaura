@@ -5,11 +5,14 @@ import { Plus, Trash2, Edit } from 'lucide-react';
 import { OtherIncomeFormModal } from './OtherIncomeFormModal';
 import api from '../../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 
 export function OtherIncomesList() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const defaultCategoryType = searchParams.get('type') || '';
 
   const { data: incomes = [] } = useQuery({
     queryKey: ['other-incomes'],
@@ -115,6 +118,7 @@ export function OtherIncomesList() {
           queryClient.invalidateQueries({ queryKey: ['other-incomes'] });
         }}
         editingId={editingId}
+        defaultCategoryType={defaultCategoryType}
       />
     </div>
   );

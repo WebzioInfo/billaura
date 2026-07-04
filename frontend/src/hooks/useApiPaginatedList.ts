@@ -1,5 +1,6 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
 import api from '../services/api';
+import { ensureArray } from '../services/api/apiClient';
 
 export interface PaginationMeta {
   page: number;
@@ -26,31 +27,20 @@ export function useApiPaginatedList<T>(
       // or if it's missing, just a raw response.
       const res: any = await api.get(url, { params });
       
-      let data: T[] = [];
+      const rawData = ensureArray<T>(res);
+      let data: T[] = rawData;
+      
       let meta: PaginationMeta = {
         page: params?.page || 1,
         limit: params?.limit || 25,
-        total: 0,
-        totalPages: 0,
+        total: rawData.length,
+        totalPages: 1,
       };
 
-      if (res?.data && Array.isArray(res.data)) {
-        data = res.data;
-        if (res.meta) {
-          meta = { ...meta, ...res.meta };
-        } else {
-          meta.total = data.length;
-          meta.totalPages = 1;
-        }
-      } else if (res?.data?.data && Array.isArray(res.data.data)) {
-        data = res.data.data;
-        if (res.data.meta) {
-          meta = { ...meta, ...res.data.meta };
-        }
-      } else if (Array.isArray(res)) {
-        data = res;
-        meta.total = data.length;
-        meta.totalPages = 1;
+      if (res && typeof res === 'object' && res.meta) {
+        meta = { ...meta, ...res.meta };
+      } else if (res?.data && typeof res.data === 'object' && res.data.meta) {
+        meta = { ...meta, ...res.data.meta };
       }
 
       return { data, meta };

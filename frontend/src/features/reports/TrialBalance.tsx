@@ -1,8 +1,11 @@
 import React from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { PageContainer, EmptyState, LoadingState } from '@/components/ui/LayoutComponents';
 import apiClient from '@/services/api';
-import { Download } from 'lucide-react';
+import { Download, BarChart2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 export const TrialBalance = () => {
@@ -15,40 +18,50 @@ export const TrialBalance = () => {
   });
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <PageContainer maxWidth="7xl">
       <PageHeader
         title="Trial Balance"
         description="Real-time trial balance reporting"
         primaryAction={
-          <button className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm">
+          <Button 
+            onClick={() => {}}
+            className="flex items-center gap-2 font-bold px-5"
+            variant="outline"
+          >
             <Download className="w-4 h-4" /> Export
-          </button>
+          </Button>
         }
       />
-      <div className="glass-panel rounded-2xl border border-border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Account Name</TableHead>
-              <TableHead className="text-right">Debit</TableHead>
-              <TableHead className="text-right">Credit</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={3}><div className="text-center py-8 text-muted-foreground">Loading...</div></TableCell></TableRow>
-            ) : data.length === 0 ? (
-              <TableRow><TableCell colSpan={3}><div className="text-center py-8 text-muted-foreground">No data found</div></TableCell></TableRow>
-            ) : data.map((item: any, i: number) => (
-              <TableRow key={i}>
-                <TableCell className="font-medium">{item.accountName}</TableCell>
-                <TableCell className="text-right">${item.debit}</TableCell>
-                <TableCell className="text-right">${item.credit}</TableCell>
+      {loading ? (
+        <LoadingState variant="table" />
+      ) : data.length === 0 ? (
+        <EmptyState
+          icon={<BarChart2 className="w-8 h-8 text-muted-foreground" />}
+          title="No data found"
+          description="Trial balance ledger balances will populate when transactions are registered."
+        />
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/10 border-b border-border">
+                <TableHead className="font-semibold py-4 px-6">Account Name</TableHead>
+                <TableHead className="font-semibold py-4 px-6 text-right">Debit</TableHead>
+                <TableHead className="font-semibold py-4 px-6 text-right">Credit</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+            </TableHeader>
+            <TableBody>
+              {data.map((item: any, i: number) => (
+                <TableRow key={i} className="hover:bg-muted/50 border-b border-border transition-colors">
+                  <TableCell className="font-medium py-4 px-6 text-foreground">{item.accountName}</TableCell>
+                  <TableCell className="text-right py-4 px-6">₹{Number(item.debit || 0).toLocaleString('en-IN')}</TableCell>
+                  <TableCell className="text-right py-4 px-6">₹{Number(item.credit || 0).toLocaleString('en-IN')}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+    </PageContainer>
   );
 };

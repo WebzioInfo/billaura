@@ -6,7 +6,32 @@ import {
   IsNumber,
   IsBoolean,
 } from "class-validator";
+import { Type } from "class-transformer";
 import { AccountCategory, AccountSubCategory } from "@prisma/client";
+import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
+
+export class AccountLookupQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsEnum(AccountCategory)
+  category?: AccountCategory;
+
+  @IsOptional()
+  @IsEnum(AccountSubCategory)
+  subCategory?: AccountSubCategory;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  isGroup?: boolean;
+
+  @IsOptional()
+  @IsString()
+  allowedAccountTypes?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
 
 export class CreateAccountDto {
   @IsString()

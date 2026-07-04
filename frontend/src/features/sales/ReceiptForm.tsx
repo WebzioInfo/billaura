@@ -1,9 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, Calendar, Receipt, Search, ChevronDown, Check, CreditCard, Banknote, HelpCircle, Loader2, ArrowLeft, Info, Landmark, Wallet, CheckCircle, FileCheck } from 'lucide-react';
+import { PageContainer, LoadingState } from '@/components/ui/LayoutComponents';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
+import { ensureArray } from '@/services/api/apiClient';
+import { LedgerLookup } from '@/components/ui/LedgerLookup';
 
 interface InvoiceAllocationRow {
   invoiceId: string;
@@ -19,7 +24,9 @@ export const ReceiptForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { pathname } = useLocation();
-  
+  const [searchParams] = useSearchParams();
+  const queryCustomerId = searchParams.get('customerId');
+
   const isEdit = pathname.endsWith('/edit');
   const isView = !!id && !isEdit;
 
@@ -49,20 +56,25 @@ export const ReceiptForm = () => {
   const { data: masterData, isLoading: isLoadingMaster } = useQuery({
     queryKey: ['receipt-master-data'],
     queryFn: async () => {
-      const [custRes, accRes] = await Promise.all([
-        apiClient.get('/customers'),
-        apiClient.get('/accounts')
-      ]);
-      const accountsList = accRes.data?.data || accRes.data || [];
+      const custRes = await apiClient.get('/customers', { params: { limit: 50 } });
       return {
-        customers: custRes.data?.data || custRes.data || [],
-        accounts: accountsList.filter((a: any) => a.category === 'ASSET')
+        customers: ensureArray(custRes)
       };
     }
   });
 
   const customers = useMemo(() => masterData?.customers || [], [masterData]);
-  const accounts = useMemo(() => masterData?.accounts || [], [masterData]);
+  const [initialAccount, setInitialAccount] = useState<any>(null);
+
+  useEffect(() => {
+    if (!id && queryCustomerId && customers.length > 0) {
+      const match = customers.find((c: any) => c.id === queryCustomerId);
+      if (match) {
+        setBusinessPartnerId(match.id);
+        setSelectedCustomer(match);
+      }
+    }
+  }, [id, queryCustomerId, customers]);
 
   const { data: receiptData, isLoading: isLoadingReceipt } = useQuery({
     queryKey: ['receipt', id],
@@ -79,7 +91,7 @@ export const ReceiptForm = () => {
     if (!receiptData || !id) return;
 
     const r = receiptData;
-    
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDate(new Date(r.date).toISOString().split('T')[0]);
     setBusinessPartnerId(r.businessPartnerId);
@@ -95,6 +107,9 @@ export const ReceiptForm = () => {
     setNotes(r.notes || '');
     setStatus(r.status);
     setSelectedCustomer(r.businessPartner);
+    if (r.account) {
+      setInitialAccount(r.account);
+    }
 
     // Load allocations
     if (r.allocations) {
@@ -118,7 +133,7 @@ export const ReceiptForm = () => {
       const res = await apiClient.get(`/sales/invoices`, {
         params: { customerId: businessPartnerId }
       });
-      const list = res.data || [];
+      const list = ensureArray(res);
       return list
         .filter((inv: any) => Number(inv.amountPaid) < Number(inv.grandTotal) && inv.status !== 'DRAFT')
         .map((inv: any) => ({
@@ -243,45 +258,31 @@ export const ReceiptForm = () => {
 
   if (isLoadingMaster || isLoadingReceipt) {
     return (
-      <div className="flex h-[80vh] items-center justify-center text-foreground">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-accent" />
-          <p className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">Loading Receipt...</p>
-        </div>
-      </div>
+      <PageContainer maxWidth="7xl">
+        <LoadingState variant="form" />
+      </PageContainer>
     );
   }
 
   const isCash = paymentMethod === 'CASH';
 
   return (
-    <div className="p-8 max-w-[1200px] mx-auto text-left text-foreground bg-background min-h-screen">
-      <div className="flex items-center gap-4 mb-6">
-        <button 
-          onClick={() => navigate('/receipts')}
-          className="p-2 hover:bg-muted border border-border rounded-xl transition-all cursor-pointer text-muted-foreground"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h2 className="text-2xl font-bold">
-            {isView ? 'Receipt Details' : isEdit ? 'Edit Receipt' : 'Record Receipt'}
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isView ? 'View accounting postings and invoice allocations.' : 'Configure money collection and allocations.'}
-          </p>
-        </div>
-      </div>
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        title={isView ? 'Receipt Details' : isEdit ? 'Edit Receipt' : 'Record Receipt'}
+        description={isView ? 'View accounting postings and invoice allocations.' : 'Configure money collection and allocations.'}
+        backTo={{ label: 'Receipts', path: '/receipts' }}
+      />
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left Columns - Form Entry */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-surface border border-border rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
               <FileCheck className="w-4 h-4 text-accent" /> Basic Details
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Date *</label>
@@ -303,12 +304,12 @@ export const ReceiptForm = () => {
                   disabled={isView}
                   className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
                 >
-                  <option value="BANK_TRANSFER">Bank Transfer / EFT</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
                   <option value="CASH">Cash</option>
                   <option value="UPI">UPI Payment</option>
                   <option value="CHEQUE">Cheque</option>
                   <option value="CREDIT_CARD">Credit/Debit Card</option>
-                  <option value="WALLET">Mobile Wallet</option>
+
                 </select>
               </div>
             </div>
@@ -324,22 +325,19 @@ export const ReceiptForm = () => {
                   required
                 >
                   <option value="">Select Customer...</option>
-                  {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {(customers || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Debit Account Ledger *</label>
-                <select
+                <LedgerLookup
+                  label="Debit Account Ledger"
                   value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
+                  onChange={(val) => setAccountId(val)}
+                  placeholder="Search ledgers..."
                   disabled={isView}
-                  className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
                   required
-                >
-                  <option value="">Select Ledger...</option>
-                  {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name} ({a.category})</option>)}
-                </select>
+                />
               </div>
             </div>
 
@@ -434,7 +432,7 @@ export const ReceiptForm = () => {
 
         {/* Right Column - Reference Details */}
         <div className="space-y-6">
-          
+
           {/* Payment Method Details */}
           <div className="bg-surface border border-border rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
@@ -526,7 +524,7 @@ export const ReceiptForm = () => {
             <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
               <Info className="w-4 h-4 text-purple-500" /> Additional Notes
             </h3>
-            
+
             <div>
               <textarea
                 value={notes}
@@ -583,6 +581,6 @@ export const ReceiptForm = () => {
           </div>
         </div>
       </form>
-    </div>
+    </PageContainer>
   );
 };

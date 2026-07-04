@@ -1,11 +1,16 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Truck } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { PageContainer, EmptyState, LoadingState } from '@/components/ui/LayoutComponents';
 import apiClient from '@/services/api';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 
 export const DeliveryNotesList = () => {
+  const navigate = useNavigate();
   const { data = [], isLoading: loading } = useQuery({
     queryKey: ['delivery-notes'],
     queryFn: async () => {
@@ -16,46 +21,60 @@ export const DeliveryNotesList = () => {
   });
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <PageContainer maxWidth="7xl">
       <PageHeader
         title="Delivery Notes"
         description="Track goods dispatched to customers"
         primaryAction={
-          <button className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm">
+          <Button 
+            onClick={() => {}}
+            className="flex items-center gap-2 font-bold px-5"
+            variant="primary"
+          >
             <Plus className="w-4 h-4" /> New Delivery Note
-          </button>
+          </Button>
         }
       />
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Note No</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Total Items</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <TableRow><TableCell colSpan={5}><div className="text-center py-8 text-muted-foreground">Loading...</div></TableCell></TableRow>
-          ) : data.length === 0 ? (
-            <TableRow><TableCell colSpan={5}><div className="text-center py-8 text-muted-foreground">No delivery notes found</div></TableCell></TableRow>
-          ) : data.map((item: any) => (
-            <TableRow key={item.id}>
-              <TableCell className="font-semibold">{item.noteNo}</TableCell>
-              <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-              <TableCell>{item.businessPartner?.name || 'N/A'}</TableCell>
-              <TableCell className="font-bold text-right">{item.items?.length || 0}</TableCell>
-              <TableCell>
-                <span className={`px-2 py-1 rounded text-xs ${item.status === 'DELIVERED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {item.status}
-                </span>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+      {loading ? (
+        <LoadingState variant="table" />
+      ) : data.length === 0 ? (
+        <EmptyState
+          icon={<Truck className="w-8 h-8 text-muted-foreground" />}
+          title="No delivery notes found"
+          description="Create your first delivery note to track dispatches."
+          actionLabel="New Delivery Note"
+          onActionClick={() => {}}
+        />
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/10 border-b border-border">
+                <TableHead className="font-semibold py-4 px-6">Note No</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Date</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Customer</TableHead>
+                <TableHead className="font-semibold py-4 px-6 text-right">Total Items</TableHead>
+                <TableHead className="font-semibold py-4 px-6">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((item: any) => (
+                <TableRow key={item.id} className="hover:bg-muted/50 border-b border-border transition-colors">
+                  <TableCell className="font-semibold py-4 px-6">{item.noteNo}</TableCell>
+                  <TableCell className="py-4 px-6">{new Date(item.date).toLocaleDateString()}</TableCell>
+                  <TableCell className="py-4 px-6 font-medium text-foreground">{item.businessPartner?.name || 'N/A'}</TableCell>
+                  <TableCell className="font-bold py-4 px-6 text-right">{item.items?.length || 0}</TableCell>
+                  <TableCell className="py-4 px-6">
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${item.status === 'DELIVERED' ? 'bg-green-500/10 text-green-600' : 'bg-blue-500/10 text-blue-600'}`}>
+                      {item.status}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+    </PageContainer>
   );
 };

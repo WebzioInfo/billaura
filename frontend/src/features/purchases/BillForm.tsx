@@ -1,21 +1,25 @@
 import React from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/LayoutComponents';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 
 export const BillForm = () => {
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <PageContainer maxWidth="7xl">
       <PageHeader
         title="Create Bill"
         description="Record a new purchase bill"
+        backTo={{ label: 'Bills', path: '/bills' }}
         primaryAction={
-          <button className="bg-accent text-white px-4 py-2 rounded-md text-sm">
+          <Button variant="primary" className="font-bold px-5">
             Save Bill
-          </button>
+          </Button>
         }
       />
-      <div className="glass-panel p-6 rounded-2xl border border-border">
+      <Card className="p-6">
         <p className="text-muted-foreground text-sm">Bill form implementation goes here.</p>
-      </div>
-    </div>
+      </Card>
+    </PageContainer>
   );
 };

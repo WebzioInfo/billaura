@@ -2,11 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Plus, Trash2, ArrowLeft, Save, FileText, Eye, X, Loader2, Info 
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer, LoadingState, FormSection } from '@/components/ui/LayoutComponents';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 
@@ -64,6 +67,8 @@ import { useQuery } from '@tanstack/react-query';
 
 export const InvoiceForm = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryCustomerId = searchParams.get('customerId');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'DRAFT' | 'SENT'>('SENT');
@@ -168,6 +173,13 @@ export const InvoiceForm = () => {
       }
     }
   }, [customerId, customers, setValue]);
+
+  // Preselect customer ID if provided via query parameters
+  useEffect(() => {
+    if (queryCustomerId && customers.length > 0) {
+      setValue('customerId', queryCustomerId);
+    }
+  }, [queryCustomerId, customers, setValue]);
 
   // Calculate Due Date based on Payment Terms & Invoice Date
   useEffect(() => {
@@ -321,11 +333,9 @@ export const InvoiceForm = () => {
 
   if (isLoading) {
     return (
-      <div className="p-8 max-w-[1600px] mx-auto space-y-6 animate-pulse">
-        <div className="h-10 w-1/4 bg-muted rounded-md mb-8"></div>
-        <div className="glass-panel p-6 rounded-2xl border border-border h-64 bg-muted/40"></div>
-        <div className="glass-panel p-6 rounded-2xl border border-border h-96 bg-muted/40"></div>
-      </div>
+      <PageContainer maxWidth="7xl">
+        <LoadingState variant="form" />
+      </PageContainer>
     );
   }
 
@@ -333,19 +343,11 @@ export const InvoiceForm = () => {
   const selectedCustomerAddress = customers.find(c => c.id === customerId)?.address || 'N/A';
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <PageContainer maxWidth="7xl">
       <PageHeader
         title="Create Invoice"
         description="Draft or issue a premium sales invoice"
-        primaryAction={
-          <button 
-            type="button"
-            onClick={() => navigate('/invoices')}
-            className="bg-secondary text-foreground hover:bg-secondary/80 px-4 py-2 rounded-xl text-sm flex items-center gap-2 cursor-pointer transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to Invoices
-          </button>
-        }
+        backTo={{ label: 'Invoices', path: '/invoices' }}
       />
       
       <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
@@ -891,6 +893,6 @@ export const InvoiceForm = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };

@@ -28,6 +28,9 @@ interface DataTableProps<TData, TValue> {
   pagination?: { pageIndex: number; pageSize: number };
   onPaginationChange?: any;
   manualPagination?: boolean;
+  globalFilter?: string;
+  onGlobalFilterChange?: (val: string) => void;
+  manualFiltering?: boolean;
 }
 
 export function DataTable<TData, TValue>({
@@ -40,12 +43,18 @@ export function DataTable<TData, TValue>({
   pagination,
   onPaginationChange,
   manualPagination,
+  globalFilter: controlledGlobalFilter,
+  onGlobalFilterChange,
+  manualFiltering,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
-  const [globalFilter, setGlobalFilter] = useState('');
+  const [internalGlobalFilter, setInternalGlobalFilter] = useState('');
+
+  const globalFilter = controlledGlobalFilter !== undefined ? controlledGlobalFilter : internalGlobalFilter;
+  const setGlobalFilter = onGlobalFilterChange || setInternalGlobalFilter;
 
   const table = useReactTable({
     data,
@@ -53,6 +62,7 @@ export function DataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     manualPagination,
+    manualFiltering,
     pageCount,
     onPaginationChange,
     getSortedRowModel: getSortedRowModel(),

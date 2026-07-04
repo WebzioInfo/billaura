@@ -214,3 +214,14 @@ export const apiClient = new ApiClient({
     useSessionStore.getState().clearSession();
   }
 });
+
+/**
+ * Safely extracts an array from any API response, handling nested `{ data }` envelopes
+ * and returning an empty array `[]` as a fallback if the data is missing or malformed.
+ */
+export function ensureArray<T = any>(data: any): T[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.data)) return data.data;
+  return [];
+}

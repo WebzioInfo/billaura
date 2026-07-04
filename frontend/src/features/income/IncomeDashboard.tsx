@@ -1,15 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { FileText, Wallet, TrendingUp, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useSearchParams } from 'react-router-dom';
 
 // Dummy components for now, we will implement them next.
 import { OtherIncomesList } from './components/OtherIncomesList';
 import { IncomeCategoriesList } from './components/IncomeCategoriesList';
 
 export function IncomeDashboard() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'incomes' | 'categories'>('incomes');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const getQueryTab = () => searchParams.get('tab') === 'categories' ? 'categories' : 'incomes';
+  
+  const [activeTab, setActiveTab] = useState<'overview' | 'incomes' | 'categories'>(getQueryTab());
+
+  useEffect(() => {
+    setActiveTab(getQueryTab());
+  }, [searchParams]);
+
+  const handleTabChange = (tab: 'incomes' | 'categories') => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   return (
     <div className="space-y-6">
@@ -18,7 +31,7 @@ export function IncomeDashboard() {
         description="Manage service revenue, rentals, and other non-operating income"
       >
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setActiveTab('categories')}>
+          <Button variant="outline" onClick={() => handleTabChange('categories')}>
             <Tags className="w-4 h-4 mr-2" />
             Manage Categories
           </Button>
@@ -60,7 +73,7 @@ export function IncomeDashboard() {
           className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
             activeTab === 'incomes' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
-          onClick={() => setActiveTab('incomes')}
+          onClick={() => handleTabChange('incomes')}
         >
           Income Receipts
         </button>
@@ -68,7 +81,7 @@ export function IncomeDashboard() {
           className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
             activeTab === 'categories' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
-          onClick={() => setActiveTab('categories')}
+          onClick={() => handleTabChange('categories')}
         >
           Income Categories
         </button>

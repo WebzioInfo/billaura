@@ -14,6 +14,7 @@ import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../hooks/useApiList';
+import { LedgerSearchSelect } from '../../components/ui/LedgerSearchSelect';
 
 // --- SCHEMAS ---
 const invoiceItemSchema = z.object({
@@ -666,11 +667,16 @@ export const SalesDashboard = () => {
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Receipt Bank Ledger *</label>
-                  <select {...paymentForm.register('bankAccountId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                    <option value="">Select ledger...</option>
-                    {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name} (Balance: {formatCurrency(b.currentBalance)})</option>)}
-                  </select>
+                  <LedgerSearchSelect
+                    label="Receipt Bank Ledger"
+                    value={paymentForm.watch('bankAccountId')}
+                    onChange={(val) => paymentForm.setValue('bankAccountId', val, { shouldValidate: true })}
+                    allowedTypes="Bank,Cash"
+                    queryKey="receipt-bank"
+                    placeholder="Search bank ledger..."
+                    required
+                    error={paymentForm.formState.errors.bankAccountId?.message}
+                  />
                 </div>
 
                 <div>

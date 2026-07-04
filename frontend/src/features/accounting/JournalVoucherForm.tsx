@@ -9,8 +9,11 @@ import { toast } from 'sonner';
 
 import api from '../../services/api';
 import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { PageContainer } from '../../components/ui/LayoutComponents';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
+import { LedgerLookup } from '../../components/ui/LedgerLookup';
 
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;
 
@@ -40,15 +43,7 @@ export const JournalVoucherForm = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: accountsData } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: async () => {
-      const res = await api.get('/accounts?take=100');
-      return res.data;
-    },
-  });
-
-  const accounts = accountsData?.data || [];
+  // Ledger prefetching is removed in favor of LedgerLookup dynamic searching
 
   const {
     register,
@@ -101,16 +96,12 @@ export const JournalVoucherForm = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">New Journal Voucher</h1>
-          <p className="text-muted-foreground">Record manual journal entries.</p>
-        </div>
-      </div>
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        title="New Journal Voucher"
+        description="Record manual journal entries."
+        backTo={{ label: 'Journal Entries', path: '/journal-entries' }}
+      />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
@@ -166,18 +157,12 @@ export const JournalVoucherForm = () => {
                   {fields.map((field, index) => (
                     <tr key={field.id} className="group">
                       <td className="py-3 pr-4">
-                        <select
-                          className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.lines?.[index]?.accountId ? 'border-red-500' : 'border-input'}`}
+                        <LedgerLookup
                           value={watchLines[index]?.accountId || ''}
-                          onChange={(e) => setValue(`lines.${index}.accountId`, e.target.value)}
-                        >
-                          <option value="">Select Account</option>
-                          {accounts.map((acc: any) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name} ({acc.category})
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(val) => setValue(`lines.${index}.accountId`, val)}
+                          placeholder="Select Account..."
+                          error={errors.lines?.[index]?.accountId?.message}
+                        />
                       </td>
                       <td className="py-3 px-2">
                         <Input
@@ -255,6 +240,6 @@ export const JournalVoucherForm = () => {
           </Button>
         </div>
       </form>
-    </div>
+    </PageContainer>
   );
 };

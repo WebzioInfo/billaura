@@ -3,6 +3,7 @@ import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import api from '../../../services/api';
+import { LedgerLookup } from '../../../components/ui/LedgerLookup';
 
 import { useQuery } from '@tanstack/react-query';
 
@@ -23,14 +24,7 @@ export function IncomeCategoryFormModal({ isOpen, onClose, onSuccess, editingId 
     accountId: '',
     isActive: true,
   });
-  const { data: accounts = [] } = useQuery({
-    queryKey: ['accounts-revenue'],
-    queryFn: async () => {
-      const { data } = await api.get('/accounts?category=REVENUE');
-      return data || [];
-    },
-    enabled: isOpen
-  });
+  // Ledger prefetching is removed in favor of LedgerLookup dynamic searching
 
   const { data: categoryData } = useQuery({
     queryKey: ['income-category', editingId],
@@ -101,18 +95,13 @@ export function IncomeCategoryFormModal({ isOpen, onClose, onSuccess, editingId 
         </div>
 
         <div className="space-y-2">
-          <Label>GL Account (Revenue)</Label>
-          <select 
-            required
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+          <LedgerLookup
             value={formData.accountId}
-            onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
-          >
-            <option value="">Select Account</option>
-            {accounts.map((acc: any) => (
-              <option key={acc.id} value={acc.id}>{acc.name}</option>
-            ))}
-          </select>
+            onChange={(val) => setFormData({ ...formData, accountId: val })}
+            allowedAccountTypes="REVENUE"
+            placeholder="Select Account..."
+            required
+          />
           <p className="text-xs text-muted-foreground">Select the General Ledger account this income should post to.</p>
         </div>
 
