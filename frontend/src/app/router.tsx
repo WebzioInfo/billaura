@@ -34,6 +34,7 @@ const PayrollDashboard = lazy(() => import('../features/hr/pages/PayrollDashboar
 const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m => ({ default: m.CustomersList })));
 const VendorsList = lazy(() => import('../features/crm/VendorsList').then(m => ({ default: m.VendorsList })));
 const InvoicesList = lazy(() => import('../features/sales/InvoicesList').then(m => ({ default: m.InvoicesList })));
+const InvoicePrintView = lazy(() => import('../features/sales/InvoicePrintView').then(m => ({ default: m.InvoicePrintView })));
 const InvoiceForm = lazy(() => import('../features/sales/InvoiceForm').then(m => ({ default: m.InvoiceForm })));
 const ReceiptsList = lazy(() => import('../features/sales/ReceiptsList').then(m => ({ default: m.ReceiptsList })));
 const ReceiptForm = lazy(() => import('../features/sales/ReceiptForm').then(m => ({ default: m.ReceiptForm })));
@@ -195,6 +196,7 @@ export const router = createBrowserRouter([
       { path: 'delivery-challans', element: <DeliveryNotesList /> },
       { path: 'delivery-notes', element: <DeliveryNotesList /> },
       { path: 'invoices', element: <InvoicesList /> },
+      { path: 'invoices/:id/print', element: <InvoicePrintView /> },
       { path: 'invoices/new', element: <InvoiceForm /> },
       { path: 'receipts', element: <ReceiptsList /> },
       { path: 'receipts/new', element: <ReceiptForm /> },
