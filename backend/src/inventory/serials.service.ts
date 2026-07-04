@@ -11,7 +11,7 @@ export class SerialsService {
     if (!companyId) return [];
 
     return this.prisma.inventorySerial.findMany({
-      where: { companyId },
+      where: {},
       include: { product: true, warehouse: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -21,7 +21,7 @@ export class SerialsService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
     const serial = await this.prisma.inventorySerial.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { product: true, warehouse: true },
     });
     if (!serial) throw new NotFoundException('Serial not found');

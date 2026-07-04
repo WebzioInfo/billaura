@@ -1,18 +1,17 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import api from '../services/api';
+import { useApiPaginatedList, PaginatedResult } from './useApiPaginatedList';
 
 export function useApiList<T>(
   key: string[],
   url: string,
-  options?: Omit<UseQueryOptions<T[], Error>, 'queryKey' | 'queryFn'>
+  params?: Record<string, any>,
+  options?: Omit<UseQueryOptions<PaginatedResult<T>, Error>, 'queryKey' | 'queryFn'>
 ) {
-  return useQuery<T[], Error>({
-    queryKey: key,
-    queryFn: async () => {
-      const res: any = await api.get(url);
-      const items = res?.data?.data?.items || res?.data?.items || res?.data?.data || res?.data || res?.items || [];
-      return Array.isArray(items) ? items : [];
-    },
-    ...options,
-  });
+  const query = useApiPaginatedList<T>(key, url, params, options);
+  
+  return {
+    ...query,
+    data: query.data?.data || [],
+    meta: query.data?.meta
+  };
 }

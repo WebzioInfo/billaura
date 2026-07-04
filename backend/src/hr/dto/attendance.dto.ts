@@ -1,5 +1,11 @@
-import { IsString, IsNotEmpty, IsDateString, IsEnum, IsOptional } from 'class-validator';
-import { AttendanceType } from '@prisma/client';
+import {
+  IsString,
+  IsNotEmpty,
+  IsDateString,
+  IsEnum,
+  IsOptional,
+} from "class-validator";
+import { AttendanceType } from "@prisma/client";
 
 export class RecordAttendanceDto {
   @IsString()

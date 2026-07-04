@@ -29,6 +29,7 @@ const ReconciliationCenter = lazy(() => import('../features/banking/Reconciliati
 const FixedAssetsList = lazy(() => import('../features/accounting/FixedAssetsList').then(m => ({ default: m.FixedAssetsList })));
 const ProjectsList = lazy(() => import('../features/accounting/ProjectsList').then(m => ({ default: m.ProjectsList })));
 const EmployeesList = lazy(() => import('../features/hr/EmployeesList').then(m => ({ default: m.EmployeesList })));
+const PayrollDashboard = lazy(() => import('../features/hr/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 
 const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m => ({ default: m.CustomersList })));
 const VendorsList = lazy(() => import('../features/crm/VendorsList').then(m => ({ default: m.VendorsList })));
@@ -231,10 +232,10 @@ export const router = createBrowserRouter([
       { path: 'reports/inventory', element: <InventoryDashboard /> },
       { path: 'reports/payroll', element: <DepartmentsList /> },
       { path: 'hr', element: <DepartmentsList /> },
-      { path: 'employees', element: <DepartmentsList /> },
+      { path: 'employees', element: <EmployeesList /> },
       { path: 'attendance', element: <DepartmentsList /> },
-      { path: 'payroll', element: <DepartmentsList /> },
-      { path: 'settings', element: <SettingsPage /> },
+      { path: 'payroll', element: <PayrollDashboard /> },
+      { path: 'settings/general', element: <DepartmentsList /> },
       { path: 'company', element: <SettingsPage /> },
       { path: 'branches', element: <SettingsPage /> },
       { path: 'users', element: <SettingsPage /> },

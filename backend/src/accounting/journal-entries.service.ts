@@ -48,7 +48,7 @@ export class JournalEntriesService {
     }
 
     const entry = await this.prisma.journalEntry.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { lines: { include: { account: true } } },
     });
 

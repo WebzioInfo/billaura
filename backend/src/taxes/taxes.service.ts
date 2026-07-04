@@ -14,7 +14,7 @@ export class TaxesService {
 
     // Outward Supplies (Invoices)
     const invoices = await this.prisma.invoice.findMany({
-      where: { companyId, deletedAt: null },
+      where: {},
       include: { businessPartner: true, items: { include: { product: true } } },
     });
 
@@ -41,7 +41,7 @@ export class TaxesService {
 
     // Inward Supplies (Purchases/Bills)
     const purchases = await this.prisma.purchase.findMany({
-      where: { companyId, deletedAt: null },
+      where: {},
       include: { businessPartner: true, items: { include: { product: true } } },
     });
 
@@ -67,8 +67,8 @@ export class TaxesService {
     }
 
     const [invoices, purchases] = await Promise.all([
-      this.prisma.invoice.findMany({ where: { companyId, deletedAt: null } }),
-      this.prisma.purchase.findMany({ where: { companyId, deletedAt: null } }),
+      this.prisma.invoice.findMany({ where: {} }),
+      this.prisma.purchase.findMany({ where: {} }),
     ]);
 
     // Outward tax liability

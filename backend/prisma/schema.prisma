@@ -342,29 +342,28 @@ enum BusinessPartnerType {
 
 // --- CORE SAAS MODELS ---
 model Company {
-  id             String             @id @default(cuid())
-  companyName    String
-  legalName      String?
-  gstin          String?
-  pan            String?
-  tan            String?
-  msme           String?
-  email          String?
-  phone          String?
-  address        String?            @db.Text
-  state          String?
-  country        String?
-  currency       String             @default("INR")
-  logo           String?
-  status         SubscriptionStatus @default(FREE_TRIAL)
-  onboardingStep String             @default("BUSINESS_DETAILS")
-  businessType   BusinessType       @default(TRADING)
-  trialStartAt   DateTime           @default(now())
-  trialEndAt     DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  deletedAt      DateTime?
-
+  id                  String                   @id @default(cuid())
+  companyName         String
+  legalName           String?
+  gstin               String?
+  pan                 String?
+  tan                 String?
+  msme                String?
+  email               String?
+  phone               String?
+  address             String?                  @db.Text
+  state               String?
+  country             String?
+  currency            String                   @default("INR")
+  logo                String?
+  status              SubscriptionStatus       @default(FREE_TRIAL)
+  onboardingStep      String                   @default("BUSINESS_DETAILS")
+  businessType        BusinessType             @default(TRADING)
+  trialStartAt        DateTime                 @default(now())
+  trialEndAt          DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  deletedAt           DateTime?
   settings            CompanySettings?
   users               CompanyUser[]
   roles               Role[]
@@ -422,30 +421,27 @@ model Company {
   branches            Branch[]
   incomeCategories    IncomeCategory[]
   otherIncomes        OtherIncome[]
-
-  contacts        Contact[]
-  crmActivities   CrmActivity[]
-  taxGroups       TaxGroup[]
-  backupJobs      BackupJob[]
-  backupSchedules BackupSchedule[]
-  backupAuditLogs BackupAuditLog[]
-  receipts        Receipt[]
-
-  expenseCategories ExpenseCategory[]
-  cashAccounts      CashAccount[]
-  bankTransactions  BankTransaction[]
-  cashTransactions  CashTransaction[]
-  internalTransfers InternalTransfer[]
-  advances          EmployeeAdvance[]
-
-  deliveryNotes  DeliveryNote[]
-  purchaseOrders PurchaseOrder[]
-  goodsReceipts  GoodsReceipt[]
-  inventoryBatches InventoryBatch[]
-  inventorySerials InventorySerial[]
-  bankStatements BankStatement[]
-  fixedAssets    FixedAsset[]
-  projects       Project[]
+  contacts            Contact[]
+  crmActivities       CrmActivity[]
+  taxGroups           TaxGroup[]
+  backupJobs          BackupJob[]
+  backupSchedules     BackupSchedule[]
+  backupAuditLogs     BackupAuditLog[]
+  receipts            Receipt[]
+  expenseCategories   ExpenseCategory[]
+  cashAccounts        CashAccount[]
+  bankTransactions    BankTransaction[]
+  cashTransactions    CashTransaction[]
+  internalTransfers   InternalTransfer[]
+  advances            EmployeeAdvance[]
+  deliveryNotes       DeliveryNote[]
+  purchaseOrders      PurchaseOrder[]
+  goodsReceipts       GoodsReceipt[]
+  inventoryBatches    InventoryBatch[]
+  inventorySerials    InventorySerial[]
+  bankStatements      BankStatement[]
+  fixedAssets         FixedAsset[]
+  projects            Project[]
 
   @@index([status])
   @@index([createdAt])
@@ -453,90 +449,87 @@ model Company {
 }
 
 model Branch {
-  id        String    @id @default(cuid())
-  companyId String
-  name      String
-  code      String?
-  address   String?   @db.Text
-  phone     String?
-  email     String?
-  gstin     String?
-  isActive  Boolean   @default(true)
-  isDefault Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
+  id           String        @id @default(cuid())
+  companyId    String
+  name         String
+  code         String?
+  address      String?       @db.Text
+  phone        String?
+  email        String?
+  gstin        String?
+  isActive     Boolean       @default(true)
+  isDefault    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
   company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   otherIncomes OtherIncome[]
 
   @@unique([companyId, name])
   @@index([companyId])
+  @@index([companyId, deletedAt])
   @@map("branches")
 }
 
 model CompanySettings {
-  id                     String  @id @default(cuid())
-  companyId              String  @unique
-  invoicePrefix          String  @default("INV")
-  quotationPrefix        String  @default("QTN")
-  creditNotePrefix       String  @default("CN")
-  purchasePrefix         String  @default("PO")
-  paymentPrefix          String  @default("PAY")
-  defaultCurrency        String  @default("INR")
-  termsAndConditions     String? @db.Text
-  bankDetails            String? @db.Text
+  id                     String         @id @default(cuid())
+  companyId              String         @unique
+  invoicePrefix          String         @default("INV")
+  quotationPrefix        String         @default("QTN")
+  creditNotePrefix       String         @default("CN")
+  purchasePrefix         String         @default("PO")
+  paymentPrefix          String         @default("PAY")
+  defaultCurrency        String         @default("INR")
+  termsAndConditions     String?        @db.Text
+  bankDetails            String?        @db.Text
   emailSettings          Json?
   whatsappSettings       Json?
   gstSettings            Json?
   invoiceSettings        Json?
   currentFinancialYearId String?
-  logoBase64             String? 
-  useLogoOnDocuments     Boolean @default(true)
+  logoBase64             String?
+  useLogoOnDocuments     Boolean        @default(true)
   activeModules          Json? // e.g. ["MANUFACTURING", "HRMS", "POS"]
-
-  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  financialYear FinancialYear? @relation(fields: [currentFinancialYearId], references: [id])
+  company                Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  financialYear          FinancialYear? @relation(fields: [currentFinancialYearId], references: [id])
 
   @@map("company_settings")
 }
 
 model FinancialYear {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   companyId String
   name      String
   startDate DateTime
   endDate   DateTime
-  isActive  Boolean  @default(false)
-  isClosed  Boolean  @default(false)
-
-  company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  settings CompanySettings[]
+  isActive  Boolean           @default(false)
+  isClosed  Boolean           @default(false)
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  settings  CompanySettings[]
 
   @@unique([companyId, name])
   @@map("financial_years")
 }
 
 model User {
-  id                  String    @id @default(cuid())
-  email               String    @unique
+  id                  String                @id @default(cuid())
+  email               String                @unique
   name                String
   passwordHash        String
-  globalRole          UserRole  @default(ACCOUNTANT)
-  isActive            Boolean   @default(true)
+  globalRole          UserRole              @default(ACCOUNTANT)
+  isActive            Boolean               @default(true)
   phone               String?
   department          String?
   createdBy           String?
   lastLogin           DateTime?
-  emailVerified       Boolean   @default(false)
+  emailVerified       Boolean               @default(false)
   otpCode             String?
   otpExpiresAt        DateTime?
-  failedLoginAttempts Int       @default(0)
+  failedLoginAttempts Int                   @default(0)
   lockoutUntil        DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
   deletedAt           DateTime?
-
   companies           CompanyUser[]
   supportTickets      SupportTicket[]
   activityFeeds       ActivityFeed[]
@@ -549,16 +542,14 @@ model User {
   taxOverrideLogs     TaxOverrideLog[]
   sessions            Session[]
   loginHistories      LoginHistory[]
-
-  backupJobs       BackupJob[]
-  backupSchedules  BackupSchedule[]
-  backupAuditLogs  BackupAuditLog[]
-  receivedReceipts Receipt[]
-  receiptAudits    ReceiptAudit[]
-
-  approvedAdvances EmployeeAdvance[] @relation("AdvanceApprover")
-  expenseHistories ExpenseHistory[]
-  expenseComments  ExpenseComment[]
+  backupJobs          BackupJob[]
+  backupSchedules     BackupSchedule[]
+  backupAuditLogs     BackupAuditLog[]
+  receivedReceipts    Receipt[]
+  receiptAudits       ReceiptAudit[]
+  approvedAdvances    EmployeeAdvance[]     @relation("AdvanceApprover")
+  expenseHistories    ExpenseHistory[]
+  expenseComments     ExpenseComment[]
 
   @@map("users")
 }
@@ -579,8 +570,7 @@ model Session {
   revokedAt  DateTime?
   revokedBy  String?
   isRevoked  Boolean   @default(false)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("sessions")
@@ -593,8 +583,7 @@ model LoginHistory {
   userAgent String?
   status    String // SUCCESS, FAILED
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("login_histories")
@@ -606,10 +595,9 @@ model CompanyUser {
   userId       String
   role         UserRole
   customRoleId String?
-
-  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  customRole Role?   @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customRole   Role?    @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, userId])
   @@index([userId])
@@ -619,14 +607,13 @@ model CompanyUser {
 
 // --- RBAC MODULE ---
 model Role {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   companyId   String? // null for system/global roles
   name        String
-  description String?  @db.Text
-  isSystem    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  description String?          @db.Text
+  isSystem    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
   company     Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   permissions RolePermission[]
   users       CompanyUser[]
@@ -640,8 +627,7 @@ model RolePermission {
   roleId   String
   resource String
   action   String
-
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role     Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, resource, action])
   @@map("role_permissions")
@@ -649,14 +635,13 @@ model RolePermission {
 
 // --- SAAS OPS & SUBSCRIPTION ---
 model SubscriptionPlan {
-  id           String  @id @default(cuid())
-  name         String
-  price        Decimal @db.Decimal(10, 2)
-  billingCycle String // MONTHLY, YEARLY
-  maxUsers     Int     @default(1)
-  maxInvoices  Int     @default(50)
-  maxCustomers Int     @default(50)
-
+  id            String         @id @default(cuid())
+  name          String
+  price         Decimal        @db.Decimal(10, 2)
+  billingCycle  String // MONTHLY, YEARLY
+  maxUsers      Int            @default(1)
+  maxInvoices   Int            @default(50)
+  maxCustomers  Int            @default(50)
   subscriptions Subscription[]
   limits        FeatureLimit[]
 
@@ -670,34 +655,31 @@ model Subscription {
   status    SubscriptionStatus
   startDate DateTime
   endDate   DateTime?
-
-  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  plan    SubscriptionPlan @relation(fields: [planId], references: [id])
+  company   Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan      SubscriptionPlan   @relation(fields: [planId], references: [id])
 
   @@index([companyId])
   @@map("subscriptions")
 }
 
 model FeatureLimit {
-  id          String @id @default(cuid())
+  id          String           @id @default(cuid())
   planId      String
   featureName String
   limit       Int
-
-  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan        SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@unique([planId, featureName])
   @@map("feature_limits")
 }
 
 model FeatureUsage {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   companyId    String
   featureName  String
-  currentUsage Int    @default(0)
+  currentUsage Int     @default(0)
   monthYear    String // e.g. "2026-06"
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, featureName, monthYear])
   @@map("feature_usages")
@@ -713,9 +695,8 @@ model SupportTicket {
   status      TicketStatus @default(OPEN)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id])
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id])
 
   @@index([companyId])
   @@map("support_tickets")
@@ -729,8 +710,7 @@ model Notification {
   type      String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("notifications")
@@ -741,8 +721,7 @@ model NotificationPreference {
   companyId String
   channel   String // EMAIL, WHATSAPP, SMS
   enabled   Boolean @default(true)
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, channel])
   @@map("notification_preferences")
@@ -757,9 +736,8 @@ model ActivityFeed {
   entityId    String
   description String?  @db.Text
   createdAt   DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user    User?   @relation(fields: [userId], references: [id])
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id])
 
   @@index([companyId, createdAt])
   @@map("activity_feeds")
@@ -767,42 +745,35 @@ model ActivityFeed {
 
 // --- CUSTOMER & VENDOR ---
 model BusinessPartner {
-  id        String              @id @default(cuid())
-  companyId String
-  bpType    BusinessPartnerType
-  bpCode    String
-  name      String
-  tradeName String?
-  email     String?
-  phone     String?
-  whatsapp  String?
-
-  gstin        String?
-  panNumber    String?
-  customerType CustomerType? @default(UNREGISTERED)
-
-  address       String? @db.Text
-  pinCode       String?
-  state         String?
-  stateCode     String?
-  placeOfSupply String?
-
-  creditLimit       Decimal @default(0) @db.Decimal(15, 2)
-  receivableBalance Decimal @default(0) @db.Decimal(15, 2)
-  payableBalance    Decimal @default(0) @db.Decimal(15, 2)
-
-  status    LeadStatus?
-  source    String?
-  leadValue Decimal?    @db.Decimal(15, 2)
-  notes     String?     @db.Text
-
-  portalAccessToken String?   @unique
-  tokenExpiresAt    DateTime?
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
+  id                  String               @id @default(cuid())
+  companyId           String
+  bpType              BusinessPartnerType
+  bpCode              String
+  name                String
+  tradeName           String?
+  email               String?
+  phone               String?
+  whatsapp            String?
+  gstin               String?
+  panNumber           String?
+  customerType        CustomerType?        @default(UNREGISTERED)
+  address             String?              @db.Text
+  pinCode             String?
+  state               String?
+  stateCode           String?
+  placeOfSupply       String?
+  creditLimit         Decimal              @default(0) @db.Decimal(15, 2)
+  receivableBalance   Decimal              @default(0) @db.Decimal(15, 2)
+  payableBalance      Decimal              @default(0) @db.Decimal(15, 2)
+  status              LeadStatus?
+  source              String?
+  leadValue           Decimal?             @db.Decimal(15, 2)
+  notes               String?              @db.Text
+  portalAccessToken   String?              @unique
+  tokenExpiresAt      DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   invoices            Invoice[]
   recurringInvoices   RecurringInvoice[]
@@ -825,29 +796,29 @@ model BusinessPartner {
 
   @@index([companyId])
   @@index([bpType])
+  @@index([companyId, deletedAt])
   @@map("business_partners")
 }
 
 model CustomerStatement {
-  id                String   @id @default(cuid())
+  id                String          @id @default(cuid())
   companyId         String
   businessPartnerId String
   date              DateTime
   type              String // INVOICE, PAYMENT
   reference         String
-  debit             Decimal  @default(0) @db.Decimal(15, 2)
-  credit            Decimal  @default(0) @db.Decimal(15, 2)
-  balance           Decimal  @default(0) @db.Decimal(15, 2)
-
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  debit             Decimal         @default(0) @db.Decimal(15, 2)
+  credit            Decimal         @default(0) @db.Decimal(15, 2)
+  balance           Decimal         @default(0) @db.Decimal(15, 2)
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
 
   @@index([companyId, businessPartnerId])
   @@map("customer_statements")
 }
 
 model Contact {
-  id                String    @id @default(cuid())
+  id                String          @id @default(cuid())
   companyId         String
   businessPartnerId String
   firstName         String
@@ -855,15 +826,15 @@ model Contact {
   email             String?
   phone             String?
   designation       String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
   deletedAt         DateTime?
-
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([businessPartnerId])
+  @@index([companyId, deletedAt])
   @@map("contacts")
 }
 
@@ -878,9 +849,8 @@ model CrmActivity {
   isCompleted       Boolean         @default(false)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
-
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([businessPartnerId])
@@ -888,70 +858,60 @@ model CrmActivity {
 }
 
 // Removed Category, Brand, Unit tables - converted to scalar strings/enums.
-
 model TaxGroup {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   companyId String
   name      String
-  totalRate Decimal  @db.Decimal(5, 2)
-  cgstRate  Decimal  @default(0) @db.Decimal(5, 2)
-  sgstRate  Decimal  @default(0) @db.Decimal(5, 2)
-  igstRate  Decimal  @default(0) @db.Decimal(5, 2)
-  cessRate  Decimal  @default(0) @db.Decimal(5, 2)
-  createdAt DateTime @default(now())
-
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  products Product[]
+  totalRate Decimal   @db.Decimal(5, 2)
+  cgstRate  Decimal   @default(0) @db.Decimal(5, 2)
+  sgstRate  Decimal   @default(0) @db.Decimal(5, 2)
+  igstRate  Decimal   @default(0) @db.Decimal(5, 2)
+  cessRate  Decimal   @default(0) @db.Decimal(5, 2)
+  createdAt DateTime  @default(now())
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products  Product[]
 
   @@unique([companyId, name])
   @@map("tax_groups")
 }
 
 model Product {
-  id          String   @id @default(cuid())
-  companyId   String
-  category    String?
-  brand       String?
-  unit        UnitType @default(PCS)
-  taxGroupId  String?
-  sku         String?
-  alias       String?
-  barcode     String?
-  name        String
-  hsnCode     String?
-  eInvoiceHsn String?
-  scheduleNo  String?
-
-  itemType   ItemType @default(FINISHED_GOOD)
-  weight     Decimal? @db.Decimal(10, 3)
-  weightType String? // kg, g, lb, etc. (mostly string label)
-
-  taxRate     Decimal     @default(0) @db.Decimal(5, 2)
-  gstRate     Decimal     @default(0) @db.Decimal(5, 2)
-  taxType     String?
-  taxCategory TaxCategory @default(TAXABLE)
-  isExempt    Boolean     @default(false)
-  isNilRated  Boolean     @default(false)
-  isNonGst    Boolean     @default(false)
-
-  purchasePrice Decimal @default(0) @db.Decimal(15, 2)
-  sellingPrice  Decimal @default(0) @db.Decimal(15, 2)
-
-  minStock        Decimal @default(0) @db.Decimal(15, 3)
-  maxStock        Decimal @default(0) @db.Decimal(15, 3)
-  reorderLevel    Decimal @default(0) @db.Decimal(15, 3)
-  pluNo           String?
-  valuationMethod String  @default("AVERAGE") // AVERAGE, FIFO
-
-  salesAccountId     String?
-  purchaseAccountId  String?
-  inventoryAccountId String?
-
-  isActive Boolean @default(true)
-  imageUrl String? @db.Text
-
-  deletedAt DateTime?
-
+  id                  String               @id @default(cuid())
+  companyId           String
+  category            String?
+  brand               String?
+  unit                UnitType             @default(PCS)
+  taxGroupId          String?
+  sku                 String?
+  alias               String?
+  barcode             String?
+  name                String
+  hsnCode             String?
+  eInvoiceHsn         String?
+  scheduleNo          String?
+  itemType            ItemType             @default(FINISHED_GOOD)
+  weight              Decimal?             @db.Decimal(10, 3)
+  weightType          String? // kg, g, lb, etc. (mostly string label)
+  taxRate             Decimal              @default(0) @db.Decimal(5, 2)
+  gstRate             Decimal              @default(0) @db.Decimal(5, 2)
+  taxType             String?
+  taxCategory         TaxCategory          @default(TAXABLE)
+  isExempt            Boolean              @default(false)
+  isNilRated          Boolean              @default(false)
+  isNonGst            Boolean              @default(false)
+  purchasePrice       Decimal              @default(0) @db.Decimal(15, 2)
+  sellingPrice        Decimal              @default(0) @db.Decimal(15, 2)
+  minStock            Decimal              @default(0) @db.Decimal(15, 3)
+  maxStock            Decimal              @default(0) @db.Decimal(15, 3)
+  reorderLevel        Decimal              @default(0) @db.Decimal(15, 3)
+  pluNo               String?
+  valuationMethod     String               @default("AVERAGE") // AVERAGE, FIFO
+  salesAccountId      String?
+  purchaseAccountId   String?
+  inventoryAccountId  String?
+  isActive            Boolean              @default(true)
+  imageUrl            String?              @db.Text
+  deletedAt           DateTime?
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taxGroup            TaxGroup?            @relation(fields: [taxGroupId], references: [id])
   stocks              Stock[]
@@ -971,22 +931,22 @@ model Product {
   serials             InventorySerial[]
 
   @@index([companyId, sku])
+  @@index([companyId, deletedAt])
   @@map("products")
 }
 
 model Stock {
-  id                String  @id @default(cuid())
+  id                String     @id @default(cuid())
   companyId         String
   productId         String
-  quantity          Decimal @default(0) @db.Decimal(15, 3)
-  averageCost       Decimal @default(0) @db.Decimal(15, 2)
-  reservedQuantity  Decimal @default(0) @db.Decimal(15, 3)
-  availableQuantity Decimal @default(0) @db.Decimal(15, 3)
+  quantity          Decimal    @default(0) @db.Decimal(15, 3)
+  averageCost       Decimal    @default(0) @db.Decimal(15, 2)
+  reservedQuantity  Decimal    @default(0) @db.Decimal(15, 3)
+  availableQuantity Decimal    @default(0) @db.Decimal(15, 3)
   warehouseId       String?
-
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
+  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product           Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse         Warehouse? @relation(fields: [warehouseId], references: [id])
 
   @@unique([companyId, productId, warehouseId])
   @@map("stocks")
@@ -1007,71 +967,63 @@ model StockLedger {
   date           DateTime          @default(now())
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product        Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([companyId, productId])
   @@index([referenceId])
+  @@index([companyId, date])
   @@map("stock_ledgers")
 }
 
 // --- BILLING SYSTEM ---
 model DocumentSequence {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   companyId     String
   documentType  String
-  currentNumber Int    @default(0)
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  currentNumber Int     @default(0)
+  company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, documentType])
   @@map("document_sequences")
 }
 
 model Invoice {
-  id                String      @id @default(cuid())
-  companyId         String
-  businessPartnerId String
-  invoiceNo         String
-  invoiceType       InvoiceType @default(TAX_INVOICE)
-  taxMode           TaxMode     @default(CGST_SGST)
-  placeOfSupply     String?
-  companyStateCode  String?
-  customerStateCode String?
-
-  billingAddress  String? @db.Text
-  shippingAddress String? @db.Text
-
-  date           DateTime
-  dueDate        DateTime?
-  status         DocumentStatus @default(DRAFT)
-  subTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  taxTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  cgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  sgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  igstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  cessAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  totalTaxAmount Decimal        @default(0) @db.Decimal(15, 2)
-  grandTotal     Decimal        @default(0) @db.Decimal(15, 2)
-  amountPaid     Decimal        @default(0) @db.Decimal(15, 2)
-
-  isRcm     Boolean @default(false)
-  tdsAmount Decimal @default(0) @db.Decimal(15, 2)
-  tcsAmount Decimal @default(0) @db.Decimal(15, 2)
-
-  gstBreakup Json?
-
-  irn              String?
-  qrCode           String? @db.Text
-  eWayBillNumber   String?
-  vehicleNumber    String?
-  lrNumber         String?
-  transportDetails Json?
-
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
+  id                 String              @id @default(cuid())
+  companyId          String
+  businessPartnerId  String
+  invoiceNo          String
+  invoiceType        InvoiceType         @default(TAX_INVOICE)
+  taxMode            TaxMode             @default(CGST_SGST)
+  placeOfSupply      String?
+  companyStateCode   String?
+  customerStateCode  String?
+  billingAddress     String?             @db.Text
+  shippingAddress    String?             @db.Text
+  date               DateTime
+  dueDate            DateTime?
+  status             DocumentStatus      @default(DRAFT)
+  subTotal           Decimal             @default(0) @db.Decimal(15, 2)
+  taxTotal           Decimal             @default(0) @db.Decimal(15, 2)
+  cgstAmount         Decimal             @default(0) @db.Decimal(15, 2)
+  sgstAmount         Decimal             @default(0) @db.Decimal(15, 2)
+  igstAmount         Decimal             @default(0) @db.Decimal(15, 2)
+  cessAmount         Decimal             @default(0) @db.Decimal(15, 2)
+  totalTaxAmount     Decimal             @default(0) @db.Decimal(15, 2)
+  grandTotal         Decimal             @default(0) @db.Decimal(15, 2)
+  amountPaid         Decimal             @default(0) @db.Decimal(15, 2)
+  isRcm              Boolean             @default(false)
+  tdsAmount          Decimal             @default(0) @db.Decimal(15, 2)
+  tcsAmount          Decimal             @default(0) @db.Decimal(15, 2)
+  gstBreakup         Json?
+  irn                String?
+  qrCode             String?             @db.Text
+  eWayBillNumber     String?
+  vehicleNumber      String?
+  lrNumber           String?
+  transportDetails   Json?
+  createdAt          DateTime            @default(now())
+  deletedAt          DateTime?
   company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   businessPartner    BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
   items              InvoiceItem[]
@@ -1081,6 +1033,9 @@ model Invoice {
 
   @@unique([companyId, invoiceNo])
   @@index([companyId, businessPartnerId])
+  @@index([companyId, deletedAt])
+  @@index([companyId, date])
+  @@index([companyId, status])
   @@map("invoices")
 }
 
@@ -1099,28 +1054,26 @@ model InvoiceItem {
   cessAmount  Decimal     @default(0) @db.Decimal(15, 2)
   taxCategory TaxCategory @default(TAXABLE)
   total       Decimal     @db.Decimal(15, 2)
-
-  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id])
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product     Product?    @relation(fields: [productId], references: [id])
 
   @@index([invoiceId])
   @@map("invoice_items")
 }
 
 model RecurringInvoice {
-  id                String             @id @default(cuid())
+  id                String                 @id @default(cuid())
   companyId         String
   businessPartnerId String
   frequency         RecurringFrequency // Using the enum added earlier
   nextRunDate       DateTime
-  status            SubscriptionStatus @default(ACTIVE)
-  subTotal          Decimal            @default(0) @db.Decimal(15, 2)
-  taxTotal          Decimal            @default(0) @db.Decimal(15, 2)
-  grandTotal        Decimal            @default(0) @db.Decimal(15, 2)
-
-  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner        @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  items           RecurringInvoiceItem[]
+  status            SubscriptionStatus     @default(ACTIVE)
+  subTotal          Decimal                @default(0) @db.Decimal(15, 2)
+  taxTotal          Decimal                @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal                @default(0) @db.Decimal(15, 2)
+  company           Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner        @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  items             RecurringInvoiceItem[]
 
   @@index([companyId])
   @@index([businessPartnerId])
@@ -1128,49 +1081,47 @@ model RecurringInvoice {
 }
 
 model RecurringInvoiceItem {
-  id                 String  @id @default(cuid())
+  id                 String           @id @default(cuid())
   recurringInvoiceId String
-  description        String  @db.Text
-  qty                Decimal @db.Decimal(15, 3)
-  rate               Decimal @db.Decimal(15, 2)
-
-  recurringInvoice RecurringInvoice @relation(fields: [recurringInvoiceId], references: [id], onDelete: Cascade)
+  description        String           @db.Text
+  qty                Decimal          @db.Decimal(15, 3)
+  rate               Decimal          @db.Decimal(15, 2)
+  recurringInvoice   RecurringInvoice @relation(fields: [recurringInvoiceId], references: [id], onDelete: Cascade)
 
   @@map("recurring_invoice_items")
 }
 
 model Quotation {
-  id                String  @id @default(cuid())
+  id                String          @id @default(cuid())
   companyId         String
   businessPartnerId String
   quotationNo       String
-  taxMode           TaxMode @default(CGST_SGST)
+  taxMode           TaxMode         @default(CGST_SGST)
   placeOfSupply     String?
   companyStateCode  String?
   customerStateCode String?
-
-  billingAddress  String? @db.Text
-  shippingAddress String? @db.Text
-
-  date           DateTime
-  status         DocumentStatus @default(DRAFT)
-  subTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  taxTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  cgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  sgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  igstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  cessAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  totalTaxAmount Decimal        @default(0) @db.Decimal(15, 2)
-  grandTotal     Decimal        @default(0) @db.Decimal(15, 2)
-  gstBreakup     Json?
-  deletedAt      DateTime?
-
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  items           QuotationItem[]
+  billingAddress    String?         @db.Text
+  shippingAddress   String?         @db.Text
+  date              DateTime
+  status            DocumentStatus  @default(DRAFT)
+  subTotal          Decimal         @default(0) @db.Decimal(15, 2)
+  taxTotal          Decimal         @default(0) @db.Decimal(15, 2)
+  cgstAmount        Decimal         @default(0) @db.Decimal(15, 2)
+  sgstAmount        Decimal         @default(0) @db.Decimal(15, 2)
+  igstAmount        Decimal         @default(0) @db.Decimal(15, 2)
+  cessAmount        Decimal         @default(0) @db.Decimal(15, 2)
+  totalTaxAmount    Decimal         @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal         @default(0) @db.Decimal(15, 2)
+  gstBreakup        Json?
+  deletedAt         DateTime?
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  items             QuotationItem[]
 
   @@unique([companyId, quotationNo])
   @@index([companyId, businessPartnerId])
+  @@index([companyId, deletedAt])
+  @@index([companyId, status])
   @@map("quotations")
 }
 
@@ -1189,88 +1140,84 @@ model QuotationItem {
   cessAmount  Decimal     @default(0) @db.Decimal(15, 2)
   taxCategory TaxCategory @default(TAXABLE)
   total       Decimal     @db.Decimal(15, 2)
-
-  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  quotation   Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product     Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@map("quotation_items")
 }
 
 model DeliveryNote {
-  id                String         @id @default(cuid())
+  id                String             @id @default(cuid())
   companyId         String
   businessPartnerId String
   noteNo            String
   salesOrderId      String?
   date              DateTime
-  status            DocumentStatus @default(DRAFT)
+  status            DocumentStatus     @default(DRAFT)
   vehicleNumber     String?
   transportDetails  Json?
-
-  company         Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner    @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  items           DeliveryNoteItem[]
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner    @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  items             DeliveryNoteItem[]
 
   @@unique([companyId, noteNo])
   @@map("delivery_notes")
 }
 
 model DeliveryNoteItem {
-  id             String  @id @default(cuid())
+  id             String       @id @default(cuid())
   deliveryNoteId String
   productId      String?
-  description    String  @db.Text
-  qty            Decimal @db.Decimal(15, 3)
-
-  deliveryNote DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
-  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  description    String       @db.Text
+  qty            Decimal      @db.Decimal(15, 3)
+  deliveryNote   DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@map("delivery_note_items")
 }
 
 // --- PURCHASE MODULE ---
 model Purchase {
-  id                String      @id @default(cuid())
+  id                String              @id @default(cuid())
   companyId         String
   businessPartnerId String
   purchaseNo        String
-  invoiceType       InvoiceType @default(PURCHASE_INVOICE)
-  taxMode           TaxMode     @default(CGST_SGST)
+  invoiceType       InvoiceType         @default(PURCHASE_INVOICE)
+  taxMode           TaxMode             @default(CGST_SGST)
   placeOfSupply     String?
   companyStateCode  String?
   customerStateCode String?
-
-  billingAddress  String? @db.Text
-  shippingAddress String? @db.Text
-
-  reference      String?
-  date           DateTime
-  status         DocumentStatus @default(DRAFT)
-  subTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  taxTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  cgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  sgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  igstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  cessAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  totalTaxAmount Decimal        @default(0) @db.Decimal(15, 2)
-  grandTotal     Decimal        @default(0) @db.Decimal(15, 2)
-  amountPaid     Decimal        @default(0) @db.Decimal(15, 2)
-
-  isRcm      Boolean   @default(false)
-  tdsAmount  Decimal   @default(0) @db.Decimal(15, 2)
-  tcsAmount  Decimal   @default(0) @db.Decimal(15, 2)
-  gstBreakup Json?
-  createdAt  DateTime  @default(now())
-  deletedAt  DateTime?
-
-  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  items           PurchaseItem[]
-  allocations     PaymentAllocation[]
-  purchaseReturns PurchaseReturn[]
+  billingAddress    String?             @db.Text
+  shippingAddress   String?             @db.Text
+  reference         String?
+  date              DateTime
+  status            DocumentStatus      @default(DRAFT)
+  subTotal          Decimal             @default(0) @db.Decimal(15, 2)
+  taxTotal          Decimal             @default(0) @db.Decimal(15, 2)
+  cgstAmount        Decimal             @default(0) @db.Decimal(15, 2)
+  sgstAmount        Decimal             @default(0) @db.Decimal(15, 2)
+  igstAmount        Decimal             @default(0) @db.Decimal(15, 2)
+  cessAmount        Decimal             @default(0) @db.Decimal(15, 2)
+  totalTaxAmount    Decimal             @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal             @default(0) @db.Decimal(15, 2)
+  amountPaid        Decimal             @default(0) @db.Decimal(15, 2)
+  isRcm             Boolean             @default(false)
+  tdsAmount         Decimal             @default(0) @db.Decimal(15, 2)
+  tcsAmount         Decimal             @default(0) @db.Decimal(15, 2)
+  gstBreakup        Json?
+  createdAt         DateTime            @default(now())
+  deletedAt         DateTime?
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  items             PurchaseItem[]
+  allocations       PaymentAllocation[]
+  purchaseReturns   PurchaseReturn[]
 
   @@unique([companyId, purchaseNo])
   @@index([companyId, businessPartnerId])
+  @@index([companyId, deletedAt])
+  @@index([companyId, date])
+  @@index([companyId, status])
   @@map("purchases")
 }
 
@@ -1289,139 +1236,134 @@ model PurchaseItem {
   cessAmount  Decimal     @default(0) @db.Decimal(15, 2)
   taxCategory TaxCategory @default(TAXABLE)
   total       Decimal     @db.Decimal(15, 2)
-
-  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  product  Product? @relation(fields: [productId], references: [id])
+  purchase    Purchase    @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product     Product?    @relation(fields: [productId], references: [id])
 
   @@index([purchaseId])
   @@map("purchase_items")
 }
 
 model PurchaseOrder {
-  id                String  @id @default(cuid())
+  id                String              @id @default(cuid())
   companyId         String
   businessPartnerId String
   orderNo           String
-  taxMode           TaxMode @default(CGST_SGST)
+  taxMode           TaxMode             @default(CGST_SGST)
   placeOfSupply     String?
   companyStateCode  String?
   customerStateCode String?
-
-  billingAddress  String? @db.Text
-  shippingAddress String? @db.Text
-
-  date           DateTime
-  status         DocumentStatus @default(DRAFT)
-  subTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  taxTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  cgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  sgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  igstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  cessAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  totalTaxAmount Decimal        @default(0) @db.Decimal(15, 2)
-  grandTotal     Decimal        @default(0) @db.Decimal(15, 2)
-  gstBreakup     Json?
-  deletedAt      DateTime?
-
-  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  items           PurchaseOrderItem[]
+  billingAddress    String?             @db.Text
+  shippingAddress   String?             @db.Text
+  date              DateTime
+  status            DocumentStatus      @default(DRAFT)
+  subTotal          Decimal             @default(0) @db.Decimal(15, 2)
+  taxTotal          Decimal             @default(0) @db.Decimal(15, 2)
+  cgstAmount        Decimal             @default(0) @db.Decimal(15, 2)
+  sgstAmount        Decimal             @default(0) @db.Decimal(15, 2)
+  igstAmount        Decimal             @default(0) @db.Decimal(15, 2)
+  cessAmount        Decimal             @default(0) @db.Decimal(15, 2)
+  totalTaxAmount    Decimal             @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal             @default(0) @db.Decimal(15, 2)
+  gstBreakup        Json?
+  deletedAt         DateTime?
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  items             PurchaseOrderItem[]
 
   @@unique([companyId, orderNo])
   @@index([companyId, businessPartnerId])
+  @@index([companyId, deletedAt])
+  @@index([companyId, status])
   @@map("purchase_orders")
 }
 
 model PurchaseOrderItem {
-  id          String      @id @default(cuid())
+  id          String        @id @default(cuid())
   orderId     String
   productId   String?
-  description String      @db.Text
-  qty         Decimal     @db.Decimal(15, 3)
-  rate        Decimal     @db.Decimal(15, 2)
-  taxPercent  Decimal     @db.Decimal(5, 2)
-  taxAmount   Decimal     @db.Decimal(15, 2)
-  cgstAmount  Decimal     @default(0) @db.Decimal(15, 2)
-  sgstAmount  Decimal     @default(0) @db.Decimal(15, 2)
-  igstAmount  Decimal     @default(0) @db.Decimal(15, 2)
-  cessAmount  Decimal     @default(0) @db.Decimal(15, 2)
-  taxCategory TaxCategory @default(TAXABLE)
-  total       Decimal     @db.Decimal(15, 2)
-
-  order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  description String        @db.Text
+  qty         Decimal       @db.Decimal(15, 3)
+  rate        Decimal       @db.Decimal(15, 2)
+  taxPercent  Decimal       @db.Decimal(5, 2)
+  taxAmount   Decimal       @db.Decimal(15, 2)
+  cgstAmount  Decimal       @default(0) @db.Decimal(15, 2)
+  sgstAmount  Decimal       @default(0) @db.Decimal(15, 2)
+  igstAmount  Decimal       @default(0) @db.Decimal(15, 2)
+  cessAmount  Decimal       @default(0) @db.Decimal(15, 2)
+  taxCategory TaxCategory   @default(TAXABLE)
+  total       Decimal       @db.Decimal(15, 2)
+  order       PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@map("purchase_order_items")
 }
 
 model GoodsReceipt {
-  id                String         @id @default(cuid())
+  id                String             @id @default(cuid())
   companyId         String
   businessPartnerId String
   receiptNo         String
   purchaseOrderId   String?
   date              DateTime
-  status            DocumentStatus @default(DRAFT)
+  status            DocumentStatus     @default(DRAFT)
   vehicleNumber     String?
   transportDetails  Json?
-
-  company         Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner    @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  items           GoodsReceiptItem[]
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner    @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  items             GoodsReceiptItem[]
 
   @@unique([companyId, receiptNo])
   @@map("goods_receipts")
 }
 
 model GoodsReceiptItem {
-  id             String  @id @default(cuid())
+  id             String       @id @default(cuid())
   goodsReceiptId String
   productId      String?
-  description    String  @db.Text
-  qty            Decimal @db.Decimal(15, 3)
-
-  goodsReceipt GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
-  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  description    String       @db.Text
+  qty            Decimal      @db.Decimal(15, 3)
+  goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@map("goods_receipt_items")
 }
 
 // --- PAYMENT MODULE ---
 model TransactionPayment {
-  id                String        @id @default(cuid())
+  id                String              @id @default(cuid())
   companyId         String
   businessPartnerId String
   bankAccountId     String
   paymentNo         String
-  paymentType       PaymentType   @default(INBOUND)
+  paymentType       PaymentType         @default(INBOUND)
   date              DateTime
-  amount            Decimal       @db.Decimal(15, 2)
-  method            PaymentMethod @default(BANK_TRANSFER)
+  amount            Decimal             @db.Decimal(15, 2)
+  method            PaymentMethod       @default(BANK_TRANSFER)
   reference         String?
-  notes             String?       @db.Text
-  createdAt         DateTime      @default(now())
+  notes             String?             @db.Text
+  createdAt         DateTime            @default(now())
   deletedAt         DateTime?
-
-  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  bankAccount     BankAccount         @relation(fields: [bankAccountId], references: [id])
-  allocations     PaymentAllocation[]
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  bankAccount       BankAccount         @relation(fields: [bankAccountId], references: [id])
+  allocations       PaymentAllocation[]
 
   @@unique([companyId, paymentNo])
   @@index([companyId, businessPartnerId])
+  @@index([companyId, deletedAt])
+  @@index([companyId, date])
   @@map("transaction_payments")
 }
 
 model PaymentAllocation {
-  id                   String  @id @default(cuid())
+  id                   String             @id @default(cuid())
   transactionPaymentId String
   invoiceId            String?
   purchaseId           String?
-  amount               Decimal @db.Decimal(15, 2)
-
-  transactionPayment TransactionPayment @relation(fields: [transactionPaymentId], references: [id], onDelete: Cascade)
-  invoice            Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  purchase           Purchase?          @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  amount               Decimal            @db.Decimal(15, 2)
+  transactionPayment   TransactionPayment @relation(fields: [transactionPaymentId], references: [id], onDelete: Cascade)
+  invoice              Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  purchase             Purchase?          @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([transactionPaymentId])
   @@index([invoiceId])
@@ -1431,70 +1373,65 @@ model PaymentAllocation {
 
 // --- EXPENSE MODULE ---
 model ExpenseCategory {
-  id          String  @id @default(cuid())
+  id          String    @id @default(cuid())
   companyId   String
   name        String
-  type        String  @default("CUSTOM") // SYSTEM, CUSTOM
-  description String? @db.Text
-  isActive    Boolean @default(true)
-
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  expenses Expense[]
+  type        String    @default("CUSTOM") // SYSTEM, CUSTOM
+  description String?   @db.Text
+  isActive    Boolean   @default(true)
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  expenses    Expense[]
 
   @@unique([companyId, name])
   @@map("expense_categories")
 }
 
 model Expense {
-  id            String   @id @default(cuid())
-  companyId     String
-  branchId      String?
-  categoryId    String?
-  subCategory   String?
-  bankAccountId String?
-  cashAccountId String?
-  expenseNo     String
-  billNumber    String?
-  date          DateTime
-
-  amount      Decimal @db.Decimal(15, 2)
-  taxAmount   Decimal @default(0) @db.Decimal(15, 2)
-  totalAmount Decimal @db.Decimal(15, 2)
-
+  id                  String              @id @default(cuid())
+  companyId           String
+  branchId            String?
+  categoryId          String?
+  subCategory         String?
+  bankAccountId       String?
+  cashAccountId       String?
+  expenseNo           String
+  billNumber          String?
+  date                DateTime
+  amount              Decimal             @db.Decimal(15, 2)
+  taxAmount           Decimal             @default(0) @db.Decimal(15, 2)
+  totalAmount         Decimal             @db.Decimal(15, 2)
   paymentMethod       PaymentMethod?
   paidFromType        PaidFromType?
   paidFromId          String?
-  status              ExpenseStatus  @default(DRAFT)
-  approvalStatus      ApprovalStatus @default(PENDING)
+  status              ExpenseStatus       @default(DRAFT)
+  approvalStatus      ApprovalStatus      @default(PENDING)
   reimbursementStatus String?
-
-  reference   String?
-  notes       String? @db.Text
-  description String? @db.Text
-
-  employeeId String?
-  vendorId   String?
-
-  approvedById String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
-
-  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  category    ExpenseCategory?    @relation(fields: [categoryId], references: [id])
-  bankAccount BankAccount?        @relation(fields: [bankAccountId], references: [id])
-  cashAccount CashAccount?        @relation(fields: [cashAccountId], references: [id])
-  approvedBy  User?               @relation("ExpenseApprover", fields: [approvedById], references: [id])
-  employee    Employee?           @relation(fields: [employeeId], references: [id])
-  vendor      BusinessPartner?    @relation(fields: [vendorId], references: [id])
-  attachments ExpenseAttachment[]
-  history     ExpenseHistory[]
-  comments    ExpenseComment[]
+  reference           String?
+  notes               String?             @db.Text
+  description         String?             @db.Text
+  employeeId          String?
+  vendorId            String?
+  approvedById        String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deletedAt           DateTime?
+  company             Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category            ExpenseCategory?    @relation(fields: [categoryId], references: [id])
+  bankAccount         BankAccount?        @relation(fields: [bankAccountId], references: [id])
+  cashAccount         CashAccount?        @relation(fields: [cashAccountId], references: [id])
+  approvedBy          User?               @relation("ExpenseApprover", fields: [approvedById], references: [id])
+  employee            Employee?           @relation(fields: [employeeId], references: [id])
+  vendor              BusinessPartner?    @relation(fields: [vendorId], references: [id])
+  attachments         ExpenseAttachment[]
+  history             ExpenseHistory[]
+  comments            ExpenseComment[]
 
   @@unique([companyId, expenseNo])
   @@index([approvedById])
   @@index([employeeId])
   @@index([vendorId])
+  @@index([companyId, deletedAt])
+  @@index([companyId, date])
   @@map("expenses")
 }
 
@@ -1504,9 +1441,8 @@ model ExpenseHistory {
   action    String
   userId    String?
   createdAt DateTime @default(now())
-
-  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  user    User?   @relation(fields: [userId], references: [id])
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
 
   @@index([expenseId])
   @@map("expense_histories")
@@ -1518,9 +1454,8 @@ model ExpenseComment {
   userId    String
   comment   String   @db.Text
   createdAt DateTime @default(now())
-
-  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id])
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
 
   @@index([expenseId])
   @@map("expense_comments")
@@ -1535,9 +1470,8 @@ model ExpenseAttachment {
   fileName     String
   uploadedById String
   uploadDate   DateTime @default(now())
-
-  expense    Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  uploadedBy User    @relation("ExpenseUploader", fields: [uploadedById], references: [id])
+  expense      Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  uploadedBy   User     @relation("ExpenseUploader", fields: [uploadedById], references: [id])
 
   @@index([expenseId])
   @@index([uploadedById])
@@ -1556,20 +1490,17 @@ model EmployeeAdvance {
   recovered        Boolean       @default(false)
   balancePending   Decimal       @db.Decimal(15, 2)
   recoverySchedule String?       @db.Text
-
-  paidFromType  PaidFromType?
-  bankAccountId String?
-  cashAccountId String?
-
-  approvedById String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  approvedBy  User?        @relation("AdvanceApprover", fields: [approvedById], references: [id])
-  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
-  cashAccount CashAccount? @relation(fields: [cashAccountId], references: [id])
+  paidFromType     PaidFromType?
+  bankAccountId    String?
+  cashAccountId    String?
+  approvedById     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  company          Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee         Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  approvedBy       User?         @relation("AdvanceApprover", fields: [approvedById], references: [id])
+  bankAccount      BankAccount?  @relation(fields: [bankAccountId], references: [id])
+  cashAccount      CashAccount?  @relation(fields: [cashAccountId], references: [id])
 
   @@unique([companyId, advanceNumber])
   @@index([employeeId])
@@ -1578,24 +1509,23 @@ model EmployeeAdvance {
 
 // --- BANKING ---
 model BankAccount {
-  id             String          @id @default(cuid())
-  companyId      String
-  branchId       String?
-  name           String // e.g. HDFC, ICICI
-  accountName    String?
-  accountNumber  String?
-  ifsc           String?
-  upiId          String?
-  bankName       String?
-  accountType    BankAccountType @default(CURRENT)
-  openingBalance Decimal         @default(0) @db.Decimal(15, 2)
-  currentBalance Decimal         @default(0) @db.Decimal(15, 2)
-  openingDate    DateTime?
-  lastReconciled DateTime?
-  status         String          @default("ACTIVE")
-  isDefault      Boolean         @default(false)
-  deletedAt      DateTime?
-
+  id                  String               @id @default(cuid())
+  companyId           String
+  branchId            String?
+  name                String // e.g. HDFC, ICICI
+  accountName         String?
+  accountNumber       String?
+  ifsc                String?
+  upiId               String?
+  bankName            String?
+  accountType         BankAccountType      @default(CURRENT)
+  openingBalance      Decimal              @default(0) @db.Decimal(15, 2)
+  currentBalance      Decimal              @default(0) @db.Decimal(15, 2)
+  openingDate         DateTime?
+  lastReconciled      DateTime?
+  status              String               @default("ACTIVE")
+  isDefault           Boolean              @default(false)
+  deletedAt           DateTime?
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   transactionPayments TransactionPayment[]
   expenses            Expense[]
@@ -1607,19 +1537,19 @@ model BankAccount {
   bankStatements      BankStatement[]
 
   @@index([companyId])
+  @@index([companyId, deletedAt])
   @@map("bank_accounts")
 }
 
 model CashAccount {
-  id             String    @id @default(cuid())
-  companyId      String
-  branchId       String?
-  name           String // Petty Cash, Office Cash
-  openingBalance Decimal   @default(0) @db.Decimal(15, 2)
-  currentBalance Decimal   @default(0) @db.Decimal(15, 2)
-  isDefault      Boolean   @default(false)
-  deletedAt      DateTime?
-
+  id               String             @id @default(cuid())
+  companyId        String
+  branchId         String?
+  name             String // Petty Cash, Office Cash
+  openingBalance   Decimal            @default(0) @db.Decimal(15, 2)
+  currentBalance   Decimal            @default(0) @db.Decimal(15, 2)
+  isDefault        Boolean            @default(false)
+  deletedAt        DateTime?
   company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   expenses         Expense[]
   advances         EmployeeAdvance[]
@@ -1628,68 +1558,67 @@ model CashAccount {
   transfersTo      InternalTransfer[] @relation("TransferToCash")
 
   @@index([companyId])
+  @@index([companyId, deletedAt])
   @@map("cash_accounts")
 }
 
 model BankTransaction {
-  id            String   @id @default(cuid())
+  id            String             @id @default(cuid())
   companyId     String
   bankAccountId String
   date          DateTime
   type          String // DEPOSIT, WITHDRAW, TRANSFER, CHEQUE, NEFT, RTGS, UPI, IMPS
-  amount        Decimal  @db.Decimal(15, 2)
-  balanceAfter  Decimal  @db.Decimal(15, 2)
+  amount        Decimal            @db.Decimal(15, 2)
+  balanceAfter  Decimal            @db.Decimal(15, 2)
   reference     String?
-  description   String?  @db.Text
-  isReconciled  Boolean  @default(false)
-  createdAt     DateTime @default(now())
-
-  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  description   String?            @db.Text
+  isReconciled  Boolean            @default(false)
+  createdAt     DateTime           @default(now())
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bankAccount   BankAccount        @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
   statementLine BankStatementLine?
 
   @@index([bankAccountId])
+  @@index([companyId, date])
   @@map("bank_transactions")
 }
 
 model CashTransaction {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   companyId     String
   cashAccountId String
   date          DateTime
   type          String // IN, OUT
-  amount        Decimal  @db.Decimal(15, 2)
-  balanceAfter  Decimal  @db.Decimal(15, 2)
+  amount        Decimal     @db.Decimal(15, 2)
+  balanceAfter  Decimal     @db.Decimal(15, 2)
   reference     String?
-  description   String?  @db.Text
-  createdAt     DateTime @default(now())
-
-  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  cashAccount CashAccount @relation(fields: [cashAccountId], references: [id], onDelete: Cascade)
+  description   String?     @db.Text
+  createdAt     DateTime    @default(now())
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  cashAccount   CashAccount @relation(fields: [cashAccountId], references: [id], onDelete: Cascade)
 
   @@index([cashAccountId])
   @@map("cash_transactions")
 }
 
 model InternalTransfer {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   companyId      String
   transferNumber String
   date           DateTime
-  amount         Decimal  @db.Decimal(15, 2)
+  amount         Decimal      @db.Decimal(15, 2)
   fromBankId     String?
   fromCashId     String?
   toBankId       String?
   toCashId       String?
   reference      String?
-  description    String?  @db.Text
-  createdAt      DateTime @default(now())
-
-  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  fromBank BankAccount? @relation("TransferFromBank", fields: [fromBankId], references: [id])
-  toBank   BankAccount? @relation("TransferToBank", fields: [toBankId], references: [id])
-  fromCash CashAccount? @relation("TransferFromCash", fields: [fromCashId], references: [id])
-  toCash   CashAccount? @relation("TransferToCash", fields: [toCashId], references: [id])
+  description    String?      @db.Text
+  createdAt      DateTime     @default(now())
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromBank       BankAccount? @relation("TransferFromBank", fields: [fromBankId], references: [id])
+  toBank         BankAccount? @relation("TransferToBank", fields: [toBankId], references: [id])
+  fromCash       CashAccount? @relation("TransferFromCash", fields: [fromCashId], references: [id])
+  toCash         CashAccount? @relation("TransferToCash", fields: [toCashId], references: [id])
 
   @@unique([companyId, transferNumber])
   @@map("internal_transfers")
@@ -1697,19 +1626,18 @@ model InternalTransfer {
 
 // --- ACCOUNTING SYSTEM ---
 model Account {
-  id          String              @id @default(cuid())
-  companyId   String
-  name        String
-  code        String? // Ledger code
-  isGroup     Boolean             @default(false)
-  parentId    String?
-  category    AccountCategory
-  subCategory AccountSubCategory?
-  balance     Decimal             @default(0) @db.Decimal(15, 2)
-
-  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  parent           Account?         @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children         Account[]        @relation("AccountHierarchy")
+  id               String              @id @default(cuid())
+  companyId        String
+  name             String
+  code             String? // Ledger code
+  isGroup          Boolean             @default(false)
+  parentId         String?
+  category         AccountCategory
+  subCategory      AccountSubCategory?
+  balance          Decimal             @default(0) @db.Decimal(15, 2)
+  company          Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent           Account?            @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children         Account[]           @relation("AccountHierarchy")
   journalLines     JournalLine[]
   incomeCategories IncomeCategory[]
   receipts         Receipt[]
@@ -1719,14 +1647,13 @@ model Account {
 }
 
 model CostCenter {
-  id          String  @id @default(cuid())
-  companyId   String
-  name        String
-  code        String?
-  description String? @db.Text
-  parentId    String?
-  isActive    Boolean @default(true)
-
+  id           String        @id @default(cuid())
+  companyId    String
+  name         String
+  code         String?
+  description  String?       @db.Text
+  parentId     String?
+  isActive     Boolean       @default(true)
   company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   parent       CostCenter?   @relation("CostCenterHierarchy", fields: [parentId], references: [id])
   children     CostCenter[]  @relation("CostCenterHierarchy")
@@ -1737,31 +1664,29 @@ model CostCenter {
 }
 
 model JournalEntry {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   companyId   String
   date        DateTime
   reference   String?
-  description String?  @db.Text
-  createdAt   DateTime @default(now())
-
-  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  lines   JournalLine[]
+  description String?       @db.Text
+  createdAt   DateTime      @default(now())
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lines       JournalLine[]
 
   @@index([companyId, date])
   @@map("journal_entries")
 }
 
 model JournalLine {
-  id             String  @id @default(cuid())
+  id             String       @id @default(cuid())
   journalEntryId String
   accountId      String
   costCenterId   String?
-  debit          Decimal @default(0) @db.Decimal(15, 2)
-  credit         Decimal @default(0) @db.Decimal(15, 2)
-
-  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  account      Account      @relation(fields: [accountId], references: [id])
-  costCenter   CostCenter?  @relation(fields: [costCenterId], references: [id])
+  debit          Decimal      @default(0) @db.Decimal(15, 2)
+  credit         Decimal      @default(0) @db.Decimal(15, 2)
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        Account      @relation(fields: [accountId], references: [id])
+  costCenter     CostCenter?  @relation(fields: [costCenterId], references: [id])
 
   @@index([journalEntryId])
   @@index([accountId])
@@ -1780,8 +1705,7 @@ model AuditLog {
   newValues Json?
   ipAddress String?
   createdAt DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, createdAt])
   @@map("audit_logs")
@@ -1798,9 +1722,8 @@ model BackupLog {
   status    TaskStatus @default(PENDING)
   fileUrl   String?
   createdAt DateTime   @default(now())
-
-  company Company? @relation(fields: [companyId], references: [id])
-  user    User?    @relation(fields: [userId], references: [id])
+  company   Company?   @relation(fields: [companyId], references: [id])
+  user      User?      @relation(fields: [userId], references: [id])
 
   @@index([companyId])
   @@map("backup_logs")
@@ -1819,9 +1742,8 @@ model TaxOverrideLog {
   reason          String?
   ipAddress       String?
   createdAt       DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id])
-  user    User    @relation(fields: [userId], references: [id])
+  company         Company  @relation(fields: [companyId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
 
   @@index([companyId])
   @@map("tax_override_logs")
@@ -1838,9 +1760,8 @@ model ExportLog {
   fileSize  Int?
   ipAddress String?
   createdAt DateTime   @default(now())
-
-  company Company? @relation(fields: [companyId], references: [id])
-  user    User     @relation(fields: [userId], references: [id])
+  company   Company?   @relation(fields: [companyId], references: [id])
+  user      User       @relation(fields: [userId], references: [id])
 
   @@index([companyId])
   @@map("export_logs")
@@ -1852,8 +1773,7 @@ model ArchiveRule {
   module        String
   retentionDays Int
   isActive      Boolean @default(true)
-
-  company Company @relation(fields: [companyId], references: [id])
+  company       Company @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
   @@map("archive_rules")
@@ -1866,8 +1786,7 @@ model ArchiveLog {
   recordsArchived Int
   status          TaskStatus @default(PENDING)
   createdAt       DateTime   @default(now())
-
-  company Company @relation(fields: [companyId], references: [id])
+  company         Company    @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
   @@map("archive_logs")
@@ -1883,8 +1802,7 @@ model PlatformPayment {
   reference    String?
   billingCycle String? // MONTHLY, YEARLY
   paymentDate  DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("platform_payments")
@@ -1897,9 +1815,8 @@ model PlatformActivityLog {
   action      String
   description String?  @db.Text
   createdAt   DateTime @default(now())
-
-  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  company Company? @relation("CompanyPlatformLogs", fields: [companyId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company     Company? @relation("CompanyPlatformLogs", fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([companyId])
@@ -1924,8 +1841,7 @@ model ApiKey {
   isActive  Boolean   @default(true)
   expiresAt DateTime?
   createdAt DateTime  @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("api_keys")
@@ -1939,8 +1855,7 @@ model Webhook {
   isActive  Boolean  @default(true)
   secret    String?
   createdAt DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("webhooks")
@@ -1952,8 +1867,7 @@ model DocumentTemplate {
   type        String // INVOICE, QUOTATION
   htmlContent String  @db.Text
   isDefault   Boolean @default(false)
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("document_templates")
@@ -1968,8 +1882,7 @@ model GSTReport {
   data      Json
   status    String // GENERATED, FILED
   createdAt DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, month, year, type])
   @@map("gst_reports")
@@ -1983,8 +1896,7 @@ model ScheduledTask {
   status      TaskStatus @default(PENDING)
   runAt       DateTime
   completedAt DateTime?
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([status, runAt])
   @@map("scheduled_tasks")
@@ -1992,54 +1904,48 @@ model ScheduledTask {
 
 // --- PAYROLL MODULE ---
 // Removed Department and Designation tables - converted to scalar strings
-
 model Employee {
-  id           String    @id @default(cuid())
-  companyId    String
-  employeeCode String
-  name         String
-  photo        String?   @db.Text
-  mobile       String?
-  email        String?
-  address      String?   @db.Text
-  dateOfBirth  DateTime?
-  gender       String?
-  joiningDate  DateTime?
-  department   String?
-  designation  String?
-  shiftId      String?
-  employeeType String    @default("PERMANENT")
-
-  salaryType  SalaryType @default(MONTHLY)
-  basicSalary Decimal    @default(0) @db.Decimal(15, 2)
-  allowances  Json? // Store structured JSON array of { name, amount }
-
-  bankDetails   Json? // Store { accountName, accountNumber, ifsc, bankName }
-  aadhaarNumber String?
-  panNumber     String?
-
-  status             String  @default("ACTIVE") // ACTIVE, INACTIVE, RESIGNED, TERMINATED
+  id                 String             @id @default(cuid())
+  companyId          String
+  employeeCode       String
+  name               String
+  photo              String?            @db.Text
+  mobile             String?
+  email              String?
+  address            String?            @db.Text
+  dateOfBirth        DateTime?
+  gender             String?
+  joiningDate        DateTime?
+  department         String?
+  designation        String?
+  shiftId            String?
+  employeeType       String             @default("PERMANENT")
+  salaryType         SalaryType         @default(MONTHLY)
+  basicSalary        Decimal            @default(0) @db.Decimal(15, 2)
+  allowances         Json? // Store structured JSON array of { name, amount }
+  bankDetails        Json? // Store { accountName, accountNumber, ifsc, bankName }
+  aadhaarNumber      String?
+  panNumber          String?
+  status             String             @default("ACTIVE") // ACTIVE, INACTIVE, RESIGNED, TERMINATED
   reportingManagerId String?
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  company          Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  reportingManager Employee?  @relation("ReportingManager", fields: [reportingManagerId], references: [id])
-  reportees        Employee[] @relation("ReportingManager")
-  shift            Shift?     @relation(fields: [shiftId], references: [id])
-
-  attendances       Attendance[]
-  leaveApplications LeaveApplication[]
-  salarySlips       SalarySlip[]
-  advances          StaffAdvance[]
-  loans             EmployeeLoan[]
-  otherIncomes      OtherIncome[]
-  expenses          Expense[]
-  employeeAdvances  EmployeeAdvance[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reportingManager   Employee?          @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+  reportees          Employee[]         @relation("ReportingManager")
+  shift              Shift?             @relation(fields: [shiftId], references: [id])
+  attendances        Attendance[]
+  leaveApplications  LeaveApplication[]
+  salarySlips        SalarySlip[]
+  advances           StaffAdvance[]
+  loans              EmployeeLoan[]
+  otherIncomes       OtherIncome[]
+  expenses           Expense[]
+  employeeAdvances   EmployeeAdvance[]
 
   @@unique([companyId, employeeCode])
+  @@index([companyId, deletedAt])
   @@map("employees")
 }
 
@@ -2050,9 +1956,8 @@ model Attendance {
   date       DateTime
   type       AttendanceType
   notes      String?
-
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, date])
   @@map("attendances")
@@ -2069,9 +1974,8 @@ model LeaveApplication {
   reason     String?     @db.Text
   approvedBy String?
   createdAt  DateTime    @default(now())
-
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([companyId, employeeId])
   @@map("leave_applications")
@@ -2092,9 +1996,8 @@ model SalarySlip {
   netSalary   Decimal  @db.Decimal(15, 2)
   status      String   @default("GENERATED") // GENERATED, PAID
   generatedAt DateTime @default(now())
-
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, month, year])
   @@map("salary_slips")
@@ -2110,47 +2013,41 @@ model StaffAdvance {
   status       String    @default("PENDING") // PENDING, RECOVERED
   notes        String?   @db.Text
   createdAt    DateTime  @default(now())
-
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([companyId, employeeId])
   @@map("staff_advances")
 }
 
 // --- RETURN MANAGEMENT MODULE ---
-
 model SalesReturn {
-  id                String       @id @default(cuid())
+  id                String            @id @default(cuid())
   companyId         String
   businessPartnerId String
   originalInvoiceId String?
   returnNumber      String
-  date              DateTime     @default(now())
-  reason            String       @db.Text
-  returnType        ReturnType   @default(CREDIT_NOTE)
-  status            ReturnStatus @default(DRAFT)
-
-  subTotal       Decimal @default(0) @db.Decimal(15, 2)
-  taxTotal       Decimal @default(0) @db.Decimal(15, 2)
-  cgstAmount     Decimal @default(0) @db.Decimal(15, 2)
-  sgstAmount     Decimal @default(0) @db.Decimal(15, 2)
-  igstAmount     Decimal @default(0) @db.Decimal(15, 2)
-  cessAmount     Decimal @default(0) @db.Decimal(15, 2)
-  totalTaxAmount Decimal @default(0) @db.Decimal(15, 2)
-  grandTotal     Decimal @default(0) @db.Decimal(15, 2)
-
-  remarks      String? @db.Text
-  createdById  String
-  approvedById String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner   @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  originalInvoice Invoice?          @relation(fields: [originalInvoiceId], references: [id])
-  items           SalesReturnItem[]
+  date              DateTime          @default(now())
+  reason            String            @db.Text
+  returnType        ReturnType        @default(CREDIT_NOTE)
+  status            ReturnStatus      @default(DRAFT)
+  subTotal          Decimal           @default(0) @db.Decimal(15, 2)
+  taxTotal          Decimal           @default(0) @db.Decimal(15, 2)
+  cgstAmount        Decimal           @default(0) @db.Decimal(15, 2)
+  sgstAmount        Decimal           @default(0) @db.Decimal(15, 2)
+  igstAmount        Decimal           @default(0) @db.Decimal(15, 2)
+  cessAmount        Decimal           @default(0) @db.Decimal(15, 2)
+  totalTaxAmount    Decimal           @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal           @default(0) @db.Decimal(15, 2)
+  remarks           String?           @db.Text
+  createdById       String
+  approvedById      String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner   @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  originalInvoice   Invoice?          @relation(fields: [originalInvoiceId], references: [id])
+  items             SalesReturnItem[]
 
   @@unique([companyId, returnNumber])
   @@index([companyId, businessPartnerId])
@@ -2158,58 +2055,53 @@ model SalesReturn {
 }
 
 model SalesReturnItem {
-  id            String  @id @default(cuid())
+  id            String      @id @default(cuid())
   salesReturnId String
   productId     String?
-  description   String  @db.Text
-  qty           Decimal @db.Decimal(15, 3)
-  rate          Decimal @db.Decimal(15, 2)
-  taxPercent    Decimal @db.Decimal(5, 2)
-  taxAmount     Decimal @db.Decimal(15, 2)
-  cgstAmount    Decimal @default(0) @db.Decimal(15, 2)
-  sgstAmount    Decimal @default(0) @db.Decimal(15, 2)
-  igstAmount    Decimal @default(0) @db.Decimal(15, 2)
-  cessAmount    Decimal @default(0) @db.Decimal(15, 2)
-  total         Decimal @db.Decimal(15, 2)
-
-  salesReturn SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
-  product     Product?    @relation(fields: [productId], references: [id])
+  description   String      @db.Text
+  qty           Decimal     @db.Decimal(15, 3)
+  rate          Decimal     @db.Decimal(15, 2)
+  taxPercent    Decimal     @db.Decimal(5, 2)
+  taxAmount     Decimal     @db.Decimal(15, 2)
+  cgstAmount    Decimal     @default(0) @db.Decimal(15, 2)
+  sgstAmount    Decimal     @default(0) @db.Decimal(15, 2)
+  igstAmount    Decimal     @default(0) @db.Decimal(15, 2)
+  cessAmount    Decimal     @default(0) @db.Decimal(15, 2)
+  total         Decimal     @db.Decimal(15, 2)
+  salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+  product       Product?    @relation(fields: [productId], references: [id])
 
   @@index([salesReturnId])
   @@map("sales_return_items")
 }
 
 model PurchaseReturn {
-  id                 String       @id @default(cuid())
+  id                 String               @id @default(cuid())
   companyId          String
   businessPartnerId  String
   originalPurchaseId String?
   returnNumber       String
-  date               DateTime     @default(now())
-  reason             String       @db.Text
-  returnType         ReturnType   @default(DEBIT_NOTE)
-  status             ReturnStatus @default(DRAFT)
-
-  subTotal       Decimal @default(0) @db.Decimal(15, 2)
-  taxTotal       Decimal @default(0) @db.Decimal(15, 2)
-  cgstAmount     Decimal @default(0) @db.Decimal(15, 2)
-  sgstAmount     Decimal @default(0) @db.Decimal(15, 2)
-  igstAmount     Decimal @default(0) @db.Decimal(15, 2)
-  cessAmount     Decimal @default(0) @db.Decimal(15, 2)
-  totalTaxAmount Decimal @default(0) @db.Decimal(15, 2)
-  grandTotal     Decimal @default(0) @db.Decimal(15, 2)
-
-  remarks      String? @db.Text
-  createdById  String
-  approvedById String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company          Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner  BusinessPartner      @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  originalPurchase Purchase?            @relation(fields: [originalPurchaseId], references: [id])
-  items            PurchaseReturnItem[]
+  date               DateTime             @default(now())
+  reason             String               @db.Text
+  returnType         ReturnType           @default(DEBIT_NOTE)
+  status             ReturnStatus         @default(DRAFT)
+  subTotal           Decimal              @default(0) @db.Decimal(15, 2)
+  taxTotal           Decimal              @default(0) @db.Decimal(15, 2)
+  cgstAmount         Decimal              @default(0) @db.Decimal(15, 2)
+  sgstAmount         Decimal              @default(0) @db.Decimal(15, 2)
+  igstAmount         Decimal              @default(0) @db.Decimal(15, 2)
+  cessAmount         Decimal              @default(0) @db.Decimal(15, 2)
+  totalTaxAmount     Decimal              @default(0) @db.Decimal(15, 2)
+  grandTotal         Decimal              @default(0) @db.Decimal(15, 2)
+  remarks            String?              @db.Text
+  createdById        String
+  approvedById       String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner    BusinessPartner      @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  originalPurchase   Purchase?            @relation(fields: [originalPurchaseId], references: [id])
+  items              PurchaseReturnItem[]
 
   @@unique([companyId, returnNumber])
   @@index([companyId, businessPartnerId])
@@ -2217,22 +2109,21 @@ model PurchaseReturn {
 }
 
 model PurchaseReturnItem {
-  id               String  @id @default(cuid())
+  id               String         @id @default(cuid())
   purchaseReturnId String
   productId        String?
-  description      String  @db.Text
-  qty              Decimal @db.Decimal(15, 3)
-  rate             Decimal @db.Decimal(15, 2)
-  taxPercent       Decimal @db.Decimal(5, 2)
-  taxAmount        Decimal @db.Decimal(15, 2)
-  cgstAmount       Decimal @default(0) @db.Decimal(15, 2)
-  sgstAmount       Decimal @default(0) @db.Decimal(15, 2)
-  igstAmount       Decimal @default(0) @db.Decimal(15, 2)
-  cessAmount       Decimal @default(0) @db.Decimal(15, 2)
-  total            Decimal @db.Decimal(15, 2)
-
-  purchaseReturn PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
-  product        Product?       @relation(fields: [productId], references: [id])
+  description      String         @db.Text
+  qty              Decimal        @db.Decimal(15, 3)
+  rate             Decimal        @db.Decimal(15, 2)
+  taxPercent       Decimal        @db.Decimal(5, 2)
+  taxAmount        Decimal        @db.Decimal(15, 2)
+  cgstAmount       Decimal        @default(0) @db.Decimal(15, 2)
+  sgstAmount       Decimal        @default(0) @db.Decimal(15, 2)
+  igstAmount       Decimal        @default(0) @db.Decimal(15, 2)
+  cessAmount       Decimal        @default(0) @db.Decimal(15, 2)
+  total            Decimal        @db.Decimal(15, 2)
+  purchaseReturn   PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  product          Product?       @relation(fields: [productId], references: [id])
 
   @@index([purchaseReturnId])
   @@map("purchase_return_items")
@@ -2248,8 +2139,7 @@ model RefundTransaction {
   transactionDate DateTime     @default(now())
   remarks         String?      @db.Text
   createdById     String
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, referenceId])
   @@map("refund_transactions")
@@ -2282,19 +2172,18 @@ enum ProductionStatus {
 
 // --- WAREHOUSE ---
 model Warehouse {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   companyId String
   name      String
   location  String?
-  isActive  Boolean  @default(true)
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  stocks  Stock[]
-  batches InventoryBatch[]
-  serials InventorySerial[]
+  isActive  Boolean           @default(true)
+  isDefault Boolean           @default(false)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  stocks    Stock[]
+  batches   InventoryBatch[]
+  serials   InventorySerial[]
 
   @@unique([companyId, name])
   @@map("warehouses")
@@ -2302,14 +2191,13 @@ model Warehouse {
 
 // --- MANUFACTURING ---
 model BillOfMaterial {
-  id        String   @id @default(cuid())
-  companyId String
-  productId String
-  name      String
-  totalCost Decimal  @default(0) @db.Decimal(15, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id          String            @id @default(cuid())
+  companyId   String
+  productId   String
+  name        String
+  totalCost   Decimal           @default(0) @db.Decimal(15, 2)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
   company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   product     Product           @relation(fields: [productId], references: [id])
   items       BOMItem[]
@@ -2320,14 +2208,13 @@ model BillOfMaterial {
 }
 
 model BOMItem {
-  id            String  @id @default(cuid())
+  id            String         @id @default(cuid())
   bomId         String
   rawMaterialId String
-  qty           Decimal @db.Decimal(15, 3)
-  cost          Decimal @db.Decimal(15, 2)
-
-  bom         BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
-  rawMaterial Product        @relation(fields: [rawMaterialId], references: [id])
+  qty           Decimal        @db.Decimal(15, 3)
+  cost          Decimal        @db.Decimal(15, 2)
+  bom           BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  rawMaterial   Product        @relation(fields: [rawMaterialId], references: [id])
 
   @@map("bom_items")
 }
@@ -2345,9 +2232,8 @@ model ProductionOrder {
   endDate     DateTime?
   totalCost   Decimal          @default(0) @db.Decimal(15, 2)
   createdAt   DateTime         @default(now())
-
-  company Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  bom     BillOfMaterial @relation(fields: [bomId], references: [id])
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bom         BillOfMaterial   @relation(fields: [bomId], references: [id])
 
   @@unique([companyId, orderNo])
   @@map("production_orders")
@@ -2355,14 +2241,13 @@ model ProductionOrder {
 
 // --- ADVANCED HRMS ---
 model Shift {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   companyId String
   name      String
   startTime String // e.g. "09:00"
   endTime   String // e.g. "18:00"
-  graceTime Int      @default(15) // minutes
-  createdAt DateTime @default(now())
-
+  graceTime Int        @default(15) // minutes
+  createdAt DateTime   @default(now())
   company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employees Employee[]
 
@@ -2381,16 +2266,14 @@ model EmployeeLoan {
   remainingAmount Decimal  @db.Decimal(15, 2)
   status          String   @default("ACTIVE")
   createdAt       DateTime @default(now())
-
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([companyId, employeeId])
   @@map("employee_loans")
 }
 
 // --- POS & SALES ORDERS ---
-
 // --- MIGRATION & IMPORT ---
 model ImportLog {
   id          String   @id @default(cuid())
@@ -2406,9 +2289,8 @@ model ImportLog {
   errors      Json? // Array of error details
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("import_logs")
@@ -2425,25 +2307,24 @@ enum IncomeType {
 }
 
 model IncomeCategory {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   companyId   String
   name        String
-  description String?  @db.Text
+  description String?       @db.Text
   accountId   String // GL account for posting (Service Revenue, Other Income, etc.)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  account Account       @relation(fields: [accountId], references: [id])
-  incomes OtherIncome[]
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account     Account       @relation(fields: [accountId], references: [id])
+  incomes     OtherIncome[]
 
   @@unique([companyId, name])
   @@map("income_categories")
 }
 
 model OtherIncome {
-  id                String     @id @default(cuid())
+  id                String           @id @default(cuid())
   companyId         String
   categoryId        String
   businessPartnerId String?
@@ -2452,49 +2333,43 @@ model OtherIncome {
   employeeId        String?
   incomeNo          String
   date              DateTime
-  incomeType        IncomeType @default(SERVICE)
-
-  walkInCustomer String?
-  description    String? @db.Text
-  reference      String?
-
-  taxMode    TaxMode @default(CGST_SGST)
-  subTotal   Decimal @default(0) @db.Decimal(15, 2)
-  taxTotal   Decimal @default(0) @db.Decimal(15, 2)
-  cgstAmount Decimal @default(0) @db.Decimal(15, 2)
-  sgstAmount Decimal @default(0) @db.Decimal(15, 2)
-  igstAmount Decimal @default(0) @db.Decimal(15, 2)
-  cessAmount Decimal @default(0) @db.Decimal(15, 2)
-  discount   Decimal @default(0) @db.Decimal(15, 2)
-  freight    Decimal @default(0) @db.Decimal(15, 2)
-  grandTotal Decimal @default(0) @db.Decimal(15, 2)
-
-  status        DocumentStatus @default(DRAFT)
-  paymentStatus String         @default("UNPAID") // PAID, UNPAID, PARTIAL
-  paymentMethod PaymentMethod?
-  bankAccountId String?
-
-  notes       String? @db.Text
-  attachments Json? // Simple array of URLs for now
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  category        IncomeCategory   @relation(fields: [categoryId], references: [id])
-  businessPartner BusinessPartner? @relation(fields: [businessPartnerId], references: [id])
-  bankAccount     BankAccount?     @relation(fields: [bankAccountId], references: [id])
-  branch          Branch?          @relation(fields: [branchId], references: [id])
-  employee        Employee?        @relation(fields: [employeeId], references: [id])
+  incomeType        IncomeType       @default(SERVICE)
+  walkInCustomer    String?
+  description       String?          @db.Text
+  reference         String?
+  taxMode           TaxMode          @default(CGST_SGST)
+  subTotal          Decimal          @default(0) @db.Decimal(15, 2)
+  taxTotal          Decimal          @default(0) @db.Decimal(15, 2)
+  cgstAmount        Decimal          @default(0) @db.Decimal(15, 2)
+  sgstAmount        Decimal          @default(0) @db.Decimal(15, 2)
+  igstAmount        Decimal          @default(0) @db.Decimal(15, 2)
+  cessAmount        Decimal          @default(0) @db.Decimal(15, 2)
+  discount          Decimal          @default(0) @db.Decimal(15, 2)
+  freight           Decimal          @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal          @default(0) @db.Decimal(15, 2)
+  status            DocumentStatus   @default(DRAFT)
+  paymentStatus     String           @default("UNPAID") // PAID, UNPAID, PARTIAL
+  paymentMethod     PaymentMethod?
+  bankAccountId     String?
+  notes             String?          @db.Text
+  attachments       Json? // Simple array of URLs for now
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category          IncomeCategory   @relation(fields: [categoryId], references: [id])
+  businessPartner   BusinessPartner? @relation(fields: [businessPartnerId], references: [id])
+  bankAccount       BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  branch            Branch?          @relation(fields: [branchId], references: [id])
+  employee          Employee?        @relation(fields: [employeeId], references: [id])
 
   @@unique([companyId, incomeNo])
   @@index([companyId, categoryId])
+  @@index([companyId, deletedAt])
   @@map("other_incomes")
 }
 
 // --- BACKUP & DISASTER RECOVERY ---
-
 enum BackupOperation {
   BACKUP
   RESTORE
@@ -2525,31 +2400,25 @@ enum ScheduleFrequency {
 }
 
 model BackupJob {
-  id          String  @id @default(cuid())
-  companyId   String? // Null means it's a Platform/Super Admin backup
-  createdById String
-
-  name      String
-  operation BackupOperation
-  type      SystemBackupType
-  status    JobStatus
-
-  progress   Int     @default(0) // 0 to 100
-  sizeBytes  BigInt?
-  durationMs Int?
-
+  id             String           @id @default(cuid())
+  companyId      String? // Null means it's a Platform/Super Admin backup
+  createdById    String
+  name           String
+  operation      BackupOperation
+  type           SystemBackupType
+  status         JobStatus
+  progress       Int              @default(0) // 0 to 100
+  sizeBytes      BigInt?
+  durationMs     Int?
   checksum       String?
   fileUrl        String?
   encryptionMeta Json?
-
-  errorLog      String? @db.Text
-  targetModules Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy User     @relation(fields: [createdById], references: [id])
+  errorLog       String?          @db.Text
+  targetModules  Json?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  company        Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy      User             @relation(fields: [createdById], references: [id])
 
   @@index([companyId])
   @@index([status])
@@ -2557,86 +2426,77 @@ model BackupJob {
 }
 
 model BackupSchedule {
-  id          String  @id @default(cuid())
-  companyId   String?
-  createdById String
-
+  id             String            @id @default(cuid())
+  companyId      String?
+  createdById    String
   frequency      ScheduleFrequency
   cronExpression String?
   retentionDays  Int               @default(30)
-
-  lastRun  DateTime?
-  nextRun  DateTime?
-  isActive Boolean   @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy User     @relation(fields: [createdById], references: [id])
+  lastRun        DateTime?
+  nextRun        DateTime?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  company        Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy      User              @relation(fields: [createdById], references: [id])
 
   @@index([companyId])
   @@map("backup_schedules")
 }
 
 model BackupAuditLog {
-  id        String  @id @default(cuid())
-  companyId String?
-  userId    String
-
+  id         String   @id @default(cuid())
+  companyId  String?
+  userId     String
   action     String
   targetName String?
-
-  ipAddress String?
-  userAgent String?
-  device    String?
-
-  success Boolean
-  details Json?
-
-  createdAt DateTime @default(now())
-
-  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress  String?
+  userAgent  String?
+  device     String?
+  success    Boolean
+  details    Json?
+  createdAt  DateTime @default(now())
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("backup_audit_logs")
 }
 
 model Receipt {
-  id                String    @id @default(cuid())
+  id                String              @id @default(cuid())
   companyId         String
   receiptNo         String
   date              DateTime
   businessPartnerId String
   accountId         String
   paymentMethod     String
-  amount            Decimal   @db.Decimal(15, 2)
+  amount            Decimal             @db.Decimal(15, 2)
   referenceNo       String?
   chequeNo          String?
   transactionId     String?
   clearanceDate     DateTime?
-  bankCharges       Decimal   @default(0) @db.Decimal(15, 2)
+  bankCharges       Decimal             @default(0) @db.Decimal(15, 2)
   cashier           String?
-  notes             String?   @db.Text
-  currency          String    @default("INR")
-  exchangeRate      Decimal   @default(1.0) @db.Decimal(10, 4)
+  notes             String?             @db.Text
+  currency          String              @default("INR")
+  exchangeRate      Decimal             @default(1.0) @db.Decimal(10, 4)
   receivedById      String
-  status            String    @default("COMPLETED") // DRAFT, COMPLETED, VOID
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  status            String              @default("COMPLETED") // DRAFT, COMPLETED, VOID
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
   deletedAt         DateTime?
-
-  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  account         Account             @relation(fields: [accountId], references: [id])
-  receivedBy      User                @relation(fields: [receivedById], references: [id])
-  allocations     ReceiptAllocation[]
-  attachments     ReceiptAttachment[]
-  audits          ReceiptAudit[]
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  account           Account             @relation(fields: [accountId], references: [id])
+  receivedBy        User                @relation(fields: [receivedById], references: [id])
+  allocations       ReceiptAllocation[]
+  attachments       ReceiptAttachment[]
+  audits            ReceiptAudit[]
 
   @@unique([companyId, receiptNo])
   @@index([companyId, date])
+  @@index([companyId, deletedAt])
   @@map("receipts")
 }
 
@@ -2646,9 +2506,8 @@ model ReceiptAllocation {
   invoiceId String
   amount    Decimal  @db.Decimal(15, 2)
   createdAt DateTime @default(now())
-
-  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([receiptId])
   @@index([invoiceId])
@@ -2663,8 +2522,7 @@ model ReceiptAttachment {
   fileSize  Int
   mimeType  String?
   createdAt DateTime @default(now())
-
-  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 
   @@index([receiptId])
   @@map("receipt_attachments")
@@ -2677,46 +2535,44 @@ model ReceiptAudit {
   action    String // CREATE, UPDATE, DELETE, PRINT, EMAIL, VOID
   details   Json?
   createdAt DateTime @default(now())
-
-  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([receiptId])
   @@map("receipt_audits")
 }
 
 model SalesOrder {
-  id                String  @id @default(cuid())
+  id                String           @id @default(cuid())
   companyId         String
   businessPartnerId String
   orderNo           String
-  taxMode           TaxMode @default(CGST_SGST)
+  taxMode           TaxMode          @default(CGST_SGST)
   placeOfSupply     String?
   companyStateCode  String?
   customerStateCode String?
-
-  billingAddress  String? @db.Text
-  shippingAddress String? @db.Text
-
-  date           DateTime
-  status         DocumentStatus @default(DRAFT)
-  subTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  taxTotal       Decimal        @default(0) @db.Decimal(15, 2)
-  cgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  sgstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  igstAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  cessAmount     Decimal        @default(0) @db.Decimal(15, 2)
-  totalTaxAmount Decimal        @default(0) @db.Decimal(15, 2)
-  grandTotal     Decimal        @default(0) @db.Decimal(15, 2)
-  gstBreakup     Json?
-  deletedAt      DateTime?
-
-  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  businessPartner BusinessPartner  @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
-  items           SalesOrderItem[]
+  billingAddress    String?          @db.Text
+  shippingAddress   String?          @db.Text
+  date              DateTime
+  status            DocumentStatus   @default(DRAFT)
+  subTotal          Decimal          @default(0) @db.Decimal(15, 2)
+  taxTotal          Decimal          @default(0) @db.Decimal(15, 2)
+  cgstAmount        Decimal          @default(0) @db.Decimal(15, 2)
+  sgstAmount        Decimal          @default(0) @db.Decimal(15, 2)
+  igstAmount        Decimal          @default(0) @db.Decimal(15, 2)
+  cessAmount        Decimal          @default(0) @db.Decimal(15, 2)
+  totalTaxAmount    Decimal          @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal          @default(0) @db.Decimal(15, 2)
+  gstBreakup        Json?
+  deletedAt         DateTime?
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner   BusinessPartner  @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  items             SalesOrderItem[]
 
   @@unique([companyId, orderNo])
   @@index([companyId, businessPartnerId])
+  @@index([companyId, deletedAt])
+  @@index([companyId, status])
   @@map("sales_orders")
 }
 
@@ -2735,15 +2591,13 @@ model SalesOrderItem {
   cessAmount  Decimal     @default(0) @db.Decimal(15, 2)
   taxCategory TaxCategory @default(TAXABLE)
   total       Decimal     @db.Decimal(15, 2)
-
-  order   SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  order       SalesOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@map("sales_order_items")
 }
 
 // --- PHASE 5: ADVANCED INVENTORY ---
-
 model InventoryBatch {
   id          String    @id @default(cuid())
   companyId   String
@@ -2754,10 +2608,9 @@ model InventoryBatch {
   expDate     DateTime?
   qty         Decimal   @default(0) @db.Decimal(15, 3)
   createdAt   DateTime  @default(now())
-
-  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, productId, batchNo])
   @@index([companyId, warehouseId])
@@ -2765,17 +2618,16 @@ model InventoryBatch {
 }
 
 model InventorySerial {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   companyId   String
   productId   String
   warehouseId String
   serialNo    String
-  status      String   @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED
-  createdAt   DateTime @default(now())
-
-  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  status      String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED
+  createdAt   DateTime  @default(now())
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, productId, serialNo])
   @@index([companyId, warehouseId])
@@ -2783,78 +2635,72 @@ model InventorySerial {
 }
 
 // --- PHASE 6: BANKING RECONCILIATION ---
-
 model BankStatement {
-  id             String   @id @default(cuid())
+  id             String              @id @default(cuid())
   companyId      String
   bankAccountId  String
   statementDate  DateTime
-  openingBalance Decimal  @default(0) @db.Decimal(15, 2)
-  closingBalance Decimal  @default(0) @db.Decimal(15, 2)
-  status         String   @default("DRAFT") // DRAFT, RECONCILED
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  bankAccount BankAccount         @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
-  lines       BankStatementLine[]
+  openingBalance Decimal             @default(0) @db.Decimal(15, 2)
+  closingBalance Decimal             @default(0) @db.Decimal(15, 2)
+  status         String              @default("DRAFT") // DRAFT, RECONCILED
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bankAccount    BankAccount         @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  lines          BankStatementLine[]
 
   @@index([companyId, bankAccountId])
   @@map("bank_statements")
 }
 
 model BankStatementLine {
-  id                 String   @id @default(cuid())
-  statementId        String
-  date               DateTime
-  description        String   @db.Text
-  amount             Decimal  @db.Decimal(15, 2)
-  status             String   @default("UNMATCHED") // UNMATCHED, MATCHED, IGNORED
-  matchedTransactionId String? @unique
-
-  statement          BankStatement   @relation(fields: [statementId], references: [id], onDelete: Cascade)
-  matchedTransaction BankTransaction? @relation(fields: [matchedTransactionId], references: [id], onDelete: SetNull)
+  id                   String           @id @default(cuid())
+  statementId          String
+  date                 DateTime
+  description          String           @db.Text
+  amount               Decimal          @db.Decimal(15, 2)
+  status               String           @default("UNMATCHED") // UNMATCHED, MATCHED, IGNORED
+  matchedTransactionId String?          @unique
+  statement            BankStatement    @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  matchedTransaction   BankTransaction? @relation(fields: [matchedTransactionId], references: [id], onDelete: SetNull)
 
   @@index([statementId])
   @@map("bank_statement_lines")
 }
 
 // --- PHASE 7: FIXED ASSETS & PROJECTS ---
-
 model FixedAsset {
-  id              String   @id @default(cuid())
-  companyId       String
-  name            String
-  description     String?  @db.Text
-  assetType       String   @default("EQUIPMENT") // EQUIPMENT, VEHICLE, FURNITURE, IT
-  purchasePrice   Decimal  @db.Decimal(15, 2)
-  purchaseDate    DateTime
-  depreciationRate Decimal @default(0) @db.Decimal(5, 2)
-  currentValue    Decimal  @db.Decimal(15, 2)
-  status          String   @default("ACTIVE") // ACTIVE, DEPRECIATED, SOLD
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  companyId        String
+  name             String
+  description      String?  @db.Text
+  assetType        String   @default("EQUIPMENT") // EQUIPMENT, VEHICLE, FURNITURE, IT
+  purchasePrice    Decimal  @db.Decimal(15, 2)
+  purchaseDate     DateTime
+  depreciationRate Decimal  @default(0) @db.Decimal(5, 2)
+  currentValue     Decimal  @db.Decimal(15, 2)
+  status           String   @default("ACTIVE") // ACTIVE, DEPRECIATED, SOLD
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("fixed_assets")
 }
 
 model Project {
-  id          String    @id @default(cuid())
+  id          String           @id @default(cuid())
   companyId   String
   customerId  String?
   name        String
-  description String?   @db.Text
+  description String?          @db.Text
   startDate   DateTime
   endDate     DateTime?
-  status      String    @default("PLANNING") // PLANNING, IN_PROGRESS, COMPLETED, ON_HOLD
-  budget      Decimal   @default(0) @db.Decimal(15, 2)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  status      String           @default("PLANNING") // PLANNING, IN_PROGRESS, COMPLETED, ON_HOLD
+  budget      Decimal          @default(0) @db.Decimal(15, 2)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer    BusinessPartner? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([companyId, customerId])

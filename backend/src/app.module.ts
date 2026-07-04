@@ -1,4 +1,5 @@
 import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
+import { CacheModule } from '@nestjs/cache-manager';
 import { AuditModule } from "./audit/audit.module";
 import { AuthModule } from "./auth/auth.module";
 import { CommonModule } from "./common/common.module";
@@ -21,16 +22,17 @@ import { ExpensesModule } from "./expenses/expenses.module";
 import { HrModule } from "./hr/hr.module";
 import { PlatformModule } from "./platform/platform.module";
 import { MailModule } from "./mail/mail.module";
-import { ReportsModule } from './reports/reports.module';
-import { IncomeModule } from './income/income.module';
-import { BackupModule } from './backup/backup.module';
-import { ScheduleModule } from '@nestjs/schedule';
-import { StorageModule } from './storage/storage.module';
-import { PrismaTestController } from './prisma-test.controller';
-import { FinanceModule } from './finance/finance.module';
+import { ReportsModule } from "./reports/reports.module";
+import { IncomeModule } from "./income/income.module";
+import { BackupModule } from "./backup/backup.module";
+import { ScheduleModule } from "@nestjs/schedule";
+import { StorageModule } from "./storage/storage.module";
+import { PrismaTestController } from "./prisma-test.controller";
+import { FinanceModule } from "./finance/finance.module";
 
 @Module({
   imports: [
+    CacheModule.register({ isGlobal: true, ttl: 60000 }), // 60 seconds global cache
     MailModule,
     AppConfigModule,
     LoggingModule,
@@ -63,8 +65,6 @@ import { FinanceModule } from './finance/finance.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(TenantContextMiddleware)
-      .forRoutes("*");
+    consumer.apply(TenantContextMiddleware).forRoutes("*");
   }
 }

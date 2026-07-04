@@ -5,6 +5,7 @@ import api from '../../services/api';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAsyncForm } from '../../hooks/useAsyncForm';
+import { handleApiFormError } from '../../utils/error-handler';
 
 interface ProductFormModalProps {
   onClose: () => void;
@@ -66,7 +67,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     queryFn: () => api.get('/tax-groups').then(res => res.data?.data || res.data || []),
   });
 
-  const { register, handleSubmit, setValue, reset } = useAsyncForm(
+  const { register, handleSubmit, setValue, reset, setError, formState: { errors } } = useAsyncForm(
     {
       defaultValues: {
         name: '',
@@ -159,7 +160,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       }
       setActiveInlineModal(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create Category');
+      handleApiFormError(err);
     }
   };
 
@@ -179,7 +180,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       }
       setActiveInlineModal(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create Brand');
+      handleApiFormError(err);
     }
   };
 
@@ -203,7 +204,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       }
       setActiveInlineModal(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create Unit');
+      handleApiFormError(err);
     }
   };
 
@@ -223,7 +224,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       }
       setActiveInlineModal(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create Tax Group');
+      handleApiFormError(err);
     }
   };
 
@@ -251,8 +252,9 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       }
       queryClient.invalidateQueries({ queryKey: ['products'] });
       onSuccess();
-    } catch {
-      toast.error('Failed to save product');
+      onClose();
+    } catch (err: any) {
+      handleApiFormError(err, setError as any);
     } finally {
       setIsLoading(false);
     }

@@ -11,7 +11,7 @@ export class BomService {
     if (!companyId) return [];
 
     return this.prisma.billOfMaterial.findMany({
-      where: { companyId },
+      where: {},
       include: { product: true, items: { include: { rawMaterial: true } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -21,7 +21,7 @@ export class BomService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
     const bom = await this.prisma.billOfMaterial.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { product: true, items: { include: { rawMaterial: true } } },
     });
     if (!bom) throw new NotFoundException('BOM not found');

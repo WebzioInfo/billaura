@@ -23,15 +23,15 @@ export class DashboardService {
       recentInvoices,
     ] = await Promise.all([
       this.prisma.invoice.aggregate({
-        where: { companyId },
+        where: {},
         _sum: { grandTotal: true },
       }),
       this.prisma.purchase.aggregate({
-        where: { companyId },
+        where: {},
         _sum: { grandTotal: true },
       }),
       this.prisma.expense.aggregate({
-        where: { companyId },
+        where: {},
         _sum: { amount: true },
       }),
       this.prisma.businessPartner.count({
@@ -50,7 +50,7 @@ export class DashboardService {
         orderBy: { name: 'asc' },
       }),
       this.prisma.invoice.findMany({
-        where: { companyId },
+        where: {},
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { businessPartner: true },

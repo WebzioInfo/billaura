@@ -1,12 +1,23 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, HttpStatus, HttpCode } from '@nestjs/common';
-import { InvoicesService } from './invoices.service';
-import { CreateInvoiceDto } from './dto/invoice.dto';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TenantGuard } from '../common/guards/tenant.guard';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  HttpStatus,
+  HttpCode,
+} from "@nestjs/common";
+import { InvoicesService } from "./invoices.service";
+import { CreateInvoiceDto } from "./dto/invoice.dto";
+import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
-@Controller('sales/invoices')
+@Controller("sales/invoices")
 export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}
 
@@ -15,8 +26,8 @@ export class InvoicesController {
     return this.invoicesService.findAll(query);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
+  @Get(":id")
+  async findOne(@Param("id") id: string) {
     return this.invoicesService.findOne(id);
   }
 
@@ -25,9 +36,9 @@ export class InvoicesController {
     return this.invoicesService.create(dto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string) {
+  async remove(@Param("id") id: string) {
     await this.invoicesService.remove(id);
   }
 }

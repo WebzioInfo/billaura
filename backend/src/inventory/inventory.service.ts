@@ -18,7 +18,7 @@ export class InventoryService {
 
     // Check product and warehouse exist
     const product = await this.prisma.product.findFirst({
-      where: { id: dto.productId, companyId, deletedAt: null },
+      where: { id: dto.productId, companyId },
     });
     if (!product) {
       throw new NotFoundException(`Product with ID ${dto.productId} not found`);
@@ -95,7 +95,7 @@ export class InventoryService {
     const where: Prisma.StockWhereInput = {
       companyId,
       product: {
-        deletedAt: null,
+        
         ...(query.search
           ? {
               OR: [

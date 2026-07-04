@@ -10,7 +10,7 @@ export class FixedAssetsService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
     return this.prisma.fixedAsset.findMany({
-      where: { companyId },
+      where: {},
       orderBy: { purchaseDate: 'desc' },
     });
   }

@@ -1,12 +1,27 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, HttpStatus, HttpCode } from '@nestjs/common';
-import { GoodsReceiptsService } from './goods-receipts.service';
-import { CreateGoodsReceiptDto, UpdateGoodsReceiptDto } from './dto/goods-receipt.dto';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TenantGuard } from '../common/guards/tenant.guard';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  HttpStatus,
+  HttpCode,
+} from "@nestjs/common";
+import { GoodsReceiptsService } from "./goods-receipts.service";
+import {
+  CreateGoodsReceiptDto,
+  UpdateGoodsReceiptDto,
+} from "./dto/goods-receipt.dto";
+import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
-@Controller('goods-receipts')
+@Controller("goods-receipts")
 export class GoodsReceiptsController {
   constructor(private readonly goodsReceiptsService: GoodsReceiptsService) {}
 
@@ -15,8 +30,8 @@ export class GoodsReceiptsController {
     return this.goodsReceiptsService.findAll(query);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
+  @Get(":id")
+  async findOne(@Param("id") id: string) {
     return this.goodsReceiptsService.findOne(id);
   }
 
@@ -25,14 +40,14 @@ export class GoodsReceiptsController {
     return this.goodsReceiptsService.create(dto);
   }
 
-  @Patch(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateGoodsReceiptDto) {
+  @Patch(":id")
+  async update(@Param("id") id: string, @Body() dto: UpdateGoodsReceiptDto) {
     return this.goodsReceiptsService.update(id, dto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string) {
+  async remove(@Param("id") id: string) {
     await this.goodsReceiptsService.remove(id);
   }
 }

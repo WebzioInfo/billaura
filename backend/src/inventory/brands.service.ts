@@ -12,7 +12,7 @@ export class BrandsService {
     if (!companyId) return Array.from(this.localBrands).map(name => ({ id: name, name }));
 
     const dbProducts = await this.prisma.product.findMany({
-      where: { companyId, deletedAt: null },
+      where: {},
       select: { brand: true },
       distinct: ['brand'],
     });

@@ -11,7 +11,7 @@ export class TaxGroupsService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
     return this.prisma.taxGroup.findMany({
-      where: { companyId },
+      where: {},
       orderBy: { name: 'asc' },
     });
   }

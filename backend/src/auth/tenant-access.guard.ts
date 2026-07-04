@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@nestjs/common";
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import type { AuthenticatedRequest } from "./types/authenticated-request";
 
@@ -23,7 +28,9 @@ export class TenantAccessGuard implements CanActivate {
       },
     });
 
-    const isTenantActive = tenant ? (tenant.status === 'ACTIVE' || tenant.status === 'FREE_TRIAL') : false;
+    const isTenantActive = tenant
+      ? tenant.status === "ACTIVE" || tenant.status === "FREE_TRIAL"
+      : false;
 
     if (!tenant || !isTenantActive) {
       throw new ForbiddenException("Company is inactive or unavailable");

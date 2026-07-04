@@ -21,7 +21,6 @@ export class BranchesService {
 
     const where: Prisma.BranchWhereInput = {
       companyId,
-      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -56,7 +55,6 @@ export class BranchesService {
       where: {
         id,
         companyId,
-        deletedAt: null,
       },
     });
 
@@ -78,7 +76,6 @@ export class BranchesService {
       where: {
         companyId,
         name: dto.name,
-        deletedAt: null,
       },
     });
 
@@ -115,7 +112,6 @@ export class BranchesService {
         where: {
           companyId,
           name: dto.name,
-          deletedAt: null,
           NOT: { id },
         },
       });

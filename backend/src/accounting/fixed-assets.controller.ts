@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
-import { FixedAssetsService } from './fixed-assets.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Controller, Get, Post, Body, UseGuards } from "@nestjs/common";
+import { FixedAssetsService } from "./fixed-assets.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 
-@Controller('accounting/fixed-assets')
+@Controller("accounting/fixed-assets")
 @UseGuards(JwtAuthGuard)
 export class FixedAssetsController {
   constructor(private readonly fixedAssetsService: FixedAssetsService) {}

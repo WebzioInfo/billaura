@@ -12,10 +12,10 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
+      PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     if (!requiredPermissions?.length) {
       return true;
@@ -36,7 +36,10 @@ export class PermissionsGuard implements CanActivate {
       include: { permissions: true },
     });
 
-    const grantedPermissions = role?.permissions?.map((p) => `${p.resource}:${p.action}`) || [];
-    return requiredPermissions.every((permission) => grantedPermissions.includes(permission));
+    const grantedPermissions =
+      role?.permissions?.map((p) => `${p.resource}:${p.action}`) || [];
+    return requiredPermissions.every((permission) =>
+      grantedPermissions.includes(permission),
+    );
   }
 }

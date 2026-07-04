@@ -10,7 +10,7 @@ export class ReconciliationService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
     return this.prisma.bankStatement.findMany({
-      where: { companyId },
+      where: {},
       include: { bankAccount: true },
       orderBy: { statementDate: 'desc' },
     });

@@ -12,7 +12,7 @@ export class AccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
   private async ensureDefaultChartOfAccounts(companyId: string) {
-    const count = await this.prisma.account.count({ where: { companyId } });
+    const count = await this.prisma.account.count({ where: {} });
     if (count > 0) return;
 
     // Create Groups
@@ -114,7 +114,7 @@ export class AccountsService {
     }
 
     const account = await this.prisma.account.findFirst({
-      where: { id, companyId },
+      where: { id },
     });
 
     if (!account) {
@@ -211,7 +211,7 @@ export class AccountsService {
     await this.ensureDefaultChartOfAccounts(companyId);
 
     const accounts = await this.prisma.account.findMany({
-      where: { companyId },
+      where: {},
     });
 
     const aggregates = await this.prisma.journalLine.groupBy({

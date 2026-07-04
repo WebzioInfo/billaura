@@ -1,6 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsArray, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
-import { TaxMode, DocumentStatus } from '@prisma/client';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  IsArray,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
+import { TaxMode, DocumentStatus } from "@prisma/client";
 
 export class PurchaseOrderItemDto {
   @IsString()

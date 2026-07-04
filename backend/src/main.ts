@@ -5,6 +5,7 @@ import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
 import compression from "compression";
+import rateLimit from "express-rate-limit";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor";
@@ -20,17 +21,26 @@ async function bootstrap() {
   app.useLogger(logger);
   app.setGlobalPrefix(config.getOrThrow<string>("API_PREFIX"));
   const allowedOriginsStr = config.getOrThrow<string>("ALLOWED_ORIGINS");
-  const allowedOrigins = allowedOriginsStr.split(',').map(o => o.trim()).filter(Boolean);
+  const allowedOrigins = allowedOriginsStr
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
 
   app.enableCors({
     origin: allowedOrigins,
     credentials: false,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: '*',
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: "*",
   });
-  
+
   app.use(helmet());
   app.use(compression());
+  app.use(
+    rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 1000, // limit each IP to 1000 requests per windowMs
+    })
+  );
   app.enableShutdownHooks();
 
   app.useGlobalPipes(
@@ -45,7 +55,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(
     new RequestContextInterceptor(),
     new ResponseEnvelopeInterceptor(),
-    new NoCacheInterceptor()
+    new NoCacheInterceptor(),
   );
 
   const swaggerConfig = new DocumentBuilder()

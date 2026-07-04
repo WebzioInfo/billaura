@@ -1,23 +1,23 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { BankService } from './bank.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Controller, Get, UseGuards } from "@nestjs/common";
+import { BankService } from "./bank.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 
-@Controller('finance/bank')
+@Controller("finance/bank")
 @UseGuards(JwtAuthGuard)
 export class BankController {
   constructor(private readonly bankService: BankService) {}
 
-  @Get('accounts')
+  @Get("accounts")
   findAllAccounts() {
     return this.bankService.findAllAccounts();
   }
 
-  @Get('transactions')
+  @Get("transactions")
   findAllTransactions() {
     return this.bankService.findAllTransactions();
   }
 
-  @Get('stats')
+  @Get("stats")
   getDashboardStats() {
     return this.bankService.getDashboardStats();
   }

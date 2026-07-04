@@ -18,6 +18,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
     apiClient.setUnauthorizedHandler(clearSession);
 
     const initSession = async () => {
+      // If we are already authenticated in Zustand, we don't need to preemptively refresh.
+      // The apiClient interceptor will automatically refresh if any API call hits a 401.
+      if (isAuthenticated) {
+        setInitFinished(true);
+        return;
+      }
+
       try {
         const refreshToken = TokenService.getRefreshToken();
         
@@ -27,8 +34,20 @@ export function SessionProvider({ children }: PropsWithChildren) {
           return;
         }
 
-        const res: any = await apiClient.post("/auth/refresh", { refreshToken });
-        const payload = res?.data || res;
+        // Use raw fetch or a separate axios instance to bypass apiClient interceptors for auth endpoints
+        // Doing this avoids the infinite 401 interceptor loop.
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        });
+        
+        if (!res.ok) {
+          throw new Error('Refresh failed');
+        }
+
+        const data = await res.json();
+        const payload = data?.data || data;
         
         if (payload && payload.access_token && payload.refresh_token && payload.user) {
           TokenService.setTokens(payload.access_token, payload.refresh_token);

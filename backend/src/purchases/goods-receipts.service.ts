@@ -39,7 +39,7 @@ export class GoodsReceiptsService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context required');
     const receipt = await this.prisma.goodsReceipt.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { businessPartner: true, items: true },
     });
     if (!receipt) throw new NotFoundException('Goods Receipt not found');

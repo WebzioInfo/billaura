@@ -20,7 +20,6 @@ export class PurchasesService {
 
     const where: Prisma.PurchaseWhereInput = {
       companyId,
-      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -52,7 +51,7 @@ export class PurchasesService {
     }
 
     const purchase = await this.prisma.purchase.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
       include: { businessPartner: true, items: { include: { product: true } } },
     });
 
@@ -71,7 +70,7 @@ export class PurchasesService {
 
     // Check vendor exists
     const vendor = await this.prisma.businessPartner.findFirst({
-      where: { id: dto.vendorId, companyId, deletedAt: null },
+      where: { id: dto.vendorId, companyId },
     });
     if (!vendor) {
       throw new NotFoundException(`Vendor with ID ${dto.vendorId} not found`);
@@ -108,7 +107,7 @@ export class PurchasesService {
 
       for (const item of dto.items) {
         const product = await tx.product.findFirst({
-          where: { id: item.productId, companyId, deletedAt: null },
+          where: { id: item.productId, companyId },
         });
 
         if (!product) {
@@ -244,6 +243,38 @@ export class PurchasesService {
         });
       }
 
+      const getTaxAccount = async (name: string) => {
+        let acc = await tx.account.findFirst({ where: { companyId, name } });
+        if (!acc) {
+          acc = await tx.account.create({
+            data: { companyId, name, category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+          });
+        }
+        return acc;
+      };
+
+      const isInterState = false; // Purchases currently default to intra-state
+      const cgstAccount = isInterState ? null : await getTaxAccount('Input CGST');
+      const sgstAccount = isInterState ? null : await getTaxAccount('Input SGST');
+      const igstAccount = isInterState ? await getTaxAccount('Input IGST') : null;
+
+      const journalLines = [
+        { accountId: inventoryAccount.id, debit: subTotal, credit: 0 },
+        { accountId: apAccount.id, debit: 0, credit: grandTotal },
+      ];
+
+      const cgstAmt = isInterState ? 0 : taxTotal / 2;
+      const sgstAmt = isInterState ? 0 : taxTotal / 2;
+      const igstAmt = isInterState ? taxTotal : 0;
+
+      if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
+        journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });
+        journalLines.push({ accountId: sgstAccount.id, debit: sgstAmt, credit: 0 });
+      }
+      if (isInterState && igstAmt > 0 && igstAccount) {
+        journalLines.push({ accountId: igstAccount.id, debit: igstAmt, credit: 0 });
+      }
+
       await tx.journalEntry.create({
         data: {
           companyId,
@@ -251,23 +282,28 @@ export class PurchasesService {
           reference: purchaseNo,
           description: `Automatic purchase billing posting ${purchaseNo}`,
           lines: {
-            create: [
-              { accountId: inventoryAccount.id, debit: grandTotal, credit: 0 },
-              { accountId: apAccount.id, debit: 0, credit: grandTotal },
-            ],
+            create: journalLines,
           },
         },
       });
 
       await tx.account.update({
         where: { id: inventoryAccount.id },
-        data: { balance: { increment: grandTotal } },
+        data: { balance: { increment: subTotal } },
       });
 
       await tx.account.update({
         where: { id: apAccount.id },
         data: { balance: { decrement: grandTotal } }, // liability credit balance increases
       });
+
+      if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
+        await tx.account.update({ where: { id: cgstAccount.id }, data: { balance: { increment: cgstAmt } } });
+        await tx.account.update({ where: { id: sgstAccount.id }, data: { balance: { increment: sgstAmt } } });
+      }
+      if (isInterState && igstAmt > 0 && igstAccount) {
+        await tx.account.update({ where: { id: igstAccount.id }, data: { balance: { increment: igstAmt } } });
+      }
 
       return purchase;
     }, { timeout: 20000 });
@@ -280,7 +316,7 @@ export class PurchasesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // Revert vendor payable balance
+      // Revert vendor outstanding balance
       await tx.businessPartner.update({
         where: { id: purchase.businessPartnerId },
         data: {
@@ -289,6 +325,76 @@ export class PurchasesService {
           },
         },
       });
+
+      // Find original journal entries and create reversals
+      const originalEntries = await tx.journalEntry.findMany({
+        where: { reference: purchase.purchaseNo },
+        include: { lines: true },
+      });
+
+      for (const entry of originalEntries) {
+        const reversalLines = entry.lines.map(line => ({
+          accountId: line.accountId,
+          debit: Number(line.credit || 0),
+          credit: Number(line.debit || 0),
+        }));
+
+        await tx.journalEntry.create({
+          data: {
+            companyId: purchase.companyId,
+            date: new Date(),
+            reference: `REV-${purchase.purchaseNo}`,
+            description: `Reversal for deleted purchase ${purchase.purchaseNo}`,
+            lines: { create: reversalLines },
+          },
+        });
+
+        // Revert account balances
+        for (const line of reversalLines) {
+          const change = line.debit - line.credit;
+          await tx.account.update({
+            where: { id: line.accountId },
+            data: { balance: { increment: change } },
+          });
+        }
+      }
+
+      // Revert Stock Ledger
+      const stockLedgers = await tx.stockLedger.findMany({
+        where: { referenceId: purchase.id, referenceType: 'PURCHASE' },
+      });
+
+      for (const ledger of stockLedgers) {
+        const changeQty = Number(ledger.quantityChange) * -1;
+
+        const stock = await tx.stock.findFirst({
+          where: { companyId: purchase.companyId, productId: ledger.productId },
+        });
+
+        if (stock) {
+          const currentQty = Number(stock.quantity);
+          const newQty = currentQty + changeQty;
+          
+          await tx.stock.update({
+            where: { id: stock.id },
+            data: { quantity: newQty, availableQuantity: newQty },
+          });
+
+          await tx.stockLedger.create({
+            data: {
+              companyId: purchase.companyId,
+              productId: ledger.productId,
+              type: 'ADJUSTMENT',
+              quantityBefore: currentQty,
+              quantityChange: changeQty,
+              quantityAfter: newQty,
+              notes: `Reversal of Purchase ${purchase.purchaseNo}`,
+              referenceId: purchase.id,
+              referenceType: 'PURCHASE_REVERSAL',
+            }
+          });
+        }
+      }
 
       // Soft delete purchase
       return tx.purchase.update({

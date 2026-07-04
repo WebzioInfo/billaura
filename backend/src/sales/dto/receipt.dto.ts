@@ -1,5 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsDateString, IsArray, ValidateNested, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+  IsDateString,
+  IsArray,
+  ValidateNested,
+  Min,
+} from "class-validator";
+import { Type } from "class-transformer";
 
 export class ReceiptAllocationDto {
   @IsString()

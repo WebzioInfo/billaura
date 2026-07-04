@@ -10,7 +10,7 @@ export class ProjectsService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
     return this.prisma.project.findMany({
-      where: { companyId },
+      where: {},
       include: { customer: true },
       orderBy: { startDate: 'desc' },
     });

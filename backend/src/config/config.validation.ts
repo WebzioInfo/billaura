@@ -8,7 +8,9 @@ export const appConfigValidationSchema = Joi.object({
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.string().default("15m"),
   JWT_REFRESH_EXPIRES_IN: Joi.string().default("30d"),
-  NODE_ENV: Joi.string().valid("development", "test", "production").default("development"),
+  NODE_ENV: Joi.string()
+    .valid("development", "test", "production")
+    .default("development"),
   PORT: Joi.number().port().default(4000),
   SMTP_HOST: Joi.string().optional().allow(""),
   SMTP_PORT: Joi.number().optional().allow(""),

@@ -16,7 +16,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
-    const status = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+    const status =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
     const message =
       exception instanceof HttpException
         ? exception.message
@@ -24,7 +27,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const requestId = response.getHeader("x-request-id")?.toString();
 
     if (status >= 500) {
-      this.logger.error(message, exception instanceof Error ? exception.stack : undefined, "ExceptionFilter");
+      this.logger.error(
+        message,
+        exception instanceof Error ? exception.stack : undefined,
+        "ExceptionFilter",
+      );
     }
 
     response.status(status).json({

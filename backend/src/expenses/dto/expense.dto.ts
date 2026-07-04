@@ -1,5 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsDateString, IsEnum } from 'class-validator';
-import { PaymentMethod, PaidFromType, ApprovalStatus } from '@prisma/client';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+  IsDateString,
+  IsEnum,
+} from "class-validator";
+import { PaymentMethod, PaidFromType, ApprovalStatus } from "@prisma/client";
 
 export class CreateExpenseDto {
   @IsString()

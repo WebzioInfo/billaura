@@ -1,6 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsArray, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
-import { DocumentStatus } from '@prisma/client';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  IsArray,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
+import { DocumentStatus } from "@prisma/client";
 
 export class DeliveryNoteItemDto {
   @IsString()

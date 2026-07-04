@@ -1,17 +1,18 @@
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
-import { CompanyContext } from '../context/company-context';
-import * as jwt from 'jsonwebtoken';
+import { Injectable, NestMiddleware } from "@nestjs/common";
+import { Request, Response, NextFunction } from "express";
+import { CompanyContext } from "../context/company-context";
+import * as jwt from "jsonwebtoken";
 
 @Injectable()
 export class TenantContextMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
-    let companyId = (req.headers['x-company-id'] || req.headers['x-tenant-id']) as string | undefined;
+    let companyId = (req.headers["x-company-id"] ||
+      req.headers["x-tenant-id"]) as string | undefined;
     let userId: string | null = null;
 
-    const authHeader = req.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
+    const authHeader = req.headers["authorization"];
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
       try {
         // Decode without verification just to extract context early in middleware
         const decoded = jwt.decode(token) as any;

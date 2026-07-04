@@ -8,11 +8,11 @@ import {
   Delete,
   UseGuards,
   Request,
-} from '@nestjs/common';
-import { OtherIncomesService } from './other-incomes.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+} from "@nestjs/common";
+import { OtherIncomesService } from "./other-incomes.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 
-@Controller('other-incomes')
+@Controller("other-incomes")
 @UseGuards(JwtAuthGuard)
 export class OtherIncomesController {
   constructor(private readonly otherIncomesService: OtherIncomesService) {}
@@ -22,8 +22,8 @@ export class OtherIncomesController {
     return this.otherIncomesService.findAll(req.user.companyId);
   }
 
-  @Get(':id')
-  findOne(@Request() req: any, @Param('id') id: string) {
+  @Get(":id")
+  findOne(@Request() req: any, @Param("id") id: string) {
     return this.otherIncomesService.findOne(req.user.companyId, id);
   }
 
@@ -32,13 +32,13 @@ export class OtherIncomesController {
     return this.otherIncomesService.create(req.user.companyId, data);
   }
 
-  @Patch(':id')
-  update(@Request() req: any, @Param('id') id: string, @Body() data: any) {
+  @Patch(":id")
+  update(@Request() req: any, @Param("id") id: string, @Body() data: any) {
     return this.otherIncomesService.update(req.user.companyId, id, data);
   }
 
-  @Delete(':id')
-  remove(@Request() req: any, @Param('id') id: string) {
+  @Delete(":id")
+  remove(@Request() req: any, @Param("id") id: string) {
     return this.otherIncomesService.remove(req.user.companyId, id);
   }
 }

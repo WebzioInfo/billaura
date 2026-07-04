@@ -131,6 +131,12 @@ export class ApiClient {
           return Promise.reject(error);
         }
 
+        // Prevent infinite loops: If the request that failed with 401 was the refresh token request itself,
+        // do not attempt to refresh again. Just reject.
+        if (originalRequest.url?.includes('/auth/refresh')) {
+          return Promise.reject(error);
+        }
+
         originalRequest._retry = true;
 
         try {

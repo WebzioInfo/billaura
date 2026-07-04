@@ -1,5 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsBoolean } from 'class-validator';
-import { AccountCategory, AccountSubCategory } from '@prisma/client';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  IsBoolean,
+} from "class-validator";
+import { AccountCategory, AccountSubCategory } from "@prisma/client";
 
 export class CreateAccountDto {
   @IsString()

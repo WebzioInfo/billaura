@@ -1,12 +1,23 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, HttpStatus, HttpCode } from '@nestjs/common';
-import { PurchasesService } from './purchases.service';
-import { CreatePurchaseDto } from './dto/purchase.dto';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TenantGuard } from '../common/guards/tenant.guard';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  HttpStatus,
+  HttpCode,
+} from "@nestjs/common";
+import { PurchasesService } from "./purchases.service";
+import { CreatePurchaseDto } from "./dto/purchase.dto";
+import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
-@Controller('purchases')
+@Controller("purchases")
 export class PurchasesController {
   constructor(private readonly purchasesService: PurchasesService) {}
 
@@ -15,8 +26,8 @@ export class PurchasesController {
     return this.purchasesService.findAll(query);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
+  @Get(":id")
+  async findOne(@Param("id") id: string) {
     return this.purchasesService.findOne(id);
   }
 
@@ -25,9 +36,9 @@ export class PurchasesController {
     return this.purchasesService.create(dto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string) {
+  async remove(@Param("id") id: string) {
     await this.purchasesService.remove(id);
   }
 }

@@ -20,7 +20,6 @@ export class PurchasePaymentsService {
 
     const where: Prisma.TransactionPaymentWhereInput = {
       companyId,
-      deletedAt: null,
       paymentType: 'OUTBOUND',
       ...(query.search
         ? {
@@ -53,7 +52,7 @@ export class PurchasePaymentsService {
     }
 
     const payment = await this.prisma.transactionPayment.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
       include: { businessPartner: true, bankAccount: true, allocations: { include: { purchase: true } } },
     });
 
@@ -71,21 +70,21 @@ export class PurchasePaymentsService {
     }
 
     const vendor = await this.prisma.businessPartner.findFirst({
-      where: { id: dto.vendorId, companyId, deletedAt: null },
+      where: { id: dto.vendorId, companyId },
     });
     if (!vendor) {
       throw new NotFoundException(`Vendor with ID ${dto.vendorId} not found`);
     }
 
     const bank = await this.prisma.bankAccount.findFirst({
-      where: { id: dto.bankAccountId, companyId, deletedAt: null },
+      where: { id: dto.bankAccountId, companyId },
     });
     if (!bank) {
       throw new NotFoundException(`Bank Account with ID ${dto.bankAccountId} not found`);
     }
 
     const purchase = await this.prisma.purchase.findFirst({
-      where: { id: dto.purchaseId, companyId, deletedAt: null },
+      where: { id: dto.purchaseId, companyId },
     });
     if (!purchase) {
       throw new NotFoundException(`Purchase with ID ${dto.purchaseId} not found`);

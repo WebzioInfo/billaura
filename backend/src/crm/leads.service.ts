@@ -21,7 +21,6 @@ export class LeadsService {
 
     const where: Prisma.BusinessPartnerWhereInput = {
       companyId,
-      deletedAt: null,
       bpType: 'LEAD',
       ...(query.search
         ? {
@@ -59,7 +58,6 @@ export class LeadsService {
       where: {
         id,
         companyId,
-        deletedAt: null,
       },
       include: { crmActivities: true },
     });

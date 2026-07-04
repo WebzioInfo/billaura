@@ -20,7 +20,6 @@ export class InvoicesService {
 
     const where: Prisma.InvoiceWhereInput = {
       companyId,
-      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -54,7 +53,7 @@ export class InvoicesService {
     }
 
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
       include: { businessPartner: true, items: { include: { product: true } } },
     });
 
@@ -73,7 +72,7 @@ export class InvoicesService {
 
     // Check customer exists
     const customer = await this.prisma.businessPartner.findFirst({
-      where: { id: dto.customerId, companyId, deletedAt: null },
+      where: { id: dto.customerId, companyId },
     });
     if (!customer) {
       throw new NotFoundException(`Customer with ID ${dto.customerId} not found`);
@@ -119,7 +118,7 @@ export class InvoicesService {
 
       for (const item of dto.items) {
         const product = await tx.product.findFirst({
-          where: { id: item.productId, companyId, deletedAt: null },
+          where: { id: item.productId, companyId },
         });
 
         if (!product) {
@@ -289,6 +288,38 @@ export class InvoicesService {
         });
       }
 
+      // Find or create Tax Accounts
+      const getTaxAccount = async (name: string) => {
+        let acc = await tx.account.findFirst({ where: { companyId, name } });
+        if (!acc) {
+          acc = await tx.account.create({
+            data: { companyId, name, category: 'LIABILITY', subCategory: 'CURRENT_LIABILITY', balance: 0 },
+          });
+        }
+        return acc;
+      };
+
+      const cgstAccount = isInterState ? null : await getTaxAccount('Output CGST');
+      const sgstAccount = isInterState ? null : await getTaxAccount('Output SGST');
+      const igstAccount = isInterState ? await getTaxAccount('Output IGST') : null;
+
+      const journalLines = [
+        { accountId: arAccount.id, debit: grandTotal, credit: 0 },
+        { accountId: salesAccount.id, debit: 0, credit: subTotal },
+      ];
+
+      const cgstAmt = isInterState ? 0 : taxTotal / 2;
+      const sgstAmt = isInterState ? 0 : taxTotal / 2;
+      const igstAmt = isInterState ? taxTotal : 0;
+
+      if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
+        journalLines.push({ accountId: cgstAccount.id, debit: 0, credit: cgstAmt });
+        journalLines.push({ accountId: sgstAccount.id, debit: 0, credit: sgstAmt });
+      }
+      if (isInterState && igstAmt > 0 && igstAccount) {
+        journalLines.push({ accountId: igstAccount.id, debit: 0, credit: igstAmt });
+      }
+
       await tx.journalEntry.create({
         data: {
           companyId,
@@ -296,10 +327,7 @@ export class InvoicesService {
           reference: invoiceNo,
           description: `Automatic invoice posting ${invoiceNo}`,
           lines: {
-            create: [
-              { accountId: arAccount.id, debit: grandTotal, credit: 0 },
-              { accountId: salesAccount.id, debit: 0, credit: grandTotal },
-            ],
+            create: journalLines,
           },
         },
       });
@@ -311,8 +339,16 @@ export class InvoicesService {
 
       await tx.account.update({
         where: { id: salesAccount.id },
-        data: { balance: { decrement: grandTotal } }, // Revenue credit is negative balance or handled as decrement
+        data: { balance: { decrement: subTotal } }, // Revenue credit
       });
+
+      if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
+        await tx.account.update({ where: { id: cgstAccount.id }, data: { balance: { decrement: cgstAmt } } });
+        await tx.account.update({ where: { id: sgstAccount.id }, data: { balance: { decrement: sgstAmt } } });
+      }
+      if (isInterState && igstAmt > 0 && igstAccount) {
+        await tx.account.update({ where: { id: igstAccount.id }, data: { balance: { decrement: igstAmt } } });
+      }
 
       // 8. Post automatic COGS journal entry
       if (totalCogs > 0) {
@@ -368,6 +404,78 @@ export class InvoicesService {
           },
         },
       });
+
+      // Find original journal entries and create reversals
+      const originalEntries = await tx.journalEntry.findMany({
+        where: { reference: invoice.invoiceNo },
+        include: { lines: true },
+      });
+
+      for (const entry of originalEntries) {
+        // Reverse lines
+        const reversalLines = entry.lines.map(line => ({
+          accountId: line.accountId,
+          debit: Number(line.credit || 0),
+          credit: Number(line.debit || 0),
+        }));
+
+        await tx.journalEntry.create({
+          data: {
+            companyId: invoice.companyId,
+            date: new Date(),
+            reference: `REV-${invoice.invoiceNo}`,
+            description: `Reversal for deleted invoice ${invoice.invoiceNo}`,
+            lines: { create: reversalLines },
+          },
+        });
+
+        // Revert account balances
+        for (const line of reversalLines) {
+          const change = line.debit - line.credit;
+          await tx.account.update({
+            where: { id: line.accountId },
+            data: { balance: { increment: change } },
+          });
+        }
+      }
+
+      // Revert Stock Ledger
+      const stockLedgers = await tx.stockLedger.findMany({
+        where: { referenceId: invoice.id, referenceType: 'INVOICE' },
+      });
+
+      for (const ledger of stockLedgers) {
+        const changeQty = Number(ledger.quantityChange) * -1; // reverse the change
+
+        // Restore stock qty
+        const stock = await tx.stock.findFirst({
+          where: { companyId: invoice.companyId, productId: ledger.productId },
+        });
+
+        if (stock) {
+          const currentQty = Number(stock.quantity);
+          const newQty = currentQty + changeQty;
+          
+          await tx.stock.update({
+            where: { id: stock.id },
+            data: { quantity: newQty, availableQuantity: newQty },
+          });
+
+          await tx.stockLedger.create({
+            data: {
+              companyId: invoice.companyId,
+              productId: ledger.productId,
+              type: 'ADJUSTMENT',
+              quantityBefore: currentQty,
+              quantityChange: changeQty,
+              quantityAfter: newQty,
+              notes: `Reversal of Invoice ${invoice.invoiceNo}`,
+              referenceId: invoice.id,
+              referenceType: 'INVOICE_REVERSAL',
+            }
+          });
+        }
+      }
 
       // Soft delete invoice
       return tx.invoice.update({

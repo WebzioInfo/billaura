@@ -19,7 +19,6 @@ export class ReceiptsService {
 
     const where: Prisma.ReceiptWhereInput = {
       companyId,
-      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -63,7 +62,7 @@ export class ReceiptsService {
     }
 
     const receipt = await this.prisma.receipt.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
       include: {
         businessPartner: true,
         account: true,
@@ -87,7 +86,7 @@ export class ReceiptsService {
       throw new ConflictException('Company context is required');
     }
 
-    const activeWhere = { companyId, deletedAt: null, status: 'COMPLETED' };
+    const activeWhere = { companyId, status: 'COMPLETED' };
 
     const totalReceipts = await this.prisma.receipt.count({ where: activeWhere });
 
@@ -104,7 +103,7 @@ export class ReceiptsService {
     });
 
     const recent = await this.prisma.receipt.findMany({
-      where: { companyId, deletedAt: null },
+      where: {},
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: { businessPartner: true },
@@ -129,7 +128,7 @@ export class ReceiptsService {
     }
 
     const customer = await this.prisma.businessPartner.findFirst({
-      where: { id: dto.businessPartnerId, companyId, deletedAt: null },
+      where: { id: dto.businessPartnerId, companyId },
     });
     if (!customer) {
       throw new NotFoundException(`Customer with ID ${dto.businessPartnerId} not found`);
@@ -197,7 +196,7 @@ export class ReceiptsService {
         // Manual allocation
         for (const alloc of dto.allocations) {
           const inv = await tx.invoice.findFirst({
-            where: { id: alloc.invoiceId, companyId, deletedAt: null },
+            where: { id: alloc.invoiceId, companyId },
           });
           if (!inv) throw new NotFoundException(`Invoice with ID ${alloc.invoiceId} not found`);
 
@@ -228,7 +227,6 @@ export class ReceiptsService {
           where: {
             companyId,
             businessPartnerId: dto.businessPartnerId,
-            deletedAt: null,
             NOT: { status: 'PAID' },
           },
           orderBy: { date: 'asc' },

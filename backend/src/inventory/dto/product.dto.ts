@@ -1,5 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsEnum } from 'class-validator';
-import { ItemType, TaxCategory, UnitType } from '@prisma/client';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsEnum,
+} from "class-validator";
+import { ItemType, TaxCategory, UnitType } from "@prisma/client";
 
 export class CreateProductDto {
   @IsString()
@@ -135,6 +142,6 @@ export class CreateProductDto {
   imageUrl?: string;
 }
 
-import { PartialType } from '@nestjs/mapped-types';
+import { PartialType } from "@nestjs/mapped-types";
 
 export class UpdateProductDto extends PartialType(CreateProductDto) {}

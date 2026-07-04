@@ -20,7 +20,6 @@ export class QuotationsService {
 
     const where: Prisma.QuotationWhereInput = {
       companyId,
-      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -52,7 +51,7 @@ export class QuotationsService {
     }
 
     const quotation = await this.prisma.quotation.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
       include: { businessPartner: true, items: { include: { product: true } } },
     });
 
@@ -70,7 +69,7 @@ export class QuotationsService {
     }
 
     const customer = await this.prisma.businessPartner.findFirst({
-      where: { id: dto.customerId, companyId, deletedAt: null },
+      where: { id: dto.customerId, companyId },
     });
     if (!customer) {
       throw new NotFoundException(`Customer with ID ${dto.customerId} not found`);
@@ -107,7 +106,7 @@ export class QuotationsService {
 
       for (const item of dto.items) {
         const product = await tx.product.findFirst({
-          where: { id: item.productId, companyId, deletedAt: null },
+          where: { id: item.productId, companyId },
         });
 
         if (!product) {

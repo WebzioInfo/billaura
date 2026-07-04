@@ -16,13 +16,13 @@ export class SalesReturnsService {
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.salesReturn.findMany({
-        where: { companyId },
+        where: {},
         skip,
         take,
         include: { businessPartner: true, items: true },
         orderBy: { date: 'desc' },
       }),
-      this.prisma.salesReturn.count({ where: { companyId } }),
+      this.prisma.salesReturn.count({ where: {} }),
     ]);
 
     return toPaginatedResult(data, total, query);
@@ -33,7 +33,7 @@ export class SalesReturnsService {
     if (!companyId) throw new ConflictException('Company context required');
 
     const salesReturn = await this.prisma.salesReturn.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { businessPartner: true, items: true },
     });
 

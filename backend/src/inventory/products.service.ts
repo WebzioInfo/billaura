@@ -20,7 +20,6 @@ export class ProductsService {
 
     const where: Prisma.ProductWhereInput = {
       companyId,
-      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -53,7 +52,7 @@ export class ProductsService {
     }
 
     const product = await this.prisma.product.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
       include: { stocks: true },
     });
 
@@ -73,7 +72,7 @@ export class ProductsService {
     // Check SKU uniqueness
     if (dto.sku) {
       const existing = await this.prisma.product.findFirst({
-        where: { companyId, sku: dto.sku, deletedAt: null },
+        where: { companyId, sku: dto.sku },
       });
       if (existing) {
         throw new ConflictException(`Product with SKU '${dto.sku}' already exists`);
@@ -148,7 +147,7 @@ export class ProductsService {
     }
 
     const product = await this.prisma.product.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
     });
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
@@ -156,7 +155,7 @@ export class ProductsService {
 
     if (dto.sku && dto.sku !== product.sku) {
       const existing = await this.prisma.product.findFirst({
-        where: { companyId, sku: dto.sku, deletedAt: null, NOT: { id } },
+        where: { companyId, sku: dto.sku, NOT: { id } },
       });
       if (existing) {
         throw new ConflictException(`Product with SKU '${dto.sku}' already exists`);

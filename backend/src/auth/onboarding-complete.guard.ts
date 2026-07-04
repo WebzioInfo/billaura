@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@nestjs/common";
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import type { AuthenticatedRequest } from "./types/authenticated-request";
 
@@ -20,7 +25,9 @@ export class OnboardingCompleteGuard implements CanActivate {
       }));
 
     if (tenant) {
-      (tenant as any).isActive = (tenant as any).status === "ACTIVE" || (tenant as any).status === "FREE_TRIAL";
+      (tenant as any).isActive =
+        (tenant as any).status === "ACTIVE" ||
+        (tenant as any).status === "FREE_TRIAL";
       (tenant as any).subscriptionStatus = (tenant as any).status;
     }
 

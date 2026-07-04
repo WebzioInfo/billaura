@@ -21,7 +21,6 @@ export class ContactsService {
 
     const where: Prisma.ContactWhereInput = {
       companyId,
-      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -58,7 +57,6 @@ export class ContactsService {
       where: {
         id,
         companyId,
-        deletedAt: null,
       },
       include: { businessPartner: true },
     });

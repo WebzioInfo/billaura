@@ -20,7 +20,6 @@ export class ExpensesService {
 
     const where: Prisma.ExpenseWhereInput = {
       companyId,
-      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -52,7 +51,7 @@ export class ExpensesService {
     }
 
     const expense = await this.prisma.expense.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
       include: { bankAccount: true, cashAccount: true, category: true, employee: true, vendor: true, attachments: true, history: true, comments: true },
     });
 
@@ -151,7 +150,7 @@ export class ExpensesService {
     if (!companyId) throw new ConflictException('Company context is required');
 
     const existing = await this.prisma.expense.findFirst({
-      where: { id, companyId, deletedAt: null }
+      where: { id }
     });
     if (!existing) throw new NotFoundException('Expense not found');
     if (existing.approvalStatus === 'APPROVED') throw new ConflictException('Cannot edit an approved expense');
@@ -276,9 +275,64 @@ export class ExpensesService {
   }
 
   async remove(id: string) {
-    return this.prisma.expense.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    const expense = await this.findOne(id);
+
+    return this.prisma.$transaction(async (tx) => {
+      // If approved, reverse the journal and bank balances
+      if (expense.approvalStatus === 'APPROVED') {
+        const totalAmount = Number(expense.totalAmount);
+        
+        // Find original journal entries and create reversals
+        const originalEntries = await tx.journalEntry.findMany({
+          where: { reference: expense.expenseNo },
+          include: { lines: true },
+        });
+
+        for (const entry of originalEntries) {
+          const reversalLines = entry.lines.map(line => ({
+            accountId: line.accountId,
+            debit: Number(line.credit || 0),
+            credit: Number(line.debit || 0),
+          }));
+
+          await tx.journalEntry.create({
+            data: {
+              companyId: expense.companyId,
+              date: new Date(),
+              reference: `REV-${expense.expenseNo}`,
+              description: `Reversal for deleted expense ${expense.expenseNo}`,
+              lines: { create: reversalLines },
+            },
+          });
+
+          // Revert account balances
+          for (const line of reversalLines) {
+            const change = line.debit - line.credit;
+            await tx.account.update({
+              where: { id: line.accountId },
+              data: { balance: { increment: change } },
+            });
+          }
+        }
+
+        // Revert Bank/Cash balance
+        if (expense.bankAccountId) {
+          await tx.bankAccount.update({
+            where: { id: expense.bankAccountId },
+            data: { currentBalance: { increment: totalAmount } },
+          });
+        } else if (expense.cashAccountId) {
+          await tx.cashAccount.update({
+            where: { id: expense.cashAccountId },
+            data: { currentBalance: { increment: totalAmount } },
+          });
+        }
+      }
+
+      return tx.expense.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
     });
   }
 }

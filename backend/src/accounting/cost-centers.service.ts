@@ -39,7 +39,7 @@ export class CostCentersService {
     if (!companyId) throw new ConflictException('Company context is required');
 
     const costCenter = await this.prisma.costCenter.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { children: true },
     });
 

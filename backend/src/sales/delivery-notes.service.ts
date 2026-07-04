@@ -39,7 +39,7 @@ export class DeliveryNotesService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context required');
     const note = await this.prisma.deliveryNote.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { businessPartner: true, items: true },
     });
     if (!note) throw new NotFoundException('Delivery Note not found');

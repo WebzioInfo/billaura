@@ -13,7 +13,9 @@ export class HealthController {
     const response = {
       success: data.isHealthy,
       status: data.isHealthy ? "ok" : "error",
-      message: data.isHealthy ? "System is healthy" : "System has degraded sub-components",
+      message: data.isHealthy
+        ? "System is healthy"
+        : "System has degraded sub-components",
       data,
       timestamp: new Date().toISOString(),
     };

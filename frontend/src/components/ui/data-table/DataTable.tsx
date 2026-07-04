@@ -24,6 +24,10 @@ interface DataTableProps<TData, TValue> {
   searchKey?: string; // which column id to use for the global search filter
   exportFilename?: string;
   onRowClick?: (row: TData) => void;
+  pageCount?: number;
+  pagination?: { pageIndex: number; pageSize: number };
+  onPaginationChange?: any;
+  manualPagination?: boolean;
 }
 
 export function DataTable<TData, TValue>({
@@ -32,6 +36,10 @@ export function DataTable<TData, TValue>({
   searchKey,
   exportFilename = 'export',
   onRowClick,
+  pageCount,
+  pagination,
+  onPaginationChange,
+  manualPagination,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -44,6 +52,9 @@ export function DataTable<TData, TValue>({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    manualPagination,
+    pageCount,
+    onPaginationChange,
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
@@ -57,6 +68,7 @@ export function DataTable<TData, TValue>({
       columnVisibility,
       rowSelection,
       globalFilter,
+      ...(pagination ? { pagination } : {}),
     },
   });
 

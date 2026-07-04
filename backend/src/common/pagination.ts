@@ -22,7 +22,11 @@ export function getPagination(query: PaginationQueryDto) {
   };
 }
 
-export function toPaginatedResult<T>(data: T[], total: number, query: PaginationQueryDto): PaginatedResult<T> {
+export function toPaginatedResult<T>(
+  data: T[],
+  total: number,
+  query: PaginationQueryDto,
+): PaginatedResult<T> {
   const { page, limit } = getPagination(query);
 
   return {

@@ -20,7 +20,6 @@ export class PaymentsService {
 
     const where: Prisma.TransactionPaymentWhereInput = {
       companyId,
-      deletedAt: null,
       paymentType: 'INBOUND', // Sales payment is INBOUND
       ...(query.search
         ? {
@@ -53,7 +52,7 @@ export class PaymentsService {
     }
 
     const payment = await this.prisma.transactionPayment.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id },
       include: { businessPartner: true, bankAccount: true, allocations: { include: { invoice: true } } },
     });
 
@@ -71,14 +70,14 @@ export class PaymentsService {
     }
 
     const customer = await this.prisma.businessPartner.findFirst({
-      where: { id: dto.customerId, companyId, deletedAt: null },
+      where: { id: dto.customerId, companyId },
     });
     if (!customer) {
       throw new NotFoundException(`Customer with ID ${dto.customerId} not found`);
     }
 
     const bank = await this.prisma.bankAccount.findFirst({
-      where: { id: dto.bankAccountId, companyId, deletedAt: null },
+      where: { id: dto.bankAccountId, companyId },
     });
     if (!bank) {
       throw new NotFoundException(`Bank Account with ID ${dto.bankAccountId} not found`);
@@ -130,7 +129,6 @@ export class PaymentsService {
         where: {
           companyId,
           businessPartnerId: dto.customerId,
-          deletedAt: null,
           NOT: { status: 'PAID' },
         },
         orderBy: { date: 'asc' },

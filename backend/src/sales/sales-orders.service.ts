@@ -39,7 +39,7 @@ export class SalesOrdersService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context required');
     const order = await this.prisma.salesOrder.findFirst({
-      where: { id, companyId },
+      where: { id },
       include: { businessPartner: true, items: true },
     });
     if (!order) throw new NotFoundException('Sales Order not found');
