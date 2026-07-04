@@ -58,7 +58,7 @@ import { FinanceModule } from "./finance/finance.module";
     IncomeModule,
     BackupModule,
     StorageModule,
-    ...(process.env.VERCEL ? [] : [ScheduleModule.forRoot()]),
+    ScheduleModule.forRoot(),
     FinanceModule,
   ],
   controllers: [PrismaTestController],
