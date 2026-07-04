@@ -10,7 +10,7 @@ export const EmployeesList = () => {
     queryKey: ['employees'],
     queryFn: async () => {
       const res = await apiClient.get('/employees');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

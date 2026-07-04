@@ -40,9 +40,9 @@ export const ExecutiveDashboard = () => {
   const { data, isLoading, refetch: fetchDashboardData } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: async () => {
-      const res = await apiClient.get<{ success: boolean; data: DashboardData }>('/dashboard/summary');
-      if (res?.success && res?.data) {
-        return res.data;
+      const res = await apiClient.get<DashboardData>('/dashboard/summary');
+      if (res) {
+        return res;
       }
       return null;
     }

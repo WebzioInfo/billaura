@@ -10,7 +10,7 @@ export const BillsList = () => {
     queryKey: ['bills'],
     queryFn: async () => {
       const res = await apiClient.get('/purchases/bills');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

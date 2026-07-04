@@ -69,7 +69,7 @@ export const ReceiptForm = () => {
     queryFn: async () => {
       if (!id) return null;
       const res = await apiClient.get(`/receipts/${id}`);
-      return res.data?.data || res.data || {};
+      return res.data || {};
     },
     enabled: !!id
   });
@@ -118,7 +118,7 @@ export const ReceiptForm = () => {
       const res = await apiClient.get(`/sales/invoices`, {
         params: { customerId: businessPartnerId }
       });
-      const list = res.data?.data?.items || res.data?.items || [];
+      const list = res.data || [];
       return list
         .filter((inv: any) => Number(inv.amountPaid) < Number(inv.grandTotal) && inv.status !== 'DRAFT')
         .map((inv: any) => ({

@@ -10,7 +10,7 @@ export const ProjectsList = () => {
     queryKey: ['projects'],
     queryFn: async () => {
       const res = await apiClient.get('/accounting/projects');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

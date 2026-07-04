@@ -20,11 +20,12 @@ async function bootstrap() {
 
   app.useLogger(logger);
   app.setGlobalPrefix(config.getOrThrow<string>("API_PREFIX"));
-  const allowedOriginsStr = config.getOrThrow<string>("ALLOWED_ORIGINS");
-  const allowedOrigins = allowedOriginsStr
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
+  const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://billaura.webziointernational.in",
+    "https://billaura-sage.vercel.app"
+  ];
 
   app.enableCors({
     origin: allowedOrigins,

@@ -10,7 +10,7 @@ export const BankTransactionsList = () => {
     queryKey: ['bank-transactions'],
     queryFn: async () => {
       const res = await apiClient.get('/finance/bank/transactions');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

@@ -10,7 +10,7 @@ export const DayBook = () => {
     queryKey: ['reports', 'day-book'],
     queryFn: async () => {
       const res = await apiClient.get('/reports/day-book');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

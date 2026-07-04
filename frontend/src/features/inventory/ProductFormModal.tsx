@@ -46,25 +46,25 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   // Load categories list via TanStack Query
   const { data: categories = [] } = useQuery<any[]>({
     queryKey: ['categories'],
-    queryFn: () => api.get('/inventory/categories').then(res => res.data?.data || res.data || []),
+    queryFn: () => api.get('/inventory/categories').then(res => res.data || []),
   });
 
   // Load brands list via TanStack Query
   const { data: brands = [] } = useQuery<any[]>({
     queryKey: ['brands'],
-    queryFn: () => api.get('/inventory/brands').then(res => res.data?.data || res.data || []),
+    queryFn: () => api.get('/inventory/brands').then(res => res.data || []),
   });
 
   // Load units list via TanStack Query
   const { data: units = [] } = useQuery<any[]>({
     queryKey: ['units'],
-    queryFn: () => api.get('/units').then(res => res.data?.data || res.data || []),
+    queryFn: () => api.get('/units').then(res => res.data || []),
   });
 
   // Load tax groups via TanStack Query
   const { data: taxGroupsData = [] } = useQuery<any[]>({
     queryKey: ['tax-groups'],
-    queryFn: () => api.get('/tax-groups').then(res => res.data?.data || res.data || []),
+    queryFn: () => api.get('/tax-groups').then(res => res.data || []),
   });
 
   const { register, handleSubmit, setValue, reset, setError, formState: { errors } } = useAsyncForm(

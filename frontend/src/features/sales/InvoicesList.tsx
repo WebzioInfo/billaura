@@ -13,7 +13,7 @@ export const InvoicesList = () => {
     queryKey: ['invoices'],
     queryFn: async () => {
       const res = await apiClient.get('/sales/invoices');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

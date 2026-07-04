@@ -17,7 +17,7 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
           : ["error", "warn"],
     });
 
-    const globalModels = ['User', 'SystemSetting', 'SubscriptionPlan', 'Company', 'PaymentAllocation', 'PurchasePaymentAllocation', 'JournalEntryLine', 'InvoiceItem', 'PurchaseItem', 'RolePermission', 'LoginHistory'];
+    const globalModels = ['User', 'SystemSetting', 'SubscriptionPlan', 'Company', 'PaymentAllocation', 'PurchasePaymentAllocation', 'JournalLine', 'InvoiceItem', 'PurchaseItem', 'RolePermission', 'LoginHistory', 'QuotationItem', 'DeliveryNoteItem', 'PurchaseOrderItem', 'GoodsReceiptItem', 'RecurringInvoiceItem', 'SalesReturnItem', 'PurchaseReturnItem', 'ExpenseHistory', 'ExpenseComment', 'ExpenseAttachment', 'BOMItem'];
 
     this.extendedClient = this.$extends({
       query: {

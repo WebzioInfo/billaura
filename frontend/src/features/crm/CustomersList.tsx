@@ -25,7 +25,7 @@ export const CustomersList = () => {
     queryKey: ['customers'],
     queryFn: async () => {
       const res = await apiClient.get('/customers');
-      const items = res.data?.data?.items || res.data?.items || res.data?.data || res.data || [];
+      const items = res.data?.data?.items || res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

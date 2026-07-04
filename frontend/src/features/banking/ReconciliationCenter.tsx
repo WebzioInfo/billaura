@@ -13,7 +13,7 @@ export const ReconciliationCenter = () => {
     queryKey: ['bank-statements'],
     queryFn: async () => {
       const res = await apiClient.get('/finance/reconciliation/statements');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });
@@ -23,7 +23,7 @@ export const ReconciliationCenter = () => {
     queryFn: async () => {
       if (!selectedStatementId) return [];
       const res = await apiClient.get(`/finance/reconciliation/statements/${selectedStatementId}/lines`);
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     },
     enabled: !!selectedStatementId

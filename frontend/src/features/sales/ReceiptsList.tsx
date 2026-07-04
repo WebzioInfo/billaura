@@ -31,11 +31,11 @@ export const ReceiptsList = () => {
           limit: 10
         }
       });
-      return res.data?.data || res.data || {};
+      return res.data || {};
     }
   });
 
-  const receipts = data?.items || data || [];
+  const receipts = data?.data || data || [];
   const totalPagesValue = data?.meta?.totalPages || 1;
   const totalItemsValue = data?.meta?.totalItems || receipts.length || 0;
 

@@ -76,11 +76,8 @@ export const RolesList = () => {
   const { data: roles = [], isLoading } = useQuery({
     queryKey: ['roles'],
     queryFn: async () => {
-      const response = await apiClient.get<{ success: boolean; data: { items: Role[] } }>('/roles');
-      if (response.success && response.data?.items) {
-        return response.data.items;
-      }
-      return [];
+      const response = await apiClient.get<Role[]>('/roles');
+      return Array.isArray(response) ? response : [];
     }
   });
 

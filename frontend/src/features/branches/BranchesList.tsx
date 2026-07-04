@@ -58,10 +58,8 @@ export const BranchesList = () => {
   const { data: branches = [], isLoading } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
-      const response = await apiClient.get<{ success: boolean; data: { items: Branch[] } }>('/branches');
-      if (response.success && response.data?.items) {
-        return response.data.items;
-      }
+      const response = await apiClient.get<Branch[]>('/branches');
+      if (response) { return response; }
       return [];
     }
   });

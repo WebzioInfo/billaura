@@ -3,7 +3,7 @@ import * as Joi from "joi";
 export const appConfigValidationSchema = Joi.object({
   API_PREFIX: Joi.string().default("api"),
   DATABASE_URL: Joi.string().required(),
-  ALLOWED_ORIGINS: Joi.string().required(),
+  ALLOWED_ORIGINS: Joi.string().optional().allow(""),
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.string().default("15m"),

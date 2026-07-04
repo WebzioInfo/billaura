@@ -10,7 +10,7 @@ export const GeneralLedger = () => {
     queryKey: ['reports', 'general-ledger'],
     queryFn: async () => {
       const res = await apiClient.get('/reports/general-ledger');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

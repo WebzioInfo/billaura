@@ -10,7 +10,7 @@ export const VendorsList = () => {
     queryKey: ['vendors'],
     queryFn: async () => {
       const res = await apiClient.get('/crm/vendors');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });

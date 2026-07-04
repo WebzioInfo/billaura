@@ -3,6 +3,20 @@ import { useSessionStore } from "../../features/auth/stores/sessionStore";
 import { env } from "../../config/env";
 import { TokenService } from "../auth/TokenService";
 
+export interface ApiResponse<T = any> {
+  success: boolean;
+  message?: string;
+  data: T;
+  meta?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+    totalPages?: number;
+    totalItems?: number;
+    [key: string]: any;
+  };
+}
+
 export interface ApiClientOptions {
   baseURL: string;
   onUnauthorized?: () => void;
@@ -158,9 +172,24 @@ export class ApiClient {
     this.options.refreshSession = refreshSession;
   }
 
+  private unwrap<T>(responseData: any): T {
+    if (responseData && typeof responseData === 'object' && 'success' in responseData && 'data' in responseData) {
+      const payload = responseData.data;
+      if (payload && typeof payload === 'object') {
+        Object.defineProperty(payload, 'meta', {
+          value: responseData.meta,
+          enumerable: false,
+          writable: true
+        });
+      }
+      return payload as T;
+    }
+    return responseData as T;
+  }
+
   async get<TData = any>(url: string, config?: RequestOptions): Promise<TData> {
-    const response = await this.instance.get<TData>(url, config);
-    return response.data;
+    const response = await this.instance.get(url, config);
+    return this.unwrap<TData>(response.data);
   }
 
   async post<TData = any, TBody = unknown>(
@@ -168,8 +197,8 @@ export class ApiClient {
     body?: TBody,
     config?: RequestOptions,
   ): Promise<TData> {
-    const response = await this.instance.post<TData>(url, body, config);
-    return response.data;
+    const response = await this.instance.post(url, body, config);
+    return this.unwrap<TData>(response.data);
   }
 
   async put<TData = any, TBody = unknown>(
@@ -177,8 +206,8 @@ export class ApiClient {
     body?: TBody,
     config?: RequestOptions,
   ): Promise<TData> {
-    const response = await this.instance.put<TData>(url, body, config);
-    return response.data;
+    const response = await this.instance.put(url, body, config);
+    return this.unwrap<TData>(response.data);
   }
 
   async patch<TData = any, TBody = unknown>(
@@ -186,13 +215,13 @@ export class ApiClient {
     body?: TBody,
     config?: RequestOptions,
   ): Promise<TData> {
-    const response = await this.instance.patch<TData>(url, body, config);
-    return response.data;
+    const response = await this.instance.patch(url, body, config);
+    return this.unwrap<TData>(response.data);
   }
 
   async delete<TData = any>(url: string, config?: RequestOptions): Promise<TData> {
-    const response = await this.instance.delete<TData>(url, config);
-    return response.data;
+    const response = await this.instance.delete(url, config);
+    return this.unwrap<TData>(response.data);
   }
 
   private async refresh() {

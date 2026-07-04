@@ -194,7 +194,7 @@ export const ChartOfAccounts = () => {
     queryKey: ['accounts'],
     queryFn: async () => {
       const res = await api.get<any>('/accounts');
-      return res.items || [];
+      return res.data || [];
     },
     enabled: activeTab === 'coa' || activeTab === 'journal'
   });
@@ -207,7 +207,7 @@ export const ChartOfAccounts = () => {
     queryKey: ['journal-entries'],
     queryFn: async () => {
       const res = await api.get<any>('/journal-entries');
-      return res.items || [];
+      return res.data || [];
     },
     enabled: activeTab === 'journal'
   });
@@ -220,7 +220,7 @@ export const ChartOfAccounts = () => {
     queryKey: ['trial-balance'],
     queryFn: async () => {
       const res = await api.get<any>('/accounts/trial-balance');
-      return res || [];
+      return res.data || [];
     },
     enabled: activeTab === 'trial'
   });
@@ -233,7 +233,7 @@ export const ChartOfAccounts = () => {
     queryKey: ['profit-loss'],
     queryFn: async () => {
       const res = await api.get<any>('/accounts/profit-loss');
-      return res || { revenue: [], expense: [], totalRevenue: 0, totalExpense: 0, netProfit: 0 };
+      return res.data || { revenue: [], expense: [], totalRevenue: 0, totalExpense: 0, netProfit: 0 };
     },
     enabled: activeTab === 'pl'
   });
@@ -246,7 +246,7 @@ export const ChartOfAccounts = () => {
     queryKey: ['balance-sheet'],
     queryFn: async () => {
       const res = await api.get<any>('/accounts/balance-sheet');
-      return res || { assets: [], liabilities: [], equity: [], totalAssets: 0, totalLiabilities: 0, totalEquity: 0 };
+      return res.data || { assets: [], liabilities: [], equity: [], totalAssets: 0, totalLiabilities: 0, totalEquity: 0 };
     },
     enabled: activeTab === 'bs'
   });
@@ -259,7 +259,7 @@ export const ChartOfAccounts = () => {
     queryKey: ['cash-flow'],
     queryFn: async () => {
       const res = await api.get<any>('/accounts/cash-flow');
-      return res || { operatingInflow: 0, operatingOutflow: 0, operatingNet: 0, investingInflow: 0, investingOutflow: 0, investingNet: 0, financingInflow: 0, financingOutflow: 0, financingNet: 0, netCashFlow: 0 };
+      return res.data || { operatingInflow: 0, operatingOutflow: 0, operatingNet: 0, investingInflow: 0, investingOutflow: 0, investingNet: 0, financingInflow: 0, financingOutflow: 0, financingNet: 0, netCashFlow: 0 };
     },
     enabled: activeTab === 'cf'
   });

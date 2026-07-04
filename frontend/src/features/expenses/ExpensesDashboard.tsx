@@ -59,7 +59,7 @@ export const ExpensesDashboard = () => {
     queryKey: ['expenses'],
     queryFn: async () => {
       const res = await apiClient.get('/expenses');
-      return res.data?.items || res.data || [];
+      return res.data || [];
     },
     enabled: activeTab === 'claims'
   });
@@ -78,7 +78,7 @@ export const ExpensesDashboard = () => {
     queryKey: ['bank-accounts'],
     queryFn: async () => {
       const res = await apiClient.get('/bank-accounts');
-      return res.data?.items || res.data?.data || res.data || [];
+      return res.data || [];
     }
   });
   const bankAccounts = Array.isArray(bankAccountsData) ? bankAccountsData : [];

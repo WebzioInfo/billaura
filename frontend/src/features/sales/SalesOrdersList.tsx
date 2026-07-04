@@ -10,7 +10,7 @@ export const SalesOrdersList = () => {
     queryKey: ['sales-orders'],
     queryFn: async () => {
       const res = await apiClient.get('/sales-orders');
-      const items = res.data?.data || res.data || [];
+      const items = res.data || [];
       return Array.isArray(items) ? items : [];
     }
   });
