@@ -47,40 +47,6 @@ export class ApiClient {
     // Request interceptor to inject Authorization and Company headers
     this.instance.interceptors.request.use(
       (config) => {
-        (config as any)._startTime = performance.now();
-        console.groupCollapsed(`[API REQUEST] ${config.method?.toUpperCase()} ${config.url}`);
-        console.log('==================================');
-        console.log('API REQUEST');
-        console.log('==================================');
-        console.log(`Timestamp: ${new Date().toISOString()}`);
-        console.log(`HTTP Method: ${config.method?.toUpperCase()}`);
-        console.log(`Full URL: ${config.baseURL}${config.url}`);
-        console.log(`Base URL: ${config.baseURL}`);
-        console.log(`Endpoint: ${config.url}`);
-        console.log(`Query Parameters:`, config.params);
-        console.log(`Headers:`, config.headers);
-        
-        let safeBody = config.data;
-        if (safeBody && typeof safeBody === 'object') {
-            safeBody = { ...safeBody };
-            if (safeBody.password) safeBody.password = '***MASKED***';
-            if (safeBody.token) safeBody.token = '***MASKED***';
-            if (safeBody.refreshToken) safeBody.refreshToken = '***MASKED***';
-        }
-        console.log(`Request Body:`, safeBody);
-        console.log(`Timeout: ${config.timeout}`);
-        console.log(`withCredentials: ${config.withCredentials}`);
-        console.log(`Environment: ${import.meta.env.MODE}`);
-        console.log(`Current Origin: ${window.location.origin}`);
-        console.log(`Current Host: ${window.location.host}`);
-        console.log(`VITE_API_URL: ${options.baseURL}`);
-        console.log(`Resolved Final URL: ${config.baseURL}${config.url}`);
-        console.log(`Frontend Route: ${window.location.pathname}`);
-        console.log(`API Route: ${config.url}`);
-        console.log(`Current Page: ${window.location.href}`);
-        console.log('==================================');
-        console.groupEnd();
-
         const token = TokenService.getAccessToken();
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
@@ -99,47 +65,8 @@ export class ApiClient {
 
     // Response interceptor to handle token rotation on 401s
     this.instance.interceptors.response.use(
-      (response) => {
-        const duration = performance.now() - ((response.config as any)._startTime || performance.now());
-        console.groupCollapsed(`[API RESPONSE] ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
-        console.log('==================================');
-        console.log('API RESPONSE');
-        console.log('==================================');
-        console.log(`URL: ${response.config.baseURL}${response.config.url}`);
-        console.log(`Status: ${response.status}`);
-        console.log(`Status Text: ${response.statusText}`);
-        console.log(`Duration: ${duration.toFixed(2)}ms`);
-        console.log(`Headers:`, response.headers);
-        console.log(`Response Body:`, response.data);
-        console.log('==================================');
-        console.groupEnd();
-        return response;
-      },
+      (response) => response,
       async (error: AxiosError) => {
-        const duration = (error.config as any)?._startTime ? performance.now() - (error.config as any)._startTime : 0;
-        console.groupCollapsed(`[API ERROR] ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
-        console.log('==================================');
-        console.log('API ERROR');
-        console.log('==================================');
-        console.log(`Request URL: ${error.config?.url}`);
-        console.log(`Resolved URL: ${error.config?.baseURL}${error.config?.url}`);
-        console.log(`Method: ${error.config?.method?.toUpperCase()}`);
-        console.log(`Status Code: ${error.response?.status}`);
-        console.log(`Axios Code: ${error.code}`);
-        console.log(`Axios Message: ${error.message}`);
-        console.log(`Timeout: ${error.config?.timeout}`);
-        console.log(`Request Config:`, error.config);
-        console.log(`Response Body:`, error.response?.data);
-        console.log(`Stack Trace:`, error.stack);
-        console.log(`Network Error: ${!error.response}`);
-        console.log(`Duration: ${duration.toFixed(2)}ms`);
-        
-        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-            console.error(`Request timed out after ${error.config?.timeout} ms`);
-        }
-        console.log('==================================');
-        console.groupEnd();
-
         const originalRequest = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
 
         if (error.response?.status !== 401 || !originalRequest || originalRequest._retry) {

@@ -13,6 +13,8 @@ import { RequestContextInterceptor } from "./common/interceptors/request-context
 import { NoCacheInterceptor } from "./common/interceptors/no-cache.interceptor";
 import { AppLogger } from "./logging/app-logger.service";
 
+import { corsOptions } from "./config/cors.config";
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const logger = app.get(AppLogger);
@@ -20,19 +22,13 @@ async function bootstrap() {
 
   app.useLogger(logger);
   app.setGlobalPrefix(config.getOrThrow<string>("API_PREFIX"));
-  const allowedOrigins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://billaura.webziointernational.in",
-    "https://billaura-sage.vercel.app"
-  ];
+  
+  const allowedOrigins = config.getOrThrow<string>("ALLOWED_ORIGINS")
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
-  app.enableCors({
-    origin: allowedOrigins,
-    credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-company-id', 'x-tenant-id', 'x-request-id', 'Cache-Control', 'Pragma', 'Expires'],
-  });
+  app.enableCors(corsOptions(allowedOrigins));
 
   app.use(helmet());
   app.use(compression());

@@ -12,7 +12,7 @@ const compression = require('compression');
 const express = require('express');
 moduleLog(`FRAMEWORK MODULES LOADED (${(performance.now() - moduleLoadStartedAt).toFixed(2)} ms)`);
 
-let AppModule, AllExceptionsFilter, ResponseEnvelopeInterceptor, RequestContextInterceptor, AppLogger;
+let AppModule, AllExceptionsFilter, ResponseEnvelopeInterceptor, RequestContextInterceptor, AppLogger, corsOptions;
 const applicationModulesStartedAt = performance.now();
 try {
   AppModule = require('../dist/app.module').AppModule;
@@ -20,33 +20,20 @@ try {
   ResponseEnvelopeInterceptor = require('../dist/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
   RequestContextInterceptor = require('../dist/common/interceptors/request-context.interceptor').RequestContextInterceptor;
   AppLogger = require('../dist/logging/app-logger.service').AppLogger;
+  corsOptions = require('../dist/config/cors.config').corsOptions;
 } catch (e) {
   AppModule = require('../dist/src/app.module').AppModule;
   AllExceptionsFilter = require('../dist/src/common/filters/all-exceptions.filter').AllExceptionsFilter;
   ResponseEnvelopeInterceptor = require('../dist/src/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
   RequestContextInterceptor = require('../dist/src/common/interceptors/request-context.interceptor').RequestContextInterceptor;
   AppLogger = require('../dist/src/logging/app-logger.service').AppLogger;
+  corsOptions = require('../dist/src/config/cors.config').corsOptions;
 }
 moduleLog(`APPLICATION MODULES LOADED (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
 
 const expressApp = express();
 
-// Add early logging middleware
-expressApp.use((req, res, next) => {
-    console.log(`[ExpressApp Middleware] ${req.method} ${req.url}`);
-    console.log(`[ExpressApp Middleware] Headers: ${JSON.stringify(req.headers)}`);
-    console.log(`[ExpressApp Middleware] Body exists? ${req.body !== undefined}`);
-    if (req.body) {
-        console.log(`[ExpressApp Middleware] Body: ${JSON.stringify(req.body)}`);
-    }
-    
-    // Hook finish event to trace response
-    res.on('finish', () => {
-        console.log(`[ExpressApp Middleware] Response finished: ${res.statusCode} for ${req.method} ${req.url}`);
-    });
-    
-    next();
-});
+
 let isInitialized = false;
 let initPromise = null;
 let startupLogs = [];
@@ -72,12 +59,7 @@ async function bootstrap() {
       .map((origin) => origin.trim())
       .filter(Boolean);
     
-    app.enableCors({
-      origin: allowedOrigins,
-      credentials: false,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: '*',
-    });
+    app.enableCors(corsOptions(allowedOrigins));
     
     const helmetMiddleware = helmet.default || helmet;
     app.use(helmetMiddleware());
@@ -114,10 +96,6 @@ async function withTimeout(promise, ms) {
 }
 
 module.exports = async (req, res) => {
-    console.log(`\n--- Vercel Handler: ${req.method} ${req.url} ---`);
-    console.log(`[Vercel Handler] Query: ${JSON.stringify(req.query)}`);
-    console.log(`[Vercel Handler] Headers: ${JSON.stringify(req.headers)}`);
-    console.log(`[Vercel Handler] Body exists? ${req.body !== undefined}`);
     try {
         if (!isInitialized) {
             log("Initializing...");
@@ -126,7 +104,6 @@ module.exports = async (req, res) => {
             }
             await withTimeout(initPromise, 5000);
         }
-        console.log(`[Vercel Handler] Passing to expressApp`);
         return expressApp(req, res);
     } catch (err) {
         console.error(`[Vercel Handler] CRITICAL ERROR: ${err.message}`, err);

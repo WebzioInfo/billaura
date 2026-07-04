@@ -13,10 +13,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
   constructor(private readonly logger: AppLogger) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
-    console.error(`[AllExceptionsFilter] Exception caught:`, exception);
-    if (exception instanceof Error) {
-      console.error(`[AllExceptionsFilter] Stack trace:`, exception.stack);
-    }
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();

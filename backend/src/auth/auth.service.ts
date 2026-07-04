@@ -20,28 +20,6 @@ export class AuthService {
     private readonly mailService: MailService,
   ) {}
 
-  private async traceLoginAwait<T>(
-    requestId: string,
-    name: string,
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const startedAt = performance.now();
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] START ${name}`);
-    try {
-      const result = await operation();
-      console.log(
-        `[${new Date().toISOString()}] [Req: ${requestId}] END ${name} (${(performance.now() - startedAt).toFixed(2)} ms)`,
-      );
-      return result;
-    } catch (error) {
-      console.error(
-        `[${new Date().toISOString()}] [Req: ${requestId}] ERROR ${name} (${(performance.now() - startedAt).toFixed(2)} ms)`,
-        error,
-      );
-      throw error;
-    }
-  }
-
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return null;
@@ -54,48 +32,11 @@ export class AuthService {
     return null;
   }
 
-  async measurePrisma<T>(name: string, operation: () => Promise<T>): Promise<T> {
-    const tBefore = Date.now();
-    const pBefore = performance.now();
-    
-    // Get metrics before
-    const metricsBefore = await (this.prisma as any).$metrics.json();
-    const activeBefore = metricsBefore.gauges.find((g: any) => g.name === 'prisma_pool_connections_busy')?.value || 0;
-    const idleBefore = metricsBefore.gauges.find((g: any) => g.name === 'prisma_pool_connections_idle')?.value || 0;
-    const openBefore = metricsBefore.gauges.find((g: any) => g.name === 'prisma_pool_connections_open')?.value || 0;
-    
-    const result = await operation();
-    
-    const pAfter = performance.now();
-    const tAfter = Date.now();
-    const metricsAfter = await (this.prisma as any).$metrics.json();
-    const activeAfter = metricsAfter.gauges.find((g: any) => g.name === 'prisma_pool_connections_busy')?.value || 0;
-    const idleAfter = metricsAfter.gauges.find((g: any) => g.name === 'prisma_pool_connections_idle')?.value || 0;
-    const openAfter = metricsAfter.gauges.find((g: any) => g.name === 'prisma_pool_connections_open')?.value || 0;
-    
-    console.log(`\n--- Prisma Operation: ${name} ---`);
-    console.log(`Timestamp Before: ${new Date(tBefore).toISOString()}`);
-    console.log(`Timestamp After:  ${new Date(tAfter).toISOString()}`);
-    console.log(`Operation Duration: ${(pAfter - pBefore).toFixed(2)} ms`);
-    console.log(`Connections Open: Before=${openBefore}, After=${openAfter}`);
-    console.log(`Connections Idle: Before=${idleBefore}, After=${idleAfter}`);
-    console.log(`Connections Busy: Before=${activeBefore}, After=${activeAfter}`);
-    
-    return result;
-  }
-
-  async login(loginDto: LoginDto, userAgent?: string, ipAddress?: string, requestId: string = 'unknown') {
-    const startTime = performance.now();
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] START login`);
-
-    const user = await this.traceLoginAwait(
-      requestId,
-      'prisma.user.findUnique',
-      () => this.prisma.user.findUnique({
-        where: { email: loginDto.email },
-        include: { companies: { include: { company: true } } }
-      }),
-    );
+  async login(loginDto: LoginDto, userAgent?: string, ipAddress?: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: loginDto.email },
+      include: { companies: { include: { company: true } } }
+    });
 
     if (!user) {
       throw new UnauthorizedException('Invalid email address');
@@ -110,11 +51,7 @@ export class AuthService {
       throw new UnauthorizedException('User account is disabled');
     }
 
-    const isMatch = await this.traceLoginAwait(
-      requestId,
-      'bcrypt.compare',
-      () => bcrypt.compare(loginDto.password, user.passwordHash),
-    );
+    const isMatch = await bcrypt.compare(loginDto.password, user.passwordHash);
 
     if (!isMatch) {
       const attempts = user.failedLoginAttempts + 1;
@@ -123,19 +60,11 @@ export class AuthService {
         data.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
       }
 
-      await this.traceLoginAwait(
-        requestId,
-        'prisma.user.update.failedLogin',
-        () => this.prisma.user.update({ where: { id: user.id }, data }),
-      );
+      await this.prisma.user.update({ where: { id: user.id }, data });
 
-      await this.traceLoginAwait(
-        requestId,
-        'prisma.loginHistory.create.failed',
-        () => this.prisma.loginHistory.create({
-          data: { userId: user.id, ipAddress, userAgent, status: 'FAILED' },
-        }),
-      );
+      await this.prisma.loginHistory.create({
+        data: { userId: user.id, ipAddress, userAgent, status: 'FAILED' },
+      });
 
       throw new UnauthorizedException('Invalid password');
     }
@@ -144,22 +73,14 @@ export class AuthService {
       throw new UnauthorizedException('Email not verified. Please verify your OTP first.');
     }
 
-    await this.traceLoginAwait(
-      requestId,
-      'prisma.user.update.resetLoginFailures',
-      () => this.prisma.user.update({
-        where: { id: user.id },
-        data: { failedLoginAttempts: 0, lockoutUntil: null },
-      }),
-    );
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, lockoutUntil: null },
+    });
 
-    await this.traceLoginAwait(
-      requestId,
-      'prisma.loginHistory.create.success',
-      () => this.prisma.loginHistory.create({
-        data: { userId: user.id, ipAddress, userAgent, status: 'SUCCESS' },
-      }),
-    );
+    await this.prisma.loginHistory.create({
+      data: { userId: user.id, ipAddress, userAgent, status: 'SUCCESS' },
+    });
 
     const firstCompanyUser = user.companies[0];
     const companyId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.companyId || null);
@@ -167,11 +88,7 @@ export class AuthService {
     const customRoleId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.customRoleId || null);
     const onboardingStep = user.globalRole === 'SUPER_ADMIN' ? 'COMPLETED' : (firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS');
 
-    const refreshToken = await this.traceLoginAwait(
-      requestId,
-      'prisma.session.create',
-      () => this.sessionService.createSession(user.id, userAgent, ipAddress, companyId || undefined),
-    );
+    const refreshToken = await this.sessionService.createSession(user.id, userAgent, ipAddress, companyId || undefined);
 
     const payload = { 
       email: user.email, 
@@ -184,12 +101,8 @@ export class AuthService {
       onboardingStep: onboardingStep,
     };
 
-    const jwtStart = performance.now();
     const accessToken = this.jwtService.sign(payload);
-    console.log(`\n--- Operation: JWT Generation ---`);
-    console.log(`Duration: ${(performance.now() - jwtStart).toFixed(2)} ms`);
 
-    console.log(`[${new Date().toISOString()}] [Req: ${requestId}] END login (${(performance.now() - startTime).toFixed(2)} ms)`);
     return {
       access_token: accessToken,
       refresh_token: refreshToken,
