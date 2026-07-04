@@ -1,0 +1,82 @@
+/* print.css */
+@media print {
+  /* Hide UI elements that shouldn't be printed */
+  header, footer, nav, aside, .no-print, button, .sidebar, .navbar {
+    display: none !important;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: white;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-container {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    background: white;
+    box-sizing: border-box;
+    padding: 10mm; /* A4 standard margin */
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  /* Typography */
+  .print-container {
+    font-family: 'Inter', 'Roboto', 'Helvetica', sans-serif;
+    color: #000;
+  }
+
+  .print-container * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+  }
+
+  /* Table rules for page breaks */
+  .print-table {
+    page-break-inside: auto;
+  }
+  .print-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  .print-table thead {
+    display: table-header-group;
+  }
+  .print-table tfoot {
+    display: table-footer-group;
+  }
+}
+
+/* Base styles for the print container (can be seen in browser preview too) */
+.print-container {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 20px auto;
+  background: white;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  padding: 10mm;
+  box-sizing: border-box;
+  font-family: 'Inter', 'Roboto', 'Helvetica', sans-serif;
+  color: #000;
+  overflow: hidden;
+}
+
+/* Responsive preview */
+@media screen and (max-width: 800px) {
+  .print-container {
+    width: 100%;
+    min-height: auto;
+    padding: 5mm;
+    margin: 0;
+    box-shadow: none;
+  }
+}

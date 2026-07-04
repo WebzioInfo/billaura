@@ -40,23 +40,34 @@ export const InvoicesList = () => {
             <TableHead>Client</TableHead>
             <TableHead>Total</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
-            <TableRow><TableCell colSpan={5}><div className="text-center py-8 text-muted-foreground">Loading...</div></TableCell></TableRow>
+            <TableRow><TableCell colSpan={6}><div className="text-center py-8 text-muted-foreground">Loading...</div></TableCell></TableRow>
           ) : data.length === 0 ? (
-            <TableRow><TableCell colSpan={5}><div className="text-center py-8 text-muted-foreground">No invoices found</div></TableCell></TableRow>
+            <TableRow><TableCell colSpan={6}><div className="text-center py-8 text-muted-foreground">No invoices found</div></TableCell></TableRow>
           ) : data.map((item: any) => (
             <TableRow key={item.id}>
               <TableCell className="font-semibold">{item.invoiceNumber}</TableCell>
               <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
               <TableCell>{item.customer?.name}</TableCell>
-              <TableCell className="font-bold text-right">${item.totalAmount}</TableCell>
+              <TableCell className="font-bold">${item.totalAmount}</TableCell>
               <TableCell>
                 <span className={`px-2 py-1 rounded text-xs ${item.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                   {item.status}
                 </span>
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2">
+                  <button 
+                    onClick={() => navigate(`/invoices/${item.id}/print`)}
+                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded border border-gray-300"
+                  >
+                    View / Print
+                  </button>
+                </div>
               </TableCell>
             </TableRow>
           ))}
