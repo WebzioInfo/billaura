@@ -5,7 +5,7 @@ import {
   Banknote, HelpCircle, Loader2, ArrowLeft, Info, Landmark, Wallet, 
   CheckCircle, FileCheck, AlertCircle, RefreshCw
 } from 'lucide-react';
-import { PageContainer, LoadingState } from '@/components/ui/LayoutComponents';
+import { PageContainer, LoadingState, FinancialSummary, SummaryRow } from '@/components/ui';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
@@ -673,11 +673,13 @@ export const ReceiptForm = () => {
 
           {/* Customer Account Summary */}
           {selectedCustomer && (
-            <div className="bg-muted/40 rounded-xl p-4 border border-border text-xs space-y-1.5">
-              <p className="font-semibold text-foreground border-b border-border/60 pb-1.5 mb-1.5 uppercase">Customer Account Summary</p>
-              <p className="flex justify-between"><span>Customer Name:</span> <span className="font-semibold text-foreground">{selectedCustomer.name}</span></p>
-              <p className="flex justify-between"><span>Outstanding Balance:</span> <span className="font-bold text-amber-500">₹{Number(selectedCustomer.receivableBalance).toLocaleString('en-IN')}</span></p>
-            </div>
+            <FinancialSummary title="Customer Account Summary" className="p-4 bg-muted/10">
+              <div className="flex justify-between items-center py-2 border-b border-border/20 last:border-b-0 text-xs">
+                <span className="font-semibold text-muted-foreground">Customer Name</span>
+                <span className="font-bold text-foreground">{selectedCustomer.name}</span>
+              </div>
+              <SummaryRow label="Outstanding Balance" value={selectedCustomer.receivableBalance} isNegative />
+            </FinancialSummary>
           )}
 
           {!isView && (

@@ -6,7 +6,7 @@ import {
   Building, Calendar, FileText, Landmark, FileCheck, HelpCircle, Loader2, Info
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { PageContainer, LoadingState } from '@/components/ui/LayoutComponents';
+import { PageContainer, LoadingState, FinancialSummary, SummaryRow } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
@@ -686,65 +686,34 @@ export const PurchaseOrderForm = () => {
             </div>
 
             {/* Calculations Breakdown */}
-            <div className="flex justify-end items-start">
-              <div className="w-full space-y-4 bg-muted/20 border border-border/60 rounded-2xl p-6 text-sm">
-                <div className="font-extrabold text-foreground border-b border-border/50 pb-2 mb-3 uppercase tracking-wider text-xs">Purchase Summary</div>
-                
-                <div className="flex justify-between text-muted-foreground text-xs">
-                  <span>Gross Subtotal</span>
-                  <span className="font-mono">₹{summary.subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-
+            <div className="flex justify-end items-start w-full">
+              <FinancialSummary title="Purchase Summary">
+                <SummaryRow label="Gross Subtotal" value={summary.subTotal} />
                 {summary.totalDiscount > 0 && (
-                  <div className="flex justify-between text-green-600 font-medium text-xs">
-                    <span>Discount Saved</span>
-                    <span className="font-mono">-₹{summary.totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                  <SummaryRow label="Discount Saved" value={-summary.totalDiscount} isPositive />
                 )}
-
-                <div className="flex justify-between text-muted-foreground text-xs border-t border-border/40 pt-2">
-                  <span>Taxable Value</span>
-                  <span className="font-mono">₹{summary.taxableValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-
+                <SummaryRow label="Taxable Value" value={summary.taxableValue} />
+                
                 {taxMode === 'CGST_SGST' && summary.cgst > 0 && (
                   <>
-                    <div className="flex justify-between text-muted-foreground text-[11px] pl-2 font-mono">
-                      <span>Input CGST</span>
-                      <span>₹{summary.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground text-[11px] pl-2 font-mono">
-                      <span>Input SGST</span>
-                      <span>₹{summary.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
+                    <SummaryRow label="Input CGST" value={summary.cgst} className="pl-4 border-b-0 py-1" />
+                    <SummaryRow label="Input SGST" value={summary.sgst} className="pl-4 border-b-0 py-1" />
                   </>
                 )}
 
                 {taxMode === 'IGST' && summary.igst > 0 && (
-                  <div className="flex justify-between text-muted-foreground text-[11px] pl-2 font-mono">
-                    <span>Input IGST</span>
-                    <span>₹{summary.igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                  <SummaryRow label="Input IGST" value={summary.igst} className="pl-4 border-b-0 py-1" />
                 )}
 
                 {summary.taxTotal > 0 && (
-                  <div className="flex justify-between text-muted-foreground text-xs pt-1 border-t border-border/30">
-                    <span>Total Tax</span>
-                    <span className="font-mono">₹{summary.taxTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                  <SummaryRow label="Total Tax" value={summary.taxTotal} />
                 )}
 
                 {Math.abs(summary.roundOff) > 0 && (
-                  <div className="flex justify-between text-muted-foreground text-[11px] font-mono">
-                    <span>Round Off Offset</span>
-                    <span>{summary.roundOff > 0 ? '+' : ''}₹{summary.roundOff.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                  <SummaryRow label="Round Off" value={summary.roundOff} />
                 )}
 
-                <div className="flex justify-between text-base font-extrabold text-foreground border-t border-border/60 pt-3">
-                  <span>Grand Total</span>
-                  <span className="text-accent font-sans">₹{summary.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
+                <SummaryRow label="Grand Total" value={summary.grandTotal} isTotal />
 
                 <div className="pt-4 flex gap-3">
                   <Button 
@@ -766,7 +735,7 @@ export const PurchaseOrderForm = () => {
                     Save Order
                   </Button>
                 </div>
-              </div>
+              </FinancialSummary>
             </div>
           </div>
         </div>

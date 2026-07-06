@@ -9,4 +9,5 @@ export * from './AsyncSelect';
 export * from './LedgerLookup';
 export * from './LedgerSearchSelect';
 export * from './LayoutComponents';
+export * from './FinancialSummary';
 

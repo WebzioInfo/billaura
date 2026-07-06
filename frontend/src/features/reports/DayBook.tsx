@@ -1,6 +1,7 @@
 import React from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { AmountText } from '@/components/ui';
 import apiClient from '@/services/api';
 import { Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -49,8 +50,12 @@ export const DayBook = () => {
                 <TableCell className="font-medium text-accent">{item.voucherNo}</TableCell>
                 <TableCell>{item.voucherType}</TableCell>
                 <TableCell>{item.accountName}</TableCell>
-                <TableCell className="text-right text-green-600">${item.debit}</TableCell>
-                <TableCell className="text-right text-red-600">${item.credit}</TableCell>
+                <TableCell className="text-right">
+                  <AmountText value={item.debit} className={Number(item.debit) > 0 ? "text-green-600" : "text-muted-foreground opacity-30 font-normal"} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <AmountText value={item.credit} className={Number(item.credit) > 0 ? "text-red-500" : "text-muted-foreground opacity-30 font-normal"} />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

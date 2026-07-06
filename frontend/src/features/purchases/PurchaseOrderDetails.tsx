@@ -7,7 +7,7 @@ import {
   TrendingUp, Play, Clock, User, ShieldAlert, RotateCcw
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { PageContainer, LoadingState, EmptyState } from '@/components/ui/LayoutComponents';
+import { PageContainer, LoadingState, EmptyState, FinancialSummary, SummaryRow } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
@@ -325,19 +325,12 @@ export const PurchaseOrderDetails = () => {
               <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{meta.notes || 'No notes specified.'}</p>
             </div>
             
-            <div className="space-y-2 text-right">
-              <div className="flex justify-between text-muted-foreground text-xs font-mono">
-                <span>Subtotal Base</span>
-                <span>₹{Number(po.subTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground text-xs font-mono">
-                <span>Total GST Amount ({taxLabel})</span>
-                <span>₹{Number(po.taxTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between text-base font-extrabold text-foreground border-t border-border/40 pt-2 font-sans">
-                <span>Grand Total</span>
-                <span className="text-accent text-lg">₹{Number(po.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-              </div>
+            <div className="w-full text-right">
+              <FinancialSummary className="bg-transparent border-0 shadow-none p-0">
+                <SummaryRow label="Subtotal Base" value={po.subTotal} />
+                <SummaryRow label={`Total GST Amount (${taxLabel})`} value={po.taxTotal} />
+                <SummaryRow label="Grand Total" value={po.grandTotal} isTotal />
+              </FinancialSummary>
             </div>
           </div>
 
