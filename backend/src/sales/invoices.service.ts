@@ -215,6 +215,10 @@ export class InvoicesService {
           igstAmount: isInterState ? taxTotal : 0,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
+          gstBreakup: {
+            notes: dto.notes,
+            termsConditions: dto.termsConditions,
+          },
           items: {
             create: itemsToCreate,
           },

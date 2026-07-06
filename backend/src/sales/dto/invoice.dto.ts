@@ -60,6 +60,14 @@ export class CreateInvoiceDto {
   @IsOptional()
   status?: string;
 
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
+  termsConditions?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => InvoiceItemDto)
