@@ -217,6 +217,44 @@ export const InvoiceForm = () => {
     }
   }, [queryCustomerId, customers, setValue]);
 
+  const duplicateId = searchParams.get('duplicateId');
+  useEffect(() => {
+    if (duplicateId && customers.length > 0 && products.length > 0) {
+      const fetchDuplicateData = async () => {
+        try {
+          const res = await apiClient.get(`/sales/invoices/${duplicateId}`);
+          const data = res.data?.data || res.data;
+          if (data) {
+            setValue('customerId', data.businessPartnerId);
+            setValue('invoiceType', data.invoiceType === 'BILL_OF_SUPPLY' ? 'NO_TAX' : (data.invoiceType === 'RETAIL_INVOICE' ? 'B2C' : 'B2B'));
+            setValue('placeOfSupply', data.placeOfSupply || '');
+            
+            // Extract notes and terms from metadata
+            const extraMeta = typeof data.gstBreakup === 'string' ? JSON.parse(data.gstBreakup) : (data.gstBreakup || {});
+            setValue('notes', extraMeta.notes || data.notes || '');
+            setValue('termsConditions', extraMeta.termsConditions || data.termsConditions || "1. Goods once sold will not be taken back or exchanged.\n2. Interest @ 18% per annum will be charged if payment is not received within due date.");
+            
+            // Prefill items
+            if (Array.isArray(data.items) && data.items.length > 0) {
+              const formattedItems = data.items.map((item: any) => ({
+                productId: item.productId || '',
+                description: item.description || '',
+                qty: Number(item.qty || item.quantity || 1),
+                rate: Number(item.rate || item.unitPrice || 0),
+                taxPercent: Number(item.taxPercent || item.taxRate || 18),
+                unit: item.product?.unit || 'Pcs'
+              }));
+              setValue('items', formattedItems);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load invoice for duplication', err);
+        }
+      };
+      fetchDuplicateData();
+    }
+  }, [duplicateId, customers, products, setValue]);
+
   // Calculate Due Date based on Payment Terms & Invoice Date
   useEffect(() => {
     if (invoiceDate && paymentTerms) {

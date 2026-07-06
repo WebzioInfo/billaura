@@ -21,6 +21,7 @@ interface WorkspaceState {
   unpinTab: (id: string) => void;
   reorderTabs: (startIndex: number, endIndex: number) => void;
   closeAll: () => void;
+  updateTabTitle: (id: string, title: string) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -89,6 +90,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       closeAll: () => set((state) => ({
         tabs: state.tabs.filter(t => t.isPinned), // Keep pinned tabs
         activeTabId: state.tabs.find(t => t.isPinned)?.id || null
+      })),
+
+      updateTabTitle: (id, title) => set((state) => ({
+        tabs: state.tabs.map(t => t.id === id ? { ...t, title } : t)
       }))
     }),
     {
