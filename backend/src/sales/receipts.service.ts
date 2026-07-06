@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateReceiptDto, UpdateReceiptDto } from './dto/receipt.dto';
+import { CreateReceiptDto, UpdateReceiptDto, ReceiptQueryDto } from './dto/receipt.dto';
 import { CompanyContext } from '../common/context/company-context';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import type { Prisma } from '@prisma/client';
@@ -9,7 +9,7 @@ import type { Prisma } from '@prisma/client';
 export class ReceiptsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: any) {
+  async findAll(query: ReceiptQueryDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');

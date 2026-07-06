@@ -45,6 +45,27 @@ export const InvoiceDetails = () => {
 
   const invoice = useMemo(() => resData || null, [resData]);
 
+  const receiptHistory = useMemo(() => {
+    if (!invoice) return [];
+    const allocs = invoice.receiptAllocations || [];
+    // Sort chronologically
+    const sortedAllocs = [...allocs].sort((a: any, b: any) => new Date(a.receipt?.date || a.createdAt).getTime() - new Date(b.receipt?.date || b.createdAt).getTime());
+    
+    let currentBalance = Number(invoice.grandTotal || 0);
+    return sortedAllocs.map((alloc: any) => {
+      currentBalance -= Number(alloc.amount);
+      return {
+        id: alloc.id,
+        date: alloc.receipt?.date || alloc.createdAt,
+        receiptNo: alloc.receipt?.receiptNo || 'N/A',
+        amount: Number(alloc.amount),
+        paymentMethod: alloc.receipt?.paymentMethod || 'N/A',
+        reference: alloc.receipt?.referenceNo || 'N/A',
+        balanceAfter: Math.max(0, currentBalance)
+      };
+    });
+  }, [invoice]);
+
   // Update tab title once details are loaded
   useEffect(() => {
     if (invoice?.invoiceNo) {
@@ -163,25 +184,7 @@ export const InvoiceDetails = () => {
   const outstanding = grandTotal - amountPaid;
   const isOverdue = invoice.dueDate && new Date(invoice.dueDate) < new Date() && outstanding > 0;
 
-  const receiptHistory = useMemo(() => {
-    const allocs = invoice.receiptAllocations || [];
-    // Sort chronologically
-    const sortedAllocs = [...allocs].sort((a: any, b: any) => new Date(a.receipt?.date || a.createdAt).getTime() - new Date(b.receipt?.date || b.createdAt).getTime());
-    
-    let currentBalance = grandTotal;
-    return sortedAllocs.map((alloc: any) => {
-      currentBalance -= Number(alloc.amount);
-      return {
-        id: alloc.id,
-        date: alloc.receipt?.date || alloc.createdAt,
-        receiptNo: alloc.receipt?.receiptNo || 'N/A',
-        amount: Number(alloc.amount),
-        paymentMethod: alloc.receipt?.paymentMethod || 'N/A',
-        reference: alloc.receipt?.referenceNo || 'N/A',
-        balanceAfter: Math.max(0, currentBalance)
-      };
-    });
-  }, [invoice, grandTotal]);
+  // receiptHistory calculation moved to top of component to satisfy Rules of Hooks
 
   // Calculated Status details
   const getCalculatedStatus = () => {

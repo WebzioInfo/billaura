@@ -9,6 +9,7 @@ import {
   Min,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
 
 export class ReceiptAllocationDto {
   @IsString()
@@ -133,4 +134,26 @@ export class UpdateReceiptDto {
   @IsString()
   @IsOptional()
   status?: string;
+}
+
+export class ReceiptQueryDto extends PaginationQueryDto {
+  @IsString()
+  @IsOptional()
+  customerId?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @IsDateString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsDateString()
+  @IsOptional()
+  endDate?: string;
 }

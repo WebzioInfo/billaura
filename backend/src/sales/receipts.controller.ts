@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ReceiptsService } from "./receipts.service";
-import { CreateReceiptDto, UpdateReceiptDto } from "./dto/receipt.dto";
+import { CreateReceiptDto, UpdateReceiptDto, ReceiptQueryDto } from "./dto/receipt.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 
@@ -21,7 +21,7 @@ export class ReceiptsController {
   constructor(private readonly receiptsService: ReceiptsService) {}
 
   @Get()
-  async findAll(@Query() query: any) {
+  async findAll(@Query() query: ReceiptQueryDto) {
     return this.receiptsService.findAll(query);
   }
 

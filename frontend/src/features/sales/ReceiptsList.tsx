@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, Search, Printer, Mail, Trash2, Edit3, 
-  DollarSign, CheckCircle, RefreshCw, FileSpreadsheet, Eye, ChevronLeft, ChevronRight, Receipt 
+import {
+  Plus, Search, Printer, Mail, Trash2, Edit3,
+  DollarSign, CheckCircle, RefreshCw, FileSpreadsheet, Eye, ChevronLeft, ChevronRight, Receipt
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
@@ -94,7 +94,7 @@ export const ReceiptsList = () => {
       r.amount,
       r.status
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," 
+    const csvContent = "data:text/csv;charset=utf-8,"
       + [headers.join(','), ...rows.map((e: any) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -112,7 +112,7 @@ export const ReceiptsList = () => {
         title="Payment Receipts"
         description="View and manage money collections and invoice allocation audits."
         primaryAction={
-          <Button 
+          <Button
             onClick={() => navigate('/receipts/new')}
             className="flex items-center gap-2 font-bold px-5"
             variant="primary"
@@ -163,8 +163,8 @@ export const ReceiptsList = () => {
         </div>
 
         <div className="flex w-full md:w-auto items-center gap-3 justify-end">
-          <select 
-            value={statusFilter} 
+          <select
+            value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
           >
@@ -173,8 +173,8 @@ export const ReceiptsList = () => {
             <option value="VOID">Voided</option>
           </select>
 
-          <select 
-            value={methodFilter} 
+          <select
+            value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}
             className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
           >
@@ -186,7 +186,7 @@ export const ReceiptsList = () => {
             <option value="CREDIT_CARD">Credit Card</option>
           </select>
 
-          <Button 
+          <Button
             onClick={handleExportCSV}
             variant="outline"
             size="sm"
@@ -235,30 +235,61 @@ export const ReceiptsList = () => {
                     <AmountText value={r.amount} />
                   </TableCell>
                   <TableCell className="py-4 px-6 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      r.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${r.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                      }`}>
                       {r.status}
                     </span>
                   </TableCell>
-                  <TableCell className="py-4 px-6 text-right space-x-1.5">
-                    <Button onClick={() => navigate(`/receipts/${r.id}`)} variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <Eye className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button onClick={() => navigate(`/receipts/${r.id}/edit`)} variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button onClick={() => handlePrint(r.id)} variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <Printer className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button onClick={() => handleEmail(r.id)} variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <Mail className="w-3.5 h-3.5" />
-                    </Button>
-                    {r.status === 'COMPLETED' && (
-                      <Button onClick={() => handleVoid(r.id)} variant="ghost" size="sm" className="h-8 w-8 p-0 hover:text-red-500 hover:bg-red-500/10">
-                        <Trash2 className="w-3.5 h-3.5" />
+                  <TableCell className="py-4 px-6 text-right">
+                    <div className="flex justify-end gap-1.5">
+                      <Button
+                        onClick={() => navigate(`/receipts/${r.id}`)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 hover:bg-blue-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="View Receipt"
+                      >
+                        <Eye className="w-10.5 h-10.5 text-blue-500" />
                       </Button>
-                    )}
+                      <Button
+                        onClick={() => navigate(`/receipts/${r.id}/edit`)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 hover:bg-amber-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="Edit Receipt"
+                      >
+                        <Edit3 className="w-4.5 h-4.5 text-amber-500" />
+                      </Button>
+                      <Button
+                        onClick={() => handlePrint(r.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 hover:bg-purple-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="Print PDF"
+                      >
+                        <Printer className="w-4.5 h-4.5 text-purple-500" />
+                      </Button>
+                      <Button
+                        onClick={() => handleEmail(r.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 hover:bg-teal-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="Email Receipt"
+                      >
+                        <Mail className="w-4.5 h-4.5 text-teal-500" />
+                      </Button>
+                      {r.status === 'COMPLETED' && (
+                        <Button
+                          onClick={() => handleVoid(r.id)}
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                          title="Void Receipt"
+                        >
+                          <Trash2 className="w-4.5 h-4.5 text-red-500" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -272,7 +303,7 @@ export const ReceiptsList = () => {
         <div className="flex justify-between items-center mt-6">
           <p className="text-xs text-muted-foreground">Showing page {page} of {totalPages}</p>
           <div className="flex gap-2">
-            <Button 
+            <Button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
               variant="outline"
@@ -281,7 +312,7 @@ export const ReceiptsList = () => {
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button 
+            <Button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               variant="outline"
