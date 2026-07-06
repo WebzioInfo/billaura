@@ -3,12 +3,13 @@ import { useEffect } from 'react';
 export function useGlobalShortcuts() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl + K for Search
-      if (e.ctrlKey && e.key.toLowerCase() === 'k') {
+      // Ctrl + K or Cmd + K for Search
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+        const searchInput = document.getElementById('global-search-input') as HTMLInputElement;
         if (searchInput) {
           searchInput.focus();
+          searchInput.select();
         }
       }
       
