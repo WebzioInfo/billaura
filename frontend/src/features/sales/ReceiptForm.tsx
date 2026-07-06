@@ -8,16 +8,6 @@ import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 
-interface InvoiceAllocationRow {
-  invoiceId: string;
-  invoiceNo: string;
-  date: string;
-  grandTotal: number;
-  amountPaid: number;
-  unpaidAmount: number;
-  amount: number;
-}
-
 export const ReceiptForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -44,10 +34,9 @@ export const ReceiptForm = () => {
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('COMPLETED');
 
-  const [invoices, setInvoices] = useState<InvoiceAllocationRow[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 
-  // Issue 1: Customer Dropdown Loading (robust with retry/error fallback)
+  // Customer Dropdown Loading (robust with retry/error fallback)
   const { data: masterData, isLoading: isLoadingMaster, error: masterError, refetch: refetchMaster } = useQuery({
     queryKey: ['receipt-master-data'],
     queryFn: async () => {
@@ -71,6 +60,16 @@ export const ReceiptForm = () => {
       }
     }
   }, [id, queryCustomerId, customers]);
+
+  // Sync selectedCustomer state when businessPartnerId changes in Create Mode
+  useEffect(() => {
+    if (businessPartnerId && customers.length > 0 && !id) {
+      const match = customers.find((c: any) => c.id === businessPartnerId);
+      if (match) {
+        setSelectedCustomer(match);
+      }
+    }
+  }, [businessPartnerId, customers, id]);
 
   const { data: receiptData, isLoading: isLoadingReceipt } = useQuery({
     queryKey: ['receipt', id],
@@ -101,89 +100,7 @@ export const ReceiptForm = () => {
     setNotes(r.notes || '');
     setStatus(r.status);
     setSelectedCustomer(r.businessPartner);
-
-    // Load allocations
-    if (r.allocations) {
-      const allocs = r.allocations.map((a: any) => ({
-        invoiceId: a.invoiceId,
-        invoiceNo: a.invoice?.invoiceNo || 'N/A',
-        date: a.invoice?.date ? new Date(a.invoice.date).toLocaleDateString() : 'N/A',
-        grandTotal: Number(a.invoice?.grandTotal || 0),
-        amountPaid: Number(a.invoice?.amountPaid || 0) - Number(a.amount), // Amount paid before this receipt
-        unpaidAmount: Number(a.invoice?.grandTotal || 0) - (Number(a.invoice?.amountPaid || 0) - Number(a.amount)),
-        amount: Number(a.amount)
-      }));
-      setInvoices(allocs);
-    }
   }, [receiptData, id]);
-
-  // Issue 2: Automatically load outstanding invoices for selected customer
-  const { data: customerInvoices } = useQuery({
-    queryKey: ['sales-invoices-outstanding', businessPartnerId],
-    queryFn: async () => {
-      if (!businessPartnerId || id) return [];
-      const res = await apiClient.get(`/sales/invoices`, {
-        params: { customerId: businessPartnerId }
-      });
-      const dataObj = res.data || res;
-      const list = dataObj.data?.data || dataObj.data || dataObj || [];
-      const listArr = Array.isArray(list) ? list : [];
-      return listArr
-        .filter((inv: any) => Number(inv.amountPaid) < Number(inv.grandTotal) && inv.status !== 'DRAFT')
-        .map((inv: any) => ({
-          invoiceId: inv.id,
-          invoiceNo: inv.invoiceNo,
-          date: new Date(inv.date).toLocaleDateString(),
-          grandTotal: Number(inv.grandTotal),
-          amountPaid: Number(inv.amountPaid),
-          unpaidAmount: Number(inv.grandTotal) - Number(inv.amountPaid),
-          amount: 0
-        }));
-    },
-    enabled: !!businessPartnerId && !id
-  });
-
-  useEffect(() => {
-    if (customerInvoices) {
-      setInvoices(customerInvoices);
-      setSelectedCustomer(customers.find((c: any) => c.id === businessPartnerId));
-    }
-  }, [customerInvoices, businessPartnerId, customers]);
-
-  // Auto/FIFO Allocation
-  const handleAutoAllocate = () => {
-    if (amount <= 0) {
-      toast.error('Enter receipt amount first');
-      return;
-    }
-
-    let remaining = amount;
-    const updated = invoices.map(inv => {
-      const allocate = Math.min(remaining, inv.unpaidAmount);
-      remaining -= allocate;
-      return { ...inv, amount: allocate };
-    });
-
-    setInvoices(updated);
-    toast.success('Amount allocated using FIFO strategy');
-  };
-
-  const handleAllocationChange = (invoiceId: string, val: number) => {
-    const updated = invoices.map(inv => {
-      if (inv.invoiceId === invoiceId) {
-        if (val > inv.unpaidAmount) {
-          toast.warning(`Allocation cannot exceed unpaid balance of ₹${inv.unpaidAmount}`);
-          return { ...inv, amount: inv.unpaidAmount };
-        }
-        return { ...inv, amount: Math.max(0, val) };
-      }
-      return inv;
-    });
-    setInvoices(updated);
-  };
-
-  const totalAllocated = invoices.reduce((sum, inv) => sum + inv.amount, 0);
-  const remainingUnapplied = amount - totalAllocated;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,10 +111,6 @@ export const ReceiptForm = () => {
     }
     if (amount <= 0) {
       toast.error('Amount must be greater than zero');
-      return;
-    }
-    if (totalAllocated > amount) {
-      toast.error('Allocated invoice sum cannot exceed Receipt Amount');
       return;
     }
 
@@ -214,10 +127,7 @@ export const ReceiptForm = () => {
         clearanceDate: clearanceDate || undefined,
         bankCharges: bankCharges || undefined,
         cashier: cashier || undefined,
-        notes: notes || undefined,
-        allocations: invoices
-          .filter(inv => inv.amount > 0)
-          .map(inv => ({ invoiceId: inv.invoiceId, amount: inv.amount }))
+        notes: notes || undefined
       };
 
       if (id && isEdit) {
@@ -277,21 +187,21 @@ export const ReceiptForm = () => {
     <PageContainer maxWidth="7xl">
       <PageHeader
         title={isView ? 'Receipt Details' : isEdit ? 'Edit Receipt' : 'Record Receipt'}
-        description={isView ? 'View accounting postings and invoice allocations.' : 'Configure money collection and allocations.'}
+        description={isView ? 'View accounting postings and details.' : 'Configure money collection.'}
         backTo={{ label: 'Receipts', path: '/receipts' }}
       />
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
 
         {/* Left Columns - Form Entry */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
           <div className="bg-surface border border-border rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
               <FileCheck className="w-4 h-4 text-accent" /> Basic Details
             </h3>
 
             {/* Row 1: Date & Payment Method */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Date *</label>
                 <input
@@ -322,7 +232,7 @@ export const ReceiptForm = () => {
             </div>
 
             {/* Row 2: Customer (with detailed text) & Receipt Amount */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Customer *</label>
                 <select
@@ -367,84 +277,6 @@ export const ReceiptForm = () => {
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Allocation Section */}
-          <div className="bg-surface border border-border rounded-2xl p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-border pb-3">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-500" /> Invoice Allocations
-              </h3>
-              {!isView && invoices.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleAutoAllocate}
-                  className="text-xs bg-accent/15 text-accent hover:bg-accent/20 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer border-0"
-                >
-                  Auto FIFO Allocate
-                </button>
-              )}
-            </div>
-
-            {invoices.length === 0 ? (
-              <div className="p-8 text-center border border-dashed border-border rounded-xl">
-                <p className="text-sm text-muted-foreground">Select a customer with unpaid invoices to configure allocations.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="text-xs uppercase tracking-wider text-muted-foreground font-semibold border-b border-border pb-2">
-                      <th className="py-2">Invoice No</th>
-                      <th className="py-2">Date</th>
-                      <th className="py-2 text-right">Total</th>
-                      <th className="py-2 text-right">Unpaid</th>
-                      <th className="py-2 text-right w-1/3">Allocation</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invoices.map((inv) => (
-                      <tr key={inv.invoiceId} className="border-b border-border/40 last:border-0 hover:bg-muted/10">
-                        <td className="py-3 font-mono font-bold text-foreground">{inv.invoiceNo}</td>
-                        <td className="py-3 text-xs text-muted-foreground">{inv.date}</td>
-                        <td className="py-3 text-right font-semibold font-sans tabular-nums">₹{inv.grandTotal.toLocaleString('en-IN')}</td>
-                        <td className="py-3 text-right text-amber-500 font-bold font-sans tabular-nums">₹{inv.unpaidAmount.toLocaleString('en-IN')}</td>
-                        <td className="py-3 pl-4">
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold font-sans">₹</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={inv.amount || ''}
-                              onChange={(e) => handleAllocationChange(inv.invoiceId, Number(e.target.value))}
-                              disabled={isView}
-                              placeholder="0.00"
-                              className="w-full text-right bg-background border border-border rounded-lg pl-6 pr-3 py-1.5 text-xs font-bold focus:outline-none focus:border-accent disabled:opacity-60 font-sans tabular-nums"
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {/* Subtotals & Unapplied display */}
-                <div className="border-t border-border mt-4 pt-4 space-y-2 text-xs font-bold text-muted-foreground">
-                  <div className="flex justify-between items-center">
-                    <span>Sum of allocated amounts:</span>
-                    <span className={totalAllocated > amount ? 'text-red-500 font-sans' : 'text-foreground font-sans'}>
-                      ₹{totalAllocated.toLocaleString('en-IN')} / ₹{amount.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Unapplied / Remaining Balance:</span>
-                    <span className={remainingUnapplied < 0 ? 'text-red-500 font-sans' : remainingUnapplied > 0 ? 'text-amber-500 font-sans' : 'text-green-600 font-sans'}>
-                      ₹{remainingUnapplied.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

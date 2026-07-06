@@ -4,6 +4,7 @@ import { ProtectedRoute } from '../features/auth/components/ProtectedRoute';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { NotFound } from '../pages/NotFound';
 import { Unauthorized } from '../pages/Unauthorized';
+import { KeyboardNavigationProvider } from '../components/workspace/KeyboardNavigationProvider';
 
 // --- Lazy Loaded Enterprise Modules ---
 const DepartmentsList = lazy(() => import('../features/departments/DepartmentsList').then(m => ({ default: m.DepartmentsList })));
@@ -174,7 +175,13 @@ export const router = createBrowserRouter([
     id: 'app',
     element: (
       <ProtectedRoute enabled requireCompletedOnboarding>
-        <Suspense fallback={<LoadingFallback />}><ErrorBoundary><WorkspaceLayout /></ErrorBoundary></Suspense>
+        <Suspense fallback={<LoadingFallback />}>
+          <ErrorBoundary>
+            <KeyboardNavigationProvider>
+              <WorkspaceLayout />
+            </KeyboardNavigationProvider>
+          </ErrorBoundary>
+        </Suspense>
       </ProtectedRoute>
     ),
     errorElement: <ErrorBoundary />,

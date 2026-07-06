@@ -8,6 +8,7 @@ import {
   IsDateString,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
 
 export class InvoiceItemDto {
   @IsString()
@@ -78,4 +79,14 @@ export class UpdateInvoiceStatusDto {
   @IsString()
   @IsNotEmpty()
   status: string; // DocumentStatus enum
+}
+
+export class InvoiceQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  customerId?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
 }
