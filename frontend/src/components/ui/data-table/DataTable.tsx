@@ -31,6 +31,8 @@ interface DataTableProps<TData, TValue> {
   globalFilter?: string;
   onGlobalFilterChange?: (val: string) => void;
   manualFiltering?: boolean;
+  emptyText?: string;
+  searchPlaceholder?: string;
 }
 
 export function DataTable<TData, TValue>({
@@ -46,6 +48,8 @@ export function DataTable<TData, TValue>({
   globalFilter: controlledGlobalFilter,
   onGlobalFilterChange,
   manualFiltering,
+  emptyText,
+  searchPlaceholder,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -116,7 +120,7 @@ export function DataTable<TData, TValue>({
             />
           ) : (
             <Input
-              placeholder="Search all columns..."
+              placeholder={searchPlaceholder || "Search all columns..."}
               value={globalFilter ?? ''}
               onChange={(e) => setGlobalFilter(e.target.value)}
               className="max-w-sm h-9"
@@ -181,7 +185,7 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results found.
+                  {emptyText || "No results found."}
                 </TableCell>
               </TableRow>
             )}

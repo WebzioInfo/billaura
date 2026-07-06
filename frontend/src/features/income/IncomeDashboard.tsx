@@ -4,10 +4,22 @@ import { Card } from '@/components/ui/Card';
 import { FileText, Wallet, TrendingUp, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../services/api';
 
 // Dummy components for now, we will implement them next.
 import { OtherIncomesList } from './components/OtherIncomesList';
 import { IncomeCategoriesList } from './components/IncomeCategoriesList';
+
+const VALID_INCOME_TYPES = [
+  'Other Income',
+  'Service Income',
+  'Rental Income',
+  'Interest Income',
+  'Recurring Income'
+] as const;
+
+type IncomeType = typeof VALID_INCOME_TYPES[number];
 
 export function IncomeDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -21,22 +33,65 @@ export function IncomeDashboard() {
 
   const handleTabChange = (tab: 'incomes' | 'categories') => {
     setActiveTab(tab);
-    setSearchParams({ tab });
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tab);
+      return next;
+    });
   };
 
+  const typeParam = searchParams.get('type') || '';
+  const matchedType = VALID_INCOME_TYPES.find(
+    (t) => t.toLowerCase() === typeParam.toLowerCase()
+  );
+  const selectedIncomeType: IncomeType = matchedType || 'Other Income';
+
+  // Set document/window title
+  useEffect(() => {
+    document.title = `${selectedIncomeType} | Bill Aura`;
+  }, [selectedIncomeType]);
+
+  // Fetch incomes to compute dynamic stats
+  const { data: incomes = [] } = useQuery({
+    queryKey: ['other-incomes'],
+    queryFn: async () => {
+      const { data } = await api.get('/other-incomes');
+      return data || [];
+    }
+  });
+
+  const filteredIncomes = incomes.filter((income: any) => {
+    const categoryName = income.category?.name || '';
+    return categoryName.toLowerCase() === selectedIncomeType.toLowerCase();
+  });
+
+  const now = new Date();
+  const currentMonthIncomes = filteredIncomes.filter((income: any) => {
+    const d = new Date(income.date);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+
+  const thisMonthSum = currentMonthIncomes.reduce(
+    (sum: number, income: any) => sum + (Number(income.grandTotal) || 0),
+    0
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       <PageHeader 
-        title="Other Income" 
-        description="Manage service revenue, rentals, and other non-operating income"
-      >
-        <div className="flex gap-2">
+        title={selectedIncomeType} 
+        description={`Manage ${selectedIncomeType.toLowerCase()} and related revenue details`}
+        breadcrumbs={[
+          { label: 'Income', href: `/other-income?type=${selectedIncomeType}` },
+          { label: selectedIncomeType }
+        ]}
+        primaryAction={
           <Button variant="outline" onClick={() => handleTabChange('categories')}>
             <Tags className="w-4 h-4 mr-2" />
             Manage Categories
           </Button>
-        </div>
-      </PageHeader>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="p-6 flex items-center space-x-4 bg-primary/5 border-primary/20">
@@ -44,8 +99,8 @@ export function IncomeDashboard() {
             <Wallet className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-sm font-medium text-muted-foreground">This Month's Income</p>
-            <h3 className="text-2xl font-bold">₹0.00</h3>
+            <p className="text-sm font-medium text-muted-foreground">This Month's {selectedIncomeType}</p>
+            <h3 className="text-2xl font-bold">₹{thisMonthSum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
           </div>
         </Card>
         <Card className="p-6 flex items-center space-x-4">
@@ -53,8 +108,10 @@ export function IncomeDashboard() {
             <FileText className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Total Invoices</p>
-            <h3 className="text-2xl font-bold">0</h3>
+            <p className="text-sm font-medium text-muted-foreground">
+              Total {selectedIncomeType === 'Recurring Income' ? 'Invoices' : 'Receipts'}
+            </p>
+            <h3 className="text-2xl font-bold">{filteredIncomes.length}</h3>
           </div>
         </Card>
         <Card className="p-6 flex items-center space-x-4">
@@ -63,7 +120,7 @@ export function IncomeDashboard() {
           </div>
           <div>
             <p className="text-sm font-medium text-muted-foreground">Top Category</p>
-            <h3 className="text-2xl font-bold">-</h3>
+            <h3 className="text-2xl font-bold">{filteredIncomes.length > 0 ? selectedIncomeType : '-'}</h3>
           </div>
         </Card>
       </div>
@@ -88,7 +145,7 @@ export function IncomeDashboard() {
       </div>
 
       <div className="mt-6">
-        {activeTab === 'incomes' && <OtherIncomesList />}
+        {activeTab === 'incomes' && <OtherIncomesList selectedIncomeType={selectedIncomeType} />}
         {activeTab === 'categories' && <IncomeCategoriesList />}
       </div>
     </div>

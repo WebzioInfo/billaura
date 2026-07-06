@@ -18,6 +18,7 @@ interface OtherIncomeFormModalProps {
 
 export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, defaultCategoryType }: OtherIncomeFormModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [hasSetDefaultCategory, setHasSetDefaultCategory] = useState(false);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().substring(0, 10),
     incomeNo: '', // Will generate on backend or submit
@@ -61,6 +62,13 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
     enabled: isOpen && !!editingId
   });
 
+  // Reset flag when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setHasSetDefaultCategory(false);
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (isOpen) {
       if (editingId && incomeData) {
@@ -94,9 +102,25 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
           paymentStatus: 'PAID',
           bankAccountId: '',
         });
+
+        if (initialCategoryId) {
+          setHasSetDefaultCategory(true);
+        }
       }
     }
-  }, [isOpen, editingId, incomeData, categories, defaultCategoryType]);
+  }, [isOpen, editingId, incomeData]); // Exclude categories/defaultCategoryType to avoid resetting inputs
+
+  useEffect(() => {
+    if (isOpen && !editingId && !hasSetDefaultCategory && defaultCategoryType && categories.length > 0) {
+      const match = categories.find(
+        (c: any) => c.name.toLowerCase() === defaultCategoryType.toLowerCase()
+      );
+      if (match) {
+        setFormData(prev => ({ ...prev, categoryId: match.id }));
+        setHasSetDefaultCategory(true);
+      }
+    }
+  }, [isOpen, editingId, categories, defaultCategoryType, hasSetDefaultCategory]);
 
   const calculateTotal = () => {
     return Number(formData.subTotal) + Number(formData.cgstAmount) + Number(formData.sgstAmount) + Number(formData.igstAmount);

@@ -12,16 +12,16 @@ export function WorkspaceLayout() {
   const navigate = useNavigate();
   useGlobalShortcuts();
 
-  // Keep tabs list in sync when the browser URL pathname changes directly (clicks, page loads)
+  // Keep tabs list in sync when the browser URL pathname or search changes directly (clicks, page loads)
   useEffect(() => {
-    const currentPath = location.pathname;
+    const currentPath = location.pathname + location.search;
 
     // Skip sync for non-workspace paths
     if (
-      currentPath.startsWith('/auth') || 
-      currentPath.startsWith('/platform') || 
-      currentPath === '/' || 
-      currentPath === '/unauthorized'
+      location.pathname.startsWith('/auth') || 
+      location.pathname.startsWith('/platform') || 
+      location.pathname === '/' || 
+      location.pathname === '/unauthorized'
     ) {
       return;
     }
@@ -39,10 +39,14 @@ export function WorkspaceLayout() {
       }
     } else {
       // Auto-register a new tab for direct navigation/link clicks
-      const segments = currentPath.split('/').filter(Boolean);
+      const segments = location.pathname.split('/').filter(Boolean);
       let title = 'Document';
-      if (currentPath === '/invoices/new') {
+      if (location.pathname === '/invoices/new') {
         title = 'New Invoice';
+      } else if (location.pathname === '/other-income') {
+        const params = new URLSearchParams(location.search);
+        const typeParam = params.get('type');
+        title = typeParam || 'Other Income';
       } else if (segments.length > 0) {
         title = segments[segments.length - 1].replace(/-/g, ' ');
         title = title.charAt(0).toUpperCase() + title.slice(1);
@@ -54,9 +58,9 @@ export function WorkspaceLayout() {
         path: currentPath,
       });
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
-  // Keep browser URL pathname in sync when activeTabId changes (e.g. clicking a tab or closing one)
+  // Keep browser URL pathname & search in sync when activeTabId changes (e.g. clicking a tab or closing one)
   useEffect(() => {
     const state = useWorkspaceStore.getState();
     // ALWAYS use the latest state.activeTabId, as the first effect might have just updated it synchronously.
@@ -66,11 +70,11 @@ export function WorkspaceLayout() {
     const activeTab = state.tabs.find(t => t.id === currentActiveTabId);
     if (activeTab) {
       const expectedPath = activeTab.path.startsWith('/app/') ? activeTab.path.replace('/app', '') : activeTab.path;
-      if (expectedPath !== location.pathname) {
+      if (expectedPath !== (location.pathname + location.search)) {
         navigate(expectedPath);
       }
     }
-  }, [activeTabId, location.pathname, navigate]);
+  }, [activeTabId, location.pathname, location.search, navigate]);
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden font-sans">

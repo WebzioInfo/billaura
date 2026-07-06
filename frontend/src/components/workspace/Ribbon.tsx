@@ -37,7 +37,7 @@ const MENUS = [
       { label: 'Service Income', path: '/other-income?type=Service Income', id: 'service-income' },
       { label: 'Rental Income', path: '/other-income?type=Rental Income', id: 'rental-income' },
       { label: 'Interest Income', path: '/other-income?type=Interest Income', id: 'interest-income' },
-      { label: 'Recurring Income', path: '/recurring-invoices', id: 'recurring-income' },
+      { label: 'Recurring Income', path: '/other-income?type=Recurring Income', id: 'recurring-income' },
       { label: 'Income Categories', path: '/other-income?tab=categories', id: 'income-categories' },
       { label: 'Income Reports', path: '/reports', id: 'income-reports' },
     ]

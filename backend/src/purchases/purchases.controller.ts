@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
@@ -34,6 +35,11 @@ export class PurchasesController {
   @Post()
   async create(@Body() dto: CreatePurchaseDto) {
     return this.purchasesService.create(dto);
+  }
+
+  @Put(":id")
+  async update(@Param("id") id: string, @Body() dto: CreatePurchaseDto) {
+    return this.purchasesService.update(id, dto);
   }
 
   @Delete(":id")

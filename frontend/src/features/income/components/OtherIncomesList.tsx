@@ -7,12 +7,14 @@ import api from '../../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 
-export function OtherIncomesList() {
+interface OtherIncomesListProps {
+  selectedIncomeType?: string;
+}
+
+export function OtherIncomesList({ selectedIncomeType = 'Other Income' }: OtherIncomesListProps) {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
-  const defaultCategoryType = searchParams.get('type') || '';
 
   const { data: incomes = [] } = useQuery({
     queryKey: ['other-incomes'],
@@ -36,6 +38,11 @@ export function OtherIncomesList() {
       deleteMutation.mutate(id);
     }
   };
+
+  const filteredIncomes = incomes.filter((income: any) => {
+    const categoryName = income.category?.name || '';
+    return categoryName.toLowerCase() === selectedIncomeType.toLowerCase();
+  });
 
   const columns = [
     {
@@ -93,20 +100,22 @@ export function OtherIncomesList() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Service & Other Incomes</h3>
+        <h3 className="text-lg font-semibold">{selectedIncomeType}</h3>
         <Button onClick={() => {
           setEditingId(null);
           setIsModalOpen(true);
         }}>
           <Plus className="w-4 h-4 mr-2" />
-          Record Income
+          Record {selectedIncomeType}
         </Button>
       </div>
 
       <div className="bg-white rounded-lg shadow">
         <DataTable 
           columns={columns} 
-          data={incomes}
+          data={filteredIncomes}
+          emptyText={`No ${selectedIncomeType.toLowerCase()} records found.`}
+          searchPlaceholder={`Search ${selectedIncomeType.toLowerCase()}...`}
         />
       </div>
 
@@ -118,7 +127,7 @@ export function OtherIncomesList() {
           queryClient.invalidateQueries({ queryKey: ['other-incomes'] });
         }}
         editingId={editingId}
-        defaultCategoryType={defaultCategoryType}
+        defaultCategoryType={selectedIncomeType}
       />
     </div>
   );
