@@ -144,19 +144,18 @@ export const InvoiceForm = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Memoize data conversions to ensure component updates stay performant
   const customers = useMemo(() => {
-    const list = customersData?.data || customersData || [];
+    const list = customersData?.data?.items || customersData?.data || customersData || [];
     return Array.isArray(list) ? list : [];
   }, [customersData]);
 
   const products = useMemo(() => {
-    const list = productsData?.data || productsData || [];
+    const list = productsData?.data?.data || productsData?.data || productsData || [];
     return Array.isArray(list) ? list : [];
   }, [productsData]);
 
   const units = useMemo(() => {
-    const list = unitsData?.data || unitsData || [];
+    const list = unitsData?.data?.data || unitsData?.data || unitsData || [];
     return Array.isArray(list) ? list : [];
   }, [unitsData]);
 
