@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+
+const formatIndianCurrency = (amount: number) => {
+  const rounded = Math.abs(amount) < 0.005 ? 0 : amount;
+  return new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(rounded);
+};
 import { z } from 'zod';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
@@ -182,7 +190,7 @@ export const InvoiceForm = () => {
 
 
   const invoiceType = watch('invoiceType');
-  const items = watch('items');
+  const items = useWatch({ control, name: 'items' }) || [];
   const invoiceDate = watch('date');
   const paymentTerms = watch('paymentTerms');
   const customerId = watch('customerId');
@@ -229,6 +237,8 @@ export const InvoiceForm = () => {
     let totalCgstAmount = 0;
     let totalSgstAmount = 0;
     let totalIgstAmount = 0;
+    let totalQty = 0;
+    let numItems = 0;
 
     const companyState = companyProfile?.state?.trim().toLowerCase() || '';
     const supplyState = selectedPlaceOfSupply?.trim().toLowerCase() || '';
@@ -236,24 +246,39 @@ export const InvoiceForm = () => {
 
     const taxSummaryMap: Record<number, { taxableValue: number; taxAmount: number }> = {};
 
-    items.forEach((item) => {
-      const rate = Number(item.rate) || 0;
+    const itemsList = items || [];
+
+    itemsList.forEach((item: any) => {
+      if (!item) return;
+
       const qty = Number(item.qty) || 0;
+      const rate = Number(item.rate) || 0;
       const discountPercent = Number(item.discount) || 0;
       const taxRate = Number(item.taxPercent) || 0;
 
-      const lineTotal = rate * qty;
-      const lineDiscount = lineTotal * (discountPercent / 100);
+      // Validation check to prevent negative values or out of bounds
+      const validQty = qty < 0 ? 0 : qty;
+      const validRate = rate < 0 ? 0 : rate;
+      const validDiscount = discountPercent < 0 ? 0 : (discountPercent > 100 ? 100 : discountPercent);
+      const validTaxRate = taxRate < 0 ? 0 : taxRate;
+
+      const lineTotal = validRate * validQty;
+      const lineDiscount = lineTotal * (validDiscount / 100);
       const taxableValue = lineTotal - lineDiscount;
       
       let lineTax = 0;
       if (invoiceType !== 'NO_TAX') {
-        lineTax = (taxableValue * taxRate) / 100;
+        lineTax = (taxableValue * validTaxRate) / 100;
       }
 
       rawSubTotal += lineTotal;
       totalDiscountAmount += lineDiscount;
       totalTaxAmount += lineTax;
+      totalQty += validQty;
+
+      if (item.productId) {
+        numItems += 1;
+      }
 
       if (invoiceType !== 'NO_TAX') {
         if (isInterState) {
@@ -265,16 +290,21 @@ export const InvoiceForm = () => {
       }
 
       // Group totals for summary breakdown
-      if (taxRate > 0 && invoiceType !== 'NO_TAX') {
-        if (!taxSummaryMap[taxRate]) {
-          taxSummaryMap[taxRate] = { taxableValue: 0, taxAmount: 0 };
+      if (validTaxRate > 0 && invoiceType !== 'NO_TAX') {
+        if (!taxSummaryMap[validTaxRate]) {
+          taxSummaryMap[validTaxRate] = { taxableValue: 0, taxAmount: 0 };
         }
-        taxSummaryMap[taxRate].taxableValue += taxableValue;
-        taxSummaryMap[taxRate].taxAmount += lineTax;
+        taxSummaryMap[validTaxRate].taxableValue += taxableValue;
+        taxSummaryMap[validTaxRate].taxAmount += lineTax;
       }
     });
 
     const finalSubTotal = rawSubTotal - totalDiscountAmount;
+    
+    // Auto-calculate Round Off to nearest rupee (standard accounting practices)
+    const exactGrandTotal = finalSubTotal + totalTaxAmount;
+    const roundedGrandTotal = Math.round(exactGrandTotal);
+    const roundOff = roundedGrandTotal - exactGrandTotal;
 
     return {
       rawSubTotal,
@@ -284,8 +314,11 @@ export const InvoiceForm = () => {
       cgstTotal: totalCgstAmount,
       sgstTotal: totalSgstAmount,
       igstTotal: totalIgstAmount,
-      grandTotal: finalSubTotal + totalTaxAmount,
+      roundOff,
+      grandTotal: roundedGrandTotal,
       isInterState,
+      totalQty,
+      numItems,
       taxSummary: Object.entries(taxSummaryMap).map(([rate, vals]) => ({
         rate: Number(rate),
         ...vals
@@ -666,19 +699,24 @@ export const InvoiceForm = () => {
                 <div className="text-sm font-semibold text-foreground border-b border-border/50 pb-2 mb-3">Invoice Summary</div>
                 
                 <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex justify-between text-xs border-b border-dashed border-border/50 pb-2 mb-2">
+                    <span>Total Quantity / Items</span>
+                    <span className="font-semibold text-foreground">{totals.totalQty} Units / {totals.numItems} Items</span>
+                  </div>
+
                   <div className="flex justify-between">
                     <span>Subtotal Gross</span>
-                    <span>{currencySymbol}{totals.rawSubTotal.toFixed(2)}</span>
+                    <span>{currencySymbol}{formatIndianCurrency(totals.rawSubTotal)}</span>
                   </div>
                   {totals.totalDiscountAmount > 0 && (
                     <div className="flex justify-between text-green-600 font-medium">
                       <span>Discount Saved</span>
-                      <span>-{currencySymbol}{totals.totalDiscountAmount.toFixed(2)}</span>
+                      <span>-{currencySymbol}{formatIndianCurrency(totals.totalDiscountAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between border-t border-dashed border-border/50 pt-2 text-foreground font-medium">
                     <span>Taxable Base Subtotal</span>
-                    <span>{currencySymbol}{totals.subTotal.toFixed(2)}</span>
+                    <span>{currencySymbol}{formatIndianCurrency(totals.subTotal)}</span>
                   </div>
                   
                   {invoiceType !== 'NO_TAX' && (
@@ -686,27 +724,34 @@ export const InvoiceForm = () => {
                       {totals.isInterState ? (
                         <div className="flex justify-between text-xs">
                           <span>Integrated GST (IGST)</span>
-                          <span>{currencySymbol}{totals.igstTotal.toFixed(2)}</span>
+                          <span>{currencySymbol}{formatIndianCurrency(totals.igstTotal)}</span>
                         </div>
                       ) : (
                         <>
                           <div className="flex justify-between text-xs">
                             <span>Central GST (CGST)</span>
-                            <span>{currencySymbol}{totals.cgstTotal.toFixed(2)}</span>
+                            <span>{currencySymbol}{formatIndianCurrency(totals.cgstTotal)}</span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span>State GST (SGST)</span>
-                            <span>{currencySymbol}{totals.sgstTotal.toFixed(2)}</span>
+                            <span>{currencySymbol}{formatIndianCurrency(totals.sgstTotal)}</span>
                           </div>
                         </>
                       )}
                     </>
                   )}
+
+                  {totals.roundOff !== 0 && (
+                    <div className="flex justify-between text-xs border-t border-dashed border-border/40 pt-1">
+                      <span>Round Off</span>
+                      <span>{totals.roundOff > 0 ? '+' : ''}{currencySymbol}{formatIndianCurrency(totals.roundOff)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-between font-bold text-lg pt-3 border-t border-border text-foreground">
                   <span>Grand Total</span>
-                  <span>{currencySymbol}{totals.grandTotal.toFixed(2)}</span>
+                  <span>{currencySymbol}{formatIndianCurrency(totals.grandTotal)}</span>
                 </div>
 
                 {/* Grouped Tax Summary matrix */}
@@ -715,8 +760,8 @@ export const InvoiceForm = () => {
                     <div className="font-semibold text-muted-foreground uppercase tracking-wider mb-1">GST Breakdown matrix</div>
                     {totals.taxSummary.map((sm) => (
                       <div key={sm.rate} className="flex justify-between text-muted-foreground">
-                        <span>GST @ {sm.rate}% (Taxable: {currencySymbol}{sm.taxableValue.toFixed(2)})</span>
-                        <span>{currencySymbol}{sm.taxAmount.toFixed(2)}</span>
+                        <span>GST @ {sm.rate}% (Taxable: {currencySymbol}{formatIndianCurrency(sm.taxableValue)})</span>
+                        <span>{currencySymbol}{formatIndianCurrency(sm.taxAmount)}</span>
                       </div>
                     ))}
                   </div>
