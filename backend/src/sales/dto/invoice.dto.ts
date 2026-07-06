@@ -50,6 +50,10 @@ export class CreateInvoiceDto {
 
   @IsString()
   @IsOptional()
+  invoiceNo?: string;
+
+  @IsString()
+  @IsOptional()
   placeOfSupply?: string;
 
   @IsString()

@@ -79,28 +79,57 @@ export class InvoicesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Generate invoice number using DocumentSequence
-      let sequence = await tx.documentSequence.findFirst({
-        where: { companyId, documentType: 'INVOICE' },
-      });
-
-      if (!sequence) {
-        sequence = await tx.documentSequence.create({
-          data: {
-            companyId,
-            documentType: 'INVOICE',
-            currentNumber: 0,
-          },
+      let invoiceNo = dto.invoiceNo;
+      if (invoiceNo) {
+        // Validate uniqueness
+        const existing = await tx.invoice.findFirst({
+          where: { companyId, invoiceNo, deletedAt: null },
         });
+        if (existing) {
+          throw new BadRequestException('Invoice number already exists');
+        }
+
+        // If user accepted/matched the next auto sequence number, increment the sequence to keep it synchronized
+        let sequence = await tx.documentSequence.findFirst({
+          where: { companyId, documentType: 'INVOICE' },
+        });
+        if (!sequence) {
+          sequence = await tx.documentSequence.create({
+            data: { companyId, documentType: 'INVOICE', currentNumber: 0 },
+          });
+        }
+        const nextNumber = sequence.currentNumber + 1;
+        const expectedAuto = `INV-${String(nextNumber).padStart(5, '0')}`;
+        if (invoiceNo === expectedAuto) {
+          await tx.documentSequence.update({
+            where: { id: sequence.id },
+            data: { currentNumber: nextNumber },
+          });
+        }
+      } else {
+        // 1. Generate invoice number using DocumentSequence
+        let sequence = await tx.documentSequence.findFirst({
+          where: { companyId, documentType: 'INVOICE' },
+        });
+
+        if (!sequence) {
+          sequence = await tx.documentSequence.create({
+            data: {
+              companyId,
+              documentType: 'INVOICE',
+              currentNumber: 0,
+            },
+          });
+        }
+
+        const nextNumber = sequence.currentNumber + 1;
+        await tx.documentSequence.update({
+          where: { id: sequence.id },
+          data: { currentNumber: nextNumber },
+        });
+
+        invoiceNo = `INV-${String(nextNumber).padStart(5, '0')}`;
       }
-
-      const nextNumber = sequence.currentNumber + 1;
-      await tx.documentSequence.update({
-        where: { id: sequence.id },
-        data: { currentNumber: nextNumber },
-      });
-
-      const invoiceNo = `INV-${String(nextNumber).padStart(5, '0')}`;
 
       // Fetch company profile to verify placeOfSupply relative to companyState for GST routing
       const company = await tx.company.findUnique({
@@ -483,5 +512,23 @@ export class InvoicesService {
         data: { deletedAt: new Date() },
       });
     });
+  }
+
+  async getNextInvoiceNumber() {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    let sequence = await this.prisma.documentSequence.findFirst({
+      where: { companyId, documentType: 'INVOICE' },
+    });
+
+    if (!sequence) {
+      return { nextNumber: 'INV-00001' };
+    }
+
+    const nextNum = sequence.currentNumber + 1;
+    return { nextNumber: `INV-${String(nextNum).padStart(5, '0')}` };
   }
 }

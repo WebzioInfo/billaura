@@ -4,8 +4,19 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  Plus, Trash2, ArrowLeft, Save, FileText, Eye, X, Loader2, Info 
+  Plus, Trash2, ArrowLeft, Save, FileText, Eye, X, Loader2, Info, AlertCircle 
 } from 'lucide-react';
+
+const mapUnit = (unitStr: string) => {
+  if (!unitStr) return 'Pcs';
+  const lower = unitStr.toLowerCase();
+  if (lower === 'pcs') return 'Pcs';
+  if (lower === 'box') return 'Box';
+  if (lower === 'kgs') return 'Kgs';
+  if (lower === 'ltr') return 'Ltr';
+  if (lower === 'nos') return 'Nos';
+  return unitStr.charAt(0).toUpperCase() + unitStr.slice(1).toLowerCase();
+};
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PageContainer, LoadingState, FormSection } from '@/components/ui/LayoutComponents';
 import { Button } from '@/components/ui/Button';
@@ -51,6 +62,7 @@ const invoiceItemSchema = z.object({
 const invoiceSchema = z.object({
   invoiceType: z.enum(['B2B', 'B2C', 'NO_TAX']),
   customerId: z.string().min(1, 'Select a customer'),
+  invoiceNo: z.string().min(1, 'Invoice number is required'),
   date: z.string().nonempty('Select date'),
   dueDate: z.string().optional(),
   paymentTerms: z.string().default('NET_30'),
@@ -73,8 +85,26 @@ export const InvoiceForm = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'DRAFT' | 'SENT'>('SENT');
 
+  const { register, control, handleSubmit, watch, formState: { errors }, setValue } = useForm<InvoiceFormValues>({
+    resolver: zodResolver(invoiceSchema as any) as any,
+    defaultValues: {
+      invoiceType: 'B2B',
+      invoiceNo: '',
+      date: new Date().toISOString().split('T')[0],
+      paymentTerms: 'NET_30',
+      currency: 'INR',
+      items: [{ productId: '', description: '', qty: 1, rate: 0, taxPercent: 18, discount: 0, unit: 'Pcs' }],
+      termsConditions: "1. Goods once sold will not be taken back or exchanged.\n2. Interest @ 18% per annum will be charged if payment is not received within due date.",
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'items',
+  });
+
   // React Query cached fetches for master data dependencies
-  const { data: meData, error: meError, isLoading: meLoading } = useQuery<any>({
+  const { data: meData, error: meError, isLoading: meLoading, refetch: refetchMe } = useQuery<any>({
     queryKey: ['auth', 'me'],
     queryFn: () => apiClient.get('/auth/me'),
     staleTime: 5 * 60 * 1000,
@@ -82,7 +112,7 @@ export const InvoiceForm = () => {
     refetchOnWindowFocus: false,
   });
 
-  const { data: customersData, error: custError, isLoading: custLoading } = useQuery<any>({
+  const { data: customersData, error: custError, isLoading: custLoading, refetch: refetchCust } = useQuery<any>({
     queryKey: ['customers'],
     queryFn: () => apiClient.get('/customers'),
     staleTime: 5 * 60 * 1000,
@@ -90,18 +120,26 @@ export const InvoiceForm = () => {
     refetchOnWindowFocus: false,
   });
 
-  const { data: productsData, error: prodError, isLoading: prodLoading } = useQuery<any>({
+  const { data: productsData, error: prodError, isLoading: prodLoading, refetch: refetchProd } = useQuery<any>({
     queryKey: ['products'],
-    queryFn: () => apiClient.get('/inventory/products'),
+    queryFn: () => apiClient.get('/products'),
     staleTime: 5 * 60 * 1000,
     retry: 1,
     refetchOnWindowFocus: false,
   });
 
-  const { data: unitsData, error: unitsError, isLoading: unitsLoading } = useQuery<any>({
+  const { data: unitsData, error: unitsError, isLoading: unitsLoading, refetch: refetchUnits } = useQuery<any>({
     queryKey: ['units'],
     queryFn: () => apiClient.get('/units').catch(() => []),
     staleTime: 5 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: nextNoData, error: nextNoError, isLoading: nextNoLoading, refetch: refetchNextNo } = useQuery<any>({
+    queryKey: ['invoices', 'next-number'],
+    queryFn: () => apiClient.get('/sales/invoices/next-number'),
+    staleTime: 0,
     retry: 1,
     refetchOnWindowFocus: false,
   });
@@ -126,32 +164,23 @@ export const InvoiceForm = () => {
     return meData?.company || meData?.data?.company || null;
   }, [meData]);
 
-  const isLoading = meLoading || custLoading || prodLoading || unitsLoading;
+  const isLoading = meLoading || custLoading || prodLoading || unitsLoading || nextNoLoading;
 
   // Single unified error toast handler to prevent toast flooding
-  const hasError = meError || custError || prodError || unitsError;
+  const hasError = meError || custError || prodError || unitsError || nextNoError;
   useEffect(() => {
     if (hasError) {
       toast.error("Failed to load customer or product master data");
     }
   }, [hasError]);
 
-  const { register, control, handleSubmit, watch, formState: { errors }, setValue } = useForm<InvoiceFormValues>({
-    resolver: zodResolver(invoiceSchema as any) as any,
-    defaultValues: {
-      invoiceType: 'B2B',
-      date: new Date().toISOString().split('T')[0],
-      paymentTerms: 'NET_30',
-      currency: 'INR',
-      items: [{ productId: '', description: '', qty: 1, rate: 0, taxPercent: 18, discount: 0, unit: 'Pcs' }],
-      termsConditions: "1. Goods once sold will not be taken back or exchanged.\n2. Interest @ 18% per annum will be charged if payment is not received within due date.",
-    },
-  });
+  useEffect(() => {
+    if (nextNoData?.nextNumber) {
+      setValue('invoiceNo', nextNoData.nextNumber);
+    }
+  }, [nextNoData, setValue]);
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'items',
-  });
+
 
   const invoiceType = watch('invoiceType');
   const items = watch('items');
@@ -272,11 +301,8 @@ export const InvoiceForm = () => {
       setValue(`items.${index}.description`, product.description || product.name || '');
       setValue(`items.${index}.taxPercent`, product.taxRate || product.gstRate || 18);
       // Auto-populate unit from product master
-      if (product.unit) {
-        setValue(`items.${index}.unit`, product.unit.abbreviation || product.unit.name || 'Pcs');
-      } else {
-        setValue(`items.${index}.unit`, 'Pcs');
-      }
+      const mappedUnit = typeof product.unit === 'string' ? mapUnit(product.unit) : 'Pcs';
+      setValue(`items.${index}.unit`, mappedUnit);
     }
   };
 
@@ -289,6 +315,7 @@ export const InvoiceForm = () => {
 
       const payload = {
         customerId: data.customerId,
+        invoiceNo: data.invoiceNo,
         date: new Date(data.date).toISOString(),
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
         invoiceType: backendType,
@@ -331,10 +358,41 @@ export const InvoiceForm = () => {
     }
   };
 
+  const handleRetry = () => {
+    refetchMe();
+    refetchCust();
+    refetchProd();
+    refetchUnits();
+    refetchNextNo();
+  };
+
   if (isLoading) {
     return (
       <PageContainer maxWidth="7xl">
         <LoadingState variant="form" />
+      </PageContainer>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <PageContainer maxWidth="7xl">
+        <div className="glass-panel p-8 rounded-2xl border border-border text-center space-y-4 max-w-md mx-auto mt-12 shadow-sm bg-surface">
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto text-red-600">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-foreground">Failed to Load Master Data</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            We couldn't load the required customer, product, or numbering sequence parameters. Please check your network connection and try again.
+          </p>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="w-full py-2 bg-accent hover:bg-accent/90 text-white rounded-lg text-xs font-semibold tracking-wider transition-colors cursor-pointer"
+          >
+            Retry Loading Master Data
+          </button>
+        </div>
       </PageContainer>
     );
   }
@@ -370,7 +428,7 @@ export const InvoiceForm = () => {
 
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Customer *</label>
-              <select {...register('customerId')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
+              <select {...register('customerId')} disabled={custLoading} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50">
                 <option value="">Select Customer...</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name} {c.gstNumber ? `(${c.gstNumber})` : ''}</option>)}
               </select>
@@ -378,8 +436,15 @@ export const InvoiceForm = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice #</label>
-              <input type="text" value="Auto-generated sequence" disabled className="w-full px-4 py-2.5 bg-background/50 border border-border rounded-xl text-sm text-muted-foreground cursor-not-allowed" />
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice # *</label>
+              <input 
+                type="text" 
+                {...register('invoiceNo')} 
+                placeholder="INV-XXXXX"
+                disabled={nextNoLoading}
+                className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50" 
+              />
+              {errors.invoiceNo && <p className="text-red-500 text-xs mt-1">{errors.invoiceNo.message}</p>}
             </div>
 
             <div>
@@ -468,16 +533,31 @@ export const InvoiceForm = () => {
                       <td className="py-3 pr-4">
                         <select 
                           {...register(`items.${index}.productId`)} 
+                          disabled={prodLoading}
                           onChange={(e) => {
                             register(`items.${index}.productId`).onChange(e);
                             handleProductSelect(index, e.target.value);
                           }}
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-accent"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-accent disabled:opacity-50"
                         >
                           <option value="">Select Item...</option>
                           {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                         {errors.items?.[index]?.productId && <p className="text-red-500 text-xs mt-1">{errors.items[index].productId?.message}</p>}
+                        
+                        {(() => {
+                          const prodId = watch(`items.${index}.productId`);
+                          const pObj = products.find(p => p.id === prodId);
+                          if (!pObj) return null;
+                          const totalStock = pObj.stocks ? pObj.stocks.reduce((acc: number, s: any) => acc + Number(s.quantity || 0), 0) : 0;
+                          return (
+                            <div className="text-[10px] text-muted-foreground mt-1 flex gap-2 pl-1 select-none">
+                              <span>HSN: <strong className="text-foreground">{pObj.hsnCode || 'N/A'}</strong></span>
+                              <span>•</span>
+                              <span>Stock: <strong className={totalStock > 0 ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{totalStock}</strong></span>
+                            </div>
+                          );
+                        })()}
                         
                         <input 
                           type="text" 

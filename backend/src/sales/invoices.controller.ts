@@ -26,6 +26,11 @@ export class InvoicesController {
     return this.invoicesService.findAll(query);
   }
 
+  @Get("next-number")
+  async getNextNumber() {
+    return this.invoicesService.getNextInvoiceNumber();
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     return this.invoicesService.findOne(id);
