@@ -46,6 +46,8 @@ const DeliveryNotesList = lazy(() => import('../features/sales/DeliveryNotesList
 const BillsList = lazy(() => import('../features/purchases/BillsList').then(m => ({ default: m.BillsList })));
 const BillForm = lazy(() => import('../features/purchases/BillForm').then(m => ({ default: m.BillForm })));
 const PurchaseOrdersList = lazy(() => import('../features/purchases/PurchaseOrdersList').then(m => ({ default: m.PurchaseOrdersList })));
+const PurchaseOrderForm = lazy(() => import('../features/purchases/PurchaseOrderForm').then(m => ({ default: m.PurchaseOrderForm })));
+const PurchaseOrderDetails = lazy(() => import('../features/purchases/PurchaseOrderDetails').then(m => ({ default: m.PurchaseOrderDetails })));
 const GoodsReceiptsList = lazy(() => import('../features/purchases/GoodsReceiptsList').then(m => ({ default: m.GoodsReceiptsList })));
 const TrialBalance = lazy(() => import('../features/reports/TrialBalance').then(m => ({ default: m.TrialBalance })));
 const BalanceSheet = lazy(() => import('../features/reports/BalanceSheet').then(m => ({ default: m.BalanceSheet })));
@@ -215,6 +217,9 @@ export const router = createBrowserRouter([
       { path: 'payments', element: <SalesDashboard /> },
       { path: 'purchases', element: <PurchasesDashboard /> },
       { path: 'purchase-orders', element: <PurchaseOrdersList /> },
+      { path: 'purchase-orders/new', element: <PurchaseOrderForm /> },
+      { path: 'purchase-orders/:id', element: <PurchaseOrderDetails /> },
+      { path: 'purchase-orders/:id/edit', element: <PurchaseOrderForm /> },
       { path: 'goods-receipts', element: <GoodsReceiptsList /> },
       { path: 'bills', element: <BillsList /> },
       { path: 'bills/new', element: <BillForm /> },

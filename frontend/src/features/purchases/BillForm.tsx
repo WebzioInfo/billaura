@@ -134,6 +134,20 @@ export const BillForm = () => {
     enabled: !!loadBillId,
   });
 
+  // Load from Purchase Order
+  const poId = searchParams.get('poId');
+  const { data: existingPo, isLoading: loadingPo } = useQuery({
+    queryKey: ['purchase-order', poId],
+    queryFn: async () => {
+      if (!poId) return null;
+      const res = await apiClient.get(`/purchase-orders/${poId}`);
+      return res.data || null;
+    },
+    enabled: !!poId,
+  });
+
+  const [shouldSkipStock, setShouldSkipStock] = useState(false);
+
   // Populate existing bill data
   useEffect(() => {
     if (!existingBill) return;
@@ -188,6 +202,40 @@ export const BillForm = () => {
       setItems(mappedItems.length > 0 ? mappedItems : items);
     }
   }, [existingBill, isDuplicateMode]);
+
+  // Populate from PO
+  useEffect(() => {
+    if (!existingPo) return;
+
+    setVendorId(existingPo.businessPartnerId);
+    setBillingAddress(existingPo.billingAddress || '');
+    setShippingAddress(existingPo.shippingAddress || '');
+    setPlaceOfSupply(existingPo.placeOfSupply || '');
+    setTaxMode(existingPo.taxMode);
+
+    const poMeta = existingPo.gstBreakup || {};
+    setWarehouseId(poMeta.warehouseId || '');
+    setNotes(poMeta.notes || '');
+    
+    // Pass skipStockUpdate flag inside gstBreakup metadata so bill saves without incrementing stock again if received!
+    const shouldSkip = existingPo.status === 'PARTIAL' || existingPo.status === 'CONVERTED';
+    setShouldSkipStock(shouldSkip);
+
+    if (existingPo.items && Array.isArray(existingPo.items)) {
+      setItems(existingPo.items.map((i: any, index: number) => ({
+        keyId: `po-row-${index}`,
+        productId: i.productId || '',
+        description: i.description || '',
+        hsnCode: i.product?.hsnCode || 'N/A',
+        qty: Number(i.qty),
+        unit: i.product?.unit || 'PCS',
+        rate: Number(i.rate),
+        discount: 0,
+        taxPercent: Number(i.taxPercent || 0),
+        warehouseId: poMeta.warehouseId || '',
+      })));
+    }
+  }, [existingPo]);
 
   // Set default warehouse when list loads
   useEffect(() => {
@@ -367,7 +415,8 @@ export const BillForm = () => {
         dueDate: dueDate || undefined,
         warehouseId: warehouseId || undefined,
         notes: notes || undefined,
-        roundOff: totals.roundOff
+        roundOff: totals.roundOff,
+        skipStockUpdate: shouldSkipStock || undefined
       },
       items: items.map(i => ({
         productId: i.productId,

@@ -44,6 +44,10 @@ export class CreateGoodsReceiptDto {
   @IsOptional()
   vehicleNumber?: string;
 
+  @IsString()
+  @IsOptional()
+  warehouseId?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => GoodsReceiptItemDto)
@@ -58,6 +62,10 @@ export class UpdateGoodsReceiptDto {
   @IsString()
   @IsOptional()
   date?: string;
+
+  @IsString()
+  @IsOptional()
+  warehouseId?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

@@ -50,6 +50,38 @@ export class CreatePurchaseOrderDto {
   @IsOptional()
   placeOfSupply?: string;
 
+  @IsString()
+  @IsOptional()
+  expectedDeliveryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  warehouseId?: string;
+
+  @IsString()
+  @IsOptional()
+  buyer?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
+  referenceNo?: string;
+
+  @IsString()
+  @IsOptional()
+  billingAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingAddress?: string;
+
+  @IsEnum(DocumentStatus)
+  @IsOptional()
+  status?: DocumentStatus;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PurchaseOrderItemDto)
@@ -64,6 +96,34 @@ export class UpdatePurchaseOrderDto {
   @IsString()
   @IsOptional()
   date?: string;
+
+  @IsString()
+  @IsOptional()
+  expectedDeliveryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  warehouseId?: string;
+
+  @IsString()
+  @IsOptional()
+  buyer?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
+  referenceNo?: string;
+
+  @IsString()
+  @IsOptional()
+  billingAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingAddress?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

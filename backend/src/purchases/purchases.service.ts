@@ -212,6 +212,7 @@ export class PurchasesService {
 
       // 5. Increase stock quantities and create movement logs
       const metaWarehouseId = dto.gstBreakup?.warehouseId;
+      const skipStockUpdate = dto.gstBreakup?.skipStockUpdate;
       let targetWarehouse = null;
       if (metaWarehouseId) {
         targetWarehouse = await tx.warehouse.findFirst({
@@ -224,7 +225,7 @@ export class PurchasesService {
         });
       }
 
-      if (targetWarehouse) {
+      if (targetWarehouse && !skipStockUpdate) {
         for (const item of itemsToCreate) {
           const stock = await tx.stock.findFirst({
             where: { companyId, productId: item.productId, warehouseId: targetWarehouse.id },

@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpStatus,
   HttpCode,
+  Req,
 } from "@nestjs/common";
 import { GoodsReceiptsService } from "./goods-receipts.service";
 import {
@@ -36,18 +37,22 @@ export class GoodsReceiptsController {
   }
 
   @Post()
-  async create(@Body() dto: CreateGoodsReceiptDto) {
-    return this.goodsReceiptsService.create(dto);
+  async create(@Body() dto: CreateGoodsReceiptDto, @Req() req: any) {
+    return this.goodsReceiptsService.create(dto, req.user?.userId);
   }
 
   @Patch(":id")
-  async update(@Param("id") id: string, @Body() dto: UpdateGoodsReceiptDto) {
-    return this.goodsReceiptsService.update(id, dto);
+  async update(
+    @Param("id") id: string,
+    @Body() dto: UpdateGoodsReceiptDto,
+    @Req() req: any
+  ) {
+    return this.goodsReceiptsService.update(id, dto, req.user?.userId);
   }
 
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param("id") id: string) {
-    await this.goodsReceiptsService.remove(id);
+  async remove(@Param("id") id: string, @Req() req: any) {
+    await this.goodsReceiptsService.remove(id, req.user?.userId);
   }
 }
