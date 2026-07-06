@@ -33,6 +33,8 @@ interface DataTableProps<TData, TValue> {
   manualFiltering?: boolean;
   emptyText?: string;
   searchPlaceholder?: string;
+  totalItems?: number;
+  toolbarExtras?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -50,6 +52,8 @@ export function DataTable<TData, TValue>({
   manualFiltering,
   emptyText,
   searchPlaceholder,
+  totalItems,
+  toolbarExtras,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -107,42 +111,34 @@ export function DataTable<TData, TValue>({
   return (
     <div className="space-y-4">
       {/* TOOLBAR */}
-      <div className="flex items-center justify-between">
-        <div className="flex flex-1 items-center space-x-2">
+      <div className="flex items-center justify-between py-4 flex-wrap gap-4">
+        <div className="flex items-center gap-4 flex-1">
           {searchKey ? (
             <Input
-              placeholder={`Search ${searchKey}...`}
-              value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ''}
-              onChange={(event) =>
-                table.getColumn(searchKey)?.setFilterValue(event.target.value)
-              }
-              className="max-w-sm h-9"
-            />
-          ) : (
-            <Input
-              placeholder={searchPlaceholder || "Search all columns..."}
+              placeholder={searchPlaceholder || `Filter ${searchKey}...`}
               value={globalFilter ?? ''}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              className="max-w-sm h-9"
+              onChange={(event) => setGlobalFilter(event.target.value)}
+              className="max-w-xs"
             />
-          )}
+          ) : null}
+          {toolbarExtras}
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" onClick={handleExport} className="h-9">
+          <Button variant="outline" size="sm" onClick={handleExport} className="h-9 whitespace-nowrap">
             <Download className="mr-2 h-4 w-4" /> Export
           </Button>
           
           {/* Column Visibility Dropdown could go here */}
-          <Button variant="outline" size="sm" className="h-9">
+          <Button variant="outline" size="sm" className="h-9 whitespace-nowrap">
             <Settings2 className="mr-2 h-4 w-4" /> View
           </Button>
         </div>
       </div>
 
       {/* TABLE */}
-      <div className="rounded-md border border-border bg-surface overflow-hidden">
+      <div className="rounded-md border border-border bg-surface overflow-auto max-h-[calc(100vh-250px)] relative">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur z-10 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -170,7 +166,7 @@ export function DataTable<TData, TValue>({
                   className={cn(onRowClick && "cursor-pointer")}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-2.5 px-4 h-[44px]">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -194,10 +190,18 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* PAGINATION */}
-      <div className="flex items-center justify-between px-2">
+      <div className="flex items-center justify-between px-2 pt-4">
         <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{' '}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+          {totalItems !== undefined ? (
+            <>
+              Showing {Math.min((table.getState().pagination.pageIndex * table.getState().pagination.pageSize) + 1, totalItems)}–{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, totalItems)} of {totalItems} total
+            </>
+          ) : (
+            <>
+              {table.getFilteredSelectedRowModel().rows.length} of{' '}
+              {table.getFilteredRowModel().rows.length} row(s) selected.
+            </>
+          )}
         </div>
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex items-center space-x-2">
@@ -209,7 +213,7 @@ export function DataTable<TData, TValue>({
                 table.setPageSize(Number(e.target.value));
               }}
             >
-              {[10, 20, 30, 40, 50].map((pageSize) => (
+              {[20, 50, 100].map((pageSize) => (
                 <option key={pageSize} value={pageSize}>
                   {pageSize}
                 </option>

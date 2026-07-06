@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Search, Printer, Mail, Trash2, Edit3,
-  DollarSign, CheckCircle, RefreshCw, FileSpreadsheet, Eye, ChevronLeft, ChevronRight, Receipt
+  Plus, Search, Printer, Trash2, Edit3,
+  DollarSign, CheckCircle, RefreshCw, Eye, Receipt
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageContainer, EmptyState, LoadingState, AmountText } from '@/components/ui';
+import { DataTable } from '@/components/ui/data-table/DataTable';
+import { ColumnDef } from '@tanstack/react-table';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -18,20 +18,22 @@ export const ReceiptsList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  
+  // Enterprise pagination state
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const { data, isLoading: loading, refetch: fetchReceipts } = useQuery({
-    queryKey: ['receipts', search, statusFilter, methodFilter, page],
+    queryKey: ['receipts', search, statusFilter, methodFilter, pagination.pageIndex, pagination.pageSize],
     queryFn: async () => {
       const res = await apiClient.get('/receipts', {
         params: {
           search: search || undefined,
           status: statusFilter || undefined,
           paymentMethod: methodFilter || undefined,
-          page,
-          limit: 10
+          page: pagination.pageIndex + 1,
+          limit: pagination.pageSize
         }
       });
       return res.data || {};
@@ -43,7 +45,6 @@ export const ReceiptsList = () => {
   const totalItemsValue = data?.data?.total || data?.data?.totalItems || data?.meta?.totalItems || receipts.length || 0;
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTotalPages(totalPagesValue);
     setTotalItems(totalItemsValue);
   }, [totalPagesValue, totalItemsValue]);
@@ -54,15 +55,6 @@ export const ReceiptsList = () => {
       toast.success(res.data?.message || 'Receipt sent to printer spool');
     } catch {
       toast.error('Failed to trigger receipt print');
-    }
-  };
-
-  const handleEmail = async (id: string) => {
-    try {
-      const res = await apiClient.post(`/receipts/${id}/email`);
-      toast.success(res.data?.message || 'Receipt emailed to customer');
-    } catch {
-      toast.error('Failed to send receipt email');
     }
   };
 
@@ -79,51 +71,181 @@ export const ReceiptsList = () => {
     }
   };
 
-  const handleExportCSV = () => {
-    if (receipts.length === 0) {
-      toast.error('No receipt records to export');
-      return;
+  const columns: ColumnDef<any>[] = useMemo(() => [
+    {
+      accessorKey: 'receiptNo',
+      header: 'Receipt No',
+      cell: ({ row }) => <span className="font-mono font-bold text-foreground">{row.original.receiptNo}</span>
+    },
+    {
+      accessorKey: 'date',
+      header: () => <div className="text-center">Date</div>,
+      cell: ({ row }) => <div className="text-center">{new Date(row.original.date).toLocaleDateString()}</div>
+    },
+    {
+      accessorKey: 'businessPartner.name',
+      header: 'Customer',
+      cell: ({ row }) => <span className="font-semibold text-foreground">{row.original.businessPartner?.name || 'N/A'}</span>
+    },
+    {
+      accessorKey: 'paymentMethod',
+      header: 'Method',
+      cell: ({ row }) => <span className="text-xs font-semibold">{row.original.paymentMethod}</span>
+    },
+    {
+      accessorKey: 'account.name',
+      header: 'Account Ledger',
+      cell: ({ row }) => <span className="text-xs font-mono">{row.original.account?.name || 'N/A'}</span>
+    },
+    {
+      accessorKey: 'amount',
+      header: () => <div className="text-right">Amount</div>,
+      cell: ({ row }) => (
+        <div className="text-right">
+          <AmountText value={row.original.amount} />
+        </div>
+      )
+    },
+    {
+      accessorKey: 'status',
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ row }) => {
+        const s = row.original.status;
+        let style = 'bg-muted/10 text-muted-foreground';
+        if (s === 'COMPLETED') style = 'bg-green-500/10 text-green-500';
+        else if (s === 'PENDING') style = 'bg-amber-500/10 text-amber-500';
+        else if (s === 'VOID') style = 'bg-red-500/10 text-red-500';
+        
+        return (
+          <div className="text-center">
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${style}`}>
+              {s}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
+      id: 'actions',
+      header: () => <div className="text-right">Actions</div>,
+      cell: ({ row }) => {
+        const r = row.original;
+        return (
+          <div className="flex justify-end gap-2">
+            <Button
+              onClick={() => navigate(`/receipts/${r.id}`)}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1.5 hover:bg-accent/10 hover:text-accent hover:border-accent"
+              title="View Receipt"
+            >
+              <Eye className="w-3.5 h-3.5" /> <span className="hidden xl:inline">View</span>
+            </Button>
+            <Button
+              onClick={() => navigate(`/receipts/${r.id}/edit`)}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1.5 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500"
+              title="Edit Receipt"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> <span className="hidden xl:inline">Edit</span>
+            </Button>
+            <Button
+              onClick={() => handlePrint(r.id)}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1.5 hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500"
+              title="Print PDF"
+            >
+              <Printer className="w-3.5 h-3.5" /> <span className="hidden xl:inline">Print</span>
+            </Button>
+            {r.status === 'COMPLETED' && (
+              <Button
+                onClick={() => handleVoid(r.id)}
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1.5 text-red-600 hover:bg-red-500/10 hover:border-red-500"
+                title="Void Receipt"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> <span className="hidden xl:inline">Void</span>
+              </Button>
+            )}
+          </div>
+        );
+      }
     }
-    const headers = ['Receipt No', 'Date', 'Customer', 'Payment Method', 'Account', 'Amount', 'Status'];
-    const rows = receipts.map((r: any) => [
-      r.receiptNo,
-      new Date(r.date).toLocaleDateString(),
-      r.businessPartner?.name || 'N/A',
-      r.paymentMethod,
-      r.account?.name || 'N/A',
-      r.amount,
-      r.status
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8,"
-      + [headers.join(','), ...rows.map((e: any) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `receipts_export_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Receipts exported to CSV successfully');
-  };
+  ], [navigate]);
+
+  const toolbarExtras = (
+    <div className="flex flex-1 flex-wrap items-center gap-3">
+      <div className="relative max-w-sm w-[280px]">
+        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="Search receipt no or customer..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPagination(prev => ({ ...prev, pageIndex: 0 }));
+          }}
+          className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent"
+        />
+      </div>
+
+      <select
+        value={statusFilter}
+        onChange={(e) => {
+          setStatusFilter(e.target.value);
+          setPagination(prev => ({ ...prev, pageIndex: 0 }));
+        }}
+        className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
+      >
+        <option value="">All Statuses</option>
+        <option value="COMPLETED">Completed</option>
+        <option value="VOID">Voided</option>
+      </select>
+
+      <select
+        value={methodFilter}
+        onChange={(e) => {
+          setMethodFilter(e.target.value);
+          setPagination(prev => ({ ...prev, pageIndex: 0 }));
+        }}
+        className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
+      >
+        <option value="">All Methods</option>
+        <option value="CASH">Cash</option>
+        <option value="BANK_TRANSFER">Bank Transfer</option>
+        <option value="UPI">UPI</option>
+        <option value="CHEQUE">Cheque</option>
+        <option value="CREDIT_CARD">Credit Card</option>
+      </select>
+
+      <Button onClick={() => fetchReceipts()} variant="outline" size="sm" className="h-9 w-9 p-0 rounded-xl" title="Refresh">
+        <RefreshCw className="w-4 h-4" />
+      </Button>
+
+      <div className="ml-auto flex items-center">
+        <Button
+          onClick={() => navigate('/receipts/new')}
+          className="flex items-center gap-2 font-bold px-5 h-9 rounded-xl"
+          variant="primary"
+        >
+          <Plus className="w-4 h-4" /> New Receipt
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <PageContainer maxWidth="7xl">
       <PageHeader
         title="Payment Receipts"
         description="View and manage money collections and invoice allocation audits."
-        primaryAction={
-          <Button
-            onClick={() => navigate('/receipts/new')}
-            className="flex items-center gap-2 font-bold px-5"
-            variant="primary"
-          >
-            <Plus className="w-4 h-4" /> New Receipt
-          </Button>
-        }
       />
 
       {/* Quick Stats Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4 shadow-sm">
           <div className="p-3.5 bg-emerald-500/10 rounded-xl text-emerald-500"><DollarSign className="w-6 h-6" /></div>
           <div>
@@ -144,63 +266,9 @@ export const ReceiptsList = () => {
         </div>
       </div>
 
-      {/* Control Actions Row */}
-      <div className="bg-surface border border-border rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm">
-        <div className="flex flex-1 w-full md:w-auto items-center gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search by receipt no, customer, or reference..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent"
-            />
-          </div>
-          <Button onClick={() => fetchReceipts()} variant="outline" size="sm" className="h-9 w-9 p-0">
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-        </div>
-
-        <div className="flex w-full md:w-auto items-center gap-3 justify-end">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
-          >
-            <option value="">All Statuses</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="VOID">Voided</option>
-          </select>
-
-          <select
-            value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value)}
-            className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
-          >
-            <option value="">All Methods</option>
-            <option value="CASH">Cash</option>
-            <option value="BANK_TRANSFER">Bank Transfer</option>
-            <option value="UPI">UPI</option>
-            <option value="CHEQUE">Cheque</option>
-            <option value="CREDIT_CARD">Credit Card</option>
-          </select>
-
-          <Button
-            onClick={handleExportCSV}
-            variant="outline"
-            size="sm"
-            className="h-9 font-semibold flex items-center gap-2"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Export CSV
-          </Button>
-        </div>
-      </div>
-
-      {/* Receipts Table */}
-      {loading ? (
+      {loading && receipts.length === 0 ? (
         <LoadingState variant="table" />
-      ) : receipts.length === 0 ? (
+      ) : receipts.length === 0 && !search && !statusFilter && !methodFilter ? (
         <EmptyState
           icon={<Receipt className="w-8 h-8 text-muted-foreground" />}
           title="No receipts found"
@@ -209,121 +277,20 @@ export const ReceiptsList = () => {
           onActionClick={() => navigate('/receipts/new')}
         />
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/10 border-b border-border">
-                <TableHead className="font-semibold py-4 px-6">Receipt No</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Date</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Customer</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Method</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Account Ledger</TableHead>
-                <TableHead className="font-semibold py-4 px-6 text-right">Amount</TableHead>
-                <TableHead className="font-semibold py-4 px-6 text-center">Status</TableHead>
-                <TableHead className="font-semibold py-4 px-6 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {receipts.map((r: any) => (
-                <TableRow key={r.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                  <TableCell className="py-4 px-6 font-mono font-bold text-foreground">{r.receiptNo}</TableCell>
-                  <TableCell className="py-4 px-6">{new Date(r.date).toLocaleDateString()}</TableCell>
-                  <TableCell className="py-4 px-6 font-semibold text-foreground">{r.businessPartner?.name || 'N/A'}</TableCell>
-                  <TableCell className="py-4 px-6 text-xs font-semibold">{r.paymentMethod}</TableCell>
-                  <TableCell className="py-4 px-6 text-xs font-mono">{r.account?.name || 'N/A'}</TableCell>
-                  <TableCell className="py-4 px-6 text-right">
-                    <AmountText value={r.amount} />
-                  </TableCell>
-                  <TableCell className="py-4 px-6 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${r.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                      }`}>
-                      {r.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-4 px-6 text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <Button
-                        onClick={() => navigate(`/receipts/${r.id}`)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 hover:bg-blue-500/10 rounded-lg transition-colors cursor-pointer"
-                        title="View Receipt"
-                      >
-                        <Eye className="w-10.5 h-10.5 text-blue-500" />
-                      </Button>
-                      <Button
-                        onClick={() => navigate(`/receipts/${r.id}/edit`)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 hover:bg-amber-500/10 rounded-lg transition-colors cursor-pointer"
-                        title="Edit Receipt"
-                      >
-                        <Edit3 className="w-4.5 h-4.5 text-amber-500" />
-                      </Button>
-                      <Button
-                        onClick={() => handlePrint(r.id)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 hover:bg-purple-500/10 rounded-lg transition-colors cursor-pointer"
-                        title="Print PDF"
-                      >
-                        <Printer className="w-4.5 h-4.5 text-purple-500" />
-                      </Button>
-                      <Button
-                        onClick={() => handleEmail(r.id)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 hover:bg-teal-500/10 rounded-lg transition-colors cursor-pointer"
-                        title="Email Receipt"
-                      >
-                        <Mail className="w-4.5 h-4.5 text-teal-500" />
-                      </Button>
-                      {r.status === 'COMPLETED' && (
-                        <Button
-                          onClick={() => handleVoid(r.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                          title="Void Receipt"
-                        >
-                          <Trash2 className="w-4.5 h-4.5 text-red-500" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
-
-      {/* Pagination Row */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-6">
-          <p className="text-xs text-muted-foreground">Showing page {page} of {totalPages}</p>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              variant="outline"
-              size="sm"
-              className="h-9 w-9 p-0"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              variant="outline"
-              size="sm"
-              className="h-9 w-9 p-0"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
+        <DataTable
+          columns={columns}
+          data={receipts}
+          toolbarExtras={toolbarExtras}
+          exportFilename="Receipts_List"
+          manualPagination={true}
+          pageCount={totalPages}
+          pagination={pagination}
+          onPaginationChange={setPagination}
+          totalItems={totalItems}
+          emptyText="No receipts match the selected filters."
+        />
       )}
     </PageContainer>
   );
 };
+
