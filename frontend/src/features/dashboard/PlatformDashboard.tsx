@@ -7,6 +7,7 @@ import {
   RefreshCw, Layers, LifeBuoy, Bell, Server, Trash2, Edit2
 } from 'lucide-react';
 import api from '@/services/api';
+import { DeleteDialog } from '@/components/ui';
 
 // Format Helpers
 const formatCurrency = (val: number) => {
@@ -39,6 +40,8 @@ export function PlatformDashboard() {
 
   // Search Filter
   const [searchQuery, setSearchQuery] = useState('');
+  const [companyToDelete, setCompanyToDelete] = useState<any>(null);
+  const [userToDelete, setUserToDelete] = useState<any>(null);
 
   // Plan creation form
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
@@ -131,15 +134,18 @@ export function PlatformDashboard() {
     }
   };
 
-  const handleDeleteCompany = async (companyId: string) => {
-    if (!window.confirm('WARNING: This will permanently delete the company and ALL associated data (invoices, customers, inventory). Are you sure?')) return;
+  const handleDeleteCompany = (companyId: string) => {
+    const company = companies.find(c => c.id === companyId);
+    setCompanyToDelete(company || { id: companyId });
+  };
+
+  const confirmDeleteCompany = async () => {
+    if (!companyToDelete) return;
     try {
-      await api.delete(`/platform/companies/${companyId}`);
+      await api.delete(`/platform/companies/${companyToDelete.id}`);
       toast.success('Company deleted successfully');
-      setCompanies(prev => prev.filter(c => c.id !== companyId));
-    } catch {
-      toast.error('Failed to delete company');
-    }
+      setCompanies(prev => prev.filter(c => c.id !== companyToDelete.id));
+    } catch { toast.error('Failed to delete company'); } finally { setCompanyToDelete(null); }
   };
 
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -161,15 +167,18 @@ export function PlatformDashboard() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to delete this global user account?')) return;
+  const handleDeleteUser = (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    setUserToDelete(user || { id: userId });
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
     try {
-      await api.delete(`/platform/users/${userId}`);
+      await api.delete(`/platform/users/${userToDelete.id}`);
       toast.success('User deleted successfully');
-      setUsers(prev => prev.filter(u => u.id !== userId));
-    } catch (e: any) {
-        toast.error(e.response?.data?.message || 'Failed to load data');
-    }
+      setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to load data'); } finally { setUserToDelete(null); }
   };
 
   const handleCreatePlan = async (e: React.FormEvent) => {
@@ -951,8 +960,12 @@ export function PlatformDashboard() {
   };
 
   return (
+    <>
     <div className="space-y-6 max-w-7xl mx-auto">
       {renderContent()}
     </div>
+      <DeleteDialog isOpen={!!companyToDelete} onClose={() => setCompanyToDelete(null)} onConfirm={confirmDeleteCompany} entityName="Company" entityId={companyToDelete?.name} warningText="WARNING: This will permanently delete the company and ALL associated data (invoices, customers, inventory). This cannot be undone." />
+      <DeleteDialog isOpen={!!userToDelete} onClose={() => setUserToDelete(null)} onConfirm={confirmDeleteUser} entityName="User Account" entityId={userToDelete?.email} warningText="This action cannot be undone." />
+    </>
   );
 }

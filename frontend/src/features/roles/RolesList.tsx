@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Shield, Plus, Edit2, Trash2, Search, Loader2, Check } from 'lucide-react';
 import apiClient from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { DeleteDialog } from '../../components/ui';
 
 const roleSchema = z.object({
   name: z.string().min(2, 'Role name must be at least 2 characters'),
@@ -166,9 +167,17 @@ export const RolesList = () => {
     mutation.mutate(dataToSend);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this custom role? This will revoke access from all mapped users.')) return;
-    deleteMutation.mutate(id);
+  const [roleToDelete, setRoleToDelete] = useState<any>(null);
+
+  const handleDelete = (id: string) => {
+    const role = roles.find(r => r.id === id);
+    setRoleToDelete(role || { id });
+  };
+
+  const confirmDelete = async () => {
+    if (!roleToDelete) return;
+    deleteMutation.mutate(roleToDelete.id);
+    setRoleToDelete(null);
   };
 
   const isSubmitting = mutation.isPending;
@@ -178,6 +187,7 @@ export const RolesList = () => {
   );
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -421,5 +431,7 @@ export const RolesList = () => {
         </div>
       )}
     </div>
+      <DeleteDialog isOpen={!!roleToDelete} onClose={() => setRoleToDelete(null)} onConfirm={confirmDelete} entityName="Role" entityId={roleToDelete?.name} warningText="This will revoke access from all mapped users." />
+    </>
   );
 };

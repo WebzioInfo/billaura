@@ -13,6 +13,7 @@ import apiClient from '@/services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { DeleteDialog, ConfirmDialog } from '@/components/ui';
 import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
 
 interface Vendor {
@@ -102,6 +103,8 @@ export const BillsList = () => {
   const [paymentBill, setPaymentBill] = useState<Purchase | null>(null);
   const [journalEntries, setJournalEntries] = useState<any[]>([]);
   const [isLoadingJournals, setIsLoadingJournals] = useState(false);
+  const [billToCancel, setBillToCancel] = useState<Purchase | null>(null);
+  const [billToDelete, setBillToDelete] = useState<Purchase | null>(null);
 
   // Payment Form State
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
@@ -376,6 +379,7 @@ export const BillsList = () => {
   };
 
   return (
+    <>
     <PageContainer maxWidth="7xl">
       <div className="space-y-6 pb-12">
         {/* Header */}
@@ -739,28 +743,20 @@ export const BillsList = () => {
                               className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                             />
                             <button
-                              onClick={() => {
-                                if (window.confirm('Are you sure you want to cancel this bill? This will reverse ledger accounts and stock changes.')) {
-                                  cancelMutation.mutate(bill.id);
-                                }
-                              }}
+                              onClick={() => setBillToCancel(bill)}
                               disabled={bill.status === 'PAID'}
-                              className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-20 cursor-pointer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-orange-300 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10 rounded-lg transition-colors disabled:opacity-20"
                               title="Cancel & Reverse Entries"
                             >
-                              <X className="w-4 h-4" />
+                              <X className="w-3.5 h-3.5" /> Cancel
                             </button>
                             <button
-                              onClick={() => {
-                                if (window.confirm('Delete this purchase bill permanently? This action is irreversible.')) {
-                                  deleteMutation.mutate(bill.id);
-                                }
-                              }}
+                              onClick={() => setBillToDelete(bill)}
                               disabled={bill.status === 'PAID'}
-                              className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-20 cursor-pointer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-20"
                               title="Delete Bill"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" /> Delete
                             </button>
                           </div>
                         </TableCell>
@@ -1148,5 +1144,8 @@ export const BillsList = () => {
         </div>
       )}
     </PageContainer>
+      <ConfirmDialog isOpen={!!billToCancel} onClose={() => setBillToCancel(null)} onConfirm={async () => { cancelMutation.mutate(billToCancel!.id); setBillToCancel(null); }} title="Cancel Purchase Bill" message={<span>Cancel bill <strong>{billToCancel?.purchaseNo}</strong>? This will reverse ledger accounts and stock changes.</span>} confirmText="Cancel Bill" variant="danger" />
+      <DeleteDialog isOpen={!!billToDelete} onClose={() => setBillToDelete(null)} onConfirm={async () => { deleteMutation.mutate(billToDelete!.id); setBillToDelete(null); }} entityName="Purchase Bill" entityId={billToDelete?.purchaseNo} warningText="This action is irreversible." />
+    </>
   );
 };

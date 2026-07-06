@@ -13,6 +13,8 @@ import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
 import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { LedgerSearchSelect } from '../../components/ui/LedgerSearchSelect';
+import { DeleteDialog, ConfirmDialog } from '../../components/ui';
 import { useApiList } from '../../hooks/useApiList';
 
 // --- SCHEMAS ---
@@ -118,8 +120,7 @@ export const PurchasesDashboard = () => {
   
   // Derive active tab from URL path
   const path = location.pathname;
-  let activeTab: 'vendors' | 'purchases' | 'payments' = 'purchases';
-  if (path.includes('/vendors')) activeTab = 'vendors';
+  let activeTab: 'purchases' | 'payments' = 'purchases';
   if (path.includes('/vendor-payments')) activeTab = 'payments';
   
   const setActiveTab = (tab: string) => navigate(tab === 'payments' ? '/vendor-payments' : `/${tab}`);
@@ -138,6 +139,9 @@ export const PurchasesDashboard = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [vendorToDelete, setVendorToDelete] = useState<Vendor | null>(null);
+  const [purchaseToDelete, setPurchaseToDelete] = useState<Purchase | null>(null);
+  const [paymentToRevert, setPaymentToRevert] = useState<Payment | null>(null);
 
   const { data: meData } = useQuery<any>({
     queryKey: ['auth', 'me'],
@@ -213,8 +217,8 @@ export const PurchasesDashboard = () => {
                 }
               }} 
             />
-            <button onClick={() => handleDeletePurchase(p.id)} disabled={p.status === 'PAID'} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30">
-              <Trash2 className="w-4 h-4" />
+            <button onClick={() => setPurchaseToDelete(p)} disabled={p.status === 'PAID'} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:border-red-500/40 rounded-lg transition-colors disabled:opacity-30 disabled:pointer-events-none">
+              <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
           </div>
         );
@@ -282,8 +286,8 @@ export const PurchasesDashboard = () => {
                 watermark: 'PAID'
               }} 
             />
-            <button onClick={() => handleDeletePayment(pay.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer">
-              <Trash2 className="w-4 h-4" />
+            <button onClick={() => setPaymentToRevert(pay)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:border-red-500/40 rounded-lg transition-colors">
+              <Trash2 className="w-3.5 h-3.5" /> Revert
             </button>
           </div>
         );
@@ -373,15 +377,13 @@ export const PurchasesDashboard = () => {
     }
   };
 
-  const handleDeleteVendor = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this vendor?')) return;
+  const confirmDeleteVendor = async () => {
+    if (!vendorToDelete) return;
     try {
-      await api.delete(`/vendors/${id}`);
+      await api.delete(`/vendors/${vendorToDelete.id}`);
       toast.success('Vendor deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
-    } catch {
-      toast.error('Deletion failed');
-    }
+    } catch { toast.error('Deletion failed'); } finally { setVendorToDelete(null); }
   };
 
   const handlePurchaseProductChange = (index: number, productId: string) => {
@@ -420,26 +422,22 @@ export const PurchasesDashboard = () => {
     }
   };
 
-  const handleDeletePurchase = async (id: string) => {
-    if (!window.confirm('Delete this purchase bill? Stock levels and vendor payable balances will be reverted.')) return;
+  const confirmDeletePurchase = async () => {
+    if (!purchaseToDelete) return;
     try {
-      await api.delete(`/purchases/${id}`);
+      await api.delete(`/purchases/${purchaseToDelete.id}`);
       toast.success('Purchase bill removed');
       queryClient.invalidateQueries({ queryKey: ['purchases'] });
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Deletion failed');
-    }
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Deletion failed'); } finally { setPurchaseToDelete(null); }
   };
 
-  const handleDeletePayment = async (id: string) => {
-    if (!window.confirm('Revert this payout transaction?')) return;
+  const confirmRevertPayment = async () => {
+    if (!paymentToRevert) return;
     try {
-      await api.delete(`/purchases/payments/${id}`);
+      await api.delete(`/purchases/payments/${paymentToRevert.id}`);
       toast.success('Payout deleted');
       queryClient.invalidateQueries({ queryKey: ['payments'] });
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Reversion failed');
-    }
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Reversion failed'); } finally { setPaymentToRevert(null); }
   };
 
 
@@ -451,30 +449,21 @@ export const PurchasesDashboard = () => {
   const totalPayable = vendors.reduce((sum, v) => sum + Number(v.payableBalance || 0), 0);
 
   return (
+    <>
     <div className="space-y-6 text-left">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <ShoppingCart className="w-6 h-6 text-accent" />
-            {activeTab === 'vendors' ? 'Vendor Catalog & Registry' : 'Procurement & Purchase Bills'}
+            Procurement & Purchase Bills
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {activeTab === 'vendors'
-              ? 'Manage supplier information, credit accounts, payable balances, and tax profiles.'
-              : 'Log vendor purchases, receive inventory stock points, and track outgoing cash/bank payments.'}
+            Log vendor purchases, receive inventory stock points, and track outgoing cash/bank payments.
           </p>
         </div>
         <div className="flex gap-2">
-          {activeTab === 'vendors' ? (
-            <button
-              onClick={handleOpenAddVendorModal}
-              className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Register Vendor
-            </button>
-          ) : activeTab === 'purchases' ? (
+          {activeTab === 'purchases' ? (
             <button
               onClick={() => { purchaseForm.reset(); setIsPurchaseModalOpen(true); }}
               className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
@@ -495,39 +484,9 @@ export const PurchasesDashboard = () => {
       </div>
 
       {/* KPI Cards Row */}
-      {activeTab === 'vendors' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase">Total Payables</span>
-              <h3 className="text-2xl font-black text-foreground">{formatCurrency(totalPayable)}</h3>
-            </div>
-            <div className="p-3 bg-accent/10 text-accent rounded-xl">
-              <DollarSign className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase">Active Vendors</span>
-              <h3 className="text-2xl font-black text-foreground">{vendors.length}</h3>
-            </div>
-            <div className="p-3 bg-accent/10 text-accent rounded-xl">
-              <ShoppingCart className="w-5 h-5" />
-            </div>
-          </div>
-        </div>
-      )}
  
       {/* Tabs Row */}
       <div className="flex border-b border-border">
-        <button
-          onClick={() => { setActiveTab('vendors'); setSearchQuery(''); }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'vendors' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Vendor Directory
-        </button>
         <button
           onClick={() => { setActiveTab('purchases'); setSearchQuery(''); }}
           className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
@@ -565,51 +524,6 @@ export const PurchasesDashboard = () => {
             <div key={i} className="glass-panel p-6 rounded-2xl border border-border h-32 animate-pulse" />
           ))}
         </div>
-      ) : activeTab === 'vendors' ? (
-        vendors.length === 0 ? (
-          <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
-            <h3 className="font-semibold text-lg">No Vendors Registered</h3>
-            <button onClick={handleOpenAddVendorModal} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-xs font-semibold">
-              Register First Vendor
-            </button>
-          </div>
-        ) : (
-          <div className="bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-background bg-opacity-35 border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                  <th className="py-4 px-6">Vendor Code</th>
-                  <th className="py-4 px-6">Name</th>
-                  <th className="py-4 px-6">GSTIN</th>
-                  <th className="py-4 px-6">Contact details</th>
-                  <th className="py-4 px-6 text-right">Payable Balance</th>
-                  <th className="py-4 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vendors.filter(v => v.name.toLowerCase().includes(searchQuery.toLowerCase()) || v.vendorCode.toLowerCase().includes(searchQuery.toLowerCase())).map((v) => (
-                  <tr key={v.id} className="border-b border-border/50 hover:bg-background/20 transition-colors">
-                    <td className="py-4 px-6 font-semibold text-foreground">{v.vendorCode}</td>
-                    <td className="py-4 px-6 font-medium text-foreground">{v.name}</td>
-                    <td className="py-4 px-6 text-xs text-foreground font-mono">{v.gstin || '-'}</td>
-                    <td className="py-4 px-6 text-xs text-foreground">{v.contactDetails || '-'}</td>
-                    <td className="py-4 px-6 text-right font-bold text-foreground">
-                      {formatCurrency(Number(v.payableBalance || 0))}
-                    </td>
-                    <td className="py-4 px-6 text-right space-x-1.5">
-                      <button onClick={() => handleOpenEditVendorModal(v)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer inline-flex">
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => handleDeleteVendor(v.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer inline-flex">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
       ) : activeTab === 'purchases' ? (
         purchases.length === 0 ? (
           <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
@@ -937,5 +851,10 @@ export const PurchasesDashboard = () => {
         </div>
       )}
     </div>
+
+      <DeleteDialog isOpen={!!vendorToDelete} onClose={() => setVendorToDelete(null)} onConfirm={confirmDeleteVendor} entityName="Vendor" entityId={vendorToDelete?.name} warningText="This action cannot be undone." />
+      <DeleteDialog isOpen={!!purchaseToDelete} onClose={() => setPurchaseToDelete(null)} onConfirm={confirmDeletePurchase} entityName="Purchase Bill" entityId={purchaseToDelete?.purchaseNo} warningText="Stock levels and vendor payable balances will be reverted. This action cannot be undone." />
+      <ConfirmDialog isOpen={!!paymentToRevert} onClose={() => setPaymentToRevert(null)} onConfirm={confirmRevertPayment} title="Revert Vendor Payout" message={<span>Are you sure you want to revert payout <strong>{paymentToRevert?.paymentNo}</strong>?</span>} confirmText="Revert" variant="danger" />
+    </>
   );
 };

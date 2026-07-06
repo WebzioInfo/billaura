@@ -9,6 +9,7 @@ import {
   Phone, Mail, Calendar, Loader2, TrendingUp, Check, Briefcase, Eye 
 } from 'lucide-react';
 import api from '../../services/api';
+import { DeleteDialog } from '../../components/ui';
 import { CustomerDetailModal } from './CustomerDetailModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../hooks/useApiList';
@@ -146,6 +147,7 @@ export const CrmDashboard = () => {
   // Ledger/Ageing Modal
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<any>(null);
 
   // Forms hooks
   const customerForm = useForm<CustomerFormValues>({
@@ -318,16 +320,21 @@ export const CrmDashboard = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return;
+  const handleDelete = (id: string) => {
+    const items = activeTab === 'customers' ? customers : activeTab === 'leads' ? leads : activeTab === 'contacts' ? contacts : activities;
+    const found = (items as any[]).find(i => i.id === id);
+    setItemToDelete(found || { id, _activeTab: activeTab });
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
     try {
-      const endpoint = activeTab === 'customers' ? '/customers' : activeTab === 'leads' ? '/crm/leads' : activeTab === 'contacts' ? '/crm/contacts' : '/crm/activities';
-      await api.delete(`${endpoint}/${id}`);
+      const tab = itemToDelete._activeTab || activeTab;
+      const endpoint = tab === 'customers' ? '/customers' : tab === 'leads' ? '/crm/leads' : tab === 'contacts' ? '/crm/contacts' : '/crm/activities';
+      await api.delete(`${endpoint}/${itemToDelete.id}`);
       toast.success('Item deleted successfully');
-      queryClient.invalidateQueries({ queryKey: [activeTab] });
-    } catch {
-      toast.error('Deletion failed');
-    }
+      queryClient.invalidateQueries({ queryKey: [tab] });
+    } catch { toast.error('Deletion failed'); } finally { setItemToDelete(null); }
   };
 
   const toggleActivityCompletion = async (act: Activity) => {
@@ -349,6 +356,7 @@ export const CrmDashboard = () => {
   const totalPipelineValue = leads.reduce((sum, l) => sum + Number(l.value || 0), 0);
 
   return (
+    <>
     <div className="space-y-6 text-left">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -948,5 +956,7 @@ export const CrmDashboard = () => {
         customer={selectedCustomer}
       />
     </div>
+      <DeleteDialog isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={confirmDelete} entityName="Item" entityId={itemToDelete?.name || itemToDelete?.id} warningText="This action cannot be undone." />
+    </>
   );
 };

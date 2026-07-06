@@ -30,6 +30,18 @@ export class VendorsController {
     return { success: true, data: { items } };
   }
 
+  @Get(":id")
+  async findOne(@Param("id") id: string) {
+    const companyId = CompanyContext.getCompanyId() as string;
+    const item = await this.prisma.businessPartner.findFirst({
+      where: { id, companyId, deletedAt: null, bpType: "VENDOR" },
+    });
+    if (!item) {
+      throw new Error("Vendor not found");
+    }
+    return { success: true, data: item };
+  }
+
   @Post()
   async create(@Body() data: any) {
     const companyId = CompanyContext.getCompanyId() as string;

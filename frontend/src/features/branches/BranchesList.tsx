@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import apiClient from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { DeleteDialog } from '../../components/ui';
 
 const branchSchema = z.object({
   name: z.string().min(2, 'Branch name must be at least 2 characters'),
@@ -132,9 +133,17 @@ export const BranchesList = () => {
     mutation.mutate(values);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this branch?')) return;
-    deleteMutation.mutate(id);
+  const [branchToDelete, setBranchToDelete] = useState<any>(null);
+
+  const handleDelete = (id: string) => {
+    const branch = branches.find(b => b.id === id);
+    setBranchToDelete(branch || { id });
+  };
+
+  const confirmDelete = async () => {
+    if (!branchToDelete) return;
+    deleteMutation.mutate(branchToDelete.id);
+    setBranchToDelete(null);
   };
 
   const isSubmitting = mutation.isPending;
@@ -146,6 +155,7 @@ export const BranchesList = () => {
   );
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -425,5 +435,7 @@ export const BranchesList = () => {
         </div>
       )}
     </div>
+      <DeleteDialog isOpen={!!branchToDelete} onClose={() => setBranchToDelete(null)} onConfirm={confirmDelete} entityName="Branch" entityId={branchToDelete?.name} warningText="This action cannot be undone." />
+    </>
   );
 };

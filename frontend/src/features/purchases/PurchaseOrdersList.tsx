@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
+import { DeleteDialog } from '@/components/ui';
 import { toast } from 'sonner';
 
 export const PurchaseOrdersList = () => {
@@ -29,6 +30,7 @@ export const PurchaseOrdersList = () => {
   const [amountMax, setAmountMax] = useState('');
 
   const [showFilters, setShowFilters] = useState(false);
+  const [poToDelete, setPoToDelete] = useState<any>(null);
 
   // Fetch Master Data
   const { data: vendors = [] } = useQuery<any[]>({
@@ -166,6 +168,7 @@ export const PurchaseOrdersList = () => {
   };
 
   return (
+    <>
     <PageContainer maxWidth="7xl">
       {/* Header */}
       <PageHeader
@@ -415,15 +418,11 @@ export const PurchaseOrdersList = () => {
                         )}
                         {item.status === 'DRAFT' && (
                           <button 
-                            onClick={() => {
-                              if (window.confirm('Delete this draft Purchase Order?')) {
-                                deleteMutation.mutate(item.id);
-                              }
-                            }} 
+                            onClick={() => setPoToDelete(item)}
                             title="Delete Draft"
-                            className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
                           </button>
                         )}
                       </div>
@@ -436,5 +435,7 @@ export const PurchaseOrdersList = () => {
         </Card>
       )}
     </PageContainer>
+      <DeleteDialog isOpen={!!poToDelete} onClose={() => setPoToDelete(null)} onConfirm={async () => { deleteMutation.mutate(poToDelete.id); setPoToDelete(null); }} entityName="Purchase Order" entityId={poToDelete?.orderNo} warningText="This action cannot be undone." />
+    </>
   );
 };

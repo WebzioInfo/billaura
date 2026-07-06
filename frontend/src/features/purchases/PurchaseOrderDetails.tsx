@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ui';
 
 export const PurchaseOrderDetails = () => {
   const { id } = useParams();
@@ -21,6 +22,7 @@ export const PurchaseOrderDetails = () => {
   const [emailing, setEmailing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [grnModalOpen, setGrnModalOpen] = useState(false);
+  const [showCancelPoDialog, setShowCancelPoDialog] = useState(false);
 
   // GRN Modal Fields
   const [grnReceiptNo, setGrnReceiptNo] = useState('');
@@ -152,7 +154,10 @@ export const PurchaseOrderDetails = () => {
   };
 
   const handleCancelPo = async () => {
-    if (!window.confirm('Are you sure you want to cancel this Purchase Order?')) return;
+    setShowCancelPoDialog(true);
+  };
+
+  const confirmCancelPo = async () => {
     setCancelling(true);
     try {
       await apiClient.patch(`/purchase-orders/${po.id}`, { status: 'CANCELLED' });
@@ -162,6 +167,7 @@ export const PurchaseOrderDetails = () => {
       toast.error(err.response?.data?.message || 'Failed to cancel Purchase Order');
     } finally {
       setCancelling(false);
+      setShowCancelPoDialog(false);
     }
   };
 
@@ -185,6 +191,7 @@ export const PurchaseOrderDetails = () => {
   const taxLabel = po.taxMode === 'IGST' ? 'IGST' : po.taxMode === 'CGST_SGST' ? 'CGST/SGST' : 'Exempt';
 
   return (
+    <>
     <PageContainer maxWidth="7xl">
       {/* Action Toolbar Header - Hidden during print */}
       <div className="print:hidden">
@@ -515,5 +522,15 @@ export const PurchaseOrderDetails = () => {
         </div>
       )}
     </PageContainer>
+      <ConfirmDialog
+        isOpen={showCancelPoDialog}
+        onClose={() => setShowCancelPoDialog(false)}
+        onConfirm={confirmCancelPo}
+        title="Cancel Purchase Order"
+        message="Are you sure you want to cancel this Purchase Order? This action cannot be undone."
+        confirmText="Cancel PO"
+        variant="danger"
+      />
+    </>
   );
 };

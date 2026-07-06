@@ -13,6 +13,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../hooks/useApiList';
 import { LedgerLookup } from '../../components/ui/LedgerLookup';
+import { DeleteDialog } from '../../components/ui';
 
 // --- SCHEMAS ---
 const accountSchema = z.object({
@@ -342,15 +343,22 @@ export const ChartOfAccounts = () => {
     }
   };
 
-  const handleDeleteAccount = async (id: string) => {
-    if (!window.confirm('Delete this account from Chart of Accounts?')) return;
+  const [accountToDelete, setAccountToDelete] = useState<any>(null);
+
+  const handleDeleteAccount = (id: string) => {
+    const account = accounts.find((a: any) => a.id === id);
+    setAccountToDelete(account || { id });
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!accountToDelete) return;
     try {
-      await api.delete(`/accounts/${id}`);
+      await api.delete(`/accounts/${accountToDelete.id}`);
       toast.success('Account deleted');
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Deletion failed');
-    }
+    } finally { setAccountToDelete(null); }
   };
 
 
@@ -359,6 +367,7 @@ export const ChartOfAccounts = () => {
   const totalCredit = watchedLines.reduce((s, l) => s + Number(l.credit || 0), 0);
 
   return (
+    <>
     <div className="space-y-6 text-left p-6 max-w-7xl mx-auto">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -839,5 +848,7 @@ export const ChartOfAccounts = () => {
         </div>
       )}
     </div>
+      <DeleteDialog isOpen={!!accountToDelete} onClose={() => setAccountToDelete(null)} onConfirm={confirmDeleteAccount} entityName="Account" entityId={accountToDelete?.name} warningText="This action cannot be undone." />
+    </>
   );
 };

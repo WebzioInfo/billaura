@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageContainer } from '@/components/ui/LayoutComponents';
+import { ConfirmDialog } from '@/components/ui';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -27,6 +28,7 @@ export const InvoiceDetails = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const updateTabTitle = useWorkspaceStore(state => state.updateTabTitle);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -132,9 +134,7 @@ export const InvoiceDetails = () => {
   };
 
   const handleCancelInvoice = () => {
-    if (window.confirm('Are you sure you want to cancel this invoice? This will roll back accounting double entry ledgers and restore warehouse stock levels.')) {
-      cancelMutation.mutate();
-    }
+    setShowCancelDialog(true);
   };
 
   const handleRecordPaymentSubmit = (e: React.FormEvent) => {
@@ -244,6 +244,7 @@ export const InvoiceDetails = () => {
   }));
 
   return (
+    <>
     <PageContainer maxWidth="7xl">
       <div className="space-y-6">
         {/* Actions Header Bar - Hidden in printing */}
@@ -863,5 +864,16 @@ export const InvoiceDetails = () => {
         </div>
       )}
     </PageContainer>
+
+      <ConfirmDialog
+        isOpen={showCancelDialog}
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={async () => cancelMutation.mutate()}
+        title="Cancel Invoice"
+        message="Are you sure you want to cancel this invoice? This will roll back accounting double entry ledgers and restore warehouse stock levels."
+        confirmText="Cancel Invoice"
+        variant="danger"
+      />
+    </>
   );
 };

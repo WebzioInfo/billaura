@@ -7,6 +7,7 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { PageContainer, EmptyState, LoadingState, AmountText } from '@/components/ui';
+import { DeleteDialog } from '@/components/ui';
 import { DataTable } from '@/components/ui/data-table/DataTable';
 import { ColumnDef } from '@tanstack/react-table';
 import apiClient from '@/services/api';
@@ -23,6 +24,7 @@ export const ReceiptsList = () => {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [receiptToVoid, setReceiptToVoid] = useState<any>(null);
 
   const { data, isLoading: loading, refetch: fetchReceipts } = useQuery({
     queryKey: ['receipts', search, statusFilter, methodFilter, pagination.pageIndex, pagination.pageSize],
@@ -58,16 +60,16 @@ export const ReceiptsList = () => {
     }
   };
 
-  const handleVoid = async (id: string) => {
-    if (!window.confirm('Are you sure you want to VOID this receipt? This action reverses all ledger and customer balance changes.')) {
-      return;
-    }
+  const handleVoid = async () => {
+    if (!receiptToVoid) return;
     try {
-      await apiClient.delete(`/receipts/${id}`);
+      await apiClient.delete(`/receipts/${receiptToVoid.id}`);
       toast.success('Receipt voided and reversed successfully');
       fetchReceipts();
     } catch {
       toast.error('Failed to void receipt');
+    } finally {
+      setReceiptToVoid(null);
     }
   };
 
@@ -161,7 +163,7 @@ export const ReceiptsList = () => {
             </Button>
             {r.status === 'COMPLETED' && (
               <Button
-                onClick={() => handleVoid(r.id)}
+                onClick={() => setReceiptToVoid(r)}
                 variant="outline"
                 size="sm"
                 className="h-7 px-2 text-xs gap-1.5 text-red-600 hover:bg-red-500/10 hover:border-red-500"
@@ -238,6 +240,7 @@ export const ReceiptsList = () => {
   );
 
   return (
+    <>
     <PageContainer maxWidth="7xl">
       <PageHeader
         title="Payment Receipts"
@@ -291,6 +294,16 @@ export const ReceiptsList = () => {
         />
       )}
     </PageContainer>
+
+      <DeleteDialog
+        isOpen={!!receiptToVoid}
+        onClose={() => setReceiptToVoid(null)}
+        onConfirm={handleVoid}
+        entityName="Receipt"
+        entityId={receiptToVoid?.receiptNo}
+        warningText="This action reverses all ledger and customer balance changes."
+      />
+    </>
   );
 };
 

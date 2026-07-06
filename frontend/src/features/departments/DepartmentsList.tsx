@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { useQuery } from '@tanstack/react-query';
+import { DeleteDialog, ConfirmDialog } from '../../components/ui';
 
 // --- SCHEMAS ---
 const departmentSchema = z.object({
@@ -219,8 +220,16 @@ export const DepartmentsList = () => {
     }
   };
 
-  const handleRunPayroll = async (emp: Employee) => {
-    if (!window.confirm(`Disburse monthly salary payout of ${formatCurrency(Number(emp.basicSalary))} for ${emp.name}?`)) return;
+  const [payrollTarget, setPayrollTarget] = useState<any>(null);
+  const [itemToDelete, setItemToDelete] = useState<any>(null);
+
+  const handleRunPayroll = (emp: any) => {
+    setPayrollTarget(emp);
+  };
+
+  const confirmRunPayroll = async () => {
+    const emp = payrollTarget;
+    if (!emp) return;
     
     setIsSubmitting(true);
     try {
@@ -249,27 +258,32 @@ export const DepartmentsList = () => {
         ],
       });
 
-      toast.success(`Payslip generated. ${formatCurrency(Number(emp.basicSalary))} posted to ledger.`);
+    toast.success(`Payslip generated. ${formatCurrency(Number(emp.basicSalary))} posted to ledger.`);
     } catch {
       toast.error('Payroll run transaction error');
     } finally {
       setIsSubmitting(false);
+      setPayrollTarget(null);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this resource?')) return;
+  const handleDelete = (id: string) => {
+    const items: any[] = activeTab === 'employees' ? employees : activeTab === 'departments' ? departments : designations;
+    const found = items.find((i: any) => i.id === id);
+    setItemToDelete(found || { id, _tab: activeTab });
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
     try {
-      const endpoint = 
-        activeTab === 'employees' ? '/employees' :
-        activeTab === 'departments' ? '/departments' : '/designations';
-      
-      await api.delete(`${endpoint}/${id}`);
+      const tab = itemToDelete._tab || activeTab;
+      const endpoint = tab === 'employees' ? '/employees' : tab === 'departments' ? '/departments' : '/designations';
+      await api.delete(`${endpoint}/${itemToDelete.id}`);
       toast.success('Item deleted successfully');
       fetchData();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Deletion failed');
-    }
+    } finally { setItemToDelete(null); }
   };
 
   const formatCurrency = (val: number) => {
@@ -277,6 +291,7 @@ export const DepartmentsList = () => {
   };
 
   return (
+    <>
     <div className="space-y-6 text-left p-6 max-w-7xl mx-auto">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -679,5 +694,8 @@ export const DepartmentsList = () => {
         </div>
       )}
     </div>
+      <ConfirmDialog isOpen={!!payrollTarget} onClose={() => setPayrollTarget(null)} onConfirm={confirmRunPayroll} title="Run Payroll" message={<span>Disburse monthly salary payout of <strong>{formatCurrency(Number(payrollTarget?.basicSalary))}</strong> for <strong>{payrollTarget?.name}</strong>?</span>} confirmText="Disburse" variant="primary" />
+      <DeleteDialog isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={confirmDelete} entityName="Resource" entityId={itemToDelete?.name || itemToDelete?.id} warningText="This action cannot be undone." />
+    </>
   );
 };

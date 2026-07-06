@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,6 +15,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../hooks/useApiList';
 import { LedgerSearchSelect } from '../../components/ui/LedgerSearchSelect';
+import { DeleteDialog, ConfirmDialog } from '../../components/ui';
 
 // --- SCHEMAS ---
 const invoiceItemSchema = z.object({
@@ -134,6 +135,8 @@ export const SalesDashboard = () => {
   // Modal controls
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  const [paymentToRevert, setPaymentToRevert] = useState<Payment | null>(null);
 
   const { data: meData } = useQuery<any>({
     queryKey: ['auth', 'me'],
@@ -205,8 +208,8 @@ export const SalesDashboard = () => {
                 }
               }} 
             />
-            <button onClick={() => handleDeleteInvoice(inv.id)} disabled={inv.status === 'PAID'} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30">
-              <Trash2 className="w-4 h-4" />
+            <button onClick={() => setInvoiceToDelete(inv)} disabled={inv.status === 'PAID'} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:border-red-500/40 rounded-lg transition-colors disabled:opacity-30 disabled:pointer-events-none">
+              <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
           </div>
         );
@@ -274,8 +277,8 @@ export const SalesDashboard = () => {
                 watermark: 'PAID'
               }} 
             />
-            <button onClick={() => handleDeletePayment(pay.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer">
-              <Trash2 className="w-4 h-4" />
+            <button onClick={() => setPaymentToRevert(pay)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:border-red-500/40 rounded-lg transition-colors">
+              <Trash2 className="w-3.5 h-3.5" /> Revert
             </button>
           </div>
         );
@@ -354,27 +357,27 @@ export const SalesDashboard = () => {
     }
   };
 
-  const handleDeleteInvoice = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this invoice? This will revert customer statement ledgers and stock reductions.')) return;
+  const confirmDeleteInvoice = useCallback(async () => {
+    if (!invoiceToDelete) return;
     try {
-      await api.delete(`/sales/invoices/${id}`);
+      await api.delete(`/sales/invoices/${invoiceToDelete.id}`);
       toast.success('Invoice deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to delete invoice');
-    }
-  };
+    } finally { setInvoiceToDelete(null); }
+  }, [invoiceToDelete]);
 
-  const handleDeletePayment = async (id: string) => {
-    if (!window.confirm('Revert payment allocation? This will increase customer outstandings again.')) return;
+  const confirmRevertPayment = useCallback(async () => {
+    if (!paymentToRevert) return;
     try {
-      await api.delete(`/sales/payments/${id}`);
+      await api.delete(`/sales/payments/${paymentToRevert.id}`);
       toast.success('Payment reverted successfully');
       queryClient.invalidateQueries({ queryKey: ['payments'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to revert payment');
-    }
-  };
+    } finally { setPaymentToRevert(null); }
+  }, [paymentToRevert]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
@@ -388,6 +391,7 @@ export const SalesDashboard = () => {
   const formGrandTotal = formSubTotal + formTaxTotal;
 
   return (
+    <>
     <div className="space-y-6 text-left">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -722,5 +726,9 @@ export const SalesDashboard = () => {
         </div>
       )}
     </div>
+
+      <DeleteDialog isOpen={!!invoiceToDelete} onClose={() => setInvoiceToDelete(null)} onConfirm={confirmDeleteInvoice} entityName="Invoice" entityId={invoiceToDelete?.invoiceNo} warningText="This will revert customer statement ledgers and stock reductions. This action cannot be undone." />
+      <ConfirmDialog isOpen={!!paymentToRevert} onClose={() => setPaymentToRevert(null)} onConfirm={confirmRevertPayment} title="Revert Payment" message={<span>Revert payment <strong>{paymentToRevert?.paymentNo}</strong>? This will increase customer outstandings again.</span>} confirmText="Revert" variant="danger" />
+    </>
   );
 };

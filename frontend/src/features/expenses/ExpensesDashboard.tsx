@@ -8,6 +8,7 @@ import { Receipt, Search, Plus, Trash2, Printer, Edit2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/services/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { DeleteDialog } from '@/components/ui';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ExpenseReceiptPdf } from './components/ExpenseReceiptPdf';
@@ -40,7 +41,7 @@ export const ExpensesDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
+  const [expenseToDelete, setExpenseToDelete] = useState<any>(null);
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
     defaultValues: {
@@ -145,6 +146,7 @@ export const ExpensesDashboard = () => {
   );
 
   return (
+    <>
     <div className="p-8 max-w-[1600px] mx-auto space-y-6">
       <PageHeader
         title="Expense Claims"
@@ -245,8 +247,8 @@ export const ExpensesDashboard = () => {
                       <button onClick={() => handleEdit(exp)} className="p-2 text-gray-500 hover:text-blue-500 rounded-md hover:bg-gray-100 transition-colors">
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => { if(window.confirm('Delete this expense?')) deleteExpense.mutate(exp.id); }} className="p-2 text-gray-500 hover:text-red-500 rounded-md hover:bg-red-50 transition-colors">
-                        <Trash2 className="w-4 h-4" />
+                      <button onClick={() => setExpenseToDelete(exp)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
                       </button>
                     </TableCell>
                   </TableRow>
@@ -347,5 +349,7 @@ export const ExpensesDashboard = () => {
         </div>
       )}
     </div>
+      <DeleteDialog isOpen={!!expenseToDelete} onClose={() => setExpenseToDelete(null)} onConfirm={async () => { deleteExpense.mutate(expenseToDelete.id); setExpenseToDelete(null); }} entityName="Expense" entityId={expenseToDelete?.description} warningText="This action cannot be undone." />
+    </>
   );
 };
