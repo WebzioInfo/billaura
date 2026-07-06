@@ -33,7 +33,7 @@ export const PurchaseOrderDetails = () => {
     queryKey: ['purchase-order', id],
     queryFn: async () => {
       const res = await apiClient.get(`/purchase-orders/${id}`);
-      return res.data || null;
+      return res.data?.data || res.data || null;
     }
   });
 
@@ -41,7 +41,7 @@ export const PurchaseOrderDetails = () => {
     queryKey: ['purchase-order-audit', id],
     queryFn: async () => {
       const res = await apiClient.get(`/purchase-orders/${id}/audit`);
-      return res.data || [];
+      return res.data?.data || res.data || [];
     },
     enabled: !!po
   });
@@ -190,7 +190,7 @@ export const PurchaseOrderDetails = () => {
       <div className="print:hidden">
         <PageHeader
           title={`PO: ${po.orderNo}`}
-          description={`Expected Delivery: ${meta.expectedDeliveryDate ? new Date(meta.expectedDeliveryDate).toLocaleDateString() : 'N/A'}`}
+          description={`PO Date: ${po ? new Date(po.date).toLocaleDateString() : ''}`}
           backTo={{ label: 'Purchase Orders', path: '/purchase-orders' }}
           primaryAction={
             <div className="flex items-center gap-2">
@@ -248,7 +248,6 @@ export const PurchaseOrderDetails = () => {
               <div className="text-xs text-muted-foreground">
                 <p>PO Number: <span className="font-bold text-foreground text-sm font-mono">{po.orderNo}</span></p>
                 <p>Date: <span className="font-semibold text-foreground">{new Date(po.date).toLocaleDateString()}</span></p>
-                <p>Delivery: <span className="font-semibold text-foreground">{meta.expectedDeliveryDate ? new Date(meta.expectedDeliveryDate).toLocaleDateString() : 'N/A'}</span></p>
                 <p>Status: <span className={`font-bold ml-1 uppercase text-[10px] px-2 py-0.5 rounded-full ${po.status === 'CONVERTED' ? 'bg-green-100 text-green-700' : po.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : po.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{po.status === 'CONVERTED' ? 'FULLY RECEIVED' : po.status === 'PARTIAL' ? 'PARTIALLY RECEIVED' : po.status}</span></p>
               </div>
             </div>
@@ -270,8 +269,6 @@ export const PurchaseOrderDetails = () => {
             <div className="space-y-1.5 md:border-l md:border-border/30 md:pl-8">
               <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Shipping Details</h4>
               <p className="text-xs text-muted-foreground">Place of Supply: <span className="font-semibold text-foreground">{po.placeOfSupply || 'N/A'}</span></p>
-              <p className="text-xs text-muted-foreground">Warehouse: <span className="font-semibold text-foreground">{warehouses.find(w => w.id === meta.warehouseId)?.name || 'Default Warehouse'}</span></p>
-              <p className="text-xs text-muted-foreground">Buyer Representative: <span className="font-semibold text-foreground">{meta.buyer || 'N/A'}</span></p>
               <p className="text-xs text-muted-foreground">Reference: <span className="font-semibold text-foreground">{meta.referenceNo || 'N/A'}</span></p>
               <div className="pt-2">
                 <h5 className="text-[10px] font-bold text-muted-foreground uppercase">Shipping Address</h5>

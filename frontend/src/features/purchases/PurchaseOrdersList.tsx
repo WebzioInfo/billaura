@@ -68,12 +68,12 @@ export const PurchaseOrdersList = () => {
     queryKey: ['purchase-orders', queryParams],
     queryFn: async () => {
       const res = await apiClient.get('/purchase-orders', { params: queryParams });
-      return res.data || { items: [], total: 0 };
+      return res.data?.data || res.data || { items: [], total: 0 };
     }
   });
 
   const poList = useMemo(() => {
-    const list = poResponse?.items || poResponse?.data || [];
+    const list = poResponse?.items || (Array.isArray(poResponse?.data) ? poResponse.data : poResponse?.data?.items) || [];
     return Array.isArray(list) ? list : [];
   }, [poResponse]);
 
@@ -107,15 +107,8 @@ export const PurchaseOrdersList = () => {
         completed++;
       } else if (po.status === 'CANCELLED') cancelled++;
 
+      // Expected delivery and warehouse details are removed from PO header
       const meta = po.gstBreakup || {};
-      if (meta.expectedDeliveryDate) {
-        const delDate = meta.expectedDeliveryDate.split('T')[0];
-        if (delDate === todayStr) {
-          dueTodayCount++;
-        } else if (delDate < todayStr && po.status !== 'CONVERTED' && po.status !== 'CANCELLED') {
-          overdueCount++;
-        }
-      }
     });
 
     return {
@@ -358,8 +351,6 @@ export const PurchaseOrdersList = () => {
                 <TableHead className="font-bold py-4 px-6">PO Number</TableHead>
                 <TableHead className="font-bold py-4 px-6">Vendor Supplier</TableHead>
                 <TableHead className="font-bold py-4 px-6">Order Date</TableHead>
-                <TableHead className="font-bold py-4 px-6">Expected Delivery</TableHead>
-                <TableHead className="font-bold py-4 px-6">Warehouse</TableHead>
                 <TableHead className="font-bold py-4 px-6 text-right">Items</TableHead>
                 <TableHead className="font-bold py-4 px-6 text-right">Grand Total</TableHead>
                 <TableHead className="font-bold py-4 px-6 text-center">Status</TableHead>
@@ -369,7 +360,6 @@ export const PurchaseOrdersList = () => {
             <TableBody className="text-xs">
               {poList.map((item: any) => {
                 const meta = item.gstBreakup || {};
-                const warehouseName = warehouses.find(w => w.id === meta.warehouseId)?.name || 'Default';
                 
                 return (
                   <TableRow key={item.id} className="hover:bg-muted/50 border-b border-border transition-all">
@@ -380,8 +370,6 @@ export const PurchaseOrdersList = () => {
                     </TableCell>
                     <TableCell className="py-4 px-6 font-bold text-foreground">{item.businessPartner?.name || 'N/A'}</TableCell>
                     <TableCell className="py-4 px-6 text-muted-foreground">{new Date(item.date).toLocaleDateString()}</TableCell>
-                    <TableCell className="py-4 px-6 text-muted-foreground">{meta.expectedDeliveryDate ? new Date(meta.expectedDeliveryDate).toLocaleDateString() : 'N/A'}</TableCell>
-                    <TableCell className="py-4 px-6 text-muted-foreground">{warehouseName}</TableCell>
                     <TableCell className="py-4 px-6 text-right font-medium">{item.items?.length || 0} lines</TableCell>
                     <TableCell className="font-bold py-4 px-6 text-right text-foreground font-mono">₹{Number(item.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</TableCell>
                     <TableCell className="py-4 px-6 text-center">
