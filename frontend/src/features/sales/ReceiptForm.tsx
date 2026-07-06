@@ -1,14 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, Calendar, Receipt, Search, ChevronDown, Check, CreditCard, Banknote, HelpCircle, Loader2, ArrowLeft, Info, Landmark, Wallet, CheckCircle, FileCheck } from 'lucide-react';
+import { Plus, Trash2, Calendar, Receipt, Search, ChevronDown, Check, CreditCard, Banknote, HelpCircle, Loader2, ArrowLeft, Info, Landmark, Wallet, CheckCircle, FileCheck, AlertCircle } from 'lucide-react';
 import { PageContainer, LoadingState } from '@/components/ui/LayoutComponents';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
-import { ensureArray } from '@/services/api/apiClient';
-import { LedgerLookup } from '@/components/ui/LedgerLookup';
 
 interface InvoiceAllocationRow {
   invoiceId: string;
@@ -30,13 +28,11 @@ export const ReceiptForm = () => {
   const isEdit = pathname.endsWith('/edit');
   const isView = !!id && !isEdit;
 
-
   const [saving, setSaving] = useState(false);
 
   // Form Fields
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [businessPartnerId, setBusinessPartnerId] = useState('');
-  const [accountId, setAccountId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
   const [amount, setAmount] = useState<number>(0);
   const [referenceNo, setReferenceNo] = useState('');
@@ -49,22 +45,22 @@ export const ReceiptForm = () => {
   const [status, setStatus] = useState('COMPLETED');
 
   const [invoices, setInvoices] = useState<InvoiceAllocationRow[]>([]);
-
-  // Selected customer details
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 
-  const { data: masterData, isLoading: isLoadingMaster } = useQuery({
+  // Issue 1: Customer Dropdown Loading (robust with retry/error fallback)
+  const { data: masterData, isLoading: isLoadingMaster, error: masterError, refetch: refetchMaster } = useQuery({
     queryKey: ['receipt-master-data'],
     queryFn: async () => {
-      const custRes = await apiClient.get('/customers', { params: { limit: 50 } });
+      const custRes = await apiClient.get('/customers', { params: { limit: 100 } });
+      const dataObj = custRes.data || custRes;
+      const customersList = dataObj.items || dataObj.data?.items || dataObj.data || [];
       return {
-        customers: ensureArray(custRes)
+        customers: Array.isArray(customersList) ? customersList : []
       };
     }
   });
 
   const customers = useMemo(() => masterData?.customers || [], [masterData]);
-  const [initialAccount, setInitialAccount] = useState<any>(null);
 
   useEffect(() => {
     if (!id && queryCustomerId && customers.length > 0) {
@@ -92,10 +88,8 @@ export const ReceiptForm = () => {
 
     const r = receiptData;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDate(new Date(r.date).toISOString().split('T')[0]);
     setBusinessPartnerId(r.businessPartnerId);
-    setAccountId(r.accountId);
     setPaymentMethod(r.paymentMethod);
     setAmount(Number(r.amount));
     setReferenceNo(r.referenceNo || '');
@@ -107,9 +101,6 @@ export const ReceiptForm = () => {
     setNotes(r.notes || '');
     setStatus(r.status);
     setSelectedCustomer(r.businessPartner);
-    if (r.account) {
-      setInitialAccount(r.account);
-    }
 
     // Load allocations
     if (r.allocations) {
@@ -126,6 +117,7 @@ export const ReceiptForm = () => {
     }
   }, [receiptData, id]);
 
+  // Issue 2: Automatically load outstanding invoices for selected customer
   const { data: customerInvoices } = useQuery({
     queryKey: ['sales-invoices-outstanding', businessPartnerId],
     queryFn: async () => {
@@ -133,8 +125,10 @@ export const ReceiptForm = () => {
       const res = await apiClient.get(`/sales/invoices`, {
         params: { customerId: businessPartnerId }
       });
-      const list = ensureArray(res);
-      return list
+      const dataObj = res.data || res;
+      const list = dataObj.data?.data || dataObj.data || dataObj || [];
+      const listArr = Array.isArray(list) ? list : [];
+      return listArr
         .filter((inv: any) => Number(inv.amountPaid) < Number(inv.grandTotal) && inv.status !== 'DRAFT')
         .map((inv: any) => ({
           invoiceId: inv.id,
@@ -151,7 +145,6 @@ export const ReceiptForm = () => {
 
   useEffect(() => {
     if (customerInvoices) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInvoices(customerInvoices);
       setSelectedCustomer(customers.find((c: any) => c.id === businessPartnerId));
     }
@@ -190,16 +183,13 @@ export const ReceiptForm = () => {
   };
 
   const totalAllocated = invoices.reduce((sum, inv) => sum + inv.amount, 0);
+  const remainingUnapplied = amount - totalAllocated;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!businessPartnerId) {
       toast.error('Select a Customer');
-      return;
-    }
-    if (!accountId) {
-      toast.error('Select an Account Ledger');
       return;
     }
     if (amount <= 0) {
@@ -216,16 +206,15 @@ export const ReceiptForm = () => {
       const payload = {
         date,
         businessPartnerId,
-        accountId,
         paymentMethod,
         amount,
-        referenceNo,
-        chequeNo,
-        transactionId,
+        referenceNo: referenceNo || undefined,
+        chequeNo: chequeNo || undefined,
+        transactionId: transactionId || undefined,
         clearanceDate: clearanceDate || undefined,
-        bankCharges,
-        cashier,
-        notes,
+        bankCharges: bankCharges || undefined,
+        cashier: cashier || undefined,
+        notes: notes || undefined,
         allocations: invoices
           .filter(inv => inv.amount > 0)
           .map(inv => ({ invoiceId: inv.invoiceId, amount: inv.amount }))
@@ -233,13 +222,13 @@ export const ReceiptForm = () => {
 
       if (id && isEdit) {
         await apiClient.put(`/receipts/${id}`, {
-          referenceNo,
-          chequeNo,
-          transactionId,
+          referenceNo: referenceNo || undefined,
+          chequeNo: chequeNo || undefined,
+          transactionId: transactionId || undefined,
           clearanceDate: clearanceDate || undefined,
-          bankCharges,
-          cashier,
-          notes,
+          bankCharges: bankCharges || undefined,
+          cashier: cashier || undefined,
+          notes: notes || undefined,
           status
         });
         toast.success('Receipt updated successfully');
@@ -256,6 +245,26 @@ export const ReceiptForm = () => {
     }
   };
 
+  if (masterError) {
+    console.error('Failed to load customer master data:', masterError);
+    return (
+      <PageContainer maxWidth="7xl">
+        <div className="bg-red-50/50 border border-red-200 rounded-2xl p-8 text-center space-y-4 my-8 max-w-2xl mx-auto shadow-sm">
+          <div className="bg-red-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto text-red-600">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h3 className="text-lg font-bold text-red-900">Failed to load customer master data</h3>
+          <p className="text-sm text-red-600 leading-relaxed">
+            There was an issue retrieving the list of customers. Please check your network connection and try again.
+          </p>
+          <Button onClick={() => refetchMaster()} className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-xl transition-all">
+            Retry Loading Customers
+          </Button>
+        </div>
+      </PageContainer>
+    );
+  }
+
   if (isLoadingMaster || isLoadingReceipt) {
     return (
       <PageContainer maxWidth="7xl">
@@ -263,8 +272,6 @@ export const ReceiptForm = () => {
       </PageContainer>
     );
   }
-
-  const isCash = paymentMethod === 'CASH';
 
   return (
     <PageContainer maxWidth="7xl">
@@ -283,6 +290,7 @@ export const ReceiptForm = () => {
               <FileCheck className="w-4 h-4 text-accent" /> Basic Details
             </h3>
 
+            {/* Row 1: Date & Payment Method */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Date *</label>
@@ -309,11 +317,11 @@ export const ReceiptForm = () => {
                   <option value="UPI">UPI Payment</option>
                   <option value="CHEQUE">Cheque</option>
                   <option value="CREDIT_CARD">Credit/Debit Card</option>
-
                 </select>
               </div>
             </div>
 
+            {/* Row 2: Customer (with detailed text) & Receipt Amount */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Customer *</label>
@@ -325,37 +333,38 @@ export const ReceiptForm = () => {
                   required
                 >
                   <option value="">Select Customer...</option>
-                  {(customers || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {(customers || []).map((c: any) => {
+                    const details = [
+                      c.customerCode ? `Code: ${c.customerCode}` : null,
+                      c.gstin || c.gstNumber ? `GSTIN: ${c.gstin || c.gstNumber}` : null,
+                      c.mobile || c.phone ? `Ph: ${c.mobile || c.phone}` : null
+                    ].filter(Boolean).join(' | ');
+                    
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {details ? `(${details})` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
               <div>
-                <LedgerLookup
-                  label="Debit Account Ledger"
-                  value={accountId}
-                  onChange={(val) => setAccountId(val)}
-                  placeholder="Search ledgers..."
-                  disabled={isView}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Receipt Amount *</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₹</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={amount || ''}
-                  onChange={(e) => setAmount(Number(e.target.value))}
-                  disabled={isView}
-                  placeholder="0.00"
-                  className="w-full bg-background border border-border rounded-xl pl-8 pr-4 py-2.5 text-sm focus:outline-none focus:border-accent font-bold disabled:opacity-60"
-                  required
-                  min={0.01}
-                />
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Receipt Amount *</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₹</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={amount || ''}
+                    onChange={(e) => setAmount(Number(e.target.value))}
+                    disabled={isView}
+                    placeholder="0.00"
+                    className="w-full bg-background border border-border rounded-xl pl-8 pr-4 py-2.5 text-sm focus:outline-none focus:border-accent font-bold disabled:opacity-60 font-sans"
+                    required
+                    min={0.01}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -370,7 +379,7 @@ export const ReceiptForm = () => {
                 <button
                   type="button"
                   onClick={handleAutoAllocate}
-                  className="text-xs bg-accent/15 text-accent hover:bg-accent/20 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer"
+                  className="text-xs bg-accent/15 text-accent hover:bg-accent/20 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer border-0"
                 >
                   Auto FIFO Allocate
                 </button>
@@ -383,7 +392,7 @@ export const ReceiptForm = () => {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-left text-sm border-collapse">
                   <thead>
                     <tr className="text-xs uppercase tracking-wider text-muted-foreground font-semibold border-b border-border pb-2">
                       <th className="py-2">Invoice No</th>
@@ -395,14 +404,14 @@ export const ReceiptForm = () => {
                   </thead>
                   <tbody>
                     {invoices.map((inv) => (
-                      <tr key={inv.invoiceId} className="border-b border-border/40 last:border-0">
+                      <tr key={inv.invoiceId} className="border-b border-border/40 last:border-0 hover:bg-muted/10">
                         <td className="py-3 font-mono font-bold text-foreground">{inv.invoiceNo}</td>
                         <td className="py-3 text-xs text-muted-foreground">{inv.date}</td>
-                        <td className="py-3 text-right font-semibold">₹{inv.grandTotal.toLocaleString('en-IN')}</td>
-                        <td className="py-3 text-right text-amber-500 font-bold">₹{inv.unpaidAmount.toLocaleString('en-IN')}</td>
+                        <td className="py-3 text-right font-semibold font-sans tabular-nums">₹{inv.grandTotal.toLocaleString('en-IN')}</td>
+                        <td className="py-3 text-right text-amber-500 font-bold font-sans tabular-nums">₹{inv.unpaidAmount.toLocaleString('en-IN')}</td>
                         <td className="py-3 pl-4">
                           <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">₹</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold font-sans">₹</span>
                             <input
                               type="number"
                               step="0.01"
@@ -410,7 +419,7 @@ export const ReceiptForm = () => {
                               onChange={(e) => handleAllocationChange(inv.invoiceId, Number(e.target.value))}
                               disabled={isView}
                               placeholder="0.00"
-                              className="w-full text-right bg-background border border-border rounded-lg pl-6 pr-3 py-1.5 text-xs font-bold focus:outline-none focus:border-accent disabled:opacity-60"
+                              className="w-full text-right bg-background border border-border rounded-lg pl-6 pr-3 py-1.5 text-xs font-bold focus:outline-none focus:border-accent disabled:opacity-60 font-sans tabular-nums"
                             />
                           </div>
                         </td>
@@ -419,11 +428,20 @@ export const ReceiptForm = () => {
                   </tbody>
                 </table>
 
-                <div className="flex justify-between items-center border-t border-border mt-4 pt-4 text-xs font-bold text-muted-foreground">
-                  <span>Sum of allocated amounts:</span>
-                  <span className={totalAllocated > amount ? 'text-red-500' : 'text-foreground'}>
-                    ₹{totalAllocated.toLocaleString('en-IN')} / ₹{amount.toLocaleString('en-IN')}
-                  </span>
+                {/* Subtotals & Unapplied display */}
+                <div className="border-t border-border mt-4 pt-4 space-y-2 text-xs font-bold text-muted-foreground">
+                  <div className="flex justify-between items-center">
+                    <span>Sum of allocated amounts:</span>
+                    <span className={totalAllocated > amount ? 'text-red-500 font-sans' : 'text-foreground font-sans'}>
+                      ₹{totalAllocated.toLocaleString('en-IN')} / ₹{amount.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Unapplied / Remaining Balance:</span>
+                    <span className={remainingUnapplied < 0 ? 'text-red-500 font-sans' : remainingUnapplied > 0 ? 'text-amber-500 font-sans' : 'text-green-600 font-sans'}>
+                      ₹{remainingUnapplied.toLocaleString('en-IN')}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -436,11 +454,12 @@ export const ReceiptForm = () => {
           {/* Payment Method Details */}
           <div className="bg-surface border border-border rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
-              {isCash ? <Wallet className="w-4 h-4 text-amber-500" /> : <Landmark className="w-4 h-4 text-blue-500" />}
-              {isCash ? 'Cash Details' : 'Bank Details'}
+              {paymentMethod === 'CASH' ? <Wallet className="w-4 h-4 text-amber-500" /> : <Landmark className="w-4 h-4 text-blue-500" />}
+              {paymentMethod === 'CASH' ? 'Cash Details' : 'Payment Details'}
             </h3>
 
-            {isCash ? (
+            {/* CASH details block */}
+            {paymentMethod === 'CASH' && (
               <div className="space-y-3">
                 <div>
                   <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Cashier / Collector</label>
@@ -449,12 +468,108 @@ export const ReceiptForm = () => {
                     value={cashier}
                     onChange={(e) => setCashier(e.target.value)}
                     disabled={isView}
-                    placeholder="Collector name"
+                    placeholder="Collector name (Optional)"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Transaction Reference</label>
+                  <input
+                    type="text"
+                    value={referenceNo}
+                    onChange={(e) => setReferenceNo(e.target.value)}
+                    disabled={isView}
+                    placeholder="Ref No (Optional)"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Clearance Date</label>
+                  <input
+                    type="date"
+                    value={clearanceDate}
+                    onChange={(e) => setClearanceDate(e.target.value)}
+                    disabled={isView}
                     className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
                   />
                 </div>
               </div>
-            ) : (
+            )}
+
+            {/* CHEQUE details block */}
+            {paymentMethod === 'CHEQUE' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Cheque Number</label>
+                  <input
+                    type="text"
+                    value={chequeNo}
+                    onChange={(e) => setChequeNo(e.target.value)}
+                    disabled={isView}
+                    placeholder="e.g. 000123 (Optional)"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Clearance Date</label>
+                  <input
+                    type="date"
+                    value={clearanceDate}
+                    onChange={(e) => setClearanceDate(e.target.value)}
+                    disabled={isView}
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Reference Number</label>
+                  <input
+                    type="text"
+                    value={referenceNo}
+                    onChange={(e) => setReferenceNo(e.target.value)}
+                    disabled={isView}
+                    placeholder="Cheque Ref (Optional)"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* UPI details block */}
+            {paymentMethod === 'UPI' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">UPI Transaction Reference</label>
+                  <input
+                    type="text"
+                    value={transactionId}
+                    onChange={(e) => setTransactionId(e.target.value)}
+                    disabled={isView}
+                    placeholder="e.g. UPI1234567890 (Optional)"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60 font-mono"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* CREDIT_CARD details block */}
+            {paymentMethod === 'CREDIT_CARD' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Transaction Reference</label>
+                  <input
+                    type="text"
+                    value={transactionId}
+                    onChange={(e) => setTransactionId(e.target.value)}
+                    disabled={isView}
+                    placeholder="e.g. CARD-TXN-9824 (Optional)"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60 font-mono"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* BANK_TRANSFER details block */}
+            {paymentMethod === 'BANK_TRANSFER' && (
               <div className="space-y-3">
                 <div>
                   <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Clearance Date</label>
@@ -466,7 +581,6 @@ export const ReceiptForm = () => {
                     className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
                   />
                 </div>
-
                 <div>
                   <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Transaction Ref / ID</label>
                   <input
@@ -474,23 +588,10 @@ export const ReceiptForm = () => {
                     value={transactionId}
                     onChange={(e) => setTransactionId(e.target.value)}
                     disabled={isView}
-                    placeholder="e.g. TXN9824"
+                    placeholder="e.g. TXN9824 (Optional)"
                     className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Cheque Number</label>
-                  <input
-                    type="text"
-                    value={chequeNo}
-                    onChange={(e) => setChequeNo(e.target.value)}
-                    disabled={isView}
-                    placeholder="e.g. 000123"
-                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60 font-mono"
-                  />
-                </div>
-
                 <div>
                   <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Bank Charges (₹)</label>
                   <input
@@ -499,24 +600,23 @@ export const ReceiptForm = () => {
                     value={bankCharges || ''}
                     onChange={(e) => setBankCharges(Number(e.target.value))}
                     disabled={isView}
-                    placeholder="0.00"
+                    placeholder="0.00 (Optional)"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Reference Number</label>
+                  <input
+                    type="text"
+                    value={referenceNo}
+                    onChange={(e) => setReferenceNo(e.target.value)}
+                    disabled={isView}
+                    placeholder="Ref No (Optional)"
                     className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
                   />
                 </div>
               </div>
             )}
-
-            <div>
-              <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Reference Number</label>
-              <input
-                type="text"
-                value={referenceNo}
-                onChange={(e) => setReferenceNo(e.target.value)}
-                disabled={isView}
-                placeholder="Internal reference No"
-                className="w-full bg-background border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
-              />
-            </div>
           </div>
 
           {/* Notes & Actions */}
@@ -564,14 +664,14 @@ export const ReceiptForm = () => {
                 <button
                   type="button"
                   onClick={() => navigate('/receipts')}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-border font-semibold text-sm text-foreground hover:bg-muted transition-all cursor-pointer text-center"
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-border font-semibold text-sm text-foreground hover:bg-muted transition-all cursor-pointer text-center bg-transparent"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 bg-accent text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-accent/20 cursor-pointer hover:bg-accent/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 bg-accent text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-accent/20 cursor-pointer hover:bg-accent/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 border-0"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Save Receipt

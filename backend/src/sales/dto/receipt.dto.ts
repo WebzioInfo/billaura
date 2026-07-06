@@ -30,8 +30,8 @@ export class CreateReceiptDto {
   businessPartnerId: string;
 
   @IsString()
-  @IsNotEmpty()
-  accountId: string;
+  @IsOptional()
+  accountId?: string;
 
   @IsString()
   @IsNotEmpty()

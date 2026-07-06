@@ -134,11 +134,26 @@ export class ReceiptsService {
       throw new NotFoundException(`Customer with ID ${dto.businessPartnerId} not found`);
     }
 
-    const account = await this.prisma.account.findFirst({
-      where: { id: dto.accountId, companyId },
-    });
-    if (!account) {
-      throw new NotFoundException(`Account with ID ${dto.accountId} not found`);
+    let targetAccountId = dto.accountId;
+    if (!targetAccountId) {
+      const isCash = dto.paymentMethod === 'CASH';
+      const ledgerName = isCash ? 'Cash' : 'Bank Accounts';
+      let resolvedAccount = await this.prisma.account.findFirst({
+        where: { companyId, name: ledgerName },
+      });
+      if (!resolvedAccount) {
+        resolvedAccount = await this.prisma.account.create({
+          data: { companyId, name: ledgerName, category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+        });
+      }
+      targetAccountId = resolvedAccount.id;
+    } else {
+      const account = await this.prisma.account.findFirst({
+        where: { id: targetAccountId, companyId },
+      });
+      if (!account) {
+        throw new NotFoundException(`Account with ID ${targetAccountId} not found`);
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -172,7 +187,7 @@ export class ReceiptsService {
           receiptNo,
           date: new Date(dto.date),
           businessPartnerId: dto.businessPartnerId,
-          accountId: dto.accountId,
+          accountId: targetAccountId,
           paymentMethod: dto.paymentMethod,
           amount: dto.amount,
           referenceNo: dto.referenceNo || null,
@@ -272,7 +287,7 @@ export class ReceiptsService {
 
       // 5. Update Cash/Bank Account balance
       await tx.account.update({
-        where: { id: dto.accountId },
+        where: { id: targetAccountId },
         data: {
           balance: {
             increment: dto.amount,
@@ -312,7 +327,7 @@ export class ReceiptsService {
           description: `Automatic receipt posting ${receiptNo}`,
           lines: {
             create: [
-              { accountId: dto.accountId, debit: dto.amount, credit: 0 },
+              { accountId: targetAccountId, debit: dto.amount, credit: 0 },
               { accountId: arAccount.id, debit: 0, credit: dto.amount },
             ],
           },
