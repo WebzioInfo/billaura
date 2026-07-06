@@ -163,6 +163,26 @@ export const InvoiceDetails = () => {
   const outstanding = grandTotal - amountPaid;
   const isOverdue = invoice.dueDate && new Date(invoice.dueDate) < new Date() && outstanding > 0;
 
+  const receiptHistory = useMemo(() => {
+    const allocs = invoice.receiptAllocations || [];
+    // Sort chronologically
+    const sortedAllocs = [...allocs].sort((a: any, b: any) => new Date(a.receipt?.date || a.createdAt).getTime() - new Date(b.receipt?.date || b.createdAt).getTime());
+    
+    let currentBalance = grandTotal;
+    return sortedAllocs.map((alloc: any) => {
+      currentBalance -= Number(alloc.amount);
+      return {
+        id: alloc.id,
+        date: alloc.receipt?.date || alloc.createdAt,
+        receiptNo: alloc.receipt?.receiptNo || 'N/A',
+        amount: Number(alloc.amount),
+        paymentMethod: alloc.receipt?.paymentMethod || 'N/A',
+        reference: alloc.receipt?.referenceNo || 'N/A',
+        balanceAfter: Math.max(0, currentBalance)
+      };
+    });
+  }, [invoice, grandTotal]);
+
   // Calculated Status details
   const getCalculatedStatus = () => {
     if (invoice.status === 'CANCELLED' || invoice.status === 'VOID') {
@@ -460,6 +480,41 @@ export const InvoiceDetails = () => {
                 </div>
               </div>
 
+            </Card>
+
+            {/* Receipt History */}
+            <Card className="mt-6 border border-border/60 shadow-sm p-6 bg-surface rounded-2xl space-y-4">
+              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50 pb-2">Receipt & Payment History</h4>
+              {receiptHistory.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2 font-medium">No payment allocations recorded for this invoice.</p>
+              ) : (
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full text-xs text-left min-w-[500px]">
+                    <thead>
+                      <tr className="text-muted-foreground border-b border-border font-bold uppercase tracking-wider">
+                        <th className="pb-3 text-left">Date</th>
+                        <th className="pb-3 text-left">Receipt Number</th>
+                        <th className="pb-3 text-left">Method</th>
+                        <th className="pb-3 text-left">Reference</th>
+                        <th className="pb-3 text-right">Allocated Amt</th>
+                        <th className="pb-3 text-right">Balance After</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40 font-medium">
+                      {receiptHistory.map((alloc: any) => (
+                        <tr key={alloc.id} className="hover:bg-muted/10 transition-colors">
+                          <td className="py-3 text-muted-foreground">{new Date(alloc.date).toLocaleDateString()}</td>
+                          <td className="py-3 font-bold font-mono text-accent">{alloc.receiptNo}</td>
+                          <td className="py-3 text-muted-foreground text-[10px] uppercase font-bold">{alloc.paymentMethod.replace('_', ' ')}</td>
+                          <td className="py-3 text-muted-foreground font-mono">{alloc.reference}</td>
+                          <td className="py-3 text-right text-green-600 font-bold font-mono">₹{formatIndianCurrency(alloc.amount)}</td>
+                          <td className="py-3 text-right text-foreground font-bold font-mono">₹{formatIndianCurrency(alloc.balanceAfter)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </Card>
           </div>
 

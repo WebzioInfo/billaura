@@ -134,6 +134,22 @@ export class ReceiptsService {
       throw new NotFoundException(`Customer with ID ${dto.businessPartnerId} not found`);
     }
 
+    const unpaidInvoices = await this.prisma.invoice.findMany({
+      where: {
+        companyId,
+        businessPartnerId: dto.businessPartnerId,
+        NOT: { status: { in: ['PAID', 'DRAFT', 'CANCELLED'] } },
+      },
+    });
+    const totalOutstanding = unpaidInvoices.reduce(
+      (sum, inv) => sum + (Number(inv.grandTotal) - Number(inv.amountPaid)),
+      0,
+    );
+
+    if (Number(dto.amount) > totalOutstanding) {
+      throw new BadRequestException('Receipt amount exceeds outstanding balance');
+    }
+
     let targetAccountId = dto.accountId;
     if (!targetAccountId) {
       const isCash = dto.paymentMethod === 'CASH';
@@ -242,7 +258,7 @@ export class ReceiptsService {
           where: {
             companyId,
             businessPartnerId: dto.businessPartnerId,
-            NOT: { status: 'PAID' },
+            NOT: { status: { in: ['PAID', 'DRAFT', 'CANCELLED'] } },
           },
           orderBy: { date: 'asc' },
         });
@@ -410,7 +426,7 @@ export class ReceiptsService {
 
         if (inv) {
           const revertedPaid = Number(inv.amountPaid) - Number(alloc.amount);
-          const status = revertedPaid <= 0 ? 'DRAFT' : 'PARTIAL'; // Set back to draft or partial
+          const status = revertedPaid <= 0 ? 'SENT' : 'PARTIAL'; // Set back to SENT or partial
 
           await tx.invoice.update({
             where: { id: inv.id },

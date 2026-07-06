@@ -54,7 +54,11 @@ export class InvoicesService {
 
     const invoice = await this.prisma.invoice.findFirst({
       where: { id },
-      include: { businessPartner: true, items: { include: { product: true } } },
+      include: { 
+        businessPartner: true, 
+        items: { include: { product: true } },
+        receiptAllocations: { include: { receipt: true } }
+      },
     });
 
     if (!invoice) {

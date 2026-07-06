@@ -82,7 +82,7 @@ export const ReceiptForm = () => {
   });
 
   const unpaidInvoices = useMemo(() => {
-    return customerInvoices.filter(inv => inv.status !== 'PAID' && inv.status !== 'DRAFT');
+    return customerInvoices.filter(inv => inv.status !== 'PAID' && inv.status !== 'DRAFT' && inv.status !== 'CANCELLED');
   }, [customerInvoices]);
 
   // Sync selectedCustomer state when businessPartnerId changes in Create Mode
@@ -178,6 +178,10 @@ export const ReceiptForm = () => {
     return Object.values(allocations).reduce((sum, val) => sum + val, 0);
   }, [allocations]);
 
+  const totalCustomerOutstanding = useMemo(() => {
+    return unpaidInvoices.reduce((sum, inv) => sum + (Number(inv.grandTotal) - Number(inv.amountPaid)), 0);
+  }, [unpaidInvoices]);
+
   const unallocatedAmount = useMemo(() => {
     return Math.max(0, amount - totalAllocated);
   }, [amount, totalAllocated]);
@@ -191,6 +195,11 @@ export const ReceiptForm = () => {
     }
     if (amount <= 0) {
       toast.error('Amount must be greater than zero');
+      return;
+    }
+
+    if (!id && amount > totalCustomerOutstanding) {
+      toast.error('Receipt amount exceeds outstanding balance');
       return;
     }
 

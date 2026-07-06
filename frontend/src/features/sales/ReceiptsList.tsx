@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { PageContainer, EmptyState, LoadingState } from '@/components/ui/LayoutComponents';
+import { PageContainer, EmptyState, LoadingState, AmountText } from '@/components/ui';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -38,9 +38,9 @@ export const ReceiptsList = () => {
     }
   });
 
-  const receipts = data?.data || data || [];
-  const totalPagesValue = data?.meta?.totalPages || 1;
-  const totalItemsValue = data?.meta?.totalItems || receipts.length || 0;
+  const receipts = data?.data?.items || data?.items || (Array.isArray(data?.data) ? data.data : []);
+  const totalPagesValue = data?.data?.totalPages || data?.meta?.totalPages || 1;
+  const totalItemsValue = data?.data?.total || data?.data?.totalItems || data?.meta?.totalItems || receipts.length || 0;
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -231,7 +231,9 @@ export const ReceiptsList = () => {
                   <TableCell className="py-4 px-6 font-semibold text-foreground">{r.businessPartner?.name || 'N/A'}</TableCell>
                   <TableCell className="py-4 px-6 text-xs font-semibold">{r.paymentMethod}</TableCell>
                   <TableCell className="py-4 px-6 text-xs font-mono">{r.account?.name || 'N/A'}</TableCell>
-                  <TableCell className="py-4 px-6 text-right font-bold text-foreground">₹{Number(r.amount).toLocaleString('en-IN')}</TableCell>
+                  <TableCell className="py-4 px-6 text-right">
+                    <AmountText value={r.amount} />
+                  </TableCell>
                   <TableCell className="py-4 px-6 text-center">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       r.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
