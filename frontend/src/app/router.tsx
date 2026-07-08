@@ -81,21 +81,25 @@ const PlatformLayout = lazy(() => import('../layouts/PlatformLayout').then(m => 
 
 const PlatformDashboard = lazy(() => import('../features/dashboard/PlatformDashboard').then(m => ({ default: m.PlatformDashboard })));
 
+import { PageLoader } from '../components/ui/LoadingSystem';
+
 const LoadingFallback = () => (
-  <div className="h-screen w-screen flex items-center justify-center bg-background text-foreground">
-    <div className="flex flex-col items-center gap-4">
-      <img 
-        src="/logo.png" 
-        alt="Loading Bill Aura..." 
-        className="w-24 h-auto animate-pulse dark:hidden" 
-      />
-      <img 
-        src="/logo2.png" 
-        alt="Loading Bill Aura..." 
-        className="w-24 h-auto animate-pulse hidden dark:block" 
-      />
-      <p className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">Loading Accounting Module...</p>
-    </div>
+  <div className="h-screen w-screen flex flex-col items-center justify-center bg-background text-foreground space-y-4">
+    <img 
+      src="/logo.png" 
+      alt="Bill Aura" 
+      className="w-20 h-auto animate-pulse dark:hidden" 
+    />
+    <img 
+      src="/logo2.png" 
+      alt="Bill Aura" 
+      className="w-20 h-auto animate-pulse hidden dark:block" 
+    />
+    <PageLoader 
+      title="Loading Accounting Module..." 
+      description="Preparing your financial workspace..." 
+      className="min-h-0 py-0" 
+    />
   </div>
 );
 

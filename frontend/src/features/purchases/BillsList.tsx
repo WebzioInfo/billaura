@@ -5,10 +5,7 @@ import {
   CheckCircle, AlertTriangle, ShieldAlert, Sparkles, Send, Briefcase, Printer, ArrowRight
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { PageContainer, LoadingState } from '@/components/ui/LayoutComponents';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, PageContainer, LoadingState, TableLoader, SummaryCardLoader } from '@/components/ui';
 import apiClient from '@/services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -411,39 +408,43 @@ export const BillsList = () => {
         </div>
 
         {/* Stats Dashboard Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="p-5 border-l-4 border-l-primary relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Outstanding</div>
-            <div className="text-2xl font-black text-foreground mt-2">{formatCurrency(stats.outstandingAmt)}</div>
-            <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-              <span className="font-bold text-amber-500">{stats.unpaidCount + stats.partialCount}</span> active bills
-            </div>
-            <DollarSign className="absolute right-4 bottom-4 w-12 h-12 text-primary/10" />
-          </Card>
+        {loadingBills ? (
+          <SummaryCardLoader count={4} className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-5 border-l-4 border-l-primary relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Outstanding</div>
+              <div className="text-2xl font-black text-foreground mt-2">{formatCurrency(stats.outstandingAmt)}</div>
+              <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                <span className="font-bold text-amber-500">{stats.unpaidCount + stats.partialCount}</span> active bills
+              </div>
+              <DollarSign className="absolute right-4 bottom-4 w-12 h-12 text-primary/10" />
+            </Card>
 
-          <Card className="p-5 border-l-4 border-l-emerald-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">GST Input Credit</div>
-            <div className="text-2xl font-black text-emerald-500 mt-2">{formatCurrency(stats.gstCredit)}</div>
-            <div className="text-xs text-muted-foreground mt-1.5">Accumulated Input GST balances</div>
-            <Sparkles className="absolute right-4 bottom-4 w-12 h-12 text-emerald-500/10" />
-          </Card>
+            <Card className="p-5 border-l-4 border-l-emerald-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">GST Input Credit</div>
+              <div className="text-2xl font-black text-emerald-500 mt-2">{formatCurrency(stats.gstCredit)}</div>
+              <div className="text-xs text-muted-foreground mt-1.5">Accumulated Input GST balances</div>
+              <Sparkles className="absolute right-4 bottom-4 w-12 h-12 text-emerald-500/10" />
+            </Card>
 
-          <Card className="p-5 border-l-4 border-l-amber-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Overdue Bills</div>
-            <div className="text-2xl font-black text-amber-500 mt-2">{stats.overdueCount}</div>
-            <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-              Requires immediate payout attention
-            </div>
-            <AlertTriangle className="absolute right-4 bottom-4 w-12 h-12 text-amber-500/10" />
-          </Card>
+            <Card className="p-5 border-l-4 border-l-amber-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Overdue Bills</div>
+              <div className="text-2xl font-black text-amber-500 mt-2">{stats.overdueCount}</div>
+              <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                Requires immediate payout attention
+              </div>
+              <AlertTriangle className="absolute right-4 bottom-4 w-12 h-12 text-amber-500/10" />
+            </Card>
 
-          <Card className="p-5 border-l-4 border-l-indigo-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Purchases This Month</div>
-            <div className="text-2xl font-black text-indigo-500 mt-2">{formatCurrency(stats.currentMonthPurchases)}</div>
-            <div className="text-xs text-muted-foreground mt-1.5">Cumulative billing for current cycle</div>
-            <Briefcase className="absolute right-4 bottom-4 w-12 h-12 text-indigo-500/10" />
-          </Card>
-        </div>
+            <Card className="p-5 border-l-4 border-l-indigo-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Purchases This Month</div>
+              <div className="text-2xl font-black text-indigo-500 mt-2">{formatCurrency(stats.currentMonthPurchases)}</div>
+              <div className="text-xs text-muted-foreground mt-1.5">Cumulative billing for current cycle</div>
+              <Briefcase className="absolute right-4 bottom-4 w-12 h-12 text-indigo-500/10" />
+            </Card>
+          </div>
+        )}
 
         {/* Filter Toolbar */}
         <Card className="p-4 bg-muted/20 border border-border/50">
@@ -603,7 +604,7 @@ export const BillsList = () => {
 
         {/* Data Table */}
         {loadingBills ? (
-          <LoadingState variant="table" />
+          <TableLoader cols={8} rows={6} className="bg-card border border-border/80 rounded-2xl" />
         ) : filteredBills.length === 0 ? (
           <Card className="flex flex-col items-center justify-center p-12 text-center bg-card">
             <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center text-primary mb-4">

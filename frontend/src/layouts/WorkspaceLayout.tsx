@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { TopBar } from '@/components/workspace/TopBar';
 import { Ribbon } from '@/components/workspace/Ribbon';
 import { WorkspaceTabs } from '@/components/workspace/WorkspaceTabs';
+import { TopProgressBar } from '@/components/ui';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts';
 
@@ -11,6 +12,17 @@ export function WorkspaceLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   useGlobalShortcuts();
+
+  const [isNavigating, setIsNavigating] = React.useState(false);
+
+  // Trigger top progress animation on route transition
+  useEffect(() => {
+    setIsNavigating(true);
+    const timer = setTimeout(() => {
+      setIsNavigating(false);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [location.pathname, location.search]);
 
   // Keep tabs list in sync when the browser URL pathname or search changes directly (clicks, page loads)
   useEffect(() => {
@@ -76,6 +88,7 @@ export function WorkspaceLayout() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden font-sans">
+      <TopProgressBar isAnimating={isNavigating} />
       <TopBar />
       <Ribbon />
       

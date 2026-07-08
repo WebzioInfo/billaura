@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { PageContainer, EmptyState, LoadingState, AmountText } from '@/components/ui';
+import { PageContainer, EmptyState, LoadingState, AmountText, TableLoader, SummaryCardLoader } from '@/components/ui';
 import { DeleteDialog } from '@/components/ui';
 import { DataTable } from '@/components/ui/data-table/DataTable';
 import { ColumnDef } from '@tanstack/react-table';
@@ -246,35 +246,39 @@ export const ReceiptsList = () => {
       />
 
       {/* Quick Stats Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
-        <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            <span className="flex items-center gap-1">💰 Total Received</span>
+      {loading ? (
+        <SummaryCardLoader count={3} className="grid-cols-1 md:grid-cols-3 gap-2 mb-2" />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+          <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="flex items-center gap-1">💰 Total Received</span>
+            </div>
+            <h3 className="text-base font-bold text-foreground leading-none mt-1">
+              ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'COMPLETED' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </h3>
           </div>
-          <h3 className="text-base font-bold text-foreground leading-none mt-1">
-            ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'COMPLETED' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </h3>
-        </div>
-        <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            <span className="flex items-center gap-1">✔️ Active Receipts</span>
+          <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="flex items-center gap-1">✔️ Active Receipts</span>
+            </div>
+            <h3 className="text-base font-bold text-foreground leading-none mt-1">
+              {receipts.filter((r: any) => r.status === 'COMPLETED').length} / {totalItems}
+            </h3>
           </div>
-          <h3 className="text-base font-bold text-foreground leading-none mt-1">
-            {receipts.filter((r: any) => r.status === 'COMPLETED').length} / {totalItems}
-          </h3>
-        </div>
-        <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            <span className="flex items-center gap-1">⏳ Pending Receipts</span>
+          <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="flex items-center gap-1">⏳ Pending Receipts</span>
+            </div>
+            <h3 className="text-base font-bold text-foreground leading-none mt-1">
+              ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'PENDING' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </h3>
           </div>
-          <h3 className="text-base font-bold text-foreground leading-none mt-1">
-            ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'PENDING' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </h3>
         </div>
-      </div>
+      )}
 
-      {loading && receipts.length === 0 ? (
-        <LoadingState variant="table" />
+      {loading ? (
+        <TableLoader cols={6} rows={6} className="bg-surface border border-border rounded-xl" />
       ) : receipts.length === 0 && !search && !statusFilter && !methodFilter ? (
         <EmptyState
           icon={<Receipt className="w-8 h-8 text-muted-foreground" />}

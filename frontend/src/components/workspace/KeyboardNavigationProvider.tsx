@@ -18,6 +18,9 @@ export const KeyboardNavigationProvider: React.FC<KeyboardNavigationProviderProp
       if (el.hasAttribute('disabled')) return false;
       if (el.getAttribute('tabindex') === '-1') return false;
       
+      // Filter out global search input from default page auto-focus
+      if (el.id === 'global-search-input') return false;
+      
       const style = window.getComputedStyle(el);
       if (style.display === 'none' || style.visibility === 'hidden') return false;
       if (el.offsetWidth === 0 && el.offsetHeight === 0) return false;

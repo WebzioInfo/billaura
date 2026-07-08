@@ -735,41 +735,23 @@ export const InvoiceForm = () => {
 
           </div>
         </div>
+      </div>
+
+      {/* Summary Sidebar & Action Buttons */}
+      <div className="w-full xl:w-80 2xl:w-96 shrink-0 sticky top-6 space-y-4">
+        <DocumentSummarySidebar
+          totals={totals}
+          invoiceType={invoiceType}
+          currencySymbol={currencySymbol}
+        />
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-4 pb-12 pt-4">
-          <button 
-            type="button" 
-            onClick={() => navigate('/invoices')} 
-            className="px-6 py-2.5 rounded-xl border border-border bg-background hover:bg-secondary text-sm font-medium transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          
-          <button 
-            type="button" 
-            onClick={() => setIsPreviewOpen(true)}
-            className="px-6 py-2.5 rounded-xl border border-border bg-background hover:bg-secondary text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <Eye className="w-4 h-4 text-muted-foreground" />
-            Preview
-          </button>
-
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            onClick={() => setSubmitStatus('DRAFT')}
-            className="px-6 py-2.5 rounded-xl border border-accent/20 bg-accent/5 hover:bg-accent/10 text-accent text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
-          >
-            {isSubmitting && submitStatus === 'DRAFT' && <Loader2 className="w-4 h-4 animate-spin" />}
-            Save Draft
-          </button>
-
+        <div className="flex flex-col gap-3 pt-2">
           <button 
             type="submit" 
             disabled={isSubmitting}
             onClick={() => setSubmitStatus('SENT')}
-            className="px-6 py-2.5 rounded-xl bg-accent text-white hover:bg-accent/90 text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full justify-center px-6 py-2.5 rounded-xl bg-accent text-white hover:bg-accent/90 text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
           >
             {isSubmitting && submitStatus === 'SENT' ? (
               <>
@@ -783,16 +765,36 @@ export const InvoiceForm = () => {
               </>
             )}
           </button>
-        </div>
-      </div>
 
-      {/* Summary Sidebar */}
-      <div className="w-full xl:w-80 2xl:w-96 shrink-0 sticky top-6">
-        <DocumentSummarySidebar
-          totals={totals}
-          invoiceType={invoiceType}
-          currencySymbol={currencySymbol}
-        />
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            onClick={() => setSubmitStatus('DRAFT')}
+            className="w-full justify-center px-6 py-2.5 rounded-xl border border-accent/20 bg-accent/5 hover:bg-accent/10 text-accent text-sm font-semibold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSubmitting && submitStatus === 'DRAFT' && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save Draft
+          </button>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button 
+              type="button" 
+              onClick={() => setIsPreviewOpen(true)}
+              className="w-full justify-center px-4 py-2.5 rounded-xl border border-border bg-background hover:bg-secondary text-sm font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Eye className="w-4 h-4 text-muted-foreground" />
+              Preview
+            </button>
+            
+            <button 
+              type="button" 
+              onClick={() => navigate('/invoices')} 
+              className="w-full justify-center px-4 py-2.5 rounded-xl border border-border bg-background hover:bg-secondary text-sm font-semibold transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     </form>
 

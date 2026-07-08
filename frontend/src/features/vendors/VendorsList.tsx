@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, RefreshCw, Eye, Edit2, Trash2, Users, MapPin, Building2, Phone } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { PageContainer, EmptyState, LoadingState } from '@/components/ui/LayoutComponents';
+import { PageContainer, EmptyState, LoadingState, TableLoader, SummaryCardLoader } from '@/components/ui';
 import { DataTable } from '@/components/ui/data-table/DataTable';
 import { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/Button';
@@ -203,18 +203,22 @@ export const VendorsList = () => {
           description="Manage supplier records, purchasing relationships, and outstanding payables."
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4 shadow-sm">
-            <div className="p-3.5 bg-blue-500/10 rounded-xl text-blue-500"><Users className="w-6 h-6" /></div>
-            <div>
-              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Vendors</p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">{totalItems}</h3>
+        {isLoading ? (
+          <SummaryCardLoader count={1} className="grid-cols-1 md:grid-cols-3 gap-6 mb-6" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4 shadow-sm">
+              <div className="p-3.5 bg-blue-500/10 rounded-xl text-blue-500"><Users className="w-6 h-6" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Vendors</p>
+                <h3 className="text-2xl font-bold text-foreground mt-1">{totalItems}</h3>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {isLoading && vendors.length === 0 ? (
-          <LoadingState variant="table" />
+        {isLoading ? (
+          <TableLoader cols={6} rows={6} className="bg-surface border border-border rounded-xl" />
         ) : vendors.length === 0 && !search && !statusFilter && !typeFilter ? (
           <EmptyState
             icon={<Users className="w-8 h-8 text-muted-foreground" />}

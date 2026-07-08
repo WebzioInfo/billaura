@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/components/ui';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -85,30 +85,48 @@ export const CustomersList = () => {
             </button>
           }
         />
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Company</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={4}><div className="text-center py-8">Loading...</div></TableCell></TableRow>
-            ) : crm.length === 0 ? (
-              <TableRow><TableCell colSpan={4}><div className="text-center py-8">No customers found</div></TableCell></TableRow>
-            ) : crm.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell>{c.name}</TableCell>
-                <TableCell>{c.email || '-'}</TableCell>
-                <TableCell>{c.phone || '-'}</TableCell>
-                <TableCell>{c.tradeName || '-'}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        {loading ? (
+          <TableLoader cols={4} rows={5} className="mt-6 border border-border/80 bg-surface rounded-2xl animate-fade-in" />
+        ) : crm.length === 0 ? (
+          <div className="mt-6 flex flex-col items-center justify-center p-12 text-center bg-surface border border-border rounded-2xl shadow-sm space-y-3">
+            <div className="p-3 bg-muted/30 text-muted-foreground rounded-full">
+              <Loader2 className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-sm text-foreground">No Customers Found</h3>
+              <p className="text-xs text-muted-foreground">Manage your client list and billing relationships by adding your first customer.</p>
+            </div>
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="bg-accent text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-accent/20 cursor-pointer hover:bg-opacity-95 transition-all mt-1"
+            >
+              Add First Customer
+            </button>
+          </div>
+        ) : (
+          <div className="border border-border/80 bg-surface rounded-2xl overflow-hidden mt-6 shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/10 border-b border-border">
+                  <TableHead className="font-bold">Name</TableHead>
+                  <TableHead className="font-bold">Email</TableHead>
+                  <TableHead className="font-bold">Phone</TableHead>
+                  <TableHead className="font-bold">Company</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {crm.map((c) => (
+                  <TableRow key={c.id} className="hover:bg-muted/50 border-b border-border transition-colors">
+                    <TableCell className="font-semibold text-foreground">{c.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.email || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono">{c.phone || '-'}</TableCell>
+                    <TableCell className="text-foreground">{c.tradeName || '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         {/* Customer Creation Modal */}
         {isModalOpen && (

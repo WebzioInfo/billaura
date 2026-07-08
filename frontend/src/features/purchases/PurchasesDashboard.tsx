@@ -14,8 +14,9 @@ import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LedgerSearchSelect } from '../../components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer } from '../../components/ui';
+import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer, TableLoader } from '../../components/ui';
 import { useApiList } from '../../hooks/useApiList';
+import { useBankAccounts } from '../../hooks/useBankAccounts';
 
 // --- SCHEMAS ---
 const vendorSchema = z.object({
@@ -196,8 +197,7 @@ export const PurchasesDashboard = () => {
   });
   const { data: vendors = [], isLoading: isLoadingVendors } = useApiList<Vendor>(['vendors'], '/vendors');
   const { data: products = [], isLoading: isLoadingProducts } = useApiList<Product>(['products'], '/products');
-  const { data: bankAccounts = [], isLoading: isLoadingBankAccounts } = useApiList<BankAccount>(['bankAccounts'], '/bank-accounts');
-  const hasBankAccounts = bankAccounts.length > 0;
+  const { bankAccounts, hasBankAccounts, isLoading: isLoadingBankAccounts } = useBankAccounts();
   const maskAccountNumber = (accountNumber?: string) => accountNumber ? `XXXX${accountNumber.slice(-4)}` : 'Account number not set';
 
   const isLoading = isLoadingPurchases || isLoadingPayments || isLoadingVendors || isLoadingProducts || isLoadingBankAccounts;
@@ -615,11 +615,7 @@ export const PurchasesDashboard = () => {
         <div className="space-y-8 w-full">
           {/* Main List Panels */}
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="glass-panel p-4 rounded-lg border border-border h-32 animate-pulse" />
-              ))}
-            </div>
+            <TableLoader cols={6} rows={6} className="bg-surface border border-border rounded-xl" />
           ) : activeTab === 'purchases' ? (
             purchases.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 w-full px-4">

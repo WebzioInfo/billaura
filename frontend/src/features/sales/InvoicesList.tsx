@@ -1,10 +1,7 @@
 import React, { useMemo } from 'react';
 import { Plus, Receipt, Eye, Sparkles } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { PageContainer, EmptyState } from '@/components/ui/LayoutComponents';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, PageContainer, EmptyState, TableLoader } from '@/components/ui';
 import apiClient from '@/services/api';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -73,17 +70,7 @@ export const InvoicesList = () => {
         />
 
         {loading ? (
-          <div className="space-y-4">
-            <Card className="p-6 border border-border/40 animate-pulse space-y-4 bg-surface">
-              <div className="h-6 w-1/4 bg-muted rounded"></div>
-              <div className="h-10 w-full bg-muted/60 rounded"></div>
-              <div className="space-y-2">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-12 w-full bg-muted/40 rounded"></div>
-                ))}
-              </div>
-            </Card>
-          </div>
+          <TableLoader cols={6} rows={6} className="bg-surface border border-border rounded-2xl" />
         ) : invoices.length === 0 ? (
           <EmptyState
             icon={<Receipt className="w-12 h-12 text-muted-foreground/60" />}
