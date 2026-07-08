@@ -100,6 +100,7 @@ const STATIC_PAGES: Omit<SearchItem, 'score'>[] = [
   // Accounting Module
   { id: 'coa', title: 'Chart of Accounts', category: 'Accounting', breadcrumb: 'Accounting > Chart of Accounts', icon: 'BookOpen', path: '/chart-of-accounts', type: 'page' },
   { id: 'journals', title: 'Journal Entries', category: 'Accounting', breadcrumb: 'Accounting > Journal Entries', icon: 'BookOpen', path: '/journal-entries', type: 'page' },
+  { id: 'expenses', title: 'Expenses Claims Dashboard', category: 'Accounting', breadcrumb: 'Accounting > Expenses', icon: 'Receipt', path: '/expenses', type: 'page' },
   { id: 'banking', title: 'Banking Dashboard', category: 'Accounting', breadcrumb: 'Accounting > Banking', icon: 'Landmark', path: '/banking', type: 'page' },
   { id: 'bank-transactions', title: 'Bank Transactions', category: 'Accounting', breadcrumb: 'Accounting > Transactions', icon: 'CreditCard', path: '/bank-transactions', type: 'page' },
   { id: 'reconciliation', title: 'Reconciliation Center', category: 'Accounting', breadcrumb: 'Accounting > Reconciliation', icon: 'RefreshCw', path: '/reconciliation', type: 'page' },

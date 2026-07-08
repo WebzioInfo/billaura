@@ -77,6 +77,7 @@ const MENUS = [
     items: [
       { label: 'Chart of Accounts', path: '/chart-of-accounts', id: 'coa' },
       { label: 'Journal Entries', path: '/journal-entries', id: 'journals' },
+      { label: 'Expenses', path: '/expenses', id: 'expenses' },
       { label: 'Banking', path: '/banking', id: 'banking' },
       { label: 'Bank Transactions', path: '/bank-transactions', id: 'bank-transactions' },
       { label: 'Reconciliation', path: '/reconciliation', id: 'reconciliation' },
