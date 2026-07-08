@@ -169,7 +169,36 @@ const staticPagesProvider: SearchProvider = {
   }
 };
 
+import apiClient from '@/services/api';
+
 registerSearchProvider(staticPagesProvider);
+
+// Dynamic Ledger Accounts Search Provider
+const accountsProvider: SearchProvider = {
+  name: 'ledger-accounts',
+  search: async (query: string) => {
+    try {
+      const res = await apiClient.get('/accounts/lookup', {
+        params: { search: query, limit: 10 }
+      });
+      const items = res.data?.data || [];
+      return items.map((acc: any) => ({
+        id: `ledger-${acc.id}`,
+        title: `${acc.name}${acc.code ? ` (${acc.code})` : ''}`,
+        category: 'Ledger Inquiry',
+        breadcrumb: `Accounting > Chart of Accounts > ${acc.name}`,
+        icon: 'BookOpen',
+        path: `/accounting/ledger/${acc.id}`,
+        type: 'entity',
+        score: getMatchScore(acc.name, query) + 5
+      }));
+    } catch {
+      return [];
+    }
+  }
+};
+
+registerSearchProvider(accountsProvider);
 
 // Core search method running against all registered search providers
 export async function searchAll(query: string): Promise<SearchItem[]> {

@@ -59,6 +59,8 @@ export function WorkspaceLayout() {
         const params = new URLSearchParams(location.search);
         const typeParam = params.get('type');
         title = typeParam || 'Other Income';
+      } else if (location.pathname.startsWith('/accounting/ledger') && !segments[2]) {
+        title = 'Search Ledger';
       } else if (segments.length > 0) {
         title = segments[segments.length - 1].replace(/-/g, ' ');
         title = title.charAt(0).toUpperCase() + title.slice(1);

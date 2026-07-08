@@ -12,6 +12,7 @@ const DepartmentsList = lazy(() => import('../features/departments/DepartmentsLi
 const CrmDashboard = lazy(() => import('../features/crm/CrmDashboard').then(m => ({ default: m.CrmDashboard })));
 const IncomeDashboard = lazy(() => import('../features/income/IncomeDashboard').then(m => ({ default: m.IncomeDashboard })));
 const ChartOfAccounts = lazy(() => import('../features/accounting/ChartOfAccounts').then(m => ({ default: m.ChartOfAccounts })));
+const LedgerInquiry = lazy(() => import('../features/accounting/LedgerInquiry').then(m => ({ default: m.LedgerInquiry })));
 const JournalVouchersList = lazy(() => import('../features/accounting/JournalVouchersList').then(m => ({ default: m.JournalVouchersList })));
 const JournalVoucherForm = lazy(() => import('../features/accounting/JournalVoucherForm').then(m => ({ default: m.JournalVoucherForm })));
 const CapitalDashboard = lazy(() => import('../features/accounting/CapitalDashboard').then(m => ({ default: m.CapitalDashboard })));
@@ -238,6 +239,8 @@ export const router = createBrowserRouter([
       { path: 'banking', element: <ChartOfAccounts /> },
       { path: 'chart-of-accounts', element: <ChartOfAccounts /> },
       { path: 'accounting', element: <ChartOfAccounts /> },
+      { path: 'accounting/ledger', element: <LedgerInquiry /> },
+      { path: 'accounting/ledger/:ledgerId', element: <LedgerInquiry /> },
       { path: 'journal-entries', element: <JournalVouchersList /> },
       { path: 'journal-entries/new', element: <JournalVoucherForm /> },
       { path: 'capital', element: <CapitalDashboard /> },

@@ -52,6 +52,11 @@ export class AccountsController {
     return this.accountsService.findAll(query);
   }
 
+  @Get(":id/inquiry")
+  async getLedgerInquiry(@Param("id") id: string, @Query() query: any) {
+    return this.accountsService.getLedgerInquiry(id, query);
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     return this.accountsService.findOne(id);

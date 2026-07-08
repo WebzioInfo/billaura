@@ -278,6 +278,215 @@ export class AccountsService {
     }
   }
 
+  async getLedgerInquiry(id: string, query: any) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const account = await this.prisma.account.findFirst({
+      where: { id, companyId },
+      include: { parent: true },
+    });
+
+    if (!account) {
+      throw new NotFoundException(`Ledger account with ID ${id} not found`);
+    }
+
+    const startDate = query.startDate ? new Date(query.startDate) : undefined;
+    const endDate = query.endDate ? new Date(query.endDate) : undefined;
+    const minAmount = query.minAmount ? Number(query.minAmount) : undefined;
+    const maxAmount = query.maxAmount ? Number(query.maxAmount) : undefined;
+    const voucherType = query.voucherType;
+    const search = query.search?.trim().toLowerCase();
+
+    const allLines = await this.prisma.journalLine.findMany({
+      where: {
+        accountId: id,
+        journalEntry: {
+          companyId,
+        },
+      },
+      include: {
+        journalEntry: true
+      },
+      orderBy: [
+        { journalEntry: { date: 'asc' } },
+        { journalEntry: { createdAt: 'asc' } },
+        { id: 'asc' }
+      ]
+    });
+
+    let balance = 0;
+    const formattedLines = allLines.map((line) => {
+      const debit = Number(line.debit);
+      const credit = Number(line.credit);
+      
+      const isAssetOrExpense = account.category === 'ASSET' || account.category === 'EXPENSE';
+      const change = isAssetOrExpense ? (debit - credit) : (credit - debit);
+      balance += change;
+
+      const ref = line.journalEntry.reference || '';
+      const desc = line.journalEntry.description || '';
+      
+      let vType = 'Journal Entry';
+      let path = '/accounting';
+      if (ref.startsWith('INV-') || desc.includes('invoice')) {
+        vType = 'Sales Invoice';
+        path = '/invoices';
+      } else if (ref.startsWith('REC-') || desc.includes('receipt')) {
+        vType = 'Receipt';
+        path = '/receipts';
+      } else if (ref.startsWith('PAY-') || desc.includes('payment') || desc.includes('payout')) {
+        vType = 'Vendor Payment';
+        path = '/vendor-payments';
+      } else if (ref.startsWith('BIL-') || ref.startsWith('PUR-') || desc.includes('purchase')) {
+        vType = 'Purchase Bill';
+        path = '/bills';
+      }
+
+      return {
+        id: line.id,
+        journalEntryId: line.journalEntryId,
+        date: line.journalEntry.date,
+        voucherNo: ref || 'JV-' + line.journalEntryId.substring(0, 5).toUpperCase(),
+        voucherType: vType,
+        path,
+        reference: ref,
+        description: desc,
+        partyName: desc.replace(/Automatic .*posting /i, '') || 'N/A',
+        debit,
+        credit,
+        runningBalance: balance,
+        createdAt: line.journalEntry.createdAt,
+        status: 'POSTED'
+      };
+    });
+
+    let filtered = formattedLines;
+
+    let openingBalance = 0;
+    if (startDate) {
+      const beforeStart = formattedLines.filter(line => new Date(line.date) < startDate);
+      if (beforeStart.length > 0) {
+        openingBalance = beforeStart[beforeStart.length - 1].runningBalance;
+      }
+    }
+
+    if (startDate) {
+      filtered = filtered.filter(line => new Date(line.date) >= startDate);
+    }
+    if (endDate) {
+      filtered = filtered.filter(line => new Date(line.date) <= endDate);
+    }
+    if (minAmount !== undefined) {
+      filtered = filtered.filter(line => Math.max(line.debit, line.credit) >= minAmount);
+    }
+    if (maxAmount !== undefined) {
+      filtered = filtered.filter(line => Math.max(line.debit, line.credit) <= maxAmount);
+    }
+    if (voucherType) {
+      filtered = filtered.filter(line => line.voucherType.toLowerCase() === voucherType.toLowerCase());
+    }
+    if (search) {
+      filtered = filtered.filter(line => 
+        line.voucherNo.toLowerCase().includes(search) ||
+        line.description.toLowerCase().includes(search) ||
+        line.partyName.toLowerCase().includes(search) ||
+        line.reference.toLowerCase().includes(search)
+      );
+    }
+
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const total = filtered.length;
+    const paginated = filtered.slice((page - 1) * limit, page * limit);
+
+    const totalDebit = filtered.reduce((acc, curr) => acc + curr.debit, 0);
+    const totalCredit = filtered.reduce((acc, curr) => acc + curr.credit, 0);
+    const netMovement = account.category === 'ASSET' || account.category === 'EXPENSE'
+      ? totalDebit - totalCredit
+      : totalCredit - totalDebit;
+
+    const averageTransaction = (totalDebit + totalCredit) / Math.max(1, filtered.length);
+    const largestDebit = filtered.reduce((max, curr) => Math.max(max, curr.debit), 0);
+    const largestCredit = filtered.reduce((max, curr) => Math.max(max, curr.credit), 0);
+
+    const auditLogs = await this.prisma.auditLog.findMany({
+      where: { companyId, tableName: 'accounts' },
+      take: 10,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let linkedPartners: any[] = [];
+    const isAR = account.name.toLowerCase().includes('receivable');
+    const isAP = account.name.toLowerCase().includes('payable');
+    if (isAR) {
+      linkedPartners = await this.prisma.businessPartner.findMany({
+        where: { companyId, deletedAt: null, bpType: { in: ['CUSTOMER', 'CUSTOMER_VENDOR'] } },
+        select: { id: true, name: true, phone: true, gstin: true, receivableBalance: true },
+        take: 15
+      });
+    } else if (isAP) {
+      linkedPartners = await this.prisma.businessPartner.findMany({
+        where: { companyId, deletedAt: null, bpType: { in: ['VENDOR', 'CUSTOMER_VENDOR'] } },
+        select: { id: true, name: true, phone: true, gstin: true, payableBalance: true },
+        take: 15
+      });
+    }
+
+    return {
+      success: true,
+      data: {
+        ledger: {
+          id: account.id,
+          name: account.name,
+          code: account.code,
+          category: account.category,
+          subCategory: account.subCategory,
+          balance: Number(account.balance),
+          parentName: account.parent?.name || 'Root Group',
+          openingBalance,
+          currentBalance: Number(account.balance),
+        },
+        summary: {
+          openingBalance,
+          currentBalance: Number(account.balance),
+          totalDebit,
+          totalCredit,
+          netMovement,
+          transactionCount: total,
+          lastTransactionDate: filtered.length > 0 ? filtered[filtered.length - 1].date : null,
+          averageTransaction,
+          largestDebit,
+          largestCredit,
+        },
+        transactions: paginated,
+        allTransactions: filtered,
+        auditLogs: auditLogs.map(log => ({
+          id: log.id,
+          action: log.action,
+          createdAt: log.createdAt,
+          ipAddress: log.ipAddress || '127.0.0.1',
+          userId: log.userId,
+        })),
+        linkedPartners: linkedPartners.map(partner => ({
+          id: partner.id,
+          name: partner.name,
+          phone: partner.phone || 'N/A',
+          gstin: partner.gstin || 'N/A',
+          balance: Number(partner.receivableBalance || partner.payableBalance || 0),
+        })),
+      },
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      }
+    };
+  }
+
   async findOne(id: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
