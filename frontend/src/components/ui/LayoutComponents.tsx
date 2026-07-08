@@ -23,7 +23,7 @@ export const PageContainer = ({ className, maxWidth = '7xl', children, ...props 
   return (
     <div
       className={cn(
-        "mx-auto w-full px-6 pt-6 pb-8 text-left text-foreground bg-background min-h-screen space-y-6",
+        "mx-auto w-full px-4 pt-3 pb-4 text-left text-foreground bg-background min-h-screen space-y-3.5",
         maxWidthClasses[maxWidth],
         className
       )}
@@ -36,16 +36,16 @@ export const PageContainer = ({ className, maxWidth = '7xl', children, ...props 
 
 // 2. Section
 export const Section = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("space-y-6", className)} {...props}>
+  <div className={cn("space-y-3", className)} {...props}>
     {children}
   </div>
 );
 
 // 3. FormSection
 export const FormSection = ({ title, children, className, ...props }: { title?: string; children: React.ReactNode; className?: string }) => (
-  <div className={cn("bg-surface border border-border rounded-2xl p-6 space-y-4 shadow-sm", className)} {...props}>
+  <div className={cn("bg-surface border border-border rounded-lg p-4 space-y-3 shadow-sm", className)} {...props}>
     {title && (
-      <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+      <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground border-b border-border pb-1.5 flex items-center gap-2">
         {title}
       </h3>
     )}
@@ -63,16 +63,16 @@ interface EmptyStateProps {
 }
 
 export const EmptyState = ({ icon, title, description, actionLabel, onActionClick }: EmptyStateProps) => (
-  <div className="flex flex-col items-center justify-center p-12 text-center bg-surface border border-border rounded-2xl shadow-sm space-y-4 w-full">
-    <div className="p-4 bg-muted/30 text-muted-foreground rounded-full">
-      {icon || <AlertCircle className="w-8 h-8 text-muted-foreground" />}
+  <div className="flex flex-col items-center justify-center p-6 text-center bg-surface border border-border rounded-lg shadow-sm space-y-2.5 w-full">
+    <div className="p-2 bg-muted/30 text-muted-foreground rounded-md">
+      {icon || <AlertCircle className="w-6 h-6 text-muted-foreground" />}
     </div>
-    <div className="space-y-1.5 max-w-sm">
-      <h3 className="font-bold text-base text-foreground">{title}</h3>
-      <p className="text-xs text-muted-foreground">{description}</p>
+    <div className="space-y-1 max-w-sm">
+      <h3 className="font-bold text-sm text-foreground">{title}</h3>
+      <p className="text-[11px] text-muted-foreground">{description}</p>
     </div>
     {actionLabel && onActionClick && (
-      <Button onClick={onActionClick} variant="primary" size="sm" className="mt-2 font-bold px-5">
+      <Button onClick={onActionClick} variant="primary" size="sm" className="mt-1 font-bold px-4">
         {actionLabel}
       </Button>
     )}
@@ -161,7 +161,7 @@ export const BackNavigation = ({ label, to, className, ...props }: BackNavigatio
 
 // 7. ActionBar
 export const ActionBar = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex justify-end items-center gap-3 border-t border-border pt-6 mt-6", className)} {...props}>
+  <div className={cn("flex justify-end items-center gap-3 border-t border-border pt-3 mt-3", className)} {...props}>
     {children}
   </div>
 );
@@ -175,15 +175,15 @@ interface BreadcrumbItem {
 export const Breadcrumb = ({ items, className }: { items: BreadcrumbItem[]; className?: string }) => {
   const navigate = useNavigate();
   return (
-    <nav aria-label="Breadcrumb" className={cn("flex items-center space-x-1 text-[13px] text-muted-foreground mb-4", className)}>
+    <nav aria-label="Breadcrumb" className={cn("flex items-center space-x-1 text-xs text-muted-foreground mb-2", className)}>
       {items.map((item, index) => (
         <React.Fragment key={index}>
-          {index > 0 && <span className="mx-1 text-muted-foreground">/</span>}
+          {index > 0 && <span className="mx-0.5 text-muted-foreground/60">/</span>}
           {item.href && index !== items.length - 1 ? (
             <button
               type="button"
               onClick={() => navigate(item.href!)}
-              className="hover:text-foreground transition-colors font-medium cursor-pointer"
+              className="hover:text-foreground transition-colors cursor-pointer"
             >
               {item.label}
             </button>

@@ -230,72 +230,78 @@ export function PlatformDashboard() {
     switch (currentTab) {
       case 'dashboard':
         return (
-          <div className="space-y-8 animate-fadeIn">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="space-y-4 animate-fadeIn text-left">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 capitalize">
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 capitalize">
                   Platform Operations
                 </h1>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Super Admin system administration control desk.
                 </p>
               </div>
             </div>
             
             {/* KPI grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Tenants</h3>
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                    <Users className="w-5 h-5" />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <p className="text-xl font-bold text-slate-900 leading-none">{companies.length}</p>
+                  <div className="w-6 h-6 rounded bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Users className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-slate-900">{companies.length}</p>
-                <div className="flex items-center gap-1 mt-2 text-xs text-emerald-600 font-medium">
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                  <span>All active and healthy</span>
+                <div className="flex items-center justify-between mt-1 text-[11px]">
+                  <h3 className="font-semibold text-slate-500 uppercase tracking-wider">Active Tenants</h3>
+                  <div className="flex items-center gap-0.5 text-emerald-600 font-medium">
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                    <span>Healthy</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Platform MRR</h3>
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5" />
+              <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <p className="text-xl font-bold text-slate-900 leading-none">{formatCurrency(revenue.mrr)}</p>
+                  <div className="w-6 h-6 rounded bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-slate-900">{formatCurrency(revenue.mrr)}</p>
-                <div className="flex items-center gap-1 mt-2 text-xs text-emerald-600 font-medium">
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                  <span>Recurring licenses</span>
+                <div className="flex items-center justify-between mt-1 text-[11px]">
+                  <h3 className="font-semibold text-slate-500 uppercase tracking-wider">Platform MRR</h3>
+                  <div className="flex items-center gap-0.5 text-emerald-600 font-medium">
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                    <span>MRR</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aggregate Sales</h3>
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                    <Layers className="w-5 h-5" />
+              <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <p className="text-xl font-bold text-slate-900 leading-none">{formatCurrency(revenue.totalRevenue)}</p>
+                  <div className="w-6 h-6 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <Layers className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-slate-900">{formatCurrency(revenue.totalRevenue)}</p>
-                <div className="flex items-center gap-1 mt-2 text-xs text-slate-500 font-medium">
-                  <span>{revenue.transactionCount} paid subscriptions</span>
+                <div className="flex items-center justify-between mt-1 text-[11px]">
+                  <h3 className="font-semibold text-slate-500 uppercase tracking-wider">Aggregate Sales</h3>
+                  <span className="text-slate-500 font-semibold">{revenue.transactionCount} subs</span>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">System Health</h3>
-                  <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
-                    <Server className="w-5 h-5" />
+              <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <p className="text-xl font-bold text-slate-900 leading-none">99.98%</p>
+                  <div className="w-6 h-6 rounded bg-violet-50 text-violet-600 flex items-center justify-center">
+                    <Server className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-slate-900">99.98%</p>
-                <div className="flex items-center gap-1 mt-2 text-xs text-emerald-600 font-medium">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  <span>CPU/RAM operational</span>
+                <div className="flex items-center justify-between mt-1 text-[11px]">
+                  <h3 className="font-semibold text-slate-500 uppercase tracking-wider">System Health</h3>
+                  <div className="flex items-center gap-0.5 text-emerald-600 font-medium">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Uptime</span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -18,8 +18,8 @@ export class CreatePurchasePaymentDto {
   purchaseId: string;
 
   @IsString()
-  @IsNotEmpty()
-  bankAccountId: string;
+  @IsOptional()
+  bankAccountId?: string;
 
   @IsDateString()
   @IsNotEmpty()

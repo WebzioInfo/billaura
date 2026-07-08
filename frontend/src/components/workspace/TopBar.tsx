@@ -285,34 +285,34 @@ export function TopBar() {
   let linearIndex = 0;
 
   return (
-    <div className="h-12 bg-primary text-primary-foreground flex items-center justify-between px-4 border-b border-primary/20 shrink-0">
+    <div className="h-10 bg-primary text-primary-foreground flex items-center justify-between px-3 border-b border-primary/20 shrink-0">
       {/* Left: Branding & Company info */}
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => navigate('/dashboard')}>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 select-none cursor-pointer" onClick={() => navigate('/dashboard')}>
           {logoBase64 ? (
-            <img src={logoBase64} alt="Company Logo" className="h-7 w-auto max-w-[120px] object-contain rounded-sm" />
+            <img src={logoBase64} alt="Company Logo" className="h-6 w-auto max-w-[100px] object-contain rounded-sm" />
           ) : (
             <>
-              <img src="/logo.png" alt="BillAura" className="h-7 w-auto object-contain dark:hidden" />
-              <img src="/logo2.png" alt="BillAura" className="h-7 w-auto object-contain hidden dark:block" />
+              <img src="/logo.png" alt="BillAura" className="h-6 w-auto object-contain dark:hidden" />
+              <img src="/logo2.png" alt="BillAura" className="h-6 w-auto object-contain hidden dark:block" />
             </>
           )}
-          {!logoBase64 && <span className="font-bold tracking-tight">BillAura</span>}
+          {!logoBase64 && <span className="font-bold tracking-tight text-sm">BillAura</span>}
         </div>
 
-        <div className="w-[1px] h-6 bg-primary-foreground/20"></div>
+        <div className="w-[1px] h-5 bg-primary-foreground/20"></div>
 
-        <div className="flex items-center gap-2 text-sm">
-          <Building2 className="w-4 h-4 text-primary-foreground/70" />
-          <span className="font-medium truncate max-w-[150px]">{companyName.split(' ')[0]}</span>
-          <span className="text-primary-foreground/50 text-xs px-2 py-0.5 bg-primary-foreground/10 rounded">FY 2026-27</span>
+        <div className="flex items-center gap-1.5 text-xs">
+          <Building2 className="w-3.5 h-3.5 text-primary-foreground/70" />
+          <span className="font-medium truncate max-w-[120px]">{companyName.split(' ')[0]}</span>
+          <span className="text-primary-foreground/50 text-[10px] px-1.5 py-0 bg-primary-foreground/10 rounded">FY 2026-27</span>
         </div>
       </div>
 
       {/* Middle: Global Search Palette */}
-      <div className="flex-1 max-w-xl mx-4 relative" ref={containerRef}>
+      <div className="flex-1 max-w-xl mx-2 relative" ref={containerRef}>
         <div className="relative group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <input
             id="global-search-input"
             ref={inputRef}
@@ -323,7 +323,7 @@ export function TopBar() {
             onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
             autoComplete="off"
-            className="w-full h-8 bg-surface text-foreground pl-9 pr-14 rounded-sm text-[13px] border-none outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-muted-foreground/70"
+            className="w-full h-7 bg-surface text-foreground pl-8 pr-14 rounded-sm text-xs border-none outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-muted-foreground/70"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
             <kbd className="hidden sm:inline-flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium text-muted-foreground uppercase border border-border">Ctrl K</kbd>
@@ -505,29 +505,29 @@ export function TopBar() {
       </div>
 
       {/* Right: Actions & Profile */}
-      <div className="flex items-center gap-3">
-        <button className="flex items-center gap-1 h-8 px-3 bg-accent hover:bg-accent/90 text-white text-[13px] font-medium rounded-sm transition-colors">
-          <Plus className="w-4 h-4" />
+      <div className="flex items-center gap-2">
+        <button className="flex items-center gap-1 h-7 px-2.5 bg-accent hover:bg-accent/90 text-white text-xs font-semibold rounded-sm transition-colors">
+          <Plus className="w-3.5 h-3.5" />
           <span>New</span>
         </button>
 
-        <div className="w-[1px] h-6 bg-primary-foreground/20 mx-1"></div>
+        <div className="w-[1px] h-5 bg-primary-foreground/20 mx-1"></div>
 
-        <button className="relative p-1.5 text-primary-foreground/70 hover:text-white transition-colors rounded-sm hover:bg-primary-foreground/10">
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+        <button className="relative p-1 text-primary-foreground/70 hover:text-white transition-colors rounded-sm hover:bg-primary-foreground/10">
+          <Bell className="w-3.5 h-3.5" />
+          <span className="absolute top-0.5 right-0.5 w-1 h-1 bg-red-500 rounded-full"></span>
         </button>
 
         <button
-          className="flex items-center gap-2 p-1 pl-2 pr-1 ml-1 rounded-sm hover:bg-primary-foreground/10 transition-colors"
+          className="flex items-center gap-1.5 p-0.5 pl-1.5 pr-0.5 ml-0.5 rounded-sm hover:bg-primary-foreground/10 transition-colors"
           onClick={() => navigate('/profile')}
         >
           <div className="flex flex-col items-end">
-            <span className="text-[13px] font-medium leading-tight">{user?.name || 'Admin'}</span>
-            <span className="text-[10px] text-primary-foreground/70 leading-tight">Administrator</span>
+            <span className="text-xs font-medium leading-none mb-0.5">{user?.name || 'Admin'}</span>
+            <span className="text-[9px] text-primary-foreground/70 leading-none">Administrator</span>
           </div>
-          <div className="w-7 h-7 bg-primary-foreground/10 rounded-sm flex items-center justify-center text-primary-foreground">
-            <User className="w-4 h-4" />
+          <div className="w-6 h-6 bg-primary-foreground/10 rounded-sm flex items-center justify-center text-primary-foreground">
+            <User className="w-3.5 h-3.5" />
           </div>
         </button>
       </div>

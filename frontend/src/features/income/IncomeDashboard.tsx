@@ -93,34 +93,40 @@ export function IncomeDashboard() {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 flex items-center space-x-4 bg-primary/5 border-primary/20">
-          <div className="p-3 bg-primary/10 rounded-full text-primary">
-            <Wallet className="w-6 h-6" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Card className="bg-primary/5 border-primary/20 p-3 rounded-lg border flex flex-col justify-between shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-foreground leading-none">₹{thisMonthSum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+            <div className="p-1 bg-primary/10 text-primary rounded">
+              <Wallet className="w-4 h-4" />
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">This Month's {selectedIncomeType}</p>
-            <h3 className="text-2xl font-bold">₹{thisMonthSum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+          <div className="flex items-center justify-between mt-1 text-[11px]">
+            <p className="font-semibold text-muted-foreground uppercase tracking-wider">This Month's Income</p>
           </div>
         </Card>
-        <Card className="p-6 flex items-center space-x-4">
-          <div className="p-3 bg-blue-500/10 rounded-full text-blue-500">
-            <FileText className="w-6 h-6" />
+        <Card className="p-3 rounded-lg border flex flex-col justify-between bg-surface shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-foreground leading-none">{filteredIncomes.length}</h3>
+            <div className="p-1 bg-blue-500/10 text-blue-500 rounded">
+              <FileText className="w-4 h-4" />
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">
+          <div className="flex items-center justify-between mt-1 text-[11px]">
+            <p className="font-semibold text-muted-foreground uppercase tracking-wider">
               Total {selectedIncomeType === 'Recurring Income' ? 'Invoices' : 'Receipts'}
             </p>
-            <h3 className="text-2xl font-bold">{filteredIncomes.length}</h3>
           </div>
         </Card>
-        <Card className="p-6 flex items-center space-x-4">
-          <div className="p-3 bg-green-500/10 rounded-full text-green-500">
-            <TrendingUp className="w-6 h-6" />
+        <Card className="p-3 rounded-lg border flex flex-col justify-between bg-surface shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-foreground leading-none truncate max-w-[150px]">{filteredIncomes.length > 0 ? selectedIncomeType : '-'}</h3>
+            <div className="p-1 bg-green-500/10 text-green-500 rounded">
+              <TrendingUp className="w-4 h-4" />
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Top Category</p>
-            <h3 className="text-2xl font-bold">{filteredIncomes.length > 0 ? selectedIncomeType : '-'}</h3>
+          <div className="flex items-center justify-between mt-1 text-[11px]">
+            <p className="font-semibold text-muted-foreground uppercase tracking-wider">Top Category</p>
           </div>
         </Card>
       </div>

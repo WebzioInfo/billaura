@@ -16,7 +16,12 @@
   --accent: #2563eb; /* Blue for active tabs/links */
   --accent-muted: #eff6ff;
   
-  /* No gradients, no glassmorphism */
+  /* Density Spacing Tokens */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
 }
 
 :root.dark {
@@ -33,6 +38,13 @@
   --primary-foreground: #111827;
   --accent: #3b82f6;
   --accent-muted: #1e3a8a;
+  
+  /* Density Spacing Tokens */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
 }
 
 @theme inline {
@@ -45,6 +57,71 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
   --color-accent-muted: var(--accent-muted);
+
+  /* Spacing Tokens */
+  --spacing-xs: var(--spacing-xs);
+  --spacing-sm: var(--spacing-sm);
+  --spacing-md: var(--spacing-md);
+  --spacing-lg: var(--spacing-lg);
+  --spacing-xl: var(--spacing-xl);
+  
+  /* Border Radii Override */
+  --radius-2xl: 8px;
+  --radius-xl: 6px;
+  --radius-lg: 4px;
+}
+
+/* Global Table Spacing & Density Overrides */
+table {
+  border-collapse: collapse !important;
+}
+table th {
+  padding: 8px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  height: 38px !important;
+  vertical-align: middle !important;
+}
+table td {
+  padding: 6px 8px !important;
+  font-size: 13px !important;
+  height: 34px !important;
+  vertical-align: middle !important;
+}
+
+/* Global Card Padding Compression */
+.glass-panel.p-6,
+.bg-surface.border.p-6,
+.bg-white.border.p-6,
+.bg-surface.p-6,
+.bg-surface.border.rounded-2xl.p-6 {
+  padding: 12px !important;
+}
+
+.glass-panel.p-8,
+.bg-surface.border.p-8,
+.bg-white.border.p-8,
+.bg-surface.p-8,
+.bg-surface.border.rounded-2xl.p-8 {
+  padding: 16px !important;
+}
+
+.glass-panel.p-12,
+.bg-surface.border.p-12,
+.bg-white.border.p-12,
+.bg-surface.p-12,
+.bg-surface.border.rounded-2xl.p-12 {
+  padding: 24px !important;
+}
+
+/* Reduce standard skeleton / loading heights */
+.h-32.animate-pulse {
+  height: 76px !important;
+}
+.h-96 {
+  height: 320px !important;
 }
 
 html,

@@ -382,46 +382,54 @@ export const CrmDashboard = () => {
  
       {/* KPI Cards Row */}
       {activeTab === 'leads' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase">Pipeline Weight</span>
-              <h3 className="text-2xl font-black text-foreground">{formatCurrency(totalPipelineValue)}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="glass-panel p-3 rounded-lg border border-border flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-foreground leading-none">{formatCurrency(totalPipelineValue)}</h3>
+              <div className="p-1 bg-accent/10 text-accent rounded">
+                <TrendingUp className="w-4 h-4" />
+              </div>
             </div>
-            <div className="p-3 bg-accent/10 text-accent rounded-xl">
-              <TrendingUp className="w-5 h-5" />
+            <div className="flex items-center justify-between mt-1 text-[11px]">
+              <span className="font-semibold text-muted-foreground uppercase tracking-wider">Pipeline Weight</span>
             </div>
           </div>
-          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase">Active Leads</span>
-              <h3 className="text-2xl font-black text-foreground">{leads.filter(l => l.status !== 'LOST').length}</h3>
+          <div className="glass-panel p-3 rounded-lg border border-border flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-foreground leading-none">{leads.filter(l => l.status !== 'LOST').length}</h3>
+              <div className="p-1 bg-accent/10 text-accent rounded">
+                <Users className="w-4 h-4" />
+              </div>
             </div>
-            <div className="p-3 bg-accent/10 text-accent rounded-xl">
-              <Users className="w-5 h-5" />
+            <div className="flex items-center justify-between mt-1 text-[11px]">
+              <span className="font-semibold text-muted-foreground uppercase tracking-wider">Active Leads</span>
             </div>
           </div>
         </div>
       )}
 
       {activeTab === 'customers' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase">Outstanding Balance</span>
-              <h3 className="text-2xl font-black text-foreground">{formatCurrency(totalOutstanding)}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="glass-panel p-3 rounded-lg border border-border flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-foreground leading-none">{formatCurrency(totalOutstanding)}</h3>
+              <div className="p-1 bg-accent/10 text-accent rounded">
+                <TrendingUp className="w-4 h-4" />
+              </div>
             </div>
-            <div className="p-3 bg-accent/10 text-accent rounded-xl">
-              <TrendingUp className="w-5 h-5" />
+            <div className="flex items-center justify-between mt-1 text-[11px]">
+              <span className="font-semibold text-muted-foreground uppercase tracking-wider">Outstanding Balance</span>
             </div>
           </div>
-          <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start">
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase">Total Customers</span>
-              <h3 className="text-2xl font-black text-foreground">{customers.length}</h3>
+          <div className="glass-panel p-3 rounded-lg border border-border flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-foreground leading-none">{customers.length}</h3>
+              <div className="p-1 bg-accent/10 text-accent rounded">
+                <Users className="w-4 h-4" />
+              </div>
             </div>
-            <div className="p-3 bg-accent/10 text-accent rounded-xl">
-              <Users className="w-5 h-5" />
+            <div className="flex items-center justify-between mt-1 text-[11px]">
+              <span className="font-semibold text-muted-foreground uppercase tracking-wider">Total Customers</span>
             </div>
           </div>
         </div>

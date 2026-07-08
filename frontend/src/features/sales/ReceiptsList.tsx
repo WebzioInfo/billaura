@@ -138,38 +138,38 @@ export const ReceiptsList = () => {
               onClick={() => navigate(`/receipts/${r.id}`)}
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-xs gap-1.5 hover:bg-accent/10 hover:text-accent hover:border-accent"
+              className="h-7 w-7 p-0 flex items-center justify-center hover:bg-accent/10 hover:text-accent hover:border-accent"
               title="View Receipt"
             >
-              <Eye className="w-3.5 h-3.5" /> <span className="hidden xl:inline">View</span>
+              <Eye className="w-3.5 h-3.5" />
             </Button>
             <Button
               onClick={() => navigate(`/receipts/${r.id}/edit`)}
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-xs gap-1.5 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500"
+              className="h-7 w-7 p-0 flex items-center justify-center hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500"
               title="Edit Receipt"
             >
-              <Edit3 className="w-3.5 h-3.5" /> <span className="hidden xl:inline">Edit</span>
+              <Edit3 className="w-3.5 h-3.5" />
             </Button>
             <Button
               onClick={() => handlePrint(r.id)}
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-xs gap-1.5 hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500"
+              className="h-7 w-7 p-0 flex items-center justify-center hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500"
               title="Print PDF"
             >
-              <Printer className="w-3.5 h-3.5" /> <span className="hidden xl:inline">Print</span>
+              <Printer className="w-3.5 h-3.5" />
             </Button>
             {r.status === 'COMPLETED' && (
               <Button
                 onClick={() => setReceiptToVoid(r)}
                 variant="outline"
                 size="sm"
-                className="h-7 px-2 text-xs gap-1.5 text-red-600 hover:bg-red-500/10 hover:border-red-500"
+                className="h-7 w-7 p-0 flex items-center justify-center text-red-600 hover:bg-red-500/10 hover:border-red-500"
                 title="Void Receipt"
               >
-                <Trash2 className="w-3.5 h-3.5" /> <span className="hidden xl:inline">Void</span>
+                <Trash2 className="w-3.5 h-3.5" />
               </Button>
             )}
           </div>
@@ -179,9 +179,9 @@ export const ReceiptsList = () => {
   ], [navigate]);
 
   const toolbarExtras = (
-    <div className="flex flex-1 flex-wrap items-center gap-3">
-      <div className="relative max-w-sm w-[280px]">
-        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+    <div className="flex flex-1 flex-wrap items-center gap-2">
+      <div className="relative max-w-xs w-[240px]">
+        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
           placeholder="Search receipt no or customer..."
@@ -190,7 +190,7 @@ export const ReceiptsList = () => {
             setSearch(e.target.value);
             setPagination(prev => ({ ...prev, pageIndex: 0 }));
           }}
-          className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent"
+          className="w-full bg-background border border-border rounded-md pl-8 pr-3 py-1 text-xs focus:outline-none focus:border-accent"
         />
       </div>
 
@@ -200,7 +200,7 @@ export const ReceiptsList = () => {
           setStatusFilter(e.target.value);
           setPagination(prev => ({ ...prev, pageIndex: 0 }));
         }}
-        className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
+        className="bg-background border border-border rounded-md px-2.5 py-1 text-xs focus:outline-none"
       >
         <option value="">All Statuses</option>
         <option value="COMPLETED">Completed</option>
@@ -213,7 +213,7 @@ export const ReceiptsList = () => {
           setMethodFilter(e.target.value);
           setPagination(prev => ({ ...prev, pageIndex: 0 }));
         }}
-        className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
+        className="bg-background border border-border rounded-md px-2.5 py-1 text-xs focus:outline-none"
       >
         <option value="">All Methods</option>
         <option value="CASH">Cash</option>
@@ -223,49 +223,53 @@ export const ReceiptsList = () => {
         <option value="CREDIT_CARD">Credit Card</option>
       </select>
 
-      <Button onClick={() => fetchReceipts()} variant="outline" size="sm" className="h-9 w-9 p-0 rounded-xl" title="Refresh">
-        <RefreshCw className="w-4 h-4" />
+      <Button onClick={() => fetchReceipts()} variant="outline" size="sm" className="h-7 w-7 p-0 rounded-md" title="Refresh">
+        <RefreshCw className="w-3.5 h-3.5" />
       </Button>
-
-      <div className="ml-auto flex items-center">
-        <Button
-          onClick={() => navigate('/receipts/new')}
-          className="flex items-center gap-2 font-bold px-5 h-9 rounded-xl"
-          variant="primary"
-        >
-          <Plus className="w-4 h-4" /> New Receipt
-        </Button>
-      </div>
     </div>
   );
 
   return (
     <>
-    <PageContainer maxWidth="7xl">
+    <PageContainer maxWidth="full">
       <PageHeader
         title="Payment Receipts"
-        description="View and manage money collections and invoice allocation audits."
+        primaryAction={
+          <Button
+            onClick={() => navigate('/receipts/new')}
+            className="flex items-center gap-1 font-semibold"
+            variant="primary"
+          >
+            <Plus className="w-3.5 h-3.5" /> New Receipt
+          </Button>
+        }
       />
 
       {/* Quick Stats Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4 shadow-sm">
-          <div className="p-3.5 bg-emerald-500/10 rounded-xl text-emerald-500"><DollarSign className="w-6 h-6" /></div>
-          <div>
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Received</p>
-            <h3 className="text-2xl font-bold text-foreground mt-1">
-              ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'COMPLETED' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN')}
-            </h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+        <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <span className="flex items-center gap-1">💰 Total Received</span>
           </div>
+          <h3 className="text-base font-bold text-foreground leading-none mt-1">
+            ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'COMPLETED' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </h3>
         </div>
-        <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4 shadow-sm">
-          <div className="p-3.5 bg-accent/10 rounded-xl text-accent"><CheckCircle className="w-6 h-6" /></div>
-          <div>
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active Receipts</p>
-            <h3 className="text-2xl font-bold text-foreground mt-1">
-              {receipts.filter((r: any) => r.status === 'COMPLETED').length} / {totalItems}
-            </h3>
+        <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <span className="flex items-center gap-1">✔️ Active Receipts</span>
           </div>
+          <h3 className="text-base font-bold text-foreground leading-none mt-1">
+            {receipts.filter((r: any) => r.status === 'COMPLETED').length} / {totalItems}
+          </h3>
+        </div>
+        <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <span className="flex items-center gap-1">⏳ Pending Receipts</span>
+          </div>
+          <h3 className="text-base font-bold text-foreground leading-none mt-1">
+            ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'PENDING' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </h3>
         </div>
       </div>
 

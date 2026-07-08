@@ -14,7 +14,7 @@ import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LedgerSearchSelect } from '../../components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog } from '../../components/ui';
+import { DeleteDialog, ConfirmDialog, AsyncSelect } from '../../components/ui';
 import { useApiList } from '../../hooks/useApiList';
 
 // --- SCHEMAS ---
@@ -43,10 +43,9 @@ const purchaseSchema = z.object({
 
 const paymentSchema = z.object({
   vendorId: z.string().min(1, 'Select a vendor'),
-  purchaseId: z.string().optional(),
-  bankAccountId: z.string().min(1, 'Select a bank account'),
+  purchaseId: z.string().min(1, 'Select a purchase invoice'),
   date: z.string().nonempty('Select date'),
-  amount: z.number().min(1, 'Amount must be >= 1'),
+  amount: z.number().min(0.01, 'Amount must be greater than zero'),
   method: z.string().min(1, 'Select payment method'),
   reference: z.string().optional(),
   notes: z.string().optional(),
@@ -320,7 +319,6 @@ export const PurchasesDashboard = () => {
     defaultValues: {
       vendorId: '',
       purchaseId: '',
-      bankAccountId: '',
       date: new Date().toISOString().split('T')[0],
       amount: 0,
       method: 'BANK_TRANSFER',
@@ -332,6 +330,18 @@ export const PurchasesDashboard = () => {
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedVendorId = paymentForm.watch('vendorId');
   const vendorPurchases = purchases.filter(p => p.vendorId === selectedVendorId && p.status !== 'PAID');
+
+  const selectedPurchaseId = paymentForm.watch('purchaseId');
+
+  useEffect(() => {
+    if (selectedPurchaseId && selectedVendorId) {
+      const selectedInvoice = vendorPurchases.find(p => p.id === selectedPurchaseId);
+      if (selectedInvoice) {
+        const dueAmount = Number(selectedInvoice.grandTotal) - Number(selectedInvoice.amountPaid);
+        paymentForm.setValue('amount', dueAmount, { shouldValidate: true });
+      }
+    }
+  }, [selectedPurchaseId, selectedVendorId, vendorPurchases, paymentForm]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -370,6 +380,7 @@ export const PurchasesDashboard = () => {
       }
       setIsVendorModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['vendors_lookup'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed');
     } finally {
@@ -714,15 +725,20 @@ export const PurchasesDashboard = () => {
             <form onSubmit={paymentForm.handleSubmit(handlePaymentSubmit)} className="p-6 space-y-4 text-left">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Supplier *</label>
-                  <select {...paymentForm.register('vendorId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                    <option value="">Select supplier...</option>
-                    {vendors.map(v => (
-                      <option key={v.id} value={v.id}>
-                        {v.name} (Payable: {formatCurrency(Number(v.payableBalance))})
-                      </option>
-                    ))}
-                  </select>
+                  <AsyncSelect
+                    label="Supplier *"
+                    apiPath="/vendors"
+                    queryKeyPrefix="vendors_lookup"
+                    placeholder="Search suppliers..."
+                    value={paymentForm.watch('vendorId')}
+                    onChange={(val) => {
+                      paymentForm.setValue('vendorId', val, { shouldValidate: true });
+                      paymentForm.setValue('purchaseId', '');
+                      paymentForm.setValue('amount', 0);
+                    }}
+                    mapOption={(v: any) => ({ label: v.name, value: v.id, description: `Payable: ${formatCurrency(Number(v.payableBalance))}` })}
+                    error={paymentForm.formState.errors.vendorId?.message}
+                  />
                 </div>
 
                 <div className="col-span-2">
@@ -735,14 +751,7 @@ export const PurchasesDashboard = () => {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Payout Bank Ledger *</label>
-                  <select {...paymentForm.register('bankAccountId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                    <option value="">Select ledger...</option>
-                    {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name} (Balance: {formatCurrency(b.currentBalance)})</option>)}
-                  </select>
+                  {paymentForm.formState.errors.purchaseId && <p className="text-xs text-red-500 mt-1">{paymentForm.formState.errors.purchaseId.message}</p>}
                 </div>
 
                 <div>

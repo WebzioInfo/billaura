@@ -76,11 +76,22 @@ export class PurchasePaymentsService {
       throw new NotFoundException(`Vendor with ID ${dto.vendorId} not found`);
     }
 
+    let bankAccountId = dto.bankAccountId;
+    if (!bankAccountId) {
+      const defaultBank = await this.prisma.bankAccount.findFirst({
+        where: { companyId },
+      });
+      if (!defaultBank) {
+        throw new ConflictException('No bank or cash accounts found for this company to process the payment.');
+      }
+      bankAccountId = defaultBank.id;
+    }
+
     const bank = await this.prisma.bankAccount.findFirst({
-      where: { id: dto.bankAccountId, companyId },
+      where: { id: bankAccountId, companyId },
     });
     if (!bank) {
-      throw new NotFoundException(`Bank Account with ID ${dto.bankAccountId} not found`);
+      throw new NotFoundException(`Bank Account with ID ${bankAccountId} not found`);
     }
 
     const purchase = await this.prisma.purchase.findFirst({
@@ -119,7 +130,7 @@ export class PurchasePaymentsService {
         data: {
           companyId,
           businessPartnerId: dto.vendorId,
-          bankAccountId: dto.bankAccountId,
+          bankAccountId: bankAccountId,
           paymentNo,
           paymentType: 'OUTBOUND',
           date: new Date(dto.date),

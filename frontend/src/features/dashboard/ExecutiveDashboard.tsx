@@ -83,84 +83,88 @@ export const ExecutiveDashboard = () => {
   const expensePercent = (metrics.expenseTotal / maxMetric) * 100;
 
   return (
-    <div className="space-y-6 text-left">
+    <div className="space-y-3.5 text-left">
       {/* Header Row */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Landmark className="w-6 h-6 text-accent" />
+          <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-1.5">
+            <Landmark className="w-5 h-5 text-accent" />
             Executive Command Dashboard
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Real-time multi-tenant financial telemetry and core operational metrics.
           </p>
         </div>
         <button
           onClick={() => fetchDashboardData()}
-          className="p-2.5 rounded-xl border border-border bg-surface text-muted-foreground hover:text-foreground hover:bg-background transition-all cursor-pointer"
+          className="p-1.5 rounded-md border border-border bg-surface text-muted-foreground hover:text-foreground hover:bg-background transition-all cursor-pointer"
           title="Refresh Telemetry"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Sales Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start hover-premium">
-          <div className="space-y-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gross Sales</span>
-            <h3 className="text-2xl font-black text-foreground">{formatCurrency(metrics.salesTotal)}</h3>
-            <span className="text-[10px] text-green-500 font-semibold flex items-center gap-0.5">
-              <TrendingUp className="w-3.5 h-3.5" /> +12% vs last month
-            </span>
+        <div className="glass-panel p-3 rounded-lg border border-border flex flex-col justify-between hover-premium">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black text-foreground leading-none">{formatCurrency(metrics.salesTotal)}</h3>
+            <div className="p-1 bg-green-500/10 text-green-500 rounded">
+              <DollarSign className="w-4 h-4" />
+            </div>
           </div>
-          <div className="p-3 bg-green-500/10 text-green-500 rounded-xl">
-            <DollarSign className="w-5 h-5" />
+          <div className="flex items-center justify-between mt-1 text-[11px]">
+            <span className="font-semibold text-muted-foreground uppercase tracking-wider">Gross Sales</span>
+            <span className="text-green-500 font-semibold flex items-center gap-0.5">
+              <TrendingUp className="w-3 h-3" /> +12%
+            </span>
           </div>
         </div>
 
         {/* Purchases Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start hover-premium">
-          <div className="space-y-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gross Purchases</span>
-            <h3 className="text-2xl font-black text-foreground">{formatCurrency(metrics.purchaseTotal)}</h3>
-            <span className="text-[10px] text-red-500 font-semibold flex items-center gap-0.5">
-              <TrendingDown className="w-3.5 h-3.5" /> +4.2% procurement expense
-            </span>
+        <div className="glass-panel p-3 rounded-lg border border-border flex flex-col justify-between hover-premium">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black text-foreground leading-none">{formatCurrency(metrics.purchaseTotal)}</h3>
+            <div className="p-1 bg-red-500/10 text-red-500 rounded">
+              <ShoppingCart className="w-4 h-4" />
+            </div>
           </div>
-          <div className="p-3 bg-red-500/10 text-red-500 rounded-xl">
-            <ShoppingCart className="w-5 h-5" />
+          <div className="flex items-center justify-between mt-1 text-[11px]">
+            <span className="font-semibold text-muted-foreground uppercase tracking-wider">Gross Purchases</span>
+            <span className="text-red-500 font-semibold flex items-center gap-0.5">
+              <TrendingDown className="w-3 h-3" /> +4.2%
+            </span>
           </div>
         </div>
 
         {/* Expenses Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start hover-premium">
-          <div className="space-y-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Operating Expenses</span>
-            <h3 className="text-2xl font-black text-foreground">{formatCurrency(metrics.expenseTotal)}</h3>
-            <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-0.5">
-              General overheads log
-            </span>
+        <div className="glass-panel p-3 rounded-lg border border-border flex flex-col justify-between hover-premium">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black text-foreground leading-none">{formatCurrency(metrics.expenseTotal)}</h3>
+            <div className="p-1 bg-amber-500/10 text-amber-500 rounded">
+              <Clock className="w-4 h-4" />
+            </div>
           </div>
-          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl">
-            <Clock className="w-5 h-5" />
+          <div className="flex items-center justify-between mt-1 text-[11px]">
+            <span className="font-semibold text-muted-foreground uppercase tracking-wider">Operating Expenses</span>
+            <span className="text-muted-foreground font-semibold">Overheads</span>
           </div>
         </div>
 
         {/* Net Profit Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-border flex justify-between items-start hover-premium">
-          <div className="space-y-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Operating Surplus</span>
-            <h3 className={`text-2xl font-black ${netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+        <div className="glass-panel p-3 rounded-lg border border-border flex flex-col justify-between hover-premium">
+          <div className="flex items-center justify-between">
+            <h3 className={`text-lg font-black leading-none ${netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
               {formatCurrency(netProfit)}
             </h3>
-            <span className="text-[10px] text-muted-foreground font-semibold">
-              Taxable margin computed
-            </span>
+            <div className={`p-1 rounded ${netProfit >= 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+              <TrendingUp className="w-4 h-4" />
+            </div>
           </div>
-          <div className={`p-3 rounded-xl ${netProfit >= 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-            <TrendingUp className="w-5 h-5" />
+          <div className="flex items-center justify-between mt-1 text-[11px]">
+            <span className="font-semibold text-muted-foreground uppercase tracking-wider">Net Surplus</span>
+            <span className="text-muted-foreground font-semibold">Margin</span>
           </div>
         </div>
       </div>

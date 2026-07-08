@@ -111,8 +111,8 @@ export function DataTable<TData, TValue>({
   return (
     <div className="space-y-4">
       {/* TOOLBAR */}
-      <div className="flex items-center justify-between py-4 flex-wrap gap-4">
-        <div className="flex items-center gap-4 flex-1">
+      <div className="flex items-center justify-between py-1.5 flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-1">
           {searchKey ? (
             <Input
               placeholder={searchPlaceholder || `Filter ${searchKey}...`}
@@ -123,14 +123,14 @@ export function DataTable<TData, TValue>({
           ) : null}
           {toolbarExtras}
         </div>
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" onClick={handleExport} className="h-9 whitespace-nowrap">
-            <Download className="mr-2 h-4 w-4" /> Export
+        <div className="flex items-center space-x-1.5">
+          <Button variant="outline" size="sm" onClick={handleExport} className="whitespace-nowrap">
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export
           </Button>
           
           {/* Column Visibility Dropdown could go here */}
-          <Button variant="outline" size="sm" className="h-9 whitespace-nowrap">
-            <Settings2 className="mr-2 h-4 w-4" /> View
+          <Button variant="outline" size="sm" className="whitespace-nowrap">
+            <Settings2 className="mr-1.5 h-3.5 w-3.5" /> View
           </Button>
         </div>
       </div>
