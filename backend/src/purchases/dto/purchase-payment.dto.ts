@@ -14,8 +14,8 @@ export class CreatePurchasePaymentDto {
   vendorId: string;
 
   @IsString()
-  @IsNotEmpty()
-  purchaseId: string;
+  @IsOptional()
+  purchaseId?: string;
 
   @IsString()
   @IsOptional()
@@ -37,3 +37,4 @@ export class CreatePurchasePaymentDto {
   @IsOptional()
   reference?: string;
 }
+

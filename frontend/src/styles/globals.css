@@ -47,7 +47,7 @@
   --spacing-xl: 20px;
 }
 
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-foreground: var(--foreground);
@@ -58,12 +58,6 @@
   --color-accent: var(--accent);
   --color-accent-muted: var(--accent-muted);
 
-  /* Spacing Tokens */
-  --spacing-xs: var(--spacing-xs);
-  --spacing-sm: var(--spacing-sm);
-  --spacing-md: var(--spacing-md);
-  --spacing-lg: var(--spacing-lg);
-  --spacing-xl: var(--spacing-xl);
   
   /* Border Radii Override */
   --radius-2xl: 8px;
@@ -191,3 +185,4 @@ body {
     size: auto;
   }
 }
+

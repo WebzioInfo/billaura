@@ -36,7 +36,13 @@ export class PurchasePaymentsService {
         where,
         skip,
         take,
-        include: { businessPartner: true, bankAccount: true },
+        include: { 
+          businessPartner: true, 
+          bankAccount: true,
+          allocations: {
+            include: { purchase: true }
+          }
+        },
         orderBy: { date: 'desc' },
       }),
       this.prisma.transactionPayment.count({ where }),
@@ -94,13 +100,14 @@ export class PurchasePaymentsService {
       throw new NotFoundException(`Bank Account with ID ${bankAccountId} not found`);
     }
 
-    const purchase = await this.prisma.purchase.findFirst({
-      where: { id: dto.purchaseId, companyId },
-    });
-    if (!purchase) {
-      throw new NotFoundException(`Purchase with ID ${dto.purchaseId} not found`);
+    const purchase = dto.purchaseId
+      ? await this.prisma.purchase.findFirst({
+          where: { id: dto.purchaseId, companyId, businessPartnerId: dto.vendorId },
+        })
+      : null;
+    if (dto.purchaseId && !purchase) {
+      throw new NotFoundException(`Purchase with ID ${dto.purchaseId} not found for the selected vendor`);
     }
-
     return this.prisma.$transaction(async (tx) => {
       // 1. Generate payment number
       let sequence = await tx.documentSequence.findFirst({
@@ -137,29 +144,34 @@ export class PurchasePaymentsService {
           amount: dto.amount,
           method: dto.method,
           reference: dto.reference || null,
-          allocations: {
-            create: [
-              {
-                purchaseId: dto.purchaseId,
-                amount: dto.amount,
+          ...(dto.purchaseId
+            ? {
+                allocations: {
+                  create: [
+                    {
+                      purchaseId: dto.purchaseId,
+                      amount: dto.amount,
+                    },
+                  ],
+                },
               }
-            ]
-          }
+            : {})
         },
       });
 
-      // 3. Update purchase paid amount
-      const newPaid = Number(purchase.amountPaid) + Number(dto.amount);
-      const status = newPaid >= Number(purchase.grandTotal) ? 'PAID' : 'PARTIAL';
+      // 3. Update purchase paid amount when this payout is linked to a bill
+      if (purchase && dto.purchaseId) {
+        const newPaid = Number(purchase.amountPaid) + Number(dto.amount);
+        const status = newPaid >= Number(purchase.grandTotal) ? 'PAID' : 'PARTIAL';
 
-      await tx.purchase.update({
-        where: { id: dto.purchaseId },
-        data: {
-          amountPaid: newPaid,
-          status,
-        },
-      });
-
+        await tx.purchase.update({
+          where: { id: dto.purchaseId },
+          data: {
+            amountPaid: newPaid,
+            status,
+          },
+        });
+      }
       // 4. Update vendor payable balance
       await tx.businessPartner.update({
         where: { id: dto.vendorId },
@@ -172,7 +184,7 @@ export class PurchasePaymentsService {
 
       // 5. Update Bank Account current balance
       await tx.bankAccount.update({
-        where: { id: dto.bankAccountId },
+        where: { id: bankAccountId },
         data: {
           currentBalance: {
             decrement: dto.amount,
@@ -274,3 +286,4 @@ export class PurchasePaymentsService {
     });
   }
 }
+

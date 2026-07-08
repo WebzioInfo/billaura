@@ -310,29 +310,29 @@ export function TopBar() {
       </div>
 
       {/* Middle: Global Search Palette */}
-      <div className="flex-1 max-w-xl mx-2 relative" ref={containerRef}>
+      <div className="flex-1 max-w-xl mx-4 relative" ref={containerRef}>
         <div className="relative group">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-focus-within:text-accent transition-colors" />
           <input
             id="global-search-input"
             ref={inputRef}
             type="text"
-            placeholder="Search transactions, customers, or press Ctrl+K..."
+            placeholder="Search screens, ledgers, reports, or press Ctrl+K..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
             autoComplete="off"
-            className="w-full h-7 bg-surface text-foreground pl-8 pr-14 rounded-sm text-xs border-none outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-muted-foreground/70"
+            className="w-full h-7 bg-surface text-foreground pl-8 pr-16 rounded-sm text-xs border border-border/40 outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent placeholder:text-muted-foreground/60 transition-all"
           />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-            <kbd className="hidden sm:inline-flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium text-muted-foreground uppercase border border-border">Ctrl K</kbd>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
+            <kbd className="hidden sm:inline-flex items-center bg-background border border-border px-1.5 py-0.5 rounded text-[10px] font-mono text-muted-foreground select-none">Ctrl+K</kbd>
           </div>
         </div>
 
         {/* Dropdown search results palette panel - Changed from bg-card to bg-surface to ensure opacity */}
         {isOpen && (
-          <div className="absolute top-[calc(100%+6px)] left-0 w-[480px] bg-surface text-foreground border border-border shadow-2xl rounded-lg z-50 flex flex-col max-h-[500px] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-surface text-foreground border border-border shadow-premium rounded-lg z-50 flex flex-col max-h-[400px] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
             {/* Scrollable list content */}
             <div className="flex-1 overflow-y-auto p-2 space-y-4">
               

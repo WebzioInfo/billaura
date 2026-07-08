@@ -48,14 +48,21 @@ export class VendorsController {
     const take = Math.min(parseInt(limit || "50", 10), 200);
     const skip = (Math.max(parseInt(page || "1", 10), 1) - 1) * take;
 
-    const where: any = { companyId, deletedAt: null, bpType: "VENDOR" };
-    if (search && search.trim()) {
+    const normalizedSearch = search?.trim();
+    const where: any = {
+      companyId,
+      deletedAt: null,
+      bpType: { in: ["VENDOR", "CUSTOMER_VENDOR"] },
+    };
+    if (normalizedSearch) {
+      const containsSearch = { contains: normalizedSearch, mode: "insensitive" as const };
       where.OR = [
-        { name: { contains: search.trim() } },
-        { bpCode: { contains: search.trim() } },
-        { email: { contains: search.trim() } },
-        { phone: { contains: search.trim() } },
-        { gstin: { contains: search.trim() } },
+        { name: containsSearch },
+        { tradeName: containsSearch },
+        { bpCode: containsSearch },
+        { email: containsSearch },
+        { phone: containsSearch },
+        { gstin: containsSearch },
       ];
     }
 
@@ -64,7 +71,7 @@ export class VendorsController {
         where,
         skip,
         take,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ name: "asc" }, { bpCode: "asc" }],
       }),
       this.prisma.businessPartner.count({ where }),
     ]);
@@ -267,3 +274,4 @@ export class VendorsController {
     return { success: true, message: "Vendor deleted successfully" };
   }
 }
+

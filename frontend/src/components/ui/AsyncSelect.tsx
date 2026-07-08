@@ -50,15 +50,21 @@ export const AsyncSelect = ({
     queryFn: async () => {
       if (!isOpen && !value) return [];
       const res = await apiClient.get(apiPath, {
-        params: { search: debouncedSearch, limit: 50, ...additionalParams }
+        params: { search: debouncedSearch.trim(), limit: 50, ...additionalParams }
       });
-      return res.data?.data || res.data || [];
+      if (Array.isArray(res)) return res;
+      if (Array.isArray((res as any)?.items)) return (res as any).items;
+      if (Array.isArray((res as any)?.data)) return (res as any).data;
+      if (Array.isArray((res as any)?.data?.items)) return (res as any).data.items;
+      return [];
     },
     enabled: isOpen || !!value,
   });
 
   const options = Array.isArray(results) ? results : [];
-
+  const emptyMessage = searchTerm.trim()
+    ? `No suppliers match '${searchTerm.trim()}'.`
+    : 'No suppliers available.';
   // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -143,7 +149,7 @@ export const AsyncSelect = ({
               })
             ) : (
               <div className="py-4 text-center text-xs text-muted-foreground">
-                No results found.
+                {emptyMessage}
               </div>
             )}
           </div>
@@ -155,3 +161,4 @@ export const AsyncSelect = ({
     </div>
   );
 };
+

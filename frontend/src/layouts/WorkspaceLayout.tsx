@@ -63,9 +63,6 @@ export function WorkspaceLayout() {
   // Keep browser URL pathname & search in sync when activeTabId changes (e.g. clicking a tab or closing one)
   useEffect(() => {
     const state = useWorkspaceStore.getState();
-    // ALWAYS use the latest state.activeTabId, as the first effect might have just updated it synchronously.
-    // Using the activeTabId from the dependency array closure can be stale in this specific render cycle,
-    // leading to a ping-pong navigation loop between routes.
     const currentActiveTabId = state.activeTabId;
     const activeTab = state.tabs.find(t => t.id === currentActiveTabId);
     if (activeTab) {
@@ -74,7 +71,8 @@ export function WorkspaceLayout() {
         navigate(expectedPath);
       }
     }
-  }, [activeTabId, location.pathname, location.search, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTabId, navigate]);
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden font-sans">

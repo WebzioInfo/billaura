@@ -14,7 +14,7 @@ import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LedgerSearchSelect } from '../../components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog, AsyncSelect } from '../../components/ui';
+import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer } from '../../components/ui';
 import { useApiList } from '../../hooks/useApiList';
 
 // --- SCHEMAS ---
@@ -43,7 +43,6 @@ const purchaseSchema = z.object({
 
 const paymentSchema = z.object({
   vendorId: z.string().min(1, 'Select a vendor'),
-  purchaseId: z.string().min(1, 'Select a purchase invoice'),
   date: z.string().nonempty('Select date'),
   amount: z.number().min(0.01, 'Amount must be greater than zero'),
   method: z.string().min(1, 'Select payment method'),
@@ -102,6 +101,16 @@ interface Purchase {
   items: PurchaseItem[];
 }
 
+interface PaymentAllocation {
+  id: string;
+  transactionPaymentId: string;
+  amount: number;
+  purchase?: {
+    id: string;
+    purchaseNo: string;
+  };
+}
+
 interface Payment {
   id: string;
   paymentNo: string;
@@ -111,6 +120,7 @@ interface Payment {
   method: string;
   reference?: string;
   vendor: Vendor;
+  allocations?: PaymentAllocation[];
 }
 
 export const PurchasesDashboard = () => {
@@ -124,8 +134,53 @@ export const PurchasesDashboard = () => {
   
   const setActiveTab = (tab: string) => navigate(tab === 'payments' ? '/vendor-payments' : `/${tab}`);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter States
+  const [purchaseStatusFilter, setPurchaseStatusFilter] = useState('');
+  const [purchaseStartDateFilter, setPurchaseStartDateFilter] = useState('');
+  const [purchaseEndDateFilter, setPurchaseEndDateFilter] = useState('');
+
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('');
+  const [paymentStartDateFilter, setPaymentStartDateFilter] = useState('');
+  const [paymentEndDateFilter, setPaymentEndDateFilter] = useState('');
+
   const { data: purchases = [], isLoading: isLoadingPurchases } = useApiList<Purchase>(['purchases'], '/purchases');
   const { data: payments = [], isLoading: isLoadingPayments } = useApiList<Payment>(['payments'], '/purchases/payments');
+
+  // Client-side filtering logic
+  const filteredPurchases = purchases.filter(p => {
+    // Search
+    if (searchQuery && 
+        !p.purchaseNo.toLowerCase().includes(searchQuery.toLowerCase()) && 
+        !p.vendor?.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    // Status
+    if (purchaseStatusFilter && p.status !== purchaseStatusFilter) {
+      return false;
+    }
+    // Date
+    if (purchaseStartDateFilter && p.date.split('T')[0] < purchaseStartDateFilter) return false;
+    if (purchaseEndDateFilter && p.date.split('T')[0] > purchaseEndDateFilter) return false;
+    return true;
+  });
+
+  const filteredPayments = payments.filter(p => {
+    // Search
+    if (searchQuery && 
+        !p.paymentNo.toLowerCase().includes(searchQuery.toLowerCase()) && 
+        !p.vendor?.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    // Method
+    if (paymentMethodFilter && p.method !== paymentMethodFilter) {
+      return false;
+    }
+    // Date
+    if (paymentStartDateFilter && p.date.split('T')[0] < paymentStartDateFilter) return false;
+    if (paymentEndDateFilter && p.date.split('T')[0] > paymentEndDateFilter) return false;
+    return true;
+  });
   const { data: vendors = [], isLoading: isLoadingVendors } = useApiList<Vendor>(['vendors'], '/vendors');
   const { data: products = [], isLoading: isLoadingProducts } = useApiList<Product>(['products'], '/products');
   const { data: bankAccounts = [], isLoading: isLoadingBankAccounts } = useApiList<BankAccount>(['bankAccounts'], '/bank-accounts');
@@ -230,12 +285,7 @@ export const PurchasesDashboard = () => {
     {
       accessorKey: 'paymentNo',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Payment No" />,
-      cell: ({ row }) => <span className="font-mono font-medium">{row.getValue('paymentNo')}</span>,
-    },
-    {
-      accessorKey: 'vendor.name',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vendor" />,
-      cell: ({ row }) => <span className="font-semibold">{row.original.vendor?.name}</span>,
+      cell: ({ row }) => <span className="font-mono font-semibold">{row.getValue('paymentNo')}</span>,
     },
     {
       accessorKey: 'date',
@@ -243,32 +293,62 @@ export const PurchasesDashboard = () => {
       cell: ({ row }) => <span>{(row.getValue('date') as string).split('T')[0]}</span>,
     },
     {
+      accessorKey: 'vendor.name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Vendor" />,
+      cell: ({ row }) => <span className="font-semibold text-foreground">{row.original.vendor?.name}</span>,
+    },
+    {
+      id: 'invoice',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Invoice" />,
+      cell: ({ row }) => {
+        const allocations = row.original.allocations || [];
+        if (allocations.length === 0) return <span className="text-muted-foreground">-</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {allocations.map(a => (
+              <span key={a.id} className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground border border-border/40">
+                {a.purchase?.purchaseNo || 'N/A'}
+              </span>
+            ))}
+          </div>
+        );
+      }
+    },
+    {
       accessorKey: 'amount',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
-      cell: ({ row }) => <span className="font-bold text-green-500">{formatCurrency(Number(row.getValue('amount')))}</span>,
+      cell: ({ row }) => <span className="font-bold text-red-600">{formatCurrency(Number(row.getValue('amount')))}</span>,
     },
     {
       accessorKey: 'method',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Method" />,
-      cell: ({ row }) => (
-        <span className="bg-green-500/10 text-green-500 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
-          {row.getValue('method')}
-        </span>
-      ),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Payment Mode" />,
+      cell: ({ row }) => {
+        const mode = row.getValue('method') as string;
+        const colorClass = mode === 'CASH' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+        return (
+          <span className={`px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase ${colorClass}`}>
+            {mode.replace('_', ' ')}
+          </span>
+        );
+      },
     },
     {
-      accessorKey: 'reference',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Reference" />,
-      cell: ({ row }) => <span>{row.getValue('reference') || '-'}</span>,
+      id: 'status',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      cell: () => (
+        <span className="bg-green-500/10 text-green-600 border border-green-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
+          SUCCESS
+        </span>
+      ),
     },
     {
       id: 'actions',
       cell: ({ row }) => {
         const pay = row.original;
         return (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-1.5">
             <PdfDownloadButton 
-              className="p-1.5"
+              className="p-1 text-muted-foreground hover:text-foreground hover:bg-background border border-border/40 rounded transition-colors"
               filename={`Payment-${pay.paymentNo}.pdf`}
               data={{
                 company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
@@ -285,8 +365,8 @@ export const PurchasesDashboard = () => {
                 watermark: 'PAID'
               }} 
             />
-            <button onClick={() => setPaymentToRevert(pay)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:border-red-500/40 rounded-lg transition-colors">
-              <Trash2 className="w-3.5 h-3.5" /> Revert
+            <button onClick={() => setPaymentToRevert(pay)} title="Revert Payment" className="p-1 border border-border/40 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded transition-colors cursor-pointer">
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         );
@@ -318,30 +398,12 @@ export const PurchasesDashboard = () => {
     resolver: zodResolver(paymentSchema),
     defaultValues: {
       vendorId: '',
-      purchaseId: '',
       date: new Date().toISOString().split('T')[0],
       amount: 0,
       method: 'BANK_TRANSFER',
       reference: '',
     }
   });
-
-  // Filter vendor purchases
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const selectedVendorId = paymentForm.watch('vendorId');
-  const vendorPurchases = purchases.filter(p => p.vendorId === selectedVendorId && p.status !== 'PAID');
-
-  const selectedPurchaseId = paymentForm.watch('purchaseId');
-
-  useEffect(() => {
-    if (selectedPurchaseId && selectedVendorId) {
-      const selectedInvoice = vendorPurchases.find(p => p.id === selectedPurchaseId);
-      if (selectedInvoice) {
-        const dueAmount = Number(selectedInvoice.grandTotal) - Number(selectedInvoice.amountPaid);
-        paymentForm.setValue('amount', dueAmount, { shouldValidate: true });
-      }
-    }
-  }, [selectedPurchaseId, selectedVendorId, vendorPurchases, paymentForm]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -461,9 +523,9 @@ export const PurchasesDashboard = () => {
 
   return (
     <>
-    <div className="space-y-6 text-left">
+    <PageContainer maxWidth="7xl" className="px-6 py-6 space-y-6">
       {/* Header Row */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-5 border-b border-border">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <ShoppingCart className="w-6 h-6 text-accent" />
@@ -473,11 +535,11 @@ export const PurchasesDashboard = () => {
             Log vendor purchases, receive inventory stock points, and track outgoing cash/bank payments.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-3 sm:mt-0">
           {activeTab === 'purchases' ? (
             <button
               onClick={() => { purchaseForm.reset(); setIsPurchaseModalOpen(true); }}
-              className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Log Purchase Bill
@@ -485,7 +547,7 @@ export const PurchasesDashboard = () => {
           ) : activeTab === 'payments' ? (
             <button
               onClick={() => { paymentForm.reset(); setIsPaymentModalOpen(true); }}
-              className="bg-accent text-white hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              className="bg-accent text-white hover:bg-opacity-90 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Log Vendor Payout
@@ -494,13 +556,11 @@ export const PurchasesDashboard = () => {
         </div>
       </div>
 
-      {/* KPI Cards Row */}
- 
       {/* Tabs Row */}
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border mb-6">
         <button
           onClick={() => { setActiveTab('purchases'); setSearchQuery(''); }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer ${
             activeTab === 'purchases' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -508,82 +568,192 @@ export const PurchasesDashboard = () => {
         </button>
         <button
           onClick={() => { setActiveTab('payments'); setSearchQuery(''); }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer ${
             activeTab === 'payments' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
-          Vendor Payouts
+          Vendor Payments
         </button>
       </div>
- 
-      {/* Search Input Filter */}
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-border w-full max-w-md focus-within:border-accent transition-colors">
-        <Search className="w-4 h-4 text-muted-foreground" />
-        <input 
-          type="text" 
-          placeholder={`Search ${activeTab}...`} 
-          className="bg-transparent border-none outline-none w-full text-sm text-foreground placeholder:text-muted-foreground"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+
+      {/* Content Area */}
+      <div className="space-y-8 w-full">
+        {/* Main List Panels */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2].map((i) => (
+              <div key={i} className="glass-panel p-4 rounded-lg border border-border h-32 animate-pulse" />
+            ))}
+          </div>
+        ) : activeTab === 'purchases' ? (
+          purchases.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 w-full px-4">
+              <div className="bg-surface border border-border rounded-xl shadow-sm p-8 w-full max-w-[460px] text-center flex flex-col items-center gap-4 transition-all">
+                <div className="p-3.5 bg-muted/40 text-muted-foreground rounded-full">
+                  <ShoppingCart className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="font-bold text-base text-foreground">No Purchase Bills Recorded</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed max-w-xs mx-auto">
+                    There are no purchase bills recorded yet. Create one to begin logging vendor purchases and tracking stock inventory.
+                  </p>
+                </div>
+                <button 
+                  onClick={() => { purchaseForm.reset(); setIsPurchaseModalOpen(true); }} 
+                  className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer mt-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Log Purchase Bill
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="col-span-full bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+              {/* Integrated Filter Bar */}
+              <div className="flex flex-wrap items-center gap-3 p-3 bg-surface border-b border-border/60">
+                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-background border border-border w-full max-w-xs focus-within:ring-2 focus-within:ring-accent/20 focus-within:border-accent">
+                  <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                  <input 
+                    type="text" 
+                    placeholder="Search by bill no, vendor..." 
+                    className="bg-transparent border-none outline-none w-full text-xs text-foreground placeholder:text-muted-foreground"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                
+                <select 
+                  value={purchaseStatusFilter} 
+                  onChange={(e) => setPurchaseStatusFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="PAID">PAID</option>
+                  <option value="DRAFT">DRAFT</option>
+                  <option value="SENT">SENT</option>
+                </select>
+
+                <div className="flex items-center gap-1">
+                  <input 
+                    type="date" 
+                    value={purchaseStartDateFilter} 
+                    onChange={(e) => setPurchaseStartDateFilter(e.target.value)}
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                  />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <input 
+                    type="date" 
+                    value={purchaseEndDateFilter} 
+                    onChange={(e) => setPurchaseEndDateFilter(e.target.value)}
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                  />
+                </div>
+
+                {(searchQuery || purchaseStatusFilter || purchaseStartDateFilter || purchaseEndDateFilter) && (
+                  <button 
+                    onClick={() => {
+                      setSearchQuery('');
+                      setPurchaseStatusFilter('');
+                      setPurchaseStartDateFilter('');
+                      setPurchaseEndDateFilter('');
+                    }}
+                    className="text-xs text-accent hover:underline font-semibold cursor-pointer"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+              <div className="p-4">
+                <DataTable columns={purchaseColumns} data={filteredPurchases} exportFilename="purchases_export" />
+              </div>
+            </div>
+          )
+        ) : (
+          // Payouts Tab
+          payments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 w-full px-4">
+              <div className="bg-surface border border-border rounded-xl shadow-sm p-8 w-full max-w-[460px] text-center flex flex-col items-center gap-4 transition-all">
+                <div className="p-3.5 bg-muted/40 text-muted-foreground rounded-full">
+                  <span className="text-3xl">📄</span>
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="font-bold text-base text-foreground">No Vendor Payouts Recorded</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed max-w-xs mx-auto">
+                    Record your first vendor payment to begin tracking payments.
+                  </p>
+                </div>
+                <button 
+                  onClick={() => { paymentForm.reset(); setIsPaymentModalOpen(true); }} 
+                  className="bg-accent text-white hover:bg-opacity-90 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer mt-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Record Vendor Payout
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="col-span-full bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+              {/* Integrated Filter Bar */}
+              <div className="flex flex-wrap items-center gap-3 p-3 bg-surface border-b border-border/60">
+                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-background border border-border w-full max-w-xs focus-within:ring-2 focus-within:ring-accent/20 focus-within:border-accent">
+                  <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                  <input 
+                    type="text" 
+                    placeholder="Search by payment no, vendor..." 
+                    className="bg-transparent border-none outline-none w-full text-xs text-foreground placeholder:text-muted-foreground"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+
+                <select 
+                  value={paymentMethodFilter} 
+                  onChange={(e) => setPaymentMethodFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                >
+                  <option value="">All Payment Modes</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                  <option value="CASH">Cash</option>
+                  <option value="CHEQUE">Cheque</option>
+                </select>
+
+                <div className="flex items-center gap-1">
+                  <input 
+                    type="date" 
+                    value={paymentStartDateFilter} 
+                    onChange={(e) => setPaymentStartDateFilter(e.target.value)}
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                  />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <input 
+                    type="date" 
+                    value={paymentEndDateFilter} 
+                    onChange={(e) => setPaymentEndDateFilter(e.target.value)}
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                  />
+                </div>
+
+                {(searchQuery || paymentMethodFilter || paymentStartDateFilter || paymentEndDateFilter) && (
+                  <button 
+                    onClick={() => {
+                      setSearchQuery('');
+                      setPaymentMethodFilter('');
+                      setPaymentStartDateFilter('');
+                      setPaymentEndDateFilter('');
+                    }}
+                    className="text-xs text-accent hover:underline font-semibold cursor-pointer"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+              <div className="p-4">
+                <DataTable columns={paymentColumns} data={filteredPayments} exportFilename="vendor_payouts_export" />
+              </div>
+            </div>
+          )
+        )}
       </div>
-
-      {/* Main List Panels */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2].map((i) => (
-            <div key={i} className="glass-panel p-6 rounded-2xl border border-border h-32 animate-pulse" />
-          ))}
-        </div>
-      ) : activeTab === 'purchases' ? (
-        purchases.length === 0 ? (
-          <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
-            <h3 className="font-semibold text-lg">No Purchase Bills Recorded</h3>
-            <button onClick={() => { purchaseForm.reset(); setIsPurchaseModalOpen(true); }} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-xs font-semibold">
-              Log Purchase Bill
-            </button>
-          </div>
-        ) : (
-          <div className="col-span-full bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
-            <FilterPanel 
-              fields={[
-                { id: 'status', label: 'Status', type: 'select', options: [{label: 'PAID', value: 'PAID'}, {label: 'DRAFT', value: 'DRAFT'}, {label: 'SENT', value: 'SENT'}] },
-                { id: 'dateRange', label: 'Date Range', type: 'date-range' }
-              ]} 
-              onApply={() => {}} 
-              className="border-none shadow-none border-b rounded-none mb-0" 
-            />
-            <div className="p-4">
-              <DataTable columns={purchaseColumns} data={purchases} searchKey="purchaseNo" exportFilename="purchases_export" />
-            </div>
-          </div>
-        )
-      ) : (
-        // Payouts Tab
-        payments.length === 0 ? (
-          <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
-            <h3 className="font-semibold text-lg">No Vendor Payouts Recorded</h3>
-            <button onClick={() => { paymentForm.reset(); setIsPaymentModalOpen(true); }} className="bg-accent text-white hover:bg-opacity-90 px-4 py-2 rounded-lg text-xs font-semibold">
-              Record Payout
-            </button>
-          </div>
-        ) : (
-          <div className="col-span-full bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
-            <FilterPanel 
-              fields={[
-                { id: 'method', label: 'Method', type: 'select', options: [{label: 'BANK_TRANSFER', value: 'BANK_TRANSFER'}, {label: 'CASH', value: 'CASH'}, {label: 'CHEQUE', value: 'CHEQUE'}] },
-                { id: 'dateRange', label: 'Date Range', type: 'date-range' }
-              ]} 
-              onApply={() => {}} 
-              className="border-none shadow-none border-b rounded-none mb-0" 
-            />
-            <div className="p-4">
-              <DataTable columns={paymentColumns} data={payments} searchKey="paymentNo" exportFilename="vendor_payouts_export" />
-            </div>
-          </div>
-        )
-      )}
-
       {/* Log Purchase Bill Modal */}
       {isPurchaseModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -733,27 +903,11 @@ export const PurchasesDashboard = () => {
                     value={paymentForm.watch('vendorId')}
                     onChange={(val) => {
                       paymentForm.setValue('vendorId', val, { shouldValidate: true });
-                      paymentForm.setValue('purchaseId', '');
-                      paymentForm.setValue('amount', 0);
                     }}
                     mapOption={(v: any) => ({ label: v.name, value: v.id, description: `Payable: ${formatCurrency(Number(v.payableBalance))}` })}
                     error={paymentForm.formState.errors.vendorId?.message}
                   />
                 </div>
-
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Select Purchase Invoice Bill *</label>
-                  <select {...paymentForm.register('purchaseId')} disabled={!selectedVendorId} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-40 font-mono">
-                    <option value="">Select invoice bill...</option>
-                    {vendorPurchases.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.purchaseNo} (Total: {formatCurrency(Number(p.grandTotal))}, Due: {formatCurrency(Number(p.grandTotal) - Number(p.amountPaid))})
-                      </option>
-                    ))}
-                  </select>
-                  {paymentForm.formState.errors.purchaseId && <p className="text-xs text-red-500 mt-1">{paymentForm.formState.errors.purchaseId.message}</p>}
-                </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Payout Date *</label>
                   <input type="date" {...paymentForm.register('date')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
@@ -859,7 +1013,7 @@ export const PurchasesDashboard = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
 
       <DeleteDialog isOpen={!!vendorToDelete} onClose={() => setVendorToDelete(null)} onConfirm={confirmDeleteVendor} entityName="Vendor" entityId={vendorToDelete?.name} warningText="This action cannot be undone." />
       <DeleteDialog isOpen={!!purchaseToDelete} onClose={() => setPurchaseToDelete(null)} onConfirm={confirmDeletePurchase} entityName="Purchase Bill" entityId={purchaseToDelete?.purchaseNo} warningText="Stock levels and vendor payable balances will be reverted. This action cannot be undone." />
@@ -867,3 +1021,4 @@ export const PurchasesDashboard = () => {
     </>
   );
 };
+

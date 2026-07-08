@@ -73,12 +73,12 @@ export const Login = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       <div className="flex flex-col items-center justify-center space-y-2">
         <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/30">
           <BarChart3 className="w-6 h-6 text-white" />
         </div>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900">Welcome Back</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-slate-900 whitespace-nowrap">Welcome Back</h2>
         <p className="text-sm text-slate-500">Access your accounting dashboard</p>
       </div>
 
@@ -98,7 +98,7 @@ export const Login = () => {
               type="email"
               {...register('email')}
               placeholder="name@company.com"
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
+              className="h-10 w-full min-w-0 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
             />
           </div>
           {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
@@ -115,7 +115,7 @@ export const Login = () => {
               type="password"
               {...register('password')}
               placeholder="••••••••"
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
+              className="h-10 w-full min-w-0 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
             />
           </div>
           {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
@@ -131,7 +131,7 @@ export const Login = () => {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm"
+          className="h-10 w-full min-w-0 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm"
         >
           {isLoading ? (
             <>
@@ -153,3 +153,4 @@ export const Login = () => {
     </div>
   );
 };
+
