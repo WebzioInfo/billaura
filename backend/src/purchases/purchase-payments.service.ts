@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreatePurchasePaymentDto } from './dto/purchase-payment.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -82,22 +82,59 @@ export class PurchasePaymentsService {
       throw new NotFoundException(`Vendor with ID ${dto.vendorId} not found`);
     }
 
-    let bankAccountId = dto.bankAccountId;
-    if (!bankAccountId) {
-      const defaultBank = await this.prisma.bankAccount.findFirst({
-        where: { companyId },
-      });
-      if (!defaultBank) {
-        throw new ConflictException('No bank or cash accounts found for this company to process the payment.');
-      }
-      bankAccountId = defaultBank.id;
+    let ledgerId = dto.bankAccountId?.trim() || undefined;
+    const isCashPayment = dto.method === 'CASH';
+
+    if (!isCashPayment && !ledgerId) {
+      throw new BadRequestException('Select a bank account for this payout method.');
     }
 
-    const bank = await this.prisma.bankAccount.findFirst({
-      where: { id: bankAccountId, companyId },
+    const ledger = ledgerId
+      ? await this.prisma.account.findFirst({ where: { id: ledgerId, companyId } })
+      : await this.prisma.account.findFirst({
+          where: {
+            companyId,
+            isGroup: false,
+            category: 'ASSET',
+            OR: [
+              { name: { contains: 'cash', mode: 'insensitive' } },
+              { parent: { name: { contains: 'cash', mode: 'insensitive' } } },
+            ],
+          },
+          orderBy: { name: 'asc' },
+        });
+
+    if (!ledger) {
+      throw new ConflictException('No payment ledger account configured for this payout method.');
+    }
+
+    let bank = await this.prisma.bankAccount.findFirst({
+      where: {
+        companyId,
+        deletedAt: null,
+        OR: [
+          { name: ledger.name },
+          { bankName: ledger.name },
+          ...(ledger.code ? [{ accountNumber: ledger.code }] : []),
+        ],
+      },
     });
+
     if (!bank) {
-      throw new NotFoundException(`Bank Account with ID ${bankAccountId} not found`);
+      bank = await this.prisma.bankAccount.create({
+        data: {
+          companyId,
+          name: ledger.name,
+          accountName: ledger.name,
+          bankName: ledger.name,
+          accountNumber: ledger.code || null,
+          accountType: isCashPayment ? 'CURRENT' : 'CURRENT',
+          openingBalance: 0,
+          currentBalance: 0,
+          status: 'ACTIVE',
+          isDefault: isCashPayment,
+        },
+      });
     }
 
     const purchase = dto.purchaseId
@@ -137,7 +174,7 @@ export class PurchasePaymentsService {
         data: {
           companyId,
           businessPartnerId: dto.vendorId,
-          bankAccountId: bankAccountId,
+          bankAccountId: bank.id,
           paymentNo,
           paymentType: 'OUTBOUND',
           date: new Date(dto.date),
@@ -184,7 +221,7 @@ export class PurchasePaymentsService {
 
       // 5. Update Bank Account current balance
       await tx.bankAccount.update({
-        where: { id: bankAccountId },
+        where: { id: bank.id },
         data: {
           currentBalance: {
             decrement: dto.amount,
@@ -202,15 +239,6 @@ export class PurchasePaymentsService {
         });
       }
 
-      let bankAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Operating Bank Account' },
-      });
-      if (!bankAccount) {
-        bankAccount = await tx.account.create({
-          data: { companyId, name: 'Operating Bank Account', category: 'ASSET', balance: 0 },
-        });
-      }
-
       await tx.journalEntry.create({
         data: {
           companyId,
@@ -220,7 +248,7 @@ export class PurchasePaymentsService {
           lines: {
             create: [
               { accountId: apAccount.id, debit: dto.amount, credit: 0 },
-              { accountId: bankAccount.id, debit: 0, credit: dto.amount },
+              { accountId: ledger.id, debit: 0, credit: dto.amount },
             ],
           },
         },
@@ -232,7 +260,7 @@ export class PurchasePaymentsService {
       });
 
       await tx.account.update({
-        where: { id: bankAccount.id },
+        where: { id: ledger.id },
         data: { balance: { decrement: dto.amount } }, // asset credit decreases balance
       });
 

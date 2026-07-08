@@ -63,8 +63,12 @@ export const AsyncSelect = ({
 
   const options = Array.isArray(results) ? results : [];
   const emptyMessage = searchTerm.trim()
-    ? `No suppliers match '${searchTerm.trim()}'.`
-    : 'No suppliers available.';
+    ? `No results match '${searchTerm.trim()}'.`
+    : placeholder.toLowerCase().includes('supplier')
+    ? 'No suppliers available.'
+    : placeholder.toLowerCase().includes('bank')
+    ? 'No bank accounts available.'
+    : 'No options available.';
   // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

@@ -223,5 +223,6 @@ export function ensureArray<T = any>(data: any): T[] {
   if (!data) return [];
   if (Array.isArray(data)) return data;
   if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.items)) return data.items;
   return [];
 }
