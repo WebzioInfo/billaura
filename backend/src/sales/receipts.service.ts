@@ -4,10 +4,20 @@ import { CreateReceiptDto, UpdateReceiptDto, ReceiptQueryDto } from './dto/recei
 import { CompanyContext } from '../common/context/company-context';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import type { Prisma } from '@prisma/client';
+import { InvoicesService } from './invoices.service';
+import { PurchasesService } from '../purchases/purchases.service';
+import { PurchasePaymentsService } from '../purchases/purchase-payments.service';
+import { ExpensesService } from '../expenses/expenses.service';
 
 @Injectable()
 export class ReceiptsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly invoicesService: InvoicesService,
+    private readonly purchasesService: PurchasesService,
+    private readonly purchasePaymentsService: PurchasePaymentsService,
+    private readonly expensesService: ExpensesService,
+  ) {}
 
   async findAll(query: ReceiptQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -121,7 +131,7 @@ export class ReceiptsService {
     };
   }
 
-  async create(dto: CreateReceiptDto, userId: string) {
+  async create(dto: CreateReceiptDto, userId: string, txClient?: Prisma.TransactionClient) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -172,7 +182,7 @@ export class ReceiptsService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       // 1. Generate receipt number
       let sequence = await tx.documentSequence.findFirst({
         where: { companyId, documentType: 'RECEIPT' },
@@ -367,7 +377,12 @@ export class ReceiptsService {
       });
 
       return receipt;
-    }, { timeout: 30000 });
+    };
+
+    if (txClient) {
+      return execute(txClient);
+    }
+    return this.prisma.$transaction(execute, { timeout: 30000 });
   }
 
   async update(id: string, dto: UpdateReceiptDto, userId: string) {
@@ -518,5 +533,272 @@ export class ReceiptsService {
 
       return { success: true };
     }, { timeout: 30000 });
+  }
+
+  async createUnifiedSales(dto: any, userId: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Create Invoice
+      const invoiceDto = {
+        customerId: dto.businessPartnerId,
+        date: dto.date,
+        invoiceType: 'TAX_INVOICE',
+        placeOfSupply: dto.placeOfSupply || null,
+        notes: dto.notes || null,
+        items: dto.items.map((item: any) => ({
+          productId: item.productId,
+          qty: item.qty,
+          rate: item.rate,
+          taxPercent: item.taxPercent
+        }))
+      };
+      
+      const invoice = await this.invoicesService.create(invoiceDto, tx);
+
+      // 2. If paid, create receipt allocation
+      if (dto.paymentMethod !== 'CREDIT') {
+        const receiptDto = {
+          date: dto.date,
+          businessPartnerId: dto.businessPartnerId,
+          accountId: dto.accountId,
+          paymentMethod: dto.paymentMethod,
+          amount: Number(invoice.grandTotal),
+          referenceNo: dto.referenceNo,
+          chequeNo: dto.chequeNo,
+          transactionId: dto.transactionId,
+          clearanceDate: dto.clearanceDate,
+          bankCharges: dto.bankCharges,
+          cashier: dto.cashier,
+          notes: dto.notes,
+          allocations: [
+            {
+              invoiceId: invoice.id,
+              amount: Number(invoice.grandTotal)
+            }
+          ]
+        };
+
+        await this.create(receiptDto, userId, tx);
+      }
+
+      return invoice;
+    }, { timeout: 40000 });
+  }
+
+  async createUnifiedPurchase(dto: any, userId: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Create Purchase Bill
+      const purchaseDto = {
+        vendorId: dto.businessPartnerId,
+        date: dto.date,
+        reference: dto.referenceNo || null,
+        placeOfSupply: dto.placeOfSupply || null,
+        items: dto.items.map((item: any) => ({
+          productId: item.productId,
+          qty: item.qty,
+          rate: item.rate,
+          taxPercent: item.taxPercent
+        }))
+      };
+
+      const purchase = await this.purchasesService.create(purchaseDto, tx);
+
+      // 2. If paid, create purchase payment
+      if (dto.paymentMethod !== 'CREDIT') {
+        // Map payment method enum
+        let method = 'BANK_TRANSFER';
+        if (dto.paymentMethod === 'CASH') method = 'CASH';
+        else if (dto.paymentMethod === 'UPI') method = 'UPI';
+        else if (dto.paymentMethod === 'CHEQUE') method = 'CHEQUE';
+        else if (dto.paymentMethod === 'CREDIT_CARD') method = 'CREDIT_CARD';
+
+        const paymentDto = {
+          vendorId: dto.businessPartnerId,
+          purchaseId: purchase.id,
+          bankAccountId: dto.accountId,
+          date: dto.date,
+          amount: Number(purchase.grandTotal),
+          method: method as any,
+          reference: dto.referenceNo || null
+        };
+
+        await this.purchasePaymentsService.create(paymentDto, tx);
+      }
+
+      return purchase;
+    }, { timeout: 40000 });
+  }
+
+  async createUnifiedExpense(dto: any, userId: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Create Expense claim
+      const expenseDto = {
+        categoryId: dto.categoryId,
+        subCategory: dto.subCategory || null,
+        date: dto.date,
+        amount: Number(dto.amount),
+        taxAmount: Number(dto.taxAmount || 0),
+        paymentMethod: dto.paymentMethod || 'BANK_TRANSFER',
+        paidFromType: (dto.paymentMethod === 'CASH' ? 'CASH' : 'BANK') as any,
+        paidFromId: dto.accountId,
+        bankAccountId: dto.paymentMethod !== 'CASH' ? dto.accountId : undefined,
+        cashAccountId: dto.paymentMethod === 'CASH' ? dto.accountId : undefined,
+        employeeId: dto.employeeId || null,
+        vendorId: dto.businessPartnerId || null,
+        billNumber: dto.referenceNo || null,
+        description: dto.notes || null,
+        notes: dto.notes || null
+      };
+
+      const expense = await this.expensesService.create(expenseDto, tx);
+
+      // 2. Approve Expense immediately to post ledger entries
+      await this.expensesService.updateApproval(expense.id, { approvalStatus: 'APPROVED' }, userId, tx);
+
+      return expense;
+    }, { timeout: 40000 });
+  }
+
+  async getNextNumber(type: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    let docType = '';
+    let prefix = '';
+    if (type === 'SALES') {
+      docType = 'INVOICE';
+      prefix = 'INV';
+    } else if (type === 'PURCHASE') {
+      docType = 'PURCHASE';
+      prefix = 'PUR';
+    } else if (type === 'EXPENSE') {
+      docType = 'EXPENSE';
+      prefix = 'EXP';
+    } else {
+      throw new BadRequestException('Invalid receipt type');
+    }
+
+    let sequence = await this.prisma.documentSequence.findFirst({
+      where: { companyId, documentType: docType as any },
+    });
+
+    const currentNumber = sequence ? sequence.currentNumber : 0;
+    const nextNumber = currentNumber + 1;
+    return `${prefix}-${String(nextNumber).padStart(5, '0')}`;
+  }
+
+  async preview(dto: any) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const previewLines: { ledgerName: string; debit: number; credit: number }[] = [];
+    const paymentMethod = dto.paymentMethod || 'CREDIT';
+    
+    let targetAccountName = 'Cash/Bank Account';
+    if (dto.accountId) {
+      const acc = await this.prisma.account.findFirst({
+        where: { id: dto.accountId, companyId }
+      });
+      if (acc) targetAccountName = acc.name;
+    }
+
+    if (dto.type === 'SALES') {
+      let subTotal = 0;
+      let taxTotal = 0;
+      if (dto.items && Array.isArray(dto.items)) {
+        for (const item of dto.items) {
+          const rate = Number(item.rate || 0);
+          const qty = Number(item.qty || 0);
+          const lineTotal = rate * qty;
+          const taxRate = Number(item.taxPercent || 18);
+          const taxAmount = (lineTotal * taxRate) / 100;
+          subTotal += lineTotal;
+          taxTotal += taxAmount;
+        }
+      }
+      const grandTotal = subTotal + taxTotal;
+
+      const debitAccount = paymentMethod === 'CREDIT' ? 'Accounts Receivable' : targetAccountName;
+      previewLines.push({ ledgerName: debitAccount, debit: grandTotal, credit: 0 });
+      previewLines.push({ ledgerName: 'Sales Revenue', debit: 0, credit: subTotal });
+
+      if (taxTotal > 0) {
+        previewLines.push({ ledgerName: 'Output GST', debit: 0, credit: taxTotal });
+      }
+    } else if (dto.type === 'PURCHASE') {
+      let subTotal = 0;
+      let taxTotal = 0;
+      if (dto.items && Array.isArray(dto.items)) {
+        for (const item of dto.items) {
+          const rate = Number(item.rate || 0);
+          const qty = Number(item.qty || 0);
+          const lineTotal = rate * qty;
+          const taxRate = Number(item.taxPercent || 18);
+          const taxAmount = (lineTotal * taxRate) / 100;
+          subTotal += lineTotal;
+          taxTotal += taxAmount;
+        }
+      }
+      const grandTotal = subTotal + taxTotal;
+
+      let purchaseAccountName = 'Purchases';
+      if (dto.accountId) {
+        const acc = await this.prisma.account.findFirst({
+          where: { id: dto.accountId, companyId }
+        });
+        if (acc) purchaseAccountName = acc.name;
+      }
+      previewLines.push({ ledgerName: purchaseAccountName, debit: subTotal, credit: 0 });
+
+      if (taxTotal > 0) {
+        previewLines.push({ ledgerName: 'Input GST', debit: taxTotal, credit: 0 });
+      }
+
+      const creditAccount = paymentMethod === 'CREDIT' ? 'Accounts Payable' : targetAccountName;
+      previewLines.push({ ledgerName: creditAccount, debit: 0, credit: grandTotal });
+    } else if (dto.type === 'EXPENSE') {
+      const amount = Number(dto.amount || 0);
+      const taxAmount = Number(dto.taxAmount || 0);
+      const totalAmount = amount + taxAmount;
+
+      let expenseAccountName = 'Expense Ledger';
+      if (dto.categoryId) {
+        const cat = await this.prisma.expenseCategory.findFirst({
+          where: { id: dto.categoryId, companyId }
+        });
+        if (cat) {
+          if (cat.accountId) {
+            const acc = await this.prisma.account.findFirst({ where: { id: cat.accountId, companyId } });
+            if (acc) expenseAccountName = acc.name;
+          } else {
+            expenseAccountName = cat.name;
+          }
+        }
+      }
+
+      previewLines.push({ ledgerName: expenseAccountName, debit: totalAmount, credit: 0 });
+
+      const creditAccount = paymentMethod === 'CREDIT' ? 'Accounts Payable' : targetAccountName;
+      previewLines.push({ ledgerName: creditAccount, debit: 0, credit: totalAmount });
+    }
+
+    return {
+      success: true,
+      data: {
+        lines: previewLines
+      }
+    };
   }
 }

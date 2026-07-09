@@ -62,7 +62,7 @@ export class ExpensesService {
     return expense;
   }
 
-  async create(dto: CreateExpenseDto) {
+  async create(dto: CreateExpenseDto, txClient?: Prisma.TransactionClient) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -87,7 +87,7 @@ export class ExpensesService {
     if (dto.paidFromType === 'EMPLOYEE' && dto.paidFromId) employeeId = dto.paidFromId;
     if (dto.paidFromType === 'VENDOR' && dto.paidFromId) vendorId = dto.paidFromId;
 
-    return this.prisma.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       // 1. Generate expense sequence number
       let sequence = await tx.documentSequence.findFirst({
         where: { companyId, documentType: 'EXPENSE' },
@@ -142,7 +142,12 @@ export class ExpensesService {
       });
 
       return expense;
-    }, { timeout: 20000 });
+    };
+
+    if (txClient) {
+      return execute(txClient);
+    }
+    return this.prisma.$transaction(execute, { timeout: 20000 });
   }
 
   async update(id: string, dto: UpdateExpenseDto) {
@@ -175,7 +180,7 @@ export class ExpensesService {
     });
   }
 
-  async updateApproval(id: string, dto: UpdateExpenseApprovalDto, userId: string) {
+  async updateApproval(id: string, dto: UpdateExpenseApprovalDto, userId: string, txClient?: Prisma.TransactionClient) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -183,7 +188,7 @@ export class ExpensesService {
 
     const expense = await this.findOne(id);
 
-    return this.prisma.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       // Create comment/history if provided
       if (dto.comment) {
         await tx.expenseComment.create({
@@ -328,7 +333,12 @@ export class ExpensesService {
       }
 
       return updatedExpense;
-    });
+    };
+
+    if (txClient) {
+      return execute(txClient);
+    }
+    return this.prisma.$transaction(execute);
   }
 
   async remove(id: string) {

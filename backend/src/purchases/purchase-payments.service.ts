@@ -69,7 +69,7 @@ export class PurchasePaymentsService {
     return payment;
   }
 
-  async create(dto: CreatePurchasePaymentDto) {
+  async create(dto: CreatePurchasePaymentDto, txClient?: Prisma.TransactionClient) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -145,7 +145,8 @@ export class PurchasePaymentsService {
     if (dto.purchaseId && !purchase) {
       throw new NotFoundException(`Purchase with ID ${dto.purchaseId} not found for the selected vendor`);
     }
-    return this.prisma.$transaction(async (tx) => {
+    
+    const execute = async (tx: Prisma.TransactionClient) => {
       // 1. Generate payment number
       let sequence = await tx.documentSequence.findFirst({
         where: { companyId, documentType: 'PURCHASE_PAYMENT' },
@@ -265,7 +266,12 @@ export class PurchasePaymentsService {
       });
 
       return payment;
-    }, { timeout: 20000 });
+    };
+
+    if (txClient) {
+      return execute(txClient);
+    }
+    return this.prisma.$transaction(execute, { timeout: 20000 });
   }
 
   async remove(id: string) {

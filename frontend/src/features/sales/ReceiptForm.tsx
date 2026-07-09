@@ -12,6 +12,7 @@ import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { useBankAccounts } from '@/hooks/useBankAccounts';
+import { UnifiedReceiptForm } from './UnifiedReceiptForm';
 
 interface Invoice {
   id: string;
@@ -373,8 +374,13 @@ const ConditionalPaymentDetails: React.FC<ConditionalPaymentDetailsProps> = (pro
 };
 
 export const ReceiptForm = () => {
-  const navigate = useNavigate();
   const { id } = useParams();
+
+  if (!id) {
+    return <UnifiedReceiptForm />;
+  }
+
+  const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const queryCustomerId = searchParams.get('customerId');

@@ -30,13 +30,36 @@ export class ReceiptsController {
     return this.receiptsService.getSummary();
   }
 
+  @Get("next-sequence")
+  async getNextSequence(@Query("type") type: string) {
+    const nextNo = await this.receiptsService.getNextNumber(type);
+    return {
+      success: true,
+      data: nextNo,
+    };
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     return this.receiptsService.findOne(id);
   }
 
+  @Post("preview")
+  async preview(@Body() dto: any) {
+    return this.receiptsService.preview(dto);
+  }
+
   @Post()
-  async create(@Body() dto: CreateReceiptDto, @Req() req: any) {
+  async create(@Body() dto: any, @Req() req: any) {
+    if (dto.type === 'SALES' || dto.type === 'PURCHASE' || dto.type === 'EXPENSE') {
+      if (dto.type === 'SALES') {
+        return this.receiptsService.createUnifiedSales(dto, req.user.userId);
+      } else if (dto.type === 'PURCHASE') {
+        return this.receiptsService.createUnifiedPurchase(dto, req.user.userId);
+      } else {
+        return this.receiptsService.createUnifiedExpense(dto, req.user.userId);
+      }
+    }
     return this.receiptsService.create(dto, req.user.userId);
   }
 

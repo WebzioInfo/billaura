@@ -68,7 +68,7 @@ export class InvoicesService {
     return invoice;
   }
 
-  async create(dto: CreateInvoiceDto) {
+  async create(dto: CreateInvoiceDto, txClient?: Prisma.TransactionClient) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -82,7 +82,7 @@ export class InvoicesService {
       throw new NotFoundException(`Customer with ID ${dto.customerId} not found`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       let invoiceNo = dto.invoiceNo;
       if (invoiceNo) {
         // Validate uniqueness
@@ -422,7 +422,12 @@ export class InvoicesService {
       }
 
       return invoice;
-    }, { timeout: 20000 });
+    };
+
+    if (txClient) {
+      return execute(txClient);
+    }
+    return this.prisma.$transaction(execute, { timeout: 20000 });
   }
 
   async remove(id: string) {

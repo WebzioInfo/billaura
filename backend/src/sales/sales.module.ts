@@ -14,9 +14,11 @@ import { SalesOrdersController } from "./sales-orders.controller";
 import { SalesOrdersService } from "./sales-orders.service";
 import { DeliveryNotesController } from "./delivery-notes.controller";
 import { DeliveryNotesService } from "./delivery-notes.service";
+import { PurchasesModule } from "../purchases/purchases.module";
+import { ExpensesModule } from "../expenses/expenses.module";
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, PurchasesModule, ExpensesModule],
   controllers: [
     InvoicesController,
     PaymentsController,
