@@ -121,3 +121,31 @@ export class UpdateExpenseDto {
   @IsOptional()
   notes?: string;
 }
+
+export class CreateExpenseCategoryDto {
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  accountId?: string;
+}
+
+export class UpdateExpenseCategoryDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  accountId?: string;
+}

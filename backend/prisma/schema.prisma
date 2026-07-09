@@ -1381,6 +1381,8 @@ model ExpenseCategory {
   isActive    Boolean   @default(true)
   company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   expenses    Expense[]
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id])
 
   @@unique([companyId, name])
   @@map("expense_categories")
@@ -1641,6 +1643,7 @@ model Account {
   journalLines     JournalLine[]
   incomeCategories IncomeCategory[]
   receipts         Receipt[]
+  expenseCategories ExpenseCategory[]
 
   @@unique([companyId, name])
   @@map("accounts")

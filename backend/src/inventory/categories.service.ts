@@ -12,7 +12,7 @@ export class CategoriesService {
     if (!companyId) return Array.from(this.localCategories).map(name => ({ id: name, name }));
 
     const dbProducts = await this.prisma.product.findMany({
-      where: {},
+      where: { companyId },
       select: { category: true },
       distinct: ['category'],
     });

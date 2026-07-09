@@ -7,7 +7,7 @@ export class OtherIncomesService {
 
   async findAll(companyId: string) {
     return this.prisma.otherIncome.findMany({
-      where: {},
+      where: { companyId },
       include: {
         category: {
           include: { account: true }
@@ -23,7 +23,7 @@ export class OtherIncomesService {
 
   async findOne(companyId: string, id: string) {
     const income = await this.prisma.otherIncome.findFirst({
-      where: { id },
+      where: { id, companyId },
       include: {
         category: {
           include: { account: true }
@@ -68,7 +68,7 @@ export class OtherIncomesService {
   async update(companyId: string, id: string, data: any) {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.otherIncome.findFirst({
-        where: { id }
+        where: { id, companyId }
       });
       if (!existing) throw new NotFoundException('Other Income not found');
 
@@ -105,7 +105,7 @@ export class OtherIncomesService {
   async remove(companyId: string, id: string) {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.otherIncome.findFirst({
-        where: { id }
+        where: { id, companyId }
       });
       if (!existing) throw new NotFoundException('Other Income not found');
 

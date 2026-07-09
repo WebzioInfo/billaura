@@ -15,6 +15,7 @@ export class BankAccountsController {
   async findAll(
     @Query("search") search?: string,
     @Query("limit") limit?: string,
+    @Query("type") type?: string,
   ) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
@@ -93,7 +94,7 @@ export class BankAccountsController {
       orderBy: { name: "asc" },
     });
 
-    const items = accounts
+    let items = accounts
       .filter((account) => {
         const nameLower = account.name.toLowerCase();
         const codeLower = account.code?.toLowerCase() || "";
@@ -122,6 +123,12 @@ export class BankAccountsController {
           parent: account.parent,
         };
       });
+
+    if (type === "CASH") {
+      items = items.filter(item => item.accountType === "CASH");
+    } else if (type === "BANK") {
+      items = items.filter(item => item.accountType !== "CASH");
+    }
 
     return { success: true, data: { items } };
   }

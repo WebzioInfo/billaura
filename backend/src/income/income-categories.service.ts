@@ -7,7 +7,7 @@ export class IncomeCategoriesService {
 
   async findAll(companyId: string) {
     return this.prisma.incomeCategory.findMany({
-      where: {},
+      where: { companyId },
       include: {
         account: true,
       },
@@ -17,7 +17,7 @@ export class IncomeCategoriesService {
 
   async findOne(companyId: string, id: string) {
     const category = await this.prisma.incomeCategory.findFirst({
-      where: { id },
+      where: { id, companyId },
       include: {
         account: true,
       },

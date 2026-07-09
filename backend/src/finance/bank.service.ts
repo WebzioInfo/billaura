@@ -10,7 +10,7 @@ export class BankService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
     return this.prisma.bankAccount.findMany({
-      where: {},
+      where: { companyId, deletedAt: null },
       orderBy: { name: 'asc' },
     });
   }
@@ -19,7 +19,7 @@ export class BankService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
     return this.prisma.bankTransaction.findMany({
-      where: {},
+      where: { companyId },
       include: { bankAccount: true },
       orderBy: { date: 'desc' },
     });

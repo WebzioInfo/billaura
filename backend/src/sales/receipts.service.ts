@@ -103,7 +103,7 @@ export class ReceiptsService {
     });
 
     const recent = await this.prisma.receipt.findMany({
-      where: {},
+      where: { companyId },
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: { businessPartner: true },

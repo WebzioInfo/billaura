@@ -17,7 +17,7 @@ export class HrService {
       throw new ConflictException('Company context is required');
     }
     return this.prisma.employee.findMany({
-      where: {},
+      where: { companyId, deletedAt: null },
       orderBy: { name: 'asc' },
     });
   }
@@ -57,6 +57,12 @@ export class HrService {
       throw new ConflictException('Company context is required');
     }
 
+    // Verify employee belongs to company
+    const employee = await this.prisma.employee.findFirst({
+      where: { id, companyId }
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+
     return this.prisma.employee.update({
       where: { id },
       data: { deletedAt: new Date() },
@@ -71,7 +77,7 @@ export class HrService {
       throw new ConflictException('Company context is required');
     }
     return this.prisma.attendance.findMany({
-      where: {},
+      where: { companyId },
       include: { employee: true },
       orderBy: { date: 'desc' },
     });
@@ -120,7 +126,7 @@ export class HrService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
     return this.prisma.salarySlip.findMany({
-      where: {},
+      where: { companyId },
       include: { employee: true },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });

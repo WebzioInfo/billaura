@@ -11,7 +11,7 @@ export class BatchesService {
     if (!companyId) return [];
 
     return this.prisma.inventoryBatch.findMany({
-      where: {},
+      where: { companyId },
       include: { product: true, warehouse: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -21,7 +21,7 @@ export class BatchesService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
     const batch = await this.prisma.inventoryBatch.findFirst({
-      where: { id },
+      where: { id, companyId },
       include: { product: true, warehouse: true },
     });
     if (!batch) throw new NotFoundException('Batch not found');

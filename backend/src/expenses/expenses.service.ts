@@ -204,43 +204,100 @@ export class ExpensesService {
       // If approved, handle accounting and balances
       if (dto.approvalStatus === 'APPROVED' && expense.approvalStatus !== 'APPROVED') {
         const totalAmount = Number(expense.totalAmount);
-        let creditAccountName = 'Operating Bank Account';
+        
+        let creditAccount = expense.bankAccountId
+          ? await tx.account.findFirst({ where: { id: expense.bankAccountId, companyId } })
+          : null;
 
-        if (expense.bankAccountId) {
-          await tx.bankAccount.update({
-            where: { id: expense.bankAccountId },
-            data: { currentBalance: { decrement: totalAmount } },
+        if (!creditAccount && expense.cashAccountId) {
+          const cashAcc = await tx.cashAccount.findUnique({ where: { id: expense.cashAccountId } });
+          if (cashAcc) {
+            creditAccount = await tx.account.findFirst({ where: { companyId, name: cashAcc.name } });
+          }
+        }
+
+        if (!creditAccount) {
+          const creditAccountName = 'Operating Bank Account';
+          creditAccount = await tx.account.findFirst({ where: { companyId, name: creditAccountName } });
+          if (!creditAccount) {
+            creditAccount = await tx.account.create({
+              data: { companyId, name: creditAccountName, category: 'ASSET', balance: 0 }
+            });
+          }
+        }
+
+        const isCash = creditAccount.name.toLowerCase().includes('cash') || 
+                       creditAccount.name.toLowerCase().includes('petty');
+
+        if (isCash) {
+          let cash = await tx.cashAccount.findFirst({
+            where: { companyId, name: creditAccount.name, deletedAt: null }
           });
-          const bank = await tx.bankAccount.findUnique({ where: { id: expense.bankAccountId } });
-          if (bank) creditAccountName = bank.name;
-        } else if (expense.cashAccountId) {
+          if (!cash) {
+            cash = await tx.cashAccount.create({
+              data: {
+                companyId,
+                name: creditAccount.name,
+                openingBalance: 0,
+                currentBalance: 0,
+                isDefault: false
+              }
+            });
+          }
           await tx.cashAccount.update({
-            where: { id: expense.cashAccountId },
-            data: { currentBalance: { decrement: totalAmount } },
+            where: { id: cash.id },
+            data: { currentBalance: { decrement: totalAmount } }
           });
-          const cash = await tx.cashAccount.findUnique({ where: { id: expense.cashAccountId } });
-          if (cash) creditAccountName = cash.name;
+        } else {
+          let bank = await tx.bankAccount.findFirst({
+            where: {
+              companyId,
+              deletedAt: null,
+              OR: [
+                { name: creditAccount.name },
+                { bankName: creditAccount.name },
+                ...(creditAccount.code ? [{ accountNumber: creditAccount.code }] : []),
+              ]
+            }
+          });
+          if (!bank) {
+            bank = await tx.bankAccount.create({
+              data: {
+                companyId,
+                name: creditAccount.name,
+                accountName: creditAccount.name,
+                bankName: creditAccount.name,
+                accountNumber: creditAccount.code || null,
+                accountType: 'CURRENT',
+                openingBalance: 0,
+                currentBalance: 0,
+                status: 'ACTIVE',
+              }
+            });
+          }
+          await tx.bankAccount.update({
+            where: { id: bank.id },
+            data: { currentBalance: { decrement: totalAmount } }
+          });
         }
 
         // Ledger Entry
         const category = await tx.expenseCategory.findUnique({ where: { id: expense.categoryId || undefined } });
         const expenseCategoryName = category?.name || 'Uncategorized Expense';
 
-        let expenseAccount = await tx.account.findFirst({
-          where: { companyId, name: expenseCategoryName },
-        });
+        let expenseAccount = category?.accountId
+          ? await tx.account.findFirst({ where: { id: category.accountId, companyId } })
+          : null;
+
         if (!expenseAccount) {
-          expenseAccount = await tx.account.create({
-            data: { companyId, name: expenseCategoryName, category: 'EXPENSE', balance: 0 },
+          expenseAccount = await tx.account.findFirst({
+            where: { companyId, name: expenseCategoryName },
           });
         }
 
-        let creditAccount = await tx.account.findFirst({
-          where: { companyId, name: creditAccountName },
-        });
-        if (!creditAccount) {
-          creditAccount = await tx.account.create({
-            data: { companyId, name: creditAccountName, category: 'ASSET', balance: 0 },
+        if (!expenseAccount) {
+          expenseAccount = await tx.account.create({
+            data: { companyId, name: expenseCategoryName, category: 'EXPENSE', balance: 0 },
           });
         }
 
@@ -316,16 +373,47 @@ export class ExpensesService {
         }
 
         // Revert Bank/Cash balance
-        if (expense.bankAccountId) {
-          await tx.bankAccount.update({
-            where: { id: expense.bankAccountId },
-            data: { currentBalance: { increment: totalAmount } },
-          });
-        } else if (expense.cashAccountId) {
-          await tx.cashAccount.update({
-            where: { id: expense.cashAccountId },
-            data: { currentBalance: { increment: totalAmount } },
-          });
+        let creditAccount = expense.bankAccountId
+          ? await tx.account.findFirst({ where: { id: expense.bankAccountId, companyId: expense.companyId } })
+          : null;
+
+        if (!creditAccount) {
+          const creditAccountName = 'Operating Bank Account';
+          creditAccount = await tx.account.findFirst({ where: { companyId: expense.companyId, name: creditAccountName } });
+        }
+
+        if (creditAccount) {
+          const isCash = creditAccount.name.toLowerCase().includes('cash') || 
+                         creditAccount.name.toLowerCase().includes('petty');
+
+          if (isCash) {
+            const cash = await tx.cashAccount.findFirst({
+              where: { companyId: expense.companyId, name: creditAccount.name, deletedAt: null }
+            });
+            if (cash) {
+              await tx.cashAccount.update({
+                where: { id: cash.id },
+                data: { currentBalance: { increment: totalAmount } }
+              });
+            }
+          } else {
+            const bank = await tx.bankAccount.findFirst({
+              where: {
+                companyId: expense.companyId,
+                deletedAt: null,
+                OR: [
+                  { name: creditAccount.name },
+                  { bankName: creditAccount.name }
+                ]
+              }
+            });
+            if (bank) {
+              await tx.bankAccount.update({
+                where: { id: bank.id },
+                data: { currentBalance: { increment: totalAmount } }
+              });
+            }
+          }
         }
       }
 
@@ -333,6 +421,83 @@ export class ExpensesService {
         where: { id },
         data: { deletedAt: new Date() },
       });
+    });
+  }
+
+  // --- Category Management Services ---
+
+  async findCategories() {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+    return this.prisma.expenseCategory.findMany({
+      where: { companyId, isActive: true },
+      include: { account: true },
+      orderBy: { name: 'asc' }
+    });
+  }
+
+  async findCategory(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+    const category = await this.prisma.expenseCategory.findFirst({
+      where: { id, companyId },
+      include: { account: true }
+    });
+    if (!category) throw new NotFoundException(`Expense Category not found`);
+    return category;
+  }
+
+  async createCategory(dto: { name: string; description?: string; accountId?: string }) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+    
+    const existing = await this.prisma.expenseCategory.findFirst({
+      where: { companyId, name: dto.name }
+    });
+    if (existing) throw new ConflictException(`Expense category "${dto.name}" already exists`);
+
+    return this.prisma.expenseCategory.create({
+      data: {
+        companyId,
+        name: dto.name,
+        description: dto.description || null,
+        accountId: dto.accountId || null,
+        type: 'CUSTOM'
+      }
+    });
+  }
+
+  async updateCategory(id: string, dto: { name?: string; description?: string; accountId?: string; isActive?: boolean }) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+    
+    const category = await this.findCategory(id);
+
+    if (dto.name && dto.name !== category.name) {
+      const existing = await this.prisma.expenseCategory.findFirst({
+        where: { companyId, name: dto.name, id: { not: id } }
+      });
+      if (existing) throw new ConflictException(`Expense category "${dto.name}" already exists`);
+    }
+
+    return this.prisma.expenseCategory.update({
+      where: { id },
+      data: {
+        name: dto.name !== undefined ? dto.name : undefined,
+        description: dto.description !== undefined ? dto.description : undefined,
+        accountId: dto.accountId !== undefined ? dto.accountId : undefined,
+        isActive: dto.isActive !== undefined ? dto.isActive : undefined
+      }
+    });
+  }
+
+  async removeCategory(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+    await this.findCategory(id);
+    return this.prisma.expenseCategory.update({
+      where: { id },
+      data: { isActive: false }
     });
   }
 }

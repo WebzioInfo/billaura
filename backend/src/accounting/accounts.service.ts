@@ -14,7 +14,7 @@ export class AccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
   private async ensureDefaultChartOfAccounts(companyId: string) {
-    const count = await this.prisma.account.count({ where: {} });
+    const count = await this.prisma.account.count({ where: { companyId } });
     if (count > 0) return;
 
     // Create Groups
@@ -64,17 +64,47 @@ export class AccountsService {
       { name: 'Bank Charges', category: AccountCategory.EXPENSE, subCategory: AccountSubCategory.OTHER_EXPENSE, parent: 'Indirect Expenses' },
     ];
 
-    await this.prisma.account.createMany({
-      data: ledgers.map(l => ({
-        companyId,
-        name: l.name,
-        isGroup: false,
-        parentId: groupMap.get(l.parent),
-        category: l.category,
-        subCategory: l.subCategory,
-        balance: 0,
-      })),
+    for (const l of ledgers) {
+      await this.prisma.account.create({
+        data: {
+          companyId,
+          name: l.name,
+          isGroup: false,
+          parentId: groupMap.get(l.parent),
+          category: l.category,
+          subCategory: l.subCategory,
+          balance: 0,
+        }
+      });
+    }
+
+    // Seed default expense categories mapped to the newly created ledgers
+    const seededAccounts = await this.prisma.account.findMany({
+      where: { companyId }
     });
+
+    const getAccountId = (name: string) => seededAccounts.find(a => a.name === name)?.id || null;
+
+    const defaultCategories = [
+      { name: 'Salary', description: 'Employee salaries and payroll overheads', accountId: getAccountId('Salary Expense') },
+      { name: 'Rent', description: 'Office premises lease and rental payments', accountId: getAccountId('Rent Expense') },
+      { name: 'Utilities', description: 'Electricity, water, gas and internet connections', accountId: getAccountId('Utilities Expense') },
+      { name: 'Bank Charges', description: 'Transaction fees, service charges and interest charges', accountId: getAccountId('Bank Charges') },
+    ];
+
+    for (const cat of defaultCategories) {
+      await this.prisma.expenseCategory.upsert({
+        where: { companyId_name: { companyId, name: cat.name } },
+        create: {
+          companyId,
+          name: cat.name,
+          description: cat.description,
+          accountId: cat.accountId,
+          type: 'SYSTEM'
+        },
+        update: {}
+      });
+    }
   }
 
   async findAll(query: PaginationQueryDto) {
@@ -591,7 +621,7 @@ export class AccountsService {
     await this.ensureDefaultChartOfAccounts(companyId);
 
     const accounts = await this.prisma.account.findMany({
-      where: {},
+      where: { companyId },
     });
 
     const aggregates = await this.prisma.journalLine.groupBy({

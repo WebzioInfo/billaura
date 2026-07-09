@@ -17,6 +17,8 @@ import {
   CreateExpenseDto,
   UpdateExpenseApprovalDto,
   UpdateExpenseDto,
+  CreateExpenseCategoryDto,
+  UpdateExpenseCategoryDto,
 } from "./dto/expense.dto";
 import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -26,6 +28,39 @@ import { TenantGuard } from "../common/guards/tenant.guard";
 @Controller("expenses")
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
+
+  // --- Category Endpoints ---
+
+  @Get("categories")
+  async findCategories() {
+    return this.expensesService.findCategories();
+  }
+
+  @Get("categories/:id")
+  async findCategory(@Param("id") id: string) {
+    return this.expensesService.findCategory(id);
+  }
+
+  @Post("categories")
+  async createCategory(@Body() dto: CreateExpenseCategoryDto) {
+    return this.expensesService.createCategory(dto);
+  }
+
+  @Put("categories/:id")
+  async updateCategory(
+    @Param("id") id: string,
+    @Body() dto: UpdateExpenseCategoryDto,
+  ) {
+    return this.expensesService.updateCategory(id, dto);
+  }
+
+  @Delete("categories/:id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeCategory(@Param("id") id: string) {
+    await this.expensesService.removeCategory(id);
+  }
+
+  // --- Expense Claims Endpoints ---
 
   @Get()
   async findAll(@Query() query: PaginationQueryDto) {
