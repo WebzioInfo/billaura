@@ -639,28 +639,35 @@ export class ReceiptsService {
     if (!companyId) throw new ConflictException('Company context is required');
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Create Expense claim
+      // 1. Resolve default branch
+      const defaultBranch = await tx.branch.findFirst({
+        where: { companyId, isDefault: true }
+      });
+      const branchId = defaultBranch?.id || null;
+
+      // 2. Create Expense claim (Net Amount becomes the base amount, tax is 0)
       const expenseDto = {
         categoryId: dto.categoryId,
-        subCategory: dto.subCategory || null,
+        subCategory: undefined,
         date: dto.date,
         amount: Number(dto.amount),
-        taxAmount: Number(dto.taxAmount || 0),
+        taxAmount: 0,
         paymentMethod: dto.paymentMethod || 'BANK_TRANSFER',
         paidFromType: (dto.paymentMethod === 'CASH' ? 'CASH' : 'BANK') as any,
         paidFromId: dto.accountId,
         bankAccountId: dto.paymentMethod !== 'CASH' ? dto.accountId : undefined,
         cashAccountId: dto.paymentMethod === 'CASH' ? dto.accountId : undefined,
-        employeeId: dto.employeeId || null,
+        employeeId: undefined,
         vendorId: dto.businessPartnerId || null,
         billNumber: dto.referenceNo || null,
         description: dto.notes || null,
-        notes: dto.notes || null
+        notes: dto.notes || null,
+        branchId
       };
 
       const expense = await this.expensesService.create(expenseDto, tx);
 
-      // 2. Approve Expense immediately to post ledger entries
+      // 3. Approve Expense immediately to post ledger entries
       await this.expensesService.updateApproval(expense.id, { approvalStatus: 'APPROVED' }, userId, tx);
 
       return expense;

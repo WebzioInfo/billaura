@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, Receipt, Check, FileCheck, Landmark, Trash2, Plus, 
-  HelpCircle, AlertCircle, Save, Calendar, Info, RefreshCw, ShoppingCart 
+  HelpCircle, AlertCircle, Save, Calendar, Info, RefreshCw, ShoppingCart,
+  ChevronDown, Search, Loader2 
 } from 'lucide-react';
 import { PageContainer, LoadingState, AsyncSelect } from '@/components/ui';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -22,6 +23,229 @@ interface FormLineItem {
   taxPercent: number; // GST percentage
 }
 
+// Grouped Cash/Bank accounts selector component
+interface GroupedCashBankSelectProps {
+  value: string;
+  onChange: (value: string, item: any) => void;
+  error?: string;
+}
+
+const GroupedCashBankSelect = ({ value, onChange, error }: GroupedCashBankSelectProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['cash-bank-accounts-all'],
+    queryFn: async () => {
+      const res = await apiClient.get('/bank-accounts');
+      return res.data?.items || res.items || [];
+    }
+  });
+
+  const rawItems = Array.isArray(data) ? data : [];
+
+  const filteredItems = useMemo(() => {
+    return rawItems.filter((item: any) => {
+      const name = (item.name || '').toLowerCase();
+      const code = (item.accountNumber || '').toLowerCase();
+      const query = searchTerm.toLowerCase();
+      return name.includes(query) || code.includes(query);
+    });
+  }, [rawItems, searchTerm]);
+
+  const grouped = useMemo(() => {
+    const cash: any[] = [];
+    const bank: any[] = [];
+    filteredItems.forEach((item: any) => {
+      if (item.accountType === 'CASH') {
+        cash.push(item);
+      } else {
+        bank.push(item);
+      }
+    });
+    return { cash, bank };
+  }, [filteredItems]);
+
+  const flatList = useMemo(() => {
+    return [...grouped.cash, ...grouped.bank];
+  }, [grouped]);
+
+  const selectedItem = useMemo(() => {
+    return rawItems.find((item: any) => item.id === value) || null;
+  }, [rawItems, value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter') {
+        setIsOpen(true);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      setActiveIndex(prev => (prev + 1) % flatList.length);
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      setActiveIndex(prev => (prev - 1 + flatList.length) % flatList.length);
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (activeIndex >= 0 && activeIndex < flatList.length) {
+        const item = flatList[activeIndex];
+        onChange(item.id, item);
+        setIsOpen(false);
+      }
+      e.preventDefault();
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      e.preventDefault();
+    }
+  };
+
+  return (
+    <div className="w-full relative" ref={containerRef} onKeyDown={handleKeyDown}>
+      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">
+        Cash / Bank Account Ledger *
+      </label>
+      
+      <div 
+        tabIndex={0}
+        className={`relative w-full bg-background border rounded-xl flex items-center justify-between px-4 py-2.5 text-sm cursor-pointer transition-all focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${
+          error ? 'border-red-500 hover:border-red-600' : 'border-border hover:border-border-hover'
+        }`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex-1 truncate pr-4 text-foreground font-semibold text-xs md:text-sm">
+          {selectedItem ? (
+            <div className="flex justify-between items-center w-full">
+              <span>{selectedItem.name}</span>
+              {selectedItem.accountNumber && (
+                <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded border border-border/40">
+                  {selectedItem.accountNumber}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-muted-foreground font-normal">Select Cash or Bank Account...</span>
+          )}
+        </div>
+        <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-2 bg-surface border border-border rounded-xl shadow-xl max-h-72 flex flex-col overflow-hidden">
+          <div className="p-2 border-b border-border relative">
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Type to search cash or bank..."
+              className="w-full bg-background border border-border rounded-lg pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:border-accent text-foreground"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setActiveIndex(-1);
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          
+          <div className="overflow-y-auto p-1 flex-1 max-h-56">
+            {isLoading ? (
+              <div className="flex justify-center items-center py-4">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : flatList.length > 0 ? (
+              <div>
+                {grouped.cash.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1 text-[9px] font-bold text-accent uppercase tracking-wider bg-accent/5 rounded-md my-1 font-sans">
+                      Cash Accounts
+                    </div>
+                    {grouped.cash.map((item: any) => {
+                      const idx = flatList.indexOf(item);
+                      const isSelected = value === item.id;
+                      const isActive = activeIndex === idx;
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex items-center justify-between px-3 py-2 cursor-pointer rounded-lg mb-0.5 transition-colors ${
+                            isSelected ? 'bg-accent/15 text-accent font-semibold' : isActive ? 'bg-muted text-foreground' : 'hover:bg-muted/50 text-foreground'
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChange(item.id, item);
+                            setIsOpen(false);
+                            setSearchTerm('');
+                          }}
+                        >
+                          <span className="text-xs">{item.name}</span>
+                          {item.accountNumber && (
+                            <span className="text-[10px] text-muted-foreground font-mono">{item.accountNumber}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {grouped.bank.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1 text-[9px] font-bold text-accent uppercase tracking-wider bg-accent/5 rounded-md my-1 font-sans">
+                      Bank Accounts
+                    </div>
+                    {grouped.bank.map((item: any) => {
+                      const idx = flatList.indexOf(item);
+                      const isSelected = value === item.id;
+                      const isActive = activeIndex === idx;
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex items-center justify-between px-3 py-2 cursor-pointer rounded-lg mb-0.5 transition-colors ${
+                            isSelected ? 'bg-accent/15 text-accent font-semibold' : isActive ? 'bg-muted text-foreground' : 'hover:bg-muted/50 text-foreground'
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChange(item.id, item);
+                            setIsOpen(false);
+                            setSearchTerm('');
+                          }}
+                        >
+                          <span className="text-xs">{item.name}</span>
+                          {item.accountNumber && (
+                            <span className="text-[10px] text-muted-foreground font-mono">{item.accountNumber}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="py-4 text-center text-xs text-muted-foreground">
+                No matching accounts found.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </div>
+  );
+};
+
 export const UnifiedReceiptForm = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -30,7 +254,6 @@ export const UnifiedReceiptForm = () => {
   const [receiptType, setReceiptType] = useState<'SALES' | 'PURCHASE' | 'EXPENSE'>('SALES');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [referenceNo, setReferenceNo] = useState('');
-  const [branchId, setBranchId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
   
   // Ledger/Bank selection
@@ -60,35 +283,14 @@ export const UnifiedReceiptForm = () => {
 
   // Expense Specifics
   const [categoryId, setCategoryId] = useState('');
-  const [subCategory, setSubCategory] = useState('');
   const [amount, setAmount] = useState<number>(0);
-  const [taxAmount, setTaxAmount] = useState<number>(0);
-  const [employeeId, setEmployeeId] = useState('');
-  const [projectId, setProjectId] = useState('');
-  const [costCenterId, setCostCenterId] = useState('');
-  const [department, setDepartment] = useState('');
+
+  // Expense category searchable selector states
+  const [catSearch, setCatSearch] = useState('');
+  const [catOpen, setCatOpen] = useState(false);
+  const catContainerRef = useRef<HTMLDivElement>(null);
 
   // --- API QUERIES ---
-
-  // Auth / Company context
-  const { data: meData } = useQuery({
-    queryKey: ['auth-me'],
-    queryFn: async () => {
-      const res = await apiClient.get('/auth/me');
-      return res.data || res;
-    }
-  });
-  const companyProfile = meData?.company || null;
-
-  // Branches lookup
-  const { data: branchesData } = useQuery({
-    queryKey: ['branches-lookup'],
-    queryFn: async () => {
-      const res = await apiClient.get('/branches');
-      return res.data?.items || res.data || [];
-    }
-  });
-  const branches = Array.isArray(branchesData) ? branchesData : [];
 
   // Expense categories lookup
   const { data: expenseCategories = [] } = useQuery({
@@ -100,16 +302,15 @@ export const UnifiedReceiptForm = () => {
     enabled: receiptType === 'EXPENSE'
   });
 
-  // Fetch Voucher Sequence Number
-  const { data: sequenceNo, refetch: refetchSequence } = useQuery({
-    queryKey: ['receipt-sequence', receiptType],
-    queryFn: async () => {
-      const res = await apiClient.get('/receipts/next-sequence', {
-        params: { type: receiptType }
-      });
-      return res.data?.data || res.data || 'AUTO-GENERATED';
-    }
-  });
+  const filteredCategories = useMemo(() => {
+    return expenseCategories.filter((c: any) =>
+      (c.name || '').toLowerCase().includes(catSearch.toLowerCase())
+    );
+  }, [expenseCategories, catSearch]);
+
+  const selectedCategory = useMemo(() => {
+    return expenseCategories.find((c: any) => c.id === categoryId) || null;
+  }, [expenseCategories, categoryId]);
 
   // Sync / Reset on Type Change
   useEffect(() => {
@@ -119,7 +320,6 @@ export const UnifiedReceiptForm = () => {
     setSelectedLedger(null);
     setCategoryId('');
     setAmount(0);
-    setTaxAmount(0);
     setItems([
       {
         keyId: 'item-1',
@@ -131,16 +331,18 @@ export const UnifiedReceiptForm = () => {
         taxPercent: 18
       }
     ]);
-    refetchSequence();
   }, [receiptType]);
 
-  // Set default branch when branches load
+  // Close dropdown on click outside
   useEffect(() => {
-    if (branches.length > 0 && !branchId) {
-      const defaultBranch = branches.find(b => b.isDefault) || branches[0];
-      setBranchId(defaultBranch.id);
-    }
-  }, [branches]);
+    const clickOutside = (e: MouseEvent) => {
+      if (catContainerRef.current && !catContainerRef.current.contains(e.target as Node)) {
+        setCatOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', clickOutside);
+    return () => document.removeEventListener('mousedown', clickOutside);
+  }, []);
 
   // --- LINE ITEMS MANAGEMENT ---
   const handleAddRow = () => {
@@ -208,9 +410,7 @@ export const UnifiedReceiptForm = () => {
   const totals = useMemo(() => {
     if (receiptType === 'EXPENSE') {
       const sub = Number(amount || 0);
-      const tax = Number(taxAmount || 0);
-      const net = sub + tax;
-      return { subTotal: sub, taxTotal: tax, discountTotal: 0, grandTotal: net, roundOff: 0 };
+      return { subTotal: sub, taxTotal: 0, discountTotal: 0, grandTotal: sub, roundOff: 0 };
     }
 
     let subTotal = 0;
@@ -239,7 +439,7 @@ export const UnifiedReceiptForm = () => {
       grandTotal: roundedGrand,
       roundOff: roundOff
     };
-  }, [receiptType, items, amount, taxAmount]);
+  }, [receiptType, items, amount]);
 
   // --- LIVE GL PREVIEW QUERY ---
   const previewPayload = useMemo(() => {
@@ -252,14 +452,13 @@ export const UnifiedReceiptForm = () => {
       items: items.map(i => ({ productId: i.productId, qty: i.qty, rate: i.rate, taxPercent: i.taxPercent })),
       categoryId,
       amount,
-      taxAmount
+      taxAmount: 0
     };
-  }, [receiptType, date, paymentMethod, accountId, businessPartnerId, items, categoryId, amount, taxAmount]);
+  }, [receiptType, date, paymentMethod, accountId, businessPartnerId, items, categoryId, amount]);
 
   const { data: previewData, isLoading: loadingPreview } = useQuery({
     queryKey: ['receipt-gl-preview', previewPayload],
     queryFn: async () => {
-      // Validate enough inputs to preview
       if (receiptType === 'EXPENSE') {
         if (!categoryId || amount <= 0) return null;
       } else {
@@ -281,7 +480,6 @@ export const UnifiedReceiptForm = () => {
 
   // --- FORM VALIDATION ---
   const isFormInvalid = useMemo(() => {
-    if (!branchId) return true;
     if (paymentMethod !== 'CREDIT' && !accountId) return true;
 
     if (receiptType === 'SALES') {
@@ -298,7 +496,7 @@ export const UnifiedReceiptForm = () => {
     }
 
     return false;
-  }, [receiptType, branchId, paymentMethod, accountId, businessPartnerId, items, categoryId, amount]);
+  }, [receiptType, paymentMethod, accountId, businessPartnerId, items, categoryId, amount]);
 
   // --- SAVE MUTATION ---
   const saveMutation = useMutation({
@@ -325,7 +523,6 @@ export const UnifiedReceiptForm = () => {
       type: receiptType,
       date,
       referenceNo: referenceNo || undefined,
-      branchId,
       paymentMethod,
       accountId: paymentMethod !== 'CREDIT' ? accountId : undefined,
       notes: notes || undefined,
@@ -352,14 +549,9 @@ export const UnifiedReceiptForm = () => {
       }));
     } else if (receiptType === 'EXPENSE') {
       payload.categoryId = categoryId;
-      payload.subCategory = subCategory || undefined;
       payload.amount = Number(amount);
-      payload.taxAmount = Number(taxAmount || 0);
-      payload.employeeId = employeeId || undefined;
-      payload.projectId = projectId || undefined;
-      payload.costCenterId = costCenterId || undefined;
+      payload.taxAmount = 0;
       payload.businessPartnerId = businessPartnerId || undefined; // supplier is optional
-      payload.department = department || undefined;
     }
 
     saveMutation.mutate(payload);
@@ -383,20 +575,20 @@ export const UnifiedReceiptForm = () => {
             
             {/* Block 1: Receipt Type and Common Fields */}
             <div className="bg-surface border border-border rounded-2xl p-6 space-y-6 shadow-sm">
-              <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+              <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 font-sans uppercase tracking-wider">
                 <Receipt className="w-4.5 h-4.5 text-accent" /> Basic Details
               </h3>
 
               {/* Receipt Type Selection */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Receipt Type *</label>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 font-sans">Receipt Type *</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(['SALES', 'PURCHASE', 'EXPENSE'] as const).map(type => (
                     <button
                       key={type}
                       type="button"
                       onClick={() => setReceiptType(type)}
-                      className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border text-center cursor-pointer ${
+                      className={`py-2.5 px-4 rounded-xl text-xs font-bold transition-all border text-center cursor-pointer ${
                         receiptType === type 
                           ? 'bg-accent/10 border-accent text-accent shadow-sm'
                           : 'bg-background hover:bg-muted/50 border-border text-muted-foreground hover:text-foreground'
@@ -422,17 +614,6 @@ export const UnifiedReceiptForm = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Voucher Number (Auto)</label>
-                  <input
-                    type="text"
-                    value={sequenceNo || ''}
-                    disabled
-                    placeholder="Auto-generating..."
-                    className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none text-muted-foreground font-mono"
-                  />
-                </div>
-
-                <div>
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Reference / Bill No</label>
                   <input
                     type="text"
@@ -444,27 +625,24 @@ export const UnifiedReceiptForm = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Company</label>
-                  <input
-                    type="text"
-                    value={companyProfile?.name || 'Your Company'}
-                    disabled
-                    className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-muted-foreground"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Branch *</label>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Payment Method *</label>
                   <select
-                    value={branchId}
-                    onChange={(e) => setBranchId(e.target.value)}
+                    value={paymentMethod}
+                    onChange={(e) => {
+                      setPaymentMethod(e.target.value);
+                      if (e.target.value === 'CREDIT') {
+                        setAccountId('');
+                        setSelectedLedger(null);
+                      }
+                    }}
                     required
                     className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent text-foreground"
                   >
-                    <option value="">Select Branch</option>
-                    {branches.map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                    <option value="CASH">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="CREDIT">Credit / On Account</option>
                   </select>
                 </div>
 
@@ -480,62 +658,16 @@ export const UnifiedReceiptForm = () => {
                     <option value="EUR">EUR (€)</option>
                   </select>
                 </div>
-              </div>
-
-              {/* Payment Method Fields */}
-              <div className="border-t border-border pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Payment Method *</label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => {
-                      setPaymentMethod(e.target.value);
-                      setAccountId('');
-                      setSelectedLedger(null);
-                    }}
-                    required
-                    className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent text-foreground"
-                  >
-                    <option value="BANK_TRANSFER">Bank Transfer</option>
-                    <option value="CASH">Cash</option>
-                    <option value="UPI">UPI</option>
-                    <option value="CHEQUE">Cheque</option>
-                    <option value="CREDIT">Credit / On Account</option>
-                  </select>
-                </div>
 
                 {paymentMethod !== 'CREDIT' && (
-                  <div>
-                    {paymentMethod === 'CASH' ? (
-                      <LedgerSearchSelect
-                        label="Cash Account Ledger *"
-                        value={accountId}
-                        onChange={(val, item) => {
-                          setAccountId(val);
-                          setSelectedLedger(item);
-                        }}
-                        allowedTypes="Cash"
-                        placeholder="Search cash accounts..."
-                      />
-                    ) : (
-                      <AsyncSelect
-                        label="Bank Account Ledger *"
-                        apiPath="/bank-accounts"
-                        queryKeyPrefix="bank_accounts_lookup"
-                        placeholder="Search bank accounts..."
-                        value={accountId}
-                        onChange={(val, item) => {
-                          setAccountId(val);
-                          setSelectedLedger(item);
-                        }}
-                        additionalParams={{ type: 'BANK' }}
-                        mapOption={(account: any) => ({
-                          label: account.bankName || account.name,
-                          value: account.id,
-                          description: `${account.accountNumber || 'No Account No'} - ${account.name}`
-                        })}
-                      />
-                    )}
+                  <div className="md:col-span-2">
+                    <GroupedCashBankSelect
+                      value={accountId}
+                      onChange={(val, item) => {
+                        setAccountId(val);
+                        setSelectedLedger(item);
+                      }}
+                    />
                   </div>
                 )}
               </div>
@@ -544,40 +676,70 @@ export const UnifiedReceiptForm = () => {
             {/* Block 2: Type Specific Fields (Sales/Purchase Party & Item Table OR Expense details) */}
             <div className="bg-surface border border-border rounded-2xl p-6 shadow-sm">
               {receiptType === 'EXPENSE' ? (
-                <div className="space-y-6">
-                  <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 font-sans uppercase tracking-wider">
                     <Landmark className="w-4.5 h-4.5 text-accent" /> Expense Specifications
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Expense Category (Ledger) *</label>
-                      <select
-                        value={categoryId}
-                        onChange={(e) => setCategoryId(e.target.value)}
-                        required
-                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent text-foreground"
+                    <div ref={catContainerRef} className="relative">
+                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">
+                        Expense Category (Ledger) *
+                      </label>
+                      <div 
+                        tabIndex={0}
+                        className="relative w-full bg-background border border-border rounded-xl flex items-center justify-between px-4 py-2.5 text-sm cursor-pointer transition-all focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                        onClick={() => setCatOpen(!catOpen)}
                       >
-                        <option value="">Select Category</option>
-                        {expenseCategories.map((c: any) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
+                        <div className="flex-1 truncate pr-4 text-foreground font-semibold text-xs md:text-sm">
+                          {selectedCategory ? selectedCategory.name : <span className="text-muted-foreground font-normal">Select Expense Category...</span>}
+                        </div>
+                        <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                      </div>
+                      {catOpen && (
+                        <div className="absolute z-50 w-full mt-2 bg-surface border border-border rounded-xl shadow-xl max-h-60 flex flex-col overflow-hidden">
+                          <div className="p-2 border-b border-border relative">
+                            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="Search expense category..."
+                              className="w-full bg-background border border-border rounded-lg pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:border-accent text-foreground"
+                              value={catSearch}
+                              onChange={(e) => setCatSearch(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                          <div className="overflow-y-auto p-1 flex-1 max-h-48">
+                            {filteredCategories.length > 0 ? (
+                              filteredCategories.map((c: any) => (
+                                <div
+                                  key={c.id}
+                                  className={`px-3 py-2 cursor-pointer rounded-lg mb-0.5 text-xs text-foreground transition-colors ${
+                                    categoryId === c.id ? 'bg-accent/15 text-accent font-semibold' : 'hover:bg-muted/50'
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCategoryId(c.id);
+                                    setCatOpen(false);
+                                    setCatSearch('');
+                                  }}
+                                >
+                                  {c.name}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="py-3 text-center text-xs text-muted-foreground">
+                                No categories found.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Sub Category</label>
-                      <input
-                        type="text"
-                        value={subCategory}
-                        onChange={(e) => setSubCategory(e.target.value)}
-                        placeholder="e.g. Travel meals"
-                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent text-foreground"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Base Amount *</label>
+                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Net Amount *</label>
                       <input
                         type="number"
                         step="0.01"
@@ -590,21 +752,7 @@ export const UnifiedReceiptForm = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Tax Amount</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={taxAmount || ''}
-                        onChange={(e) => setTaxAmount(Number(e.target.value))}
-                        placeholder="0.00"
-                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent text-foreground font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="border-t border-border pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                    <div className="md:col-span-2">
                       <AsyncSelect
                         label="Supplier (Optional)"
                         apiPath="/vendors"
@@ -622,70 +770,11 @@ export const UnifiedReceiptForm = () => {
                         })}
                       />
                     </div>
-
-                    <div>
-                      <AsyncSelect
-                        label="Employee (Optional)"
-                        apiPath="/employees"
-                        queryKeyPrefix="employees_lookup"
-                        placeholder="Search employees..."
-                        value={employeeId}
-                        onChange={(val) => setEmployeeId(val)}
-                        mapOption={(emp: any) => ({
-                          label: `${emp.name} (${emp.employeeCode})`,
-                          value: emp.id,
-                          description: emp.department ? `Dept: ${emp.department}` : undefined
-                        })}
-                      />
-                    </div>
-
-                    <div>
-                      <AsyncSelect
-                        label="Project (Optional)"
-                        apiPath="/projects"
-                        queryKeyPrefix="projects_lookup"
-                        placeholder="Search projects..."
-                        value={projectId}
-                        onChange={(val) => setProjectId(val)}
-                        mapOption={(p: any) => ({
-                          label: p.name,
-                          value: p.id,
-                          description: p.code ? `Code: ${p.code}` : undefined
-                        })}
-                      />
-                    </div>
-
-                    <div>
-                      <AsyncSelect
-                        label="Cost Center (Optional)"
-                        apiPath="/cost-centers"
-                        queryKeyPrefix="cost_centers_lookup"
-                        placeholder="Search cost centers..."
-                        value={costCenterId}
-                        onChange={(val) => setCostCenterId(val)}
-                        mapOption={(cc: any) => ({
-                          label: cc.name,
-                          value: cc.id,
-                          description: cc.code ? `Code: ${cc.code}` : undefined
-                        })}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Department (Optional)</label>
-                      <input
-                        type="text"
-                        value={department}
-                        onChange={(e) => setDepartment(e.target.value)}
-                        placeholder="e.g. Marketing"
-                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent text-foreground"
-                      />
-                    </div>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 font-sans uppercase tracking-wider">
                     <ShoppingCart className="w-4.5 h-4.5 text-accent" /> {receiptType === 'SALES' ? 'Customer & Items' : 'Vendor & Items'}
                   </h3>
 
@@ -734,19 +823,19 @@ export const UnifiedReceiptForm = () => {
                       <table className="w-full text-left border-collapse min-w-[700px]">
                         <thead>
                           <tr className="bg-muted/30 border-b border-border text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                            <th className="py-3 px-4 w-[35%]">Product *</th>
-                            <th className="py-3 px-3 w-[25%]">Description</th>
-                            <th className="py-3 px-3 w-[10%] text-right">Qty</th>
-                            <th className="py-3 px-3 w-[12%] text-right">Rate</th>
-                            <th className="py-3 px-3 w-[8%] text-right">Disc %</th>
-                            <th className="py-3 px-3 w-[8%] text-right">Tax %</th>
+                            <th className="py-3 px-4 w-[35%] font-sans">Product *</th>
+                            <th className="py-3 px-3 w-[25%] font-sans">Description</th>
+                            <th className="py-3 px-3 w-[10%] text-right font-sans">Qty</th>
+                            <th className="py-3 px-3 w-[12%] text-right font-sans">Rate</th>
+                            <th className="py-3 px-3 w-[8%] text-right font-sans">Disc %</th>
+                            <th className="py-3 px-3 w-[8%] text-right font-sans">Tax %</th>
                             <th className="py-3 px-4 w-[2%]"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                           {items.map((item, index) => (
                             <tr key={item.keyId} className="hover:bg-muted/10 transition-colors">
-                              <td className="py-2.5 px-4">
+                              <td className="py-2 px-4">
                                 <AsyncSelect
                                   apiPath="/products"
                                   queryKeyPrefix="products_lookup"
@@ -760,16 +849,16 @@ export const UnifiedReceiptForm = () => {
                                   })}
                                 />
                               </td>
-                              <td className="py-2.5 px-3">
+                              <td className="py-2 px-3">
                                 <input
                                   type="text"
                                   value={item.description}
                                   onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                   placeholder="Item details"
-                                  className="w-full bg-background border border-border/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-accent text-foreground"
+                                  className="w-full bg-background border border-border/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-accent text-foreground font-sans"
                                 />
                               </td>
-                              <td className="py-2.5 px-3">
+                              <td className="py-2 px-3">
                                 <input
                                   type="number"
                                   min="1"
@@ -779,7 +868,7 @@ export const UnifiedReceiptForm = () => {
                                   className="w-full bg-background border border-border/80 rounded-lg px-2.5 py-1.5 text-xs text-right focus:outline-none focus:border-accent text-foreground font-mono"
                                 />
                               </td>
-                              <td className="py-2.5 px-3">
+                              <td className="py-2 px-3">
                                 <input
                                   type="number"
                                   step="0.01"
@@ -789,7 +878,7 @@ export const UnifiedReceiptForm = () => {
                                   className="w-full bg-background border border-border/80 rounded-lg px-2.5 py-1.5 text-xs text-right focus:outline-none focus:border-accent text-foreground font-mono"
                                 />
                               </td>
-                              <td className="py-2.5 px-3">
+                              <td className="py-2 px-3">
                                 <input
                                   type="number"
                                   min="0"
@@ -800,7 +889,7 @@ export const UnifiedReceiptForm = () => {
                                   className="w-full bg-background border border-border/80 rounded-lg px-2 px-1.5 text-xs text-right focus:outline-none focus:border-accent text-foreground font-mono"
                                 />
                               </td>
-                              <td className="py-2.5 px-3">
+                              <td className="py-2 px-3">
                                 <select
                                   value={item.taxPercent}
                                   onChange={(e) => handleItemChange(index, 'taxPercent', Number(e.target.value))}
@@ -813,7 +902,7 @@ export const UnifiedReceiptForm = () => {
                                   <option value="28">28%</option>
                                 </select>
                               </td>
-                              <td className="py-2.5 px-4 text-center">
+                              <td className="py-2 px-4 text-center">
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveRow(index)}
@@ -827,13 +916,13 @@ export const UnifiedReceiptForm = () => {
                         </tbody>
                       </table>
                     </div>
-                    <div className="p-3 border-t border-border bg-muted/5 flex justify-end">
+                    <div className="p-2.5 border-t border-border bg-muted/5 flex justify-end">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={handleAddRow}
-                        className="flex items-center gap-1.5 text-xs px-4"
+                        className="flex items-center gap-1.5 text-xs px-4 py-1"
                       >
                         <Plus className="w-3.5 h-3.5" /> Add Row
                       </Button>
@@ -843,15 +932,15 @@ export const UnifiedReceiptForm = () => {
               )}
             </div>
 
-            {/* Block 3: Narration & Attachments */}
+            {/* Block 3: Narration */}
             <div className="bg-surface border border-border rounded-2xl p-6 space-y-4 shadow-sm">
-              <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+              <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 font-sans uppercase tracking-wider">
                 <Info className="w-4.5 h-4.5 text-accent" /> Additional Information
               </h3>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">Narration / Notes</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Provide transaction details or terms..."
@@ -867,7 +956,7 @@ export const UnifiedReceiptForm = () => {
             
             {/* Summary Card */}
             <div className="bg-surface border border-border rounded-2xl p-6 shadow-premium space-y-6">
-              <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+              <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 font-sans uppercase tracking-wider">
                 <FileCheck className="w-4.5 h-4.5 text-accent" /> Transaction Summary
               </h3>
 
@@ -892,7 +981,7 @@ export const UnifiedReceiptForm = () => {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Expense Ledger</span>
                     <span className="font-semibold text-foreground">
-                      {expenseCategories.find((c: any) => c.id === categoryId)?.name || 'N/A'}
+                      {selectedCategory?.name || 'N/A'}
                     </span>
                   </div>
                 )}
@@ -906,31 +995,33 @@ export const UnifiedReceiptForm = () => {
                   </span>
                 </div>
 
-                <div className="border-t border-border/60 my-2 pt-2 space-y-2">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Subtotal</span>
-                    <span className="font-mono">{formatCurrencyValue(totals.subTotal)}</span>
-                  </div>
-                  
-                  {totals.discountTotal > 0 && (
-                    <div className="flex justify-between text-xs text-red-500">
-                      <span>Discount</span>
-                      <span className="font-mono">-{formatCurrencyValue(totals.discountTotal)}</span>
+                {receiptType !== 'EXPENSE' ? (
+                  <div className="border-t border-border/60 my-2 pt-2 space-y-2">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Subtotal</span>
+                      <span className="font-mono">{formatCurrencyValue(totals.subTotal)}</span>
                     </div>
-                  )}
+                    
+                    {totals.discountTotal > 0 && (
+                      <div className="flex justify-between text-xs text-red-500">
+                        <span>Discount</span>
+                        <span className="font-mono">-{formatCurrencyValue(totals.discountTotal)}</span>
+                      </div>
+                    )}
 
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>GST (CGST/SGST/IGST)</span>
-                    <span className="font-mono">{formatCurrencyValue(totals.taxTotal)}</span>
-                  </div>
-
-                  {totals.roundOff !== 0 && (
-                    <div className="flex justify-between text-[11px] text-muted-foreground font-sans">
-                      <span>Round Off</span>
-                      <span className="font-mono">{totals.roundOff > 0 ? '+' : ''}{totals.roundOff.toFixed(2)}</span>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>GST (CGST/SGST/IGST)</span>
+                      <span className="font-mono">{formatCurrencyValue(totals.taxTotal)}</span>
                     </div>
-                  )}
-                </div>
+
+                    {totals.roundOff !== 0 && (
+                      <div className="flex justify-between text-[11px] text-muted-foreground font-sans">
+                        <span>Round Off</span>
+                        <span className="font-mono">{totals.roundOff > 0 ? '+' : ''}{totals.roundOff.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
                 <div className="border-t border-border pt-3.5 flex justify-between items-center">
                   <span className="font-bold text-foreground">Net Amount</span>
@@ -943,7 +1034,7 @@ export const UnifiedReceiptForm = () => {
               {/* Double Entry Accounting Preview Section */}
               <div className="border-t border-border pt-4 space-y-3 text-left">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Accounting Preview</h4>
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider font-sans">Accounting Preview</h4>
                   {loadingPreview && (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                   )}
@@ -953,7 +1044,7 @@ export const UnifiedReceiptForm = () => {
                   <div className="border border-border/80 rounded-xl overflow-hidden bg-background/50">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="bg-muted/40 border-b border-border text-[9px] font-bold text-muted-foreground">
+                        <tr className="bg-muted/40 border-b border-border text-[9px] font-bold text-muted-foreground font-sans">
                           <th className="py-2 px-2.5 text-left">Ledger Account</th>
                           <th className="py-2 px-2 text-right">Debit</th>
                           <th className="py-2 px-2.5 text-right">Credit</th>
@@ -1007,7 +1098,7 @@ export const UnifiedReceiptForm = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full text-xs py-2.5 rounded-xl cursor-pointer"
+                  className="w-full text-xs py-2.5 rounded-xl cursor-pointer font-sans"
                   onClick={() => navigate('/receipts')}
                 >
                   Cancel & Go Back
