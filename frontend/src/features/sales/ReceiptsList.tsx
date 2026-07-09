@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Printer, Trash2, Edit3,
-  DollarSign, CheckCircle, RefreshCw, Eye, Receipt, SlidersHorizontal
+  DollarSign, CheckCircle, RefreshCw, Eye, Receipt, SlidersHorizontal,
+  MoreVertical
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +14,154 @@ import { ColumnDef } from '@tanstack/react-table';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
+
+interface RowActionsProps {
+  r: any;
+  navigate: any;
+  handlePrint: (id: string) => void;
+  setReceiptToVoid: (r: any) => void;
+}
+
+const RowActions = ({ r, navigate, handlePrint, setReceiptToVoid }: RowActionsProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const clickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', clickOutside);
+    return () => document.removeEventListener('mousedown', clickOutside);
+  }, [isOpen]);
+
+  const isSales = r.type === 'SALES';
+
+  if (!isSales) {
+    return (
+      <span className="text-[10px] text-muted-foreground font-semibold font-sans bg-muted px-2.5 py-1 rounded-lg border border-border/40">
+        Managed in {r.type === 'PURCHASE' ? 'Purchases' : 'Expenses'}
+      </span>
+    );
+  }
+
+  return (
+    <div className="relative flex justify-end items-center" ref={dropdownRef}>
+      {/* Desktop / Tablet Layout: Horizontal row */}
+      <div className="hidden sm:flex items-center gap-2">
+        {/* View */}
+        <button
+          type="button"
+          onClick={() => navigate(`/receipts/${r.rawId}`)}
+          title="View Receipt"
+          aria-label="View Receipt"
+          className="h-[36px] w-[36px] rounded-xl border border-border bg-background flex items-center justify-center text-muted-foreground transition-all duration-200 hover:text-blue-500 hover:bg-blue-50/50 hover:border-blue-200 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none hover:scale-105 active:scale-95 cursor-pointer"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
+
+        {/* Edit */}
+        <button
+          type="button"
+          onClick={() => navigate(`/receipts/${r.rawId}/edit`)}
+          title="Edit Receipt"
+          aria-label="Edit Receipt"
+          className="h-[36px] w-[36px] rounded-xl border border-border bg-background flex items-center justify-center text-muted-foreground transition-all duration-200 hover:text-accent hover:bg-accent/5 hover:border-accent/30 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none hover:scale-105 active:scale-95 cursor-pointer"
+        >
+          <Edit3 className="w-4 h-4" />
+        </button>
+
+        {/* Print */}
+        <button
+          type="button"
+          onClick={() => handlePrint(r.rawId)}
+          title="Print Receipt"
+          aria-label="Print Receipt"
+          className="h-[36px] w-[36px] rounded-xl border border-border bg-background flex items-center justify-center text-muted-foreground transition-all duration-200 hover:text-indigo-600 hover:bg-indigo-50/50 hover:border-indigo-200 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none hover:scale-105 active:scale-95 cursor-pointer"
+        >
+          <Printer className="w-4 h-4" />
+        </button>
+
+        {/* Delete / Void */}
+        {r.status === 'COMPLETED' && (
+          <button
+            type="button"
+            onClick={() => setReceiptToVoid(r)}
+            title="Delete Receipt"
+            aria-label="Delete Receipt"
+            className="h-[36px] w-[36px] rounded-xl border border-border bg-background flex items-center justify-center text-muted-foreground transition-all duration-200 hover:text-white hover:bg-red-600 hover:border-red-600 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none hover:scale-105 active:scale-95 cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Mobile Layout: 3-dot dropdown menu */}
+      <div className="flex sm:hidden">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Open Actions Menu"
+          className="h-[36px] w-[36px] rounded-xl border border-border bg-background flex items-center justify-center text-muted-foreground transition-all duration-200 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none cursor-pointer"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+
+        {isOpen && (
+          <div className="absolute right-0 top-10 z-50 w-44 bg-surface border border-border rounded-xl shadow-lg py-1 text-left">
+            <button
+              type="button"
+              onClick={() => {
+                navigate(`/receipts/${r.rawId}`);
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+            >
+              <Eye className="w-4 h-4 text-muted-foreground" /> View Receipt
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                navigate(`/receipts/${r.rawId}/edit`);
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4 text-muted-foreground" /> Edit Receipt
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                handlePrint(r.rawId);
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-muted-foreground" /> Print Receipt
+            </button>
+
+            {r.status === 'COMPLETED' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setReceiptToVoid(r);
+                  setIsOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50/50 transition-colors cursor-pointer border-t border-border/40 mt-1 pt-2"
+              >
+                <Trash2 className="w-4 h-4 text-red-600" /> Delete Receipt
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const ReceiptsList = () => {
   const navigate = useNavigate();
@@ -173,60 +322,14 @@ export const ReceiptsList = () => {
     {
       id: 'actions',
       header: () => <div className="text-right">Actions</div>,
-      cell: ({ row }) => {
-        const r = row.original;
-        const isSales = r.type === 'SALES';
-        return (
-          <div className="flex justify-end gap-2">
-            {isSales ? (
-              <>
-                <Button
-                  onClick={() => navigate(`/receipts/${r.rawId}`)}
-                  variant="outline"
-                  size="sm"
-                  className="h-7 w-7 p-0 flex items-center justify-center hover:bg-accent/10 hover:text-accent hover:border-accent"
-                  title="View Receipt"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                </Button>
-                <Button
-                  onClick={() => navigate(`/receipts/${r.rawId}/edit`)}
-                  variant="outline"
-                  size="sm"
-                  className="h-7 w-7 p-0 flex items-center justify-center hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500"
-                  title="Edit Receipt"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </Button>
-                <Button
-                  onClick={() => handlePrint(r.rawId)}
-                  variant="outline"
-                  size="sm"
-                  className="h-7 w-7 p-0 flex items-center justify-center hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500"
-                  title="Print PDF"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                </Button>
-                {r.status === 'COMPLETED' && (
-                  <Button
-                    onClick={() => setReceiptToVoid(r)}
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-7 p-0 flex items-center justify-center text-red-600 hover:bg-red-500/10 hover:border-red-500"
-                    title="Void Receipt"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                )}
-              </>
-            ) : (
-              <span className="text-[10px] text-muted-foreground font-sans bg-muted px-2 py-0.5 rounded border border-border/40">
-                Managed in {r.type === 'PURCHASE' ? 'Purchases' : 'Expenses'}
-              </span>
-            )}
-          </div>
-        );
-      }
+      cell: ({ row }) => (
+        <RowActions
+          r={row.original}
+          navigate={navigate}
+          handlePrint={handlePrint}
+          setReceiptToVoid={setReceiptToVoid}
+        />
+      )
     }
   ], [navigate]);
 
@@ -472,7 +575,7 @@ export const ReceiptsList = () => {
       onConfirm={handleVoid}
       entityName="Receipt"
       entityId={receiptToVoid?.receiptNo}
-      warningText="This action reverses all ledger and customer balance changes."
+      warningText="This action cannot be undone. This will void the payment receipt and reverse all general ledger entry balances."
     />
     </>
   );
