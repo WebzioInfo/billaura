@@ -25,7 +25,6 @@ const MENUS = [
       { label: 'Payments', path: '/payments', id: 'payments' },
       { label: 'Credit Notes', path: '/credit-notes', id: 'credit-notes' },
       { label: 'Returns', path: '/sales-returns', id: 'sales-returns' },
-      { label: 'Receipts', path: '/receipts', id: 'receipts' },
       { label: 'Statements', path: '/customer-statements', id: 'customer-statements' },
     ]
   },
@@ -54,6 +53,14 @@ const MENUS = [
       { label: 'Debit Notes', path: '/debit-notes', id: 'debit-notes' },
       { label: 'Returns', path: '/purchase-returns', id: 'purchase-returns' },
       { label: 'Statements', path: '/vendor-statements', id: 'vendor-statements' },
+    ]
+  },
+  {
+    id: 'receipts',
+    label: 'Receipts',
+    items: [
+      { label: 'Manage Receipts', path: '/receipts', id: 'receipts-list' },
+      { label: 'Record Receipt', path: '/receipts/new', id: 'receipts-new' },
     ]
   },
   {

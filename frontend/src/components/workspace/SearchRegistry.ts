@@ -65,7 +65,7 @@ const STATIC_PAGES: Omit<SearchItem, 'score'>[] = [
   { id: 'payments', title: 'Payments Received', category: 'Sales', breadcrumb: 'Sales > Payments', icon: 'DollarSign', path: '/payments', type: 'page' },
   { id: 'credit-notes', title: 'Credit Notes', category: 'Sales', breadcrumb: 'Sales > Credit Notes', icon: 'CreditCard', path: '/credit-notes', type: 'page' },
   { id: 'sales-returns', title: 'Sales Returns', category: 'Sales', breadcrumb: 'Sales > Returns', icon: 'RefreshCw', path: '/sales-returns', type: 'page' },
-  { id: 'receipts', title: 'Receipts', category: 'Sales', breadcrumb: 'Sales > Receipts', icon: 'Receipt', path: '/receipts', type: 'page' },
+  { id: 'receipts', title: 'Receipts', category: 'Receipts', breadcrumb: 'Receipts > Receipts', icon: 'Receipt', path: '/receipts', type: 'page' },
   { id: 'customer-statements', title: 'Customer Statements', category: 'Sales', breadcrumb: 'Sales > Statements', icon: 'BarChart3', path: '/customer-statements', type: 'page' },
 
   // Income Module
@@ -151,6 +151,7 @@ const STATIC_PAGES: Omit<SearchItem, 'score'>[] = [
   // Action Shortcuts / Creation Forms
   { id: 'new-invoice', title: 'Create New Invoice', category: 'Actions', breadcrumb: 'Actions > New Invoice', icon: 'PlusCircle', path: '/invoices/new', type: 'action' },
   { id: 'new-bill', title: 'Record New Vendor Bill', category: 'Actions', breadcrumb: 'Actions > New Bill', icon: 'PlusCircle', path: '/bills/new', type: 'action' },
+  { id: 'new-receipt', title: 'Create New Receipt', category: 'Actions', breadcrumb: 'Actions > New Receipt', icon: 'PlusCircle', path: '/receipts/new', type: 'action' },
 ];
 
 // Register Default Static Pages Provider

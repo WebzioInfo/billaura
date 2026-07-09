@@ -25,6 +25,11 @@ export class ReceiptsController {
     return this.receiptsService.findAll(query);
   }
 
+  @Get("unified")
+  async findAllUnified(@Query() query: any) {
+    return this.receiptsService.findAllUnified(query);
+  }
+
   @Get("summary")
   async getSummary() {
     return this.receiptsService.getSummary();

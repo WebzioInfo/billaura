@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Printer, Trash2, Edit3,
-  DollarSign, CheckCircle, RefreshCw, Eye, Receipt
+  DollarSign, CheckCircle, RefreshCw, Eye, Receipt, SlidersHorizontal
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +20,14 @@ export const ReceiptsList = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
   
+  // Advanced filters state
+  const [typeFilter, setTypeFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  
   // Enterprise pagination state
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [totalItems, setTotalItems] = useState(0);
@@ -27,13 +35,30 @@ export const ReceiptsList = () => {
   const [receiptToVoid, setReceiptToVoid] = useState<any>(null);
 
   const { data, isLoading: loading, refetch: fetchReceipts } = useQuery({
-    queryKey: ['receipts', search, statusFilter, methodFilter, pagination.pageIndex, pagination.pageSize],
+    queryKey: [
+      'receipts-unified', 
+      search, 
+      statusFilter, 
+      methodFilter, 
+      typeFilter,
+      startDate,
+      endDate,
+      minAmount,
+      maxAmount,
+      pagination.pageIndex, 
+      pagination.pageSize
+    ],
     queryFn: async () => {
-      const res = await apiClient.get('/receipts', {
+      const res = await apiClient.get('/receipts/unified', {
         params: {
           search: search || undefined,
           status: statusFilter || undefined,
           paymentMethod: methodFilter || undefined,
+          type: typeFilter || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          minAmount: minAmount || undefined,
+          maxAmount: maxAmount || undefined,
           page: pagination.pageIndex + 1,
           limit: pagination.pageSize
         }
@@ -63,7 +88,7 @@ export const ReceiptsList = () => {
   const handleVoid = async () => {
     if (!receiptToVoid) return;
     try {
-      await apiClient.delete(`/receipts/${receiptToVoid.id}`);
+      await apiClient.delete(`/receipts/${receiptToVoid.rawId}`);
       toast.success('Receipt voided and reversed successfully');
       fetchReceipts();
     } catch {
@@ -75,29 +100,47 @@ export const ReceiptsList = () => {
 
   const columns: ColumnDef<any>[] = useMemo(() => [
     {
+      accessorKey: 'type',
+      header: 'Type',
+      cell: ({ row }) => {
+        const type = row.original.type;
+        let badgeStyle = 'bg-blue-500/10 text-blue-500 border border-blue-500/20';
+        if (type === 'PURCHASE') {
+          badgeStyle = 'bg-green-500/10 text-green-500 border border-green-500/20';
+        } else if (type === 'EXPENSE') {
+          badgeStyle = 'bg-purple-500/10 text-purple-500 border border-purple-500/20';
+        }
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${badgeStyle}`}>
+            {type}
+          </span>
+        );
+      }
+    },
+    {
       accessorKey: 'receiptNo',
-      header: 'Receipt No',
+      header: 'Voucher No',
       cell: ({ row }) => <span className="font-mono font-bold text-foreground">{row.original.receiptNo}</span>
     },
     {
       accessorKey: 'date',
       header: () => <div className="text-center">Date</div>,
-      cell: ({ row }) => <div className="text-center">{new Date(row.original.date).toLocaleDateString()}</div>
+      cell: ({ row }) => <div className="text-center font-mono text-xs">{new Date(row.original.date).toLocaleDateString()}</div>
     },
     {
-      accessorKey: 'businessPartner.name',
-      header: 'Customer',
-      cell: ({ row }) => <span className="font-semibold text-foreground">{row.original.businessPartner?.name || 'N/A'}</span>
+      accessorKey: 'partyName',
+      header: 'Party',
+      cell: ({ row }) => <span className="font-semibold text-foreground">{row.original.partyName}</span>
     },
     {
-      accessorKey: 'paymentMethod',
-      header: 'Method',
-      cell: ({ row }) => <span className="text-xs font-semibold">{row.original.paymentMethod}</span>
+      accessorKey: 'paymentLedgerName',
+      header: 'Payment Ledger',
+      cell: ({ row }) => <span className="text-xs font-mono">{row.original.paymentLedgerName}</span>
     },
     {
-      accessorKey: 'account.name',
-      header: 'Account Ledger',
-      cell: ({ row }) => <span className="text-xs font-mono">{row.original.account?.name || 'N/A'}</span>
+      accessorKey: 'expenseLedgerName',
+      header: 'Expense Ledger',
+      cell: ({ row }) => <span className="text-xs font-mono text-muted-foreground">{row.original.expenseLedgerName}</span>
     },
     {
       accessorKey: 'amount',
@@ -132,45 +175,54 @@ export const ReceiptsList = () => {
       header: () => <div className="text-right">Actions</div>,
       cell: ({ row }) => {
         const r = row.original;
+        const isSales = r.type === 'SALES';
         return (
           <div className="flex justify-end gap-2">
-            <Button
-              onClick={() => navigate(`/receipts/${r.id}`)}
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0 flex items-center justify-center hover:bg-accent/10 hover:text-accent hover:border-accent"
-              title="View Receipt"
-            >
-              <Eye className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              onClick={() => navigate(`/receipts/${r.id}/edit`)}
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0 flex items-center justify-center hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500"
-              title="Edit Receipt"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              onClick={() => handlePrint(r.id)}
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0 flex items-center justify-center hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500"
-              title="Print PDF"
-            >
-              <Printer className="w-3.5 h-3.5" />
-            </Button>
-            {r.status === 'COMPLETED' && (
-              <Button
-                onClick={() => setReceiptToVoid(r)}
-                variant="outline"
-                size="sm"
-                className="h-7 w-7 p-0 flex items-center justify-center text-red-600 hover:bg-red-500/10 hover:border-red-500"
-                title="Void Receipt"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+            {isSales ? (
+              <>
+                <Button
+                  onClick={() => navigate(`/receipts/${r.rawId}`)}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0 flex items-center justify-center hover:bg-accent/10 hover:text-accent hover:border-accent"
+                  title="View Receipt"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  onClick={() => navigate(`/receipts/${r.rawId}/edit`)}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0 flex items-center justify-center hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500"
+                  title="Edit Receipt"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  onClick={() => handlePrint(r.rawId)}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0 flex items-center justify-center hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500"
+                  title="Print PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                </Button>
+                {r.status === 'COMPLETED' && (
+                  <Button
+                    onClick={() => setReceiptToVoid(r)}
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0 flex items-center justify-center text-red-600 hover:bg-red-500/10 hover:border-red-500"
+                    title="Void Receipt"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+              </>
+            ) : (
+              <span className="text-[10px] text-muted-foreground font-sans bg-muted px-2 py-0.5 rounded border border-border/40">
+                Managed in {r.type === 'PURCHASE' ? 'Purchases' : 'Expenses'}
+              </span>
             )}
           </div>
         );
@@ -194,34 +246,14 @@ export const ReceiptsList = () => {
         />
       </div>
 
-      <select
-        value={statusFilter}
-        onChange={(e) => {
-          setStatusFilter(e.target.value);
-          setPagination(prev => ({ ...prev, pageIndex: 0 }));
-        }}
-        className="bg-background border border-border rounded-md px-2.5 py-1 text-xs focus:outline-none"
+      <Button
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        variant={showAdvanced ? 'primary' : 'outline'}
+        size="sm"
+        className="flex items-center gap-1 text-xs h-7.5"
       >
-        <option value="">All Statuses</option>
-        <option value="COMPLETED">Completed</option>
-        <option value="VOID">Voided</option>
-      </select>
-
-      <select
-        value={methodFilter}
-        onChange={(e) => {
-          setMethodFilter(e.target.value);
-          setPagination(prev => ({ ...prev, pageIndex: 0 }));
-        }}
-        className="bg-background border border-border rounded-md px-2.5 py-1 text-xs focus:outline-none"
-      >
-        <option value="">All Methods</option>
-        <option value="CASH">Cash</option>
-        <option value="BANK_TRANSFER">Bank Transfer</option>
-        <option value="UPI">UPI</option>
-        <option value="CHEQUE">Cheque</option>
-        <option value="CREDIT_CARD">Credit Card</option>
-      </select>
+        <SlidersHorizontal className="w-3.5 h-3.5" /> Filters
+      </Button>
 
       <Button onClick={() => fetchReceipts()} variant="outline" size="sm" className="h-7 w-7 p-0 rounded-md" title="Refresh">
         <RefreshCw className="w-3.5 h-3.5" />
@@ -245,33 +277,164 @@ export const ReceiptsList = () => {
         }
       />
 
+      {/* Advanced Filters Panel */}
+      {showAdvanced && (
+        <div className="bg-surface border border-border rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 shadow-sm text-left mb-4">
+          <div>
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 font-sans">Receipt Type</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+              }}
+              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+            >
+              <option value="">All Types</option>
+              <option value="SALES">Sales Receipts</option>
+              <option value="PURCHASE">Purchase Payments</option>
+              <option value="EXPENSE">Expense Claims</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 font-sans">Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+              }}
+              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 font-sans">End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+              }}
+              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 font-sans">Min Amount (₹)</label>
+            <input
+              type="number"
+              placeholder="Min"
+              value={minAmount}
+              onChange={(e) => {
+                setMinAmount(e.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+              }}
+              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 font-sans">Max Amount (₹)</label>
+            <input
+              type="number"
+              placeholder="Max"
+              value={maxAmount}
+              onChange={(e) => {
+                setMaxAmount(e.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+              }}
+              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 font-sans">Payment Method</label>
+            <select
+              value={methodFilter}
+              onChange={(e) => {
+                setMethodFilter(e.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+              }}
+              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+            >
+              <option value="">All Methods</option>
+              <option value="CASH">Cash</option>
+              <option value="BANK_TRANSFER">Bank Transfer</option>
+              <option value="UPI">UPI</option>
+              <option value="CHEQUE">Cheque</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 font-sans">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+              }}
+              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none"
+            >
+              <option value="">All Statuses</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="VOID">Voided</option>
+            </select>
+          </div>
+
+          <div className="flex items-end">
+            <Button
+              onClick={() => {
+                setTypeFilter('');
+                setStatusFilter('');
+                setMethodFilter('');
+                setStartDate('');
+                setEndDate('');
+                setMinAmount('');
+                setMaxAmount('');
+                setSearch('');
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+              }}
+              variant="outline"
+              size="sm"
+              className="w-full text-xs py-2.5 rounded-lg"
+            >
+              Reset Filters
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Quick Stats Banner */}
       {loading ? (
-        <SummaryCardLoader count={3} className="grid-cols-1 md:grid-cols-3 gap-2 mb-2" />
+        <SummaryCardLoader count={3} className="grid-cols-1 md:grid-cols-3 gap-2 mb-4" />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
           <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
             <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              <span className="flex items-center gap-1">💰 Total Received</span>
+              <span className="flex items-center gap-1">💰 Total Received (SALES)</span>
             </div>
             <h3 className="text-base font-bold text-foreground leading-none mt-1">
-              ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'COMPLETED' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              ₹{receipts.filter((r: any) => r.type === 'SALES').reduce((acc: number, curr: any) => acc + (curr.status === 'COMPLETED' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </h3>
           </div>
           <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
             <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              <span className="flex items-center gap-1">✔️ Active Receipts</span>
+              <span className="flex items-center gap-1">✔️ Total Items</span>
             </div>
             <h3 className="text-base font-bold text-foreground leading-none mt-1">
-              {receipts.filter((r: any) => r.status === 'COMPLETED').length} / {totalItems}
+              {totalItems} Receipts
             </h3>
           </div>
           <div className="bg-surface border border-border p-2.5 rounded-md flex flex-col justify-between shadow-sm h-[68px]">
             <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              <span className="flex items-center gap-1">⏳ Pending Receipts</span>
+              <span className="flex items-center gap-1">⏳ Total Expenses Approved</span>
             </div>
             <h3 className="text-base font-bold text-foreground leading-none mt-1">
-              ₹{receipts.reduce((acc: number, curr: any) => acc + (curr.status === 'PENDING' ? Number(curr.amount) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              ₹{receipts.filter((r: any) => r.type === 'EXPENSE').reduce((acc: number, curr: any) => acc + Number(curr.amount), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </h3>
           </div>
         </div>
@@ -279,11 +442,11 @@ export const ReceiptsList = () => {
 
       {loading ? (
         <TableLoader cols={6} rows={6} className="bg-surface border border-border rounded-xl" />
-      ) : receipts.length === 0 && !search && !statusFilter && !methodFilter ? (
+      ) : receipts.length === 0 && !search && !statusFilter && !methodFilter && !typeFilter && !startDate && !endDate && !minAmount && !maxAmount ? (
         <EmptyState
           icon={<Receipt className="w-8 h-8 text-muted-foreground" />}
           title="No receipts found"
-          description="Record a customer payment receipt to allocate invoice balances."
+          description="Record a receipt to allocate and post payment entries."
           actionLabel="Record First Receipt"
           onActionClick={() => navigate('/receipts/new')}
         />
@@ -303,15 +466,14 @@ export const ReceiptsList = () => {
       )}
     </PageContainer>
 
-      <DeleteDialog
-        isOpen={!!receiptToVoid}
-        onClose={() => setReceiptToVoid(null)}
-        onConfirm={handleVoid}
-        entityName="Receipt"
-        entityId={receiptToVoid?.receiptNo}
-        warningText="This action reverses all ledger and customer balance changes."
-      />
+    <DeleteDialog
+      isOpen={!!receiptToVoid}
+      onClose={() => setReceiptToVoid(null)}
+      onConfirm={handleVoid}
+      entityName="Receipt"
+      entityId={receiptToVoid?.receiptNo}
+      warningText="This action reverses all ledger and customer balance changes."
+    />
     </>
   );
 };
-

@@ -808,4 +808,190 @@ export class ReceiptsService {
       }
     };
   }
+
+  async findAllUnified(query: any) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const type = query.type; // 'SALES' | 'PURCHASE' | 'EXPENSE'
+    const search = query.search || '';
+    const status = query.status;
+    const startDate = query.startDate ? new Date(query.startDate) : undefined;
+    const endDate = query.endDate ? new Date(query.endDate) : undefined;
+    const minAmount = query.minAmount ? Number(query.minAmount) : undefined;
+    const maxAmount = query.maxAmount ? Number(query.maxAmount) : undefined;
+
+    const unified: any[] = [];
+
+    // 1. Fetch Sales Receipts (Receipt table)
+    if (!type || type === 'SALES') {
+      const sales = await this.prisma.receipt.findMany({
+        where: {
+          companyId,
+          deletedAt: null,
+          ...(status ? { status } : {}),
+          ...(startDate || endDate ? {
+            date: {
+              ...(startDate ? { gte: startDate } : {}),
+              ...(endDate ? { lte: endDate } : {}),
+            }
+          } : {}),
+          ...(minAmount || maxAmount ? {
+            amount: {
+              ...(minAmount ? { gte: minAmount } : {}),
+              ...(maxAmount ? { lte: maxAmount } : {}),
+            }
+          } : {}),
+        },
+        include: {
+          businessPartner: true,
+          account: true,
+        }
+      });
+
+      sales.forEach((s: any) => {
+        unified.push({
+          id: `SALES-${s.id}`,
+          rawId: s.id,
+          type: 'SALES',
+          receiptNo: s.receiptNo,
+          date: s.date,
+          partyName: s.businessPartner?.name || 'N/A',
+          paymentLedgerName: s.account?.name || 'N/A',
+          expenseLedgerName: '—',
+          amount: Number(s.amount),
+          status: s.status,
+          notes: s.notes || s.description || '—',
+          createdBy: 'System'
+        });
+      });
+    }
+
+    // 2. Fetch Purchase Payments (TransactionPayment table)
+    if (!type || type === 'PURCHASE') {
+      const purchases = await this.prisma.transactionPayment.findMany({
+        where: {
+          companyId,
+          deletedAt: null,
+          ...(startDate || endDate ? {
+            date: {
+              ...(startDate ? { gte: startDate } : {}),
+              ...(endDate ? { lte: endDate } : {}),
+            }
+          } : {}),
+          ...(minAmount || maxAmount ? {
+            amount: {
+              ...(minAmount ? { gte: minAmount } : {}),
+              ...(maxAmount ? { lte: maxAmount } : {}),
+            }
+          } : {}),
+        },
+        include: {
+          businessPartner: true,
+          bankAccount: true,
+        }
+      });
+
+      purchases.forEach((p: any) => {
+        unified.push({
+          id: `PURCHASE-${p.id}`,
+          rawId: p.id,
+          type: 'PURCHASE',
+          receiptNo: p.paymentNo,
+          date: p.date,
+          partyName: p.businessPartner?.name || 'N/A',
+          paymentLedgerName: p.bankAccount?.name || 'N/A',
+          expenseLedgerName: '—',
+          amount: Number(p.amount),
+          status: p.deletedAt ? 'VOID' : 'COMPLETED',
+          notes: p.notes || p.reference || '—',
+          createdBy: 'System'
+        });
+      });
+    }
+
+    // 3. Fetch Expenses (Expense table)
+    if (!type || type === 'EXPENSE') {
+      const expenses = await this.prisma.expense.findMany({
+        where: {
+          companyId,
+          deletedAt: null,
+          status: 'APPROVED',
+          ...(startDate || endDate ? {
+            date: {
+              ...(startDate ? { gte: startDate } : {}),
+              ...(endDate ? { lte: endDate } : {}),
+            }
+          } : {}),
+          ...(minAmount || maxAmount ? {
+            amount: {
+              ...(minAmount ? { gte: minAmount } : {}),
+              ...(maxAmount ? { lte: maxAmount } : {}),
+            }
+          } : {}),
+        },
+        include: {
+          category: true,
+          bankAccount: true,
+          cashAccount: true,
+          vendor: true,
+          employee: true,
+        }
+      });
+
+      expenses.forEach((e: any) => {
+        const paymentLedgerName = e.bankAccount?.name || e.cashAccount?.name || 'N/A';
+        const partyName = e.vendor?.name || e.employee?.name || '—';
+        unified.push({
+          id: `EXPENSE-${e.id}`,
+          rawId: e.id,
+          type: 'EXPENSE',
+          receiptNo: e.expenseNo,
+          date: e.date,
+          partyName,
+          paymentLedgerName,
+          expenseLedgerName: e.category?.name || 'N/A',
+          amount: Number(e.amount),
+          status: 'COMPLETED',
+          notes: e.notes || e.description || '—',
+          createdBy: 'System'
+        });
+      });
+    }
+
+    // Apply global text search in-memory
+    let filtered = unified;
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = unified.filter((u: any) =>
+        u.receiptNo.toLowerCase().includes(q) ||
+        u.partyName.toLowerCase().includes(q) ||
+        u.paymentLedgerName.toLowerCase().includes(q) ||
+        u.expenseLedgerName.toLowerCase().includes(q) ||
+        u.notes.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort by date desc
+    filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const total = filtered.length;
+    const page = Number(query.page || 1);
+    const limit = Number(query.limit || 20);
+    const startIndex = (page - 1) * limit;
+    const items = filtered.slice(startIndex, startIndex + limit);
+
+    return {
+      success: true,
+      data: {
+        items,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      }
+    };
+  }
 }
