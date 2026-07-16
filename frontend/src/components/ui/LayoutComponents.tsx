@@ -76,6 +76,11 @@ export const EmptyState = ({ icon, title, description, actionLabel, onActionClic
         {actionLabel}
       </Button>
     )}
+    <div className="pt-2 border-t border-border/40 w-full max-w-[160px] text-center mt-3 opacity-60">
+      <span className="text-[9px] text-muted-foreground font-mono select-none tracking-wider block">
+        Bill Aura &bull; A Product by Webzio
+      </span>
+    </div>
   </div>
 );
 

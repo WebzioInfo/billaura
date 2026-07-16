@@ -62,6 +62,14 @@ export function EmptyState({
           {action}
         </div>
       )}
+
+      {variant === 'default' && (
+        <div className="mt-8 pt-3 border-t border-border/40 w-full max-w-[200px] text-center opacity-60">
+          <span className="text-[9px] text-muted-foreground font-mono select-none tracking-wider">
+            Bill Aura &bull; A Product by Webzio
+          </span>
+        </div>
+      )}
     </div>
   );
 }

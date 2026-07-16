@@ -3,25 +3,13 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Sun, Moon, Menu, X } from 'lucide-react';
 
 export default function PublicLayout() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark');
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsDarkMode(isDark);
+    // Force light mode on public landing pages
+    document.documentElement.classList.remove('dark');
   }, []);
-
-  const toggleTheme = () => {
-    if (isDarkMode) {
-      document.documentElement.classList.remove('dark');
-      setIsDarkMode(false);
-    } else {
-      document.documentElement.classList.add('dark');
-      setIsDarkMode(true);
-    }
-  };
 
   const navLinks = [
     { name: 'Features', path: '/features' },
@@ -32,150 +20,160 @@ export default function PublicLayout() {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300 flex flex-col premium-glow">
-      {/* Navigation Header */}
-      <header className="sticky top-0 z-50 glass-panel border-b border-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <Link to="/" className="flex items-center justify-center">
-                <img src="/logo.png" alt="Bill Aura Logo" className="h-8 w-auto dark:hidden" />
-                <img src="/logo2.png" alt="Bill Aura Logo" className="h-8 w-auto hidden dark:block" />
-              </Link>
-            </div>
-
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-              {navLinks.map((link) => {
-                const isActive = location.pathname === link.path;
-                return (
-                  <Link
-                    key={link.name}
-                    to={link.path}
-                    className={`transition-colors hover:text-accent ${
-                      isActive ? 'text-accent border-b-2 border-accent pb-1' : 'text-muted-foreground'
-                    }`}
-                  >
-                    {link.name}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <div className="hidden md:flex items-center gap-4">
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                aria-label="Toggle theme"
-              >
-                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-
-              <Link
-                to="/login"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Sign In
-              </Link>
-
-              <Link
-                to="/register"
-                className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-all"
-              >
-                Start Free Trial
-              </Link>
-            </div>
-
-            {/* Mobile Menu Button */}
-            <div className="md:hidden flex items-center gap-2">
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              >
-                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-              >
-                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
-            </div>
+    <div className="min-h-screen bg-[#ffffff] dark:bg-[#070b13] text-[#111111] dark:text-slate-100 transition-colors duration-300 flex flex-col font-sans antialiased relative">
+      
+      {/* Floating Capsule Header (Inspired by Dynamic Island / Premium Hardware) */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 w-[92%] sm:w-11/12 max-w-4xl z-50 transition-all duration-300">
+        <header className="backdrop-blur-md bg-white/70 dark:bg-[#070b13]/70 border border-slate-200/50 dark:border-slate-800/80 rounded-full px-5 py-2.5 sm:px-6 sm:py-3 shadow-lg shadow-slate-200/10 dark:shadow-none flex items-center justify-between">
+          
+          {/* Logo and Tagline */}
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2 group">
+              <img src="/logo.png" alt="Bill Aura" className="h-5 w-auto dark:hidden transition-transform duration-200 group-hover:scale-95" />
+              <img src="/logo2.png" alt="Bill Aura" className="h-5 w-auto hidden dark:block transition-transform duration-200 group-hover:scale-95" />
+              <span className="hidden sm:inline-block text-[9px] tracking-wider text-slate-400 dark:text-slate-500 font-bold uppercase font-mono border-l border-slate-200 dark:border-slate-800 pl-3">
+                A Product by Webzio
+              </span>
+            </Link>
           </div>
-        </div>
 
-        {/* Mobile Navigation Dropdown */}
+          {/* Center Links (Desktop) */}
+          <nav className="hidden md:flex items-center gap-7 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {navLinks.map((link) => {
+              const isActive = location.pathname === link.path;
+              return (
+                <Link
+                  key={link.name}
+                  to={link.path}
+                  className={`transition-colors duration-250 hover:text-black dark:hover:text-white ${
+                    isActive ? 'text-black dark:text-white font-bold' : ''
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Action Elements */}
+          <div className="hidden md:flex items-center gap-5">
+            <Link
+              to="/login"
+              className="text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-black dark:hover:text-white transition-colors"
+            >
+              Sign In
+            </Link>
+
+            <Link
+              to="/register"
+              className="bg-black dark:bg-white text-white dark:text-black hover:bg-slate-900 dark:hover:bg-slate-100 px-4 py-1.5 rounded-full text-[10px] font-extrabold tracking-widest uppercase shadow-sm transition-all duration-200"
+            >
+              Get Started
+            </Link>
+          </div>
+
+          {/* Mobile Menu Icon */}
+          <div className="md:hidden flex items-center gap-2">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-black dark:hover:text-white cursor-pointer"
+            >
+              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+          </div>
+
+        </header>
+
+        {/* Mobile Dropdown (Dynamic Island inspired slide out) */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-border bg-surface px-4 py-4 space-y-3">
+          <div className="mt-2 border border-slate-200/50 dark:border-slate-800/80 bg-white/95 dark:bg-[#070b13]/95 px-6 py-6 space-y-4 rounded-3xl shadow-xl backdrop-blur-md animate-fade-in text-left">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
                 to={link.path}
                 onClick={() => setMobileMenuOpen(false)}
-                className="block text-sm font-medium text-muted-foreground hover:text-accent transition-colors"
+                className="block text-xs font-bold uppercase tracking-wider text-slate-550 hover:text-black dark:hover:text-white transition-colors"
               >
                 {link.name}
               </Link>
             ))}
-            <div className="pt-4 border-t border-border flex flex-col gap-2">
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
               <Link
                 to="/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="text-center py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                className="text-center py-2 text-xs font-bold uppercase tracking-wider text-slate-550 hover:text-black dark:hover:text-white"
               >
                 Sign In
               </Link>
               <Link
                 to="/register"
                 onClick={() => setMobileMenuOpen(false)}
-                className="bg-primary text-primary-foreground text-center py-2 rounded-lg text-sm font-semibold shadow-sm"
+                className="bg-black dark:bg-white text-white dark:text-black text-center py-2 rounded-full text-xs font-bold tracking-wider uppercase shadow-sm"
               >
-                Start Free Trial
+                Get Started
               </Link>
             </div>
           </div>
         )}
-      </header>
+      </div>
 
-      {/* Main Content Area */}
-      <main className="flex-grow">
+      {/* Main Content Spacer (to clear the top-floating header) */}
+      <main className="flex-grow pt-24 bg-[#ffffff] dark:bg-[#070b13]">
         <Outlet />
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border bg-surface py-12 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Timeless Minimalist Footer */}
+      <footer className="bg-[#fafafa] dark:bg-[#05080f] border-t border-slate-100 dark:border-slate-900 py-16 flex-shrink-0 text-left">
+        <div className="max-w-5xl mx-auto px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1 space-y-4">
-              <span className="flex items-center gap-2">
-                <img src="/logo.png" alt="Bill Aura Logo" className="h-8 w-auto dark:hidden" />
-                <img src="/logo2.png" alt="Bill Aura Logo" className="h-8 w-auto hidden dark:block" />
-              </span>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Smart Cloud Accounting SaaS Solution for modern startups, SMEs, and large-scale enterprises. Complete compliance and financial intelligence.
+              <div className="flex flex-col">
+                <span className="flex items-center gap-2">
+                  <img src="/logo.png" alt="Bill Aura Logo" className="h-5 w-auto dark:hidden" />
+                  <img src="/logo2.png" alt="Bill Aura Logo" className="h-5 w-auto hidden dark:block" />
+                </span>
+                <span className="text-[9px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-bold font-mono mt-1">
+                  A Product by Webzio
+                </span>
+              </div>
+              <p className="text-xs text-slate-450 dark:text-slate-400 leading-relaxed pr-4">
+                Quiet enterprise accounting SaaS. Designed with extreme attention to detail and zero visual clutter.
               </p>
             </div>
+            
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Platform</h3>
-              <ul className="space-y-2 text-xs">
-                <li><Link to="/features" className="hover:text-accent transition-colors">Features</Link></li>
-                <li><Link to="/pricing" className="hover:text-accent transition-colors">Pricing</Link></li>
-                <li><Link to="/about" className="hover:text-accent transition-colors">About Us</Link></li>
+              <h3 className="text-[9px] font-bold uppercase tracking-widest text-[#111111] dark:text-white mb-4">Platform</h3>
+              <ul className="space-y-3 text-xs">
+                <li><Link to="/features" className="text-slate-550 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors">Features</Link></li>
+                <li><Link to="/pricing" className="text-slate-550 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors">Pricing</Link></li>
+                <li><Link to="/about" className="text-slate-550 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors">About Us</Link></li>
               </ul>
             </div>
+            
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Resources</h3>
-              <ul className="space-y-2 text-xs">
-                <li><Link to="/docs" className="hover:text-accent transition-colors">Documentation</Link></li>
-                <li><Link to="/contact" className="hover:text-accent transition-colors">Contact Support</Link></li>
+              <h3 className="text-[9px] font-bold uppercase tracking-widest text-[#111111] dark:text-white mb-4">Resources</h3>
+              <ul className="space-y-3 text-xs">
+                <li><Link to="/docs" className="text-slate-550 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors">Documentation</Link></li>
+                <li><Link to="/contact" className="text-slate-550 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors">Contact Support</Link></li>
               </ul>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-[9px] font-bold uppercase tracking-widest text-[#111111] dark:text-white mb-4">Webzio</h3>
+              <p className="text-xs text-slate-550 dark:text-slate-400 leading-relaxed">
+                Bill Aura is designed and developed by <a href="https://webzio.info" target="_blank" rel="noreferrer" className="text-black dark:text-white font-bold hover:underline">Webzio</a>.
+              </p>
+              <div className="inline-block px-2 py-0.5 rounded bg-slate-200/50 dark:bg-slate-900 border border-slate-350/20 dark:border-slate-800 text-[9px] text-slate-450 dark:text-slate-500 font-mono">
+                Version: 4.0.0-enterprise
+              </div>
             </div>
           </div>
-          <div className="border-t border-border mt-8 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} Bill Aura. All rights reserved. A Webzio Product.</p>
+
+          <div className="border-t border-slate-200/40 dark:border-slate-900 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-450 dark:text-slate-500">
+            <p>&copy; {new Date().getFullYear()} Bill Aura. All rights reserved. Powered by Webzio.</p>
             <div className="flex gap-6">
-              <a href="#" className="hover:text-accent">Privacy Policy</a>
-              <a href="#" className="hover:text-accent">Terms of Service</a>
+              <a href="#" className="hover:text-black dark:hover:text-white">Privacy Policy</a>
+              <a href="#" className="hover:text-black dark:hover:text-white">Terms of Service</a>
             </div>
           </div>
         </div>

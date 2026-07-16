@@ -1,35 +1,38 @@
-import React from 'react';
-import { Outlet, Link } from 'react-router-dom';
-
+import React, { useEffect } from 'react';
+import { Outlet } from 'react-router-dom';
 
 export default function AuthLayout() {
+  useEffect(() => {
+    // Force light mode on authentication screens
+    document.documentElement.classList.remove('dark');
+  }, []);
+
+  // Lightweight inline SVG pattern for the repeating "WEBZIO" watermark
+  // Renders a rotated "WEBZIO" text at 22 degrees with ~2.5% opacity
+  const watermarkStyle = {
+    backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='100'><text x='50%' y='50%' fill='%23111827' font-size='28' font-weight='900' font-family='system-ui, -apple-system, sans-serif' opacity='0.05' transform='rotate(-22 120 80)' text-anchor='middle'>WEBZIO</text></svg>")`,
+    backgroundRepeat: 'repeat',
+  };
+
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center px-6 py-8 bg-background premium-glow relative overflow-hidden transition-colors duration-300">
-      {/* Background visual accents */}
-      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-accent opacity-[0.02] rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-accent opacity-[0.02] rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="mx-auto w-full max-w-md z-10">
-        <div className="flex justify-center items-center gap-2">
-          <Link to="/" className="flex items-center justify-center">
-            <img src="/logo.png" alt="Bill Aura" className="h-12 max-w-full w-auto object-contain dark:hidden" />
-            <img src="/logo2.png" alt="Bill Aura" className="h-12 max-w-full w-auto object-contain hidden dark:block" />
-          </Link>
-        </div>
-        <p className="mt-2 text-center text-xs text-muted-foreground uppercase tracking-widest font-semibold whitespace-nowrap">
-          Cloud Accounting SaaS Platform
-        </p>
+    <div
+      style={watermarkStyle}
+      className="min-h-screen w-full bg-[#faf9f6] flex flex-col items-center justify-center px-4 py-12 select-none relative"
+    >
+      {/* Centered Login Card wrapper */}
+      <div className="w-full max-w-[440px] bg-white border border-slate-200/60 rounded-2xl shadow-xl shadow-slate-200/45 p-8 sm:p-10 z-10">
+        <Outlet />
       </div>
 
-      <div className="mt-8 mx-auto w-full max-w-md min-w-0 z-10">
-        <div className="glass-panel w-full min-w-0 rounded-xl shadow-xl border border-border bg-white px-6 py-8 sm:px-8 space-y-6">
-          <Outlet />
+      {/* Minimal Footer */}
+      <footer className="mt-8 text-center space-y-1 text-[10px] tracking-wide text-slate-400 font-mono z-10">
+        <div className="flex items-center justify-center gap-2">
+          <span>Version v4.0.0-enterprise</span>
+          <span>&bull;</span>
+          <span>A Product by Webzio</span>
         </div>
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Secure Tenant Isolation &bull; SSO Enabled &bull; AES-256 Encrypted
-        </p>
-      </div>
+        <p>&copy; {new Date().getFullYear()} Bill Aura ERP. All rights reserved.</p>
+      </footer>
     </div>
   );
 }
-

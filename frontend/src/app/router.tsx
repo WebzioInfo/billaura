@@ -19,6 +19,8 @@ const JournalEntryDetails = lazy(() => import('../features/accounting/JournalEnt
 const CapitalDashboard = lazy(() => import('../features/accounting/CapitalDashboard').then(m => ({ default: m.CapitalDashboard })));
 const ProfitLossDashboard = lazy(() => import('../features/reports/ProfitLossDashboard'));
 const LandingPage = lazy(() => import('../features/public/LandingPage').then(m => ({ default: m.LandingPage })));
+const AboutPage = lazy(() => import('../features/public/AboutPage').then(m => ({ default: m.AboutPage })));
+const SupportPage = lazy(() => import('../features/public/SupportPage').then(m => ({ default: m.SupportPage })));
 
 const WarehousesList = lazy(() => import('../features/inventory/WarehousesList').then(m => ({ default: m.WarehousesList })));
 const BatchesList = lazy(() => import('../features/inventory/BatchesList').then(m => ({ default: m.BatchesList })));
@@ -97,22 +99,34 @@ const MaintenancePage = lazy(() => import('./MaintenancePage').then(m => ({ defa
 import { PageLoader } from '../components/ui/LoadingSystem';
 
 const LoadingFallback = () => (
-  <div className="h-screen w-screen flex flex-col items-center justify-center bg-background text-foreground space-y-4">
-    <img 
-      src="/logo.png" 
-      alt="Bill Aura" 
-      className="w-20 h-auto animate-pulse dark:hidden" 
-    />
-    <img 
-      src="/logo2.png" 
-      alt="Bill Aura" 
-      className="w-20 h-auto animate-pulse hidden dark:block" 
-    />
-    <PageLoader 
-      title="Loading Accounting Module..." 
-      description="Preparing your financial workspace..." 
-      className="min-h-0 py-0" 
-    />
+  <div className="h-screen w-screen flex flex-col items-center justify-center bg-white text-slate-800 space-y-6 select-none relative overflow-hidden">
+    {/* Background visual accents */}
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-amber-100 opacity-[0.2] rounded-full blur-[100px] pointer-events-none" />
+    
+    <div className="flex flex-col items-center space-y-4 animate-fade-in relative z-10">
+      <img 
+        src="/logo.png" 
+        alt="Bill Aura" 
+        className="w-24 h-auto animate-pulse" 
+      />
+      <div className="text-center">
+        <p className="text-[10px] uppercase tracking-[0.25em] text-[#a08020] font-semibold font-mono">
+          A Webzio Product
+        </p>
+        <div className="w-16 h-[1px] bg-gradient-to-r from-transparent via-[#a08020] to-transparent mx-auto mt-2 opacity-50" />
+      </div>
+    </div>
+    
+    <div className="w-48 bg-slate-100 h-[2px] rounded-full overflow-hidden relative z-10">
+      <div className="bg-[#a08020] h-full w-2/3 rounded-full animate-loading-bar absolute left-0" style={{ animation: 'shimmer 2s infinite linear' }} />
+    </div>
+    
+    <style dangerouslySetInnerHTML={{__html: `
+      @keyframes shimmer {
+        0% { left: -100%; width: 100%; }
+        100% { left: 100%; width: 100%; }
+      }
+    `}} />
   </div>
 );
 
@@ -132,9 +146,9 @@ export const router = createBrowserRouter([
       { path: '', element: <LandingPage /> },
       { path: 'features', element: <div className="max-w-7xl mx-auto px-4 py-16 text-center"><h1 className="text-3xl font-bold">Accounting Platform Features</h1><p className="text-muted-foreground mt-2">Comprehensive suite of financial management tools.</p></div> },
       { path: 'pricing', element: <div className="max-w-7xl mx-auto px-4 py-16 text-center"><h1 className="text-3xl font-bold">Pricing Plans</h1><p className="text-muted-foreground mt-2">Simple, transparent, scale-friendly licensing.</p></div> },
-      { path: 'about', element: <div className="max-w-7xl mx-auto px-4 py-16 text-center"><h1 className="text-3xl font-bold">About Bill Aura</h1><p className="text-muted-foreground mt-2">Cloud accounting engineered for scale.</p></div> },
+      { path: 'about', element: <AboutPage /> },
       { path: 'docs', element: <div className="max-w-7xl mx-auto px-4 py-16 text-center"><h1 className="text-3xl font-bold">Documentation</h1><p className="text-muted-foreground mt-2">Developer APIs and configuration guides.</p></div> },
-      { path: 'contact', element: <div className="max-w-7xl mx-auto px-4 py-16 text-center"><h1 className="text-3xl font-bold">Contact Sales</h1><p className="text-muted-foreground mt-2">Get custom onboarding support.</p></div> },
+      { path: 'contact', element: <SupportPage /> },
     ],
   },
   // Redirects for old /auth paths

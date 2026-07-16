@@ -3,19 +3,20 @@
 
 :root {
   color-scheme: light;
-  /* Enterprise Light Theme */
-  --background: #f3f4f6; /* Light gray background like ERPs */
+  --background: #f3f4f6;
   --surface: #ffffff;
   --foreground: #111827;
   --muted-foreground: #4b5563;
   --border: #d1d5db;
-  
+
   /* Brand/Accent colors */
-  --primary: #1f2937; /* Dark gray */
+  --primary: #1f2937;
+  /* Dark gray */
   --primary-foreground: #ffffff;
-  --accent: #2563eb; /* Blue for active tabs/links */
+  --accent: #2563eb;
+  /* Blue for active tabs/links */
   --accent-muted: #eff6ff;
-  
+
   /* Density Spacing Tokens */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -32,13 +33,13 @@
   --foreground: #f9fafb;
   --muted-foreground: #9ca3af;
   --border: #374151;
-  
+
   /* Brand/Accent colors */
   --primary: #f3f4f6;
   --primary-foreground: #111827;
   --accent: #3b82f6;
   --accent-muted: #1e3a8a;
-  
+
   /* Density Spacing Tokens */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -58,7 +59,7 @@
   --color-accent: var(--accent);
   --color-accent-muted: var(--accent-muted);
 
-  
+
   /* Border Radii Override */
   --radius-2xl: 8px;
   --radius-xl: 6px;
@@ -69,6 +70,7 @@
 table {
   border-collapse: collapse !important;
 }
+
 table th {
   padding: 8px 8px !important;
   font-size: 11px !important;
@@ -78,6 +80,7 @@ table th {
   height: 38px !important;
   vertical-align: middle !important;
 }
+
 table td {
   padding: 6px 8px !important;
   font-size: 13px !important;
@@ -114,6 +117,7 @@ table td {
 .h-32.animate-pulse {
   height: 76px !important;
 }
+
 .h-96 {
   height: 320px !important;
 }
@@ -128,7 +132,8 @@ body,
 body {
   margin: 0;
   font-family: 'Inter', 'Segoe UI', 'IBM Plex Sans', -apple-system, sans-serif;
-  font-size: 13px; /* Dense UI */
+  font-size: 13px;
+  /* Dense UI */
   background-color: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
@@ -146,43 +151,55 @@ body {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--muted-foreground);
 }
 
 @media print {
+
   /* Hide UI elements that shouldn't be printed */
-  header, nav, aside, .sidebar, .navbar, .no-print, .workspace-tabs {
+  header,
+  nav,
+  aside,
+  .sidebar,
+  .navbar,
+  .no-print,
+  .workspace-tabs {
     display: none !important;
   }
-  
+
   body {
     background: transparent !important;
     background-color: white !important;
     color: black !important;
   }
-  
-  main, .main-content {
+
+  main,
+  .main-content {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
     max-width: none !important;
   }
-  
-  table, tr, img {
+
+  table,
+  tr,
+  img {
     page-break-inside: avoid;
   }
-  
+
   @page {
     margin: 1.5cm;
     size: auto;
   }
 }
-
