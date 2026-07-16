@@ -1,5 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { CacheModule } from '@nestjs/cache-manager';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from "./audit/audit.module";
 import { AuthModule } from "./auth/auth.module";
 import { CommonModule } from "./common/common.module";
@@ -29,9 +30,19 @@ import { ScheduleModule } from "@nestjs/schedule";
 import { StorageModule } from "./storage/storage.module";
 import { PrismaTestController } from "./prisma-test.controller";
 import { FinanceModule } from "./finance/finance.module";
+import { UsersModule } from "./users/users.module";
+
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard } from '@nestjs/throttler';
+
+import { DocumentTemplatesModule } from "./settings/document-templates/document-templates.module";
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100, // 100 requests per minute globally
+    }]),
     CacheModule.register({ isGlobal: true, ttl: 60000 }), // 60 seconds global cache
     MailModule,
     AppConfigModule,
@@ -60,8 +71,16 @@ import { FinanceModule } from "./finance/finance.module";
     StorageModule,
     ScheduleModule.forRoot(),
     FinanceModule,
+    UsersModule,
+    DocumentTemplatesModule,
   ],
   controllers: [PrismaTestController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

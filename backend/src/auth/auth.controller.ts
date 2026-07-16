@@ -25,6 +25,7 @@ import {
   BranchSetupDto,
   SubscriptionDto,
 } from "./dto/onboard.dto";
+import { UpdateCompanyDto } from "./dto/update-company.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 
 import { ConfigService } from "@nestjs/config";
@@ -154,7 +155,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Patch("company")
-  async updateCompany(@Request() req: any, @Body() dto: any) {
+  async updateCompany(@Request() req: any, @Body() dto: UpdateCompanyDto) {
     return this.authService.updateCompany(req.user.tenantId, dto);
   }
 

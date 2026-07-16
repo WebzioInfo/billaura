@@ -2,6 +2,7 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import { useSessionStore } from "../../features/auth/stores/sessionStore";
 import { env } from "../../config/env";
 import { TokenService } from "../auth/TokenService";
+import { useNetworkStore } from "../../store/networkStore";
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -63,11 +64,31 @@ export class ApiClient {
       (error) => Promise.reject(error),
     );
 
-    // Response interceptor to handle token rotation on 401s
+    // Response interceptor to handle token rotation on 401s and network failures
     this.instance.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        // Clear server unreachable state if a request succeeds
+        const { isServerUnreachable, setServerUnreachable } = useNetworkStore.getState();
+        if (isServerUnreachable) {
+          setServerUnreachable(false);
+        }
+        return response;
+      },
       async (error: AxiosError) => {
         const originalRequest = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
+
+        // Offline / Network Error detection
+        if (!error.response) {
+          const networkErrors = ['ERR_NETWORK', 'ECONNREFUSED', 'ETIMEDOUT', 'ERR_CONNECTION_REFUSED', 'ERR_INTERNET_DISCONNECTED'];
+          if (networkErrors.includes(error.code || '') || error.message.includes('Network Error') || error.message.includes('Failed to fetch')) {
+            useNetworkStore.getState().setServerUnreachable(true);
+            
+            // Create a user-friendly error response
+            const friendlyError = new Error("We couldn't reach the Bill Aura server. Please check your connection or wait for auto-reconnect.");
+            (friendlyError as any).response = { data: { message: friendlyError.message } };
+            return Promise.reject(friendlyError);
+          }
+        }
 
         if (error.response?.status !== 401 || !originalRequest || originalRequest._retry) {
           return Promise.reject(error);

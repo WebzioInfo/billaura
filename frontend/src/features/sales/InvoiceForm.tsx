@@ -12,7 +12,7 @@ const formatIndianCurrency = (amount: number) => {
 import { z } from 'zod';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  Plus, Trash2, ArrowLeft, Save, FileText, Eye, X, Loader2, Info, AlertCircle 
+  Plus, Trash2, ArrowLeft, Save, FileText, Eye, X, Loader2, Info, AlertCircle, BookOpen 
 } from 'lucide-react';
 
 const mapUnit = (unitStr: string) => {
@@ -744,6 +744,80 @@ export const InvoiceForm = () => {
           invoiceType={invoiceType}
           currencySymbol={currencySymbol}
         />
+
+        {/* Accounting Net Effect Preview */}
+        <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-muted/30 px-4 py-3 border-b border-border flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <BookOpen className="w-4 h-4 text-accent" /> Accounting Preview
+            </h4>
+          </div>
+          <div className="p-4 space-y-3 text-sm">
+            {totals.grandTotal > 0 ? (
+              <>
+                <div className="flex justify-between items-center text-foreground font-medium">
+                  <div className="flex flex-col">
+                    <span>Accounts Receivable ({selectedCustomerName})</span>
+                    <span className="text-[10px] text-muted-foreground uppercase">Asset • Debit</span>
+                  </div>
+                  <span className="text-green-600 font-bold">+{currencySymbol}{totals.grandTotal.toFixed(2)}</span>
+                </div>
+                
+                <div className="flex justify-between items-center text-foreground font-medium border-t border-border/50 pt-3">
+                  <div className="flex flex-col pl-4">
+                    <span>Sales Revenue</span>
+                    <span className="text-[10px] text-muted-foreground uppercase">Income • Credit</span>
+                  </div>
+                  <span className="text-red-500 font-bold">{currencySymbol}{totals.subTotal.toFixed(2)}</span>
+                </div>
+                
+                {invoiceType !== 'NO_TAX' && !totals.isInterState && totals.cgstTotal > 0 && (
+                  <div className="flex justify-between items-center text-foreground font-medium border-t border-border/50 pt-3">
+                    <div className="flex flex-col pl-4">
+                      <span>CGST Output</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">Liability • Credit</span>
+                    </div>
+                    <span className="text-red-500 font-bold">{currencySymbol}{totals.cgstTotal.toFixed(2)}</span>
+                  </div>
+                )}
+                
+                {invoiceType !== 'NO_TAX' && !totals.isInterState && totals.sgstTotal > 0 && (
+                  <div className="flex justify-between items-center text-foreground font-medium border-t border-border/50 pt-3">
+                    <div className="flex flex-col pl-4">
+                      <span>SGST Output</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">Liability • Credit</span>
+                    </div>
+                    <span className="text-red-500 font-bold">{currencySymbol}{totals.sgstTotal.toFixed(2)}</span>
+                  </div>
+                )}
+                
+                {invoiceType !== 'NO_TAX' && totals.isInterState && totals.igstTotal > 0 && (
+                  <div className="flex justify-between items-center text-foreground font-medium border-t border-border/50 pt-3">
+                    <div className="flex flex-col pl-4">
+                      <span>IGST Output</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">Liability • Credit</span>
+                    </div>
+                    <span className="text-red-500 font-bold">{currencySymbol}{totals.igstTotal.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {totals.roundOff !== 0 && (
+                  <div className="flex justify-between items-center text-foreground font-medium border-t border-border/50 pt-3">
+                    <div className="flex flex-col pl-4">
+                      <span>Round Off</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">Expense/Income • {totals.roundOff > 0 ? 'Credit' : 'Debit'}</span>
+                    </div>
+                    <span className={totals.roundOff > 0 ? "text-red-500 font-bold" : "text-green-600 font-bold"}>{currencySymbol}{Math.abs(totals.roundOff).toFixed(2)}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-xs text-muted-foreground text-center py-4 italic">
+                Add items to see the accounting impact.
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-3 pt-2">

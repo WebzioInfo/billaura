@@ -21,6 +21,7 @@ export class BranchesService {
 
     const where: Prisma.BranchWhereInput = {
       companyId,
+      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -55,6 +56,7 @@ export class BranchesService {
       where: {
         id,
         companyId,
+        deletedAt: null,
       },
     });
 
@@ -135,7 +137,25 @@ export class BranchesService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const branch = await this.findOne(id);
+    
+    if (branch.isDefault) {
+      throw new ConflictException('Cannot delete the default branch. Please set another branch as default first.');
+    }
+    
+    // Check if the branch is used in any related financial models
+    const expenseInUse = await this.prisma.expense.findFirst({
+      where: { branchId: id }
+    });
+
+    const otherIncomeInUse = await this.prisma.otherIncome.findFirst({
+      where: { branchId: id }
+    });
+    
+    if (expenseInUse || otherIncomeInUse) {
+      throw new ConflictException('Branch has existing financial transactions and cannot be deleted.');
+    }
+
     return this.prisma.branch.update({
       where: { id },
       data: { deletedAt: new Date() },

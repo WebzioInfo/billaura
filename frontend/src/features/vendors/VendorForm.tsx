@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
+import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 
 // ─── Full India State / UT List ───────────────────────────────────────────────
 const INDIAN_STATES = [
@@ -234,6 +235,8 @@ export const VendorForm = () => {
     },
     enabled: isEditMode,
   });
+
+  useDynamicTitle(isEditMode ? (existingVendor?.name ? `Edit ${existingVendor.name}` : 'Edit Vendor') : 'New Vendor');
 
   useEffect(() => {
     if (!existingVendor) return;

@@ -7,14 +7,13 @@ import {
 import apiClient from '@/services/api';
 import { Card } from '@/components/ui/Card';
 import { TableLoader } from '@/components/ui/LoadingSystem';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 import { toast } from 'sonner';
 
 export function LedgerInquiry() {
   const { ledgerId } = useParams<{ ledgerId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const updateTabTitle = useWorkspaceStore(state => state.updateTabTitle);
   
   // Tab states
   const [activeTab, setActiveTab] = useState<'statement' | 'outstanding' | 'audit'>('statement');
@@ -124,11 +123,7 @@ export function LedgerInquiry() {
     enabled: !!ledgerId
   });
 
-  useEffect(() => {
-    if (inquiryData?.ledger?.name) {
-      updateTabTitle(location.pathname + location.search, inquiryData.ledger.name);
-    }
-  }, [inquiryData, location.pathname, location.search, updateTabTitle]);
+  useDynamicTitle(inquiryData?.ledger?.name || 'Ledger Inquiry');
 
   // Calculate Date Ranges
   useEffect(() => {

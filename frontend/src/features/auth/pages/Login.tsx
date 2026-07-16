@@ -6,11 +6,12 @@ import * as z from 'zod';
 import { authService } from '../../../services/api';
 import { useSessionStore } from '../stores/sessionStore';
 import { TokenService } from '../../../services/auth/TokenService';
-import { BarChart3, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
+import { BarChart3, Lock, Mail, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+  rememberMe: z.boolean().optional(),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -20,6 +21,7 @@ export const Login = () => {
   const setSession = useSessionStore((state) => state.setSession);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -112,18 +114,30 @@ export const Login = () => {
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               {...register('password')}
               placeholder="••••••••"
-              className="h-10 w-full min-w-0 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
+              className="h-10 w-full min-w-0 pl-10 pr-10 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
           {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
         </div>
 
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 text-xs text-slate-600 select-none cursor-pointer">
-            <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+            <input 
+              type="checkbox" 
+              {...register('rememberMe')}
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" 
+            />
             Remember this device
           </label>
         </div>

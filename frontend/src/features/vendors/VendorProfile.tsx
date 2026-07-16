@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/data-table/DataTable';
 import apiClient from '@/services/api';
+import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
@@ -33,6 +34,8 @@ export const VendorProfile = () => {
       return res.data?.data || res.data || null;
     }
   });
+
+  useDynamicTitle(vendor?.name);
 
   // Recent Purchases
   const { data: purchasesData, isLoading: loadingPurchases } = useQuery({

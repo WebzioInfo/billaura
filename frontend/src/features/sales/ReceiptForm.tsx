@@ -12,6 +12,7 @@ import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { useBankAccounts } from '@/hooks/useBankAccounts';
+import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 import { UnifiedReceiptForm } from './UnifiedReceiptForm';
 
 interface Invoice {
@@ -518,6 +519,10 @@ export const ReceiptForm = () => {
     },
     enabled: !!id
   });
+
+  useDynamicTitle(
+    id ? (receiptData?.receiptNo ? (isEdit ? `Edit ${receiptData.receiptNo}` : `Receipt: ${receiptData.receiptNo}`) : 'Receipt Details') : 'New Receipt'
+  );
 
   useEffect(() => {
     if (!receiptData || !id) return;

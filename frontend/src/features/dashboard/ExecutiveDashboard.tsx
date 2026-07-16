@@ -165,7 +165,6 @@ const QuickActions = ({ navigate }: { navigate: ReturnType<typeof useNavigate> }
   const actions = [
     { label: 'New Invoice', path: '/invoices/new', icon: FilePlus2 },
     { label: 'New Receipt', path: '/receipts/new', icon: Receipt },
-    { label: 'Vendor Payment', path: '/vendor-payments', icon: CreditCard },
     { label: 'Purchase Bill', path: '/bills/new', icon: ShoppingCart },
     { label: 'Add Customer', path: '/customers', icon: Users },
     { label: 'Add Vendor', path: '/vendors/new', icon: Building2 },
@@ -174,7 +173,6 @@ const QuickActions = ({ navigate }: { navigate: ReturnType<typeof useNavigate> }
     { label: 'Chart of Accounts', path: '/chart-of-accounts', icon: Landmark },
     { label: 'Add Product', path: '/products', icon: PackagePlus },
     { label: 'Stock Adjustment', path: '/inventory', icon: Boxes },
-    { label: 'Create Quote', path: '/quotations', icon: FileText },
   ];
 
   return (

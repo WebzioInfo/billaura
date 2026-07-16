@@ -23,6 +23,7 @@ const companySchema = z.object({
   email: z.string().email('Invalid email address').or(z.literal('')),
   phone: z.string().optional(),
   address: z.string().optional(),
+  pinCode: z.string().trim().max(20, 'Pincode must be at most 20 characters').regex(/^[A-Za-z0-9\s\-]{3,20}$/, 'Invalid Pincode format').optional().or(z.literal('')),
   state: z.string().optional(),
   country: z.string().optional(),
   currency: z.string(),
@@ -85,6 +86,7 @@ export const SettingsPage = () => {
         email: '',
         phone: '',
         address: '',
+        pinCode: '',
         state: '',
         country: '',
         currency: 'INR',
@@ -100,6 +102,7 @@ export const SettingsPage = () => {
         email: company.email || '',
         phone: company.phone || '',
         address: company.address || '',
+        pinCode: company.pinCode || '',
         state: company.state || '',
         country: company.country || '',
         currency: company.currency || 'INR',
@@ -329,6 +332,11 @@ export const SettingsPage = () => {
                   <div className="col-span-1 md:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Primary Registered Address</label>
                     <textarea {...register('address')} rows={3} className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-accent/50 transition-shadow" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Pincode / ZIP Code</label>
+                    <input type="text" {...register('pinCode')} placeholder="Enter Pincode" className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 transition-shadow" />
                   </div>
 
                   <div>

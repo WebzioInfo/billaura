@@ -17,28 +17,10 @@ const MENUS = [
     label: 'Sales',
     items: [
       { label: 'Customers', path: '/customers', id: 'customers' },
-      { label: 'Leads', path: '/leads', id: 'leads' },
-      { label: 'Quotations', path: '/quotations', id: 'quotations' },
       { label: 'Sales Orders', path: '/sales-orders', id: 'sales-orders' },
       { label: 'Delivery Notes', path: '/delivery-notes', id: 'delivery-notes' },
       { label: 'Invoices', path: '/invoices', id: 'invoices' },
       { label: 'Payments', path: '/payments', id: 'payments' },
-      { label: 'Credit Notes', path: '/credit-notes', id: 'credit-notes' },
-      { label: 'Returns', path: '/sales-returns', id: 'sales-returns' },
-      { label: 'Statements', path: '/customer-statements', id: 'customer-statements' },
-    ]
-  },
-  {
-    id: 'income',
-    label: 'Income',
-    items: [
-      { label: 'Other Income', path: '/other-income?type=Other Income', id: 'other-income' },
-      { label: 'Service Income', path: '/other-income?type=Service Income', id: 'service-income' },
-      { label: 'Rental Income', path: '/other-income?type=Rental Income', id: 'rental-income' },
-      { label: 'Interest Income', path: '/other-income?type=Interest Income', id: 'interest-income' },
-      { label: 'Recurring Income', path: '/other-income?type=Recurring Income', id: 'recurring-income' },
-      { label: 'Income Categories', path: '/other-income?tab=categories', id: 'income-categories' },
-      { label: 'Income Reports', path: '/reports', id: 'income-reports' },
     ]
   },
   {
@@ -49,18 +31,6 @@ const MENUS = [
       { label: 'Purchase Orders', path: '/purchase-orders', id: 'purchase-orders' },
       { label: 'Goods Receipts', path: '/goods-receipts', id: 'goods-receipts' },
       { label: 'Bills', path: '/bills', id: 'bills' },
-      { label: 'Vendor Payments', path: '/vendor-payments', id: 'vendor-payments' },
-      { label: 'Debit Notes', path: '/debit-notes', id: 'debit-notes' },
-      { label: 'Returns', path: '/purchase-returns', id: 'purchase-returns' },
-      { label: 'Statements', path: '/vendor-statements', id: 'vendor-statements' },
-    ]
-  },
-  {
-    id: 'receipts',
-    label: 'Receipts',
-    items: [
-      { label: 'Manage Receipts', path: '/receipts', id: 'receipts-list' },
-      { label: 'Record Receipt', path: '/receipts/new', id: 'receipts-new' },
     ]
   },
   {
@@ -68,7 +38,6 @@ const MENUS = [
     label: 'Inventory',
     items: [
       { label: 'Products', path: '/products', id: 'products' },
-      { label: 'Services', path: '/services', id: 'services' },
       { label: 'Categories', path: '/categories', id: 'categories' },
       { label: 'Brands', path: '/brands', id: 'brands' },
       { label: 'Warehouses', path: '/warehouses', id: 'warehouses' },
@@ -92,36 +61,13 @@ const MENUS = [
       { label: 'Trial Balance', path: '/trial-balance', id: 'trial-balance' },
       { label: 'Profit & Loss', path: '/profit-loss', id: 'profit-loss' },
       { label: 'Balance Sheet', path: '/balance-sheet', id: 'balance-sheet' },
-      { label: 'Cash Flow', path: '/cash-flow', id: 'cash-flow' },
-      { label: 'Budgets', path: '/budgets', id: 'budgets' },
-      { label: 'Cost Centres', path: '/cost-centres', id: 'cost-centres' },
-    ]
-  },
-  {
-    id: 'banking',
-    label: 'Banking',
-    items: [
-      { label: 'Bank Accounts', path: '/banking', id: 'bank-accounts' },
-      { label: 'Bank Reconciliation', path: '/bank-reconciliation', id: 'bank-reconciliation' },
     ]
   },
   {
     id: 'gst',
     label: 'GST',
     items: [
-      { label: 'GSTR-1', path: '/gstr-1', id: 'gstr-1' },
-      { label: 'GSTR-2B', path: '/gstr-2b', id: 'gstr-2b' },
-      { label: 'GSTR-3B', path: '/gstr-3b', id: 'gstr-3b' },
       { label: 'Tax Rates', path: '/taxes', id: 'taxes' },
-    ]
-  },
-  {
-    id: 'hr',
-    label: 'HR',
-    items: [
-      { label: 'Employees', path: '/employees', id: 'employees' },
-      { label: 'Departments', path: '/departments', id: 'departments' },
-      { label: 'Payroll', path: '/payroll', id: 'payroll' },
     ]
   },
   {
@@ -137,21 +83,8 @@ const MENUS = [
     label: 'HR & Payroll',
     items: [
       { label: 'Employees', path: '/employees', id: 'employees' },
-      { label: 'Attendance', path: '/attendance', id: 'attendance' },
-      { label: 'Leave Applications', path: '/leaves', id: 'leaves' },
-      { label: 'Salary Slips', path: '/salary-slips', id: 'salary-slips' },
-    ]
-  },
-  {
-    id: 'reports',
-    label: 'Reports',
-    items: [
-      { label: 'Sales Reports', path: '/reports/sales', id: 'report-sales' },
-      { label: 'Purchase Reports', path: '/reports/purchases', id: 'report-purchases' },
-      { label: 'GST Reports', path: '/reports/gst', id: 'report-gst' },
-      { label: 'Inventory Reports', path: '/reports/inventory', id: 'report-inventory' },
-      { label: 'Financial Reports', path: '/reports/financial', id: 'report-financial' },
-      { label: 'Payroll Reports', path: '/reports/payroll', id: 'report-payroll' },
+      { label: 'Departments', path: '/departments', id: 'departments' },
+      { label: 'Payroll', path: '/payroll', id: 'payroll' },
     ]
   },
   {
@@ -160,7 +93,6 @@ const MENUS = [
     items: [
       { label: 'Company Profile', path: '/company', id: 'settings-company' },
       { label: 'Users & Roles', path: '/users', id: 'settings-users' },
-      { label: 'Document Sequences', path: '/sequences', id: 'settings-sequences' },
       { label: 'Backup & Restore', path: '/backup-restore', id: 'settings-backup' },
     ]
   }

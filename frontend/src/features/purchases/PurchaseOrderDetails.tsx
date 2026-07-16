@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui';
+import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 
 export const PurchaseOrderDetails = () => {
   const { id } = useParams();
@@ -38,6 +39,8 @@ export const PurchaseOrderDetails = () => {
       return res.data?.data || res.data || null;
     }
   });
+
+  useDynamicTitle(po ? (po.orderNo ? `Purchase: ${po.orderNo}` : 'Purchase Order') : null);
 
   const { data: auditLogs = [] } = useQuery<any[]>({
     queryKey: ['purchase-order-audit', id],

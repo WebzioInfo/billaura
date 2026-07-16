@@ -44,12 +44,13 @@ export class SessionService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  async createSession(userId: string, userAgent?: string, ipAddress?: string, companyId?: string): Promise<string> {
+  async createSession(userId: string, userAgent?: string, ipAddress?: string, companyId?: string, rememberMe: boolean = false): Promise<string> {
     const rawToken = this.generateToken();
     const tokenHash = this.hashToken(rawToken);
     
-    // Sessions last 30 days
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // Sessions last 30 days if rememberMe, else 24 hours
+    const durationMs = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+    const expiresAt = new Date(Date.now() + durationMs);
     const { deviceName, browser, os } = parseUserAgent(userAgent);
 
     await this.prisma.session.create({
@@ -92,8 +93,11 @@ export class SessionService {
     const newTokenHash = this.hashToken(newRawToken);
     const { deviceName, browser, os } = parseUserAgent(userAgent);
 
-    // Refresh extends session lifespan
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // Refresh extends session lifespan based on original duration
+    const durationMs = (session.expiresAt.getTime() - session.createdAt.getTime()) > (24 * 60 * 60 * 1000) 
+      ? 30 * 24 * 60 * 60 * 1000 
+      : 24 * 60 * 60 * 1000;
+    const expiresAt = new Date(Date.now() + durationMs);
 
     await this.prisma.session.update({
       where: { id: session.id },

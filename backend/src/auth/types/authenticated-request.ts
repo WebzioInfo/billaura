@@ -5,6 +5,8 @@ export interface AuthenticatedUser {
   email: string;
   tenantId: string;
   roleId?: string | null;
+  globalRole: string;
+  role?: string | null;
 }
 
 export interface RequestTenantContext {

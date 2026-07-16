@@ -13,7 +13,7 @@ import { PageContainer } from '@/components/ui/LayoutComponents';
 import { ConfirmDialog } from '@/components/ui';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 
 const formatIndianCurrency = (amount: number) => {
   const rounded = Math.abs(amount) < 0.005 ? 0 : amount;
@@ -27,7 +27,6 @@ export const InvoiceDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const updateTabTitle = useWorkspaceStore(state => state.updateTabTitle);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
@@ -46,6 +45,8 @@ export const InvoiceDetails = () => {
   });
 
   const invoice = useMemo(() => resData || null, [resData]);
+
+  useDynamicTitle(invoice ? (invoice.invoiceNo ? `Invoice: ${invoice.invoiceNo}` : 'Invoice Details') : null);
 
   const receiptHistory = useMemo(() => {
     if (!invoice) return [];
@@ -67,13 +68,6 @@ export const InvoiceDetails = () => {
       };
     });
   }, [invoice]);
-
-  // Update tab title once details are loaded
-  useEffect(() => {
-    if (invoice?.invoiceNo) {
-      updateTabTitle(window.location.pathname + window.location.search, `Invoice: ${invoice.invoiceNo}`);
-    }
-  }, [invoice, updateTabTitle]);
 
   // Mutate/Cancel invoice (delete)
   const cancelMutation = useMutation({

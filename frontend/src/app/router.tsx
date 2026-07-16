@@ -15,6 +15,7 @@ const ChartOfAccounts = lazy(() => import('../features/accounting/ChartOfAccount
 const LedgerInquiry = lazy(() => import('../features/accounting/LedgerInquiry').then(m => ({ default: m.LedgerInquiry })));
 const JournalVouchersList = lazy(() => import('../features/accounting/JournalVouchersList').then(m => ({ default: m.JournalVouchersList })));
 const JournalVoucherForm = lazy(() => import('../features/accounting/JournalVoucherForm').then(m => ({ default: m.JournalVoucherForm })));
+const JournalEntryDetails = lazy(() => import('../features/accounting/JournalEntryDetails').then(m => ({ default: m.JournalEntryDetails })));
 const CapitalDashboard = lazy(() => import('../features/accounting/CapitalDashboard').then(m => ({ default: m.CapitalDashboard })));
 const ProfitLossDashboard = lazy(() => import('../features/reports/ProfitLossDashboard'));
 const LandingPage = lazy(() => import('../features/public/LandingPage').then(m => ({ default: m.LandingPage })));
@@ -22,7 +23,9 @@ const LandingPage = lazy(() => import('../features/public/LandingPage').then(m =
 const WarehousesList = lazy(() => import('../features/inventory/WarehousesList').then(m => ({ default: m.WarehousesList })));
 const BatchesList = lazy(() => import('../features/inventory/BatchesList').then(m => ({ default: m.BatchesList })));
 const SerialsList = lazy(() => import('../features/inventory/SerialsList').then(m => ({ default: m.SerialsList })));
+const CategoriesList = lazy(() => import('../features/inventory/CategoriesList').then(m => ({ default: m.CategoriesList })));
 const BomList = lazy(() => import('../features/inventory/BomList').then(m => ({ default: m.BomList })));
+const ProductsList = lazy(() => import('../features/inventory/ProductsList').then(m => ({ default: m.ProductsList })));
 
 const BankingDashboard = lazy(() => import('../features/banking/BankingDashboard').then(m => ({ default: m.BankingDashboard })));
 const BankTransactionsList = lazy(() => import('../features/banking/BankTransactionsList').then(m => ({ default: m.BankTransactionsList })));
@@ -34,6 +37,8 @@ const EmployeesList = lazy(() => import('../features/hr/EmployeesList').then(m =
 const PayrollDashboard = lazy(() => import('../features/hr/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 
 const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m => ({ default: m.CustomersList })));
+const CustomerProfile = lazy(() => import('../features/crm/CustomerProfile').then(m => ({ default: m.CustomerProfile })));
+const CustomerForm = lazy(() => import('../features/crm/CustomerForm').then(m => ({ default: m.CustomerForm })));
 const VendorsList = lazy(() => import('../features/vendors/VendorsList').then(m => ({ default: m.VendorsList })));
 const VendorProfile = lazy(() => import('../features/vendors/VendorProfile').then(m => ({ default: m.VendorProfile })));
 const VendorForm = lazy(() => import('../features/vendors/VendorForm').then(m => ({ default: m.VendorForm })));
@@ -66,6 +71,10 @@ const ForgotPassword = lazy(() => import('../features/auth/pages/ForgotPassword'
 const ResetPassword = lazy(() => import('../features/auth/pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const OnboardingWizard = lazy(() => import('../features/auth/pages/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const BranchesPage = lazy(() => import('../features/settings/pages/BranchesPage').then(m => ({ default: m.BranchesPage })));
+const RolesPage = lazy(() => import('../features/settings/pages/RolesPage').then(m => ({ default: m.RolesPage })));
+const UsersPage = lazy(() => import('../features/settings/pages/UsersPage').then(m => ({ default: m.UsersPage })));
+const CompanyProfilePage = lazy(() => import('../features/settings/pages/CompanyProfilePage').then(m => ({ default: m.CompanyProfilePage })));
 const BackupRestoreCenter = lazy(() => import('../features/settings/BackupRestoreCenter').then(m => ({ default: m.BackupRestoreCenter })));
 const ExecutiveDashboard = lazy(() => import('../features/dashboard/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
 const InventoryDashboard = lazy(() => import('../features/inventory/InventoryDashboard').then(m => ({ default: m.InventoryDashboard })));
@@ -73,6 +82,8 @@ const SalesDashboard = lazy(() => import('../features/sales/SalesDashboard').the
 const PurchasesDashboard = lazy(() => import('../features/purchases/PurchasesDashboard').then(m => ({ default: m.PurchasesDashboard })));
 const TaxesDashboard = lazy(() => import('../features/taxes/TaxesDashboard').then(m => ({ default: m.TaxesDashboard })));
 const ExpensesDashboard = lazy(() => import('../features/expenses/ExpensesDashboard').then(m => ({ default: m.ExpensesDashboard })));
+const TemplateBuilder = lazy(() => import('../pages/settings/TemplateBuilder'));
+const HelpCenterPortal = lazy(() => import('../pages/help/HelpCenterPortal'));
 
 // Layout Shells
 const PublicLayout = lazy(() => import('../layouts/PublicLayout').then(m => ({ default: m.default })));
@@ -81,6 +92,7 @@ const WorkspaceLayout = lazy(() => import('../layouts/WorkspaceLayout').then(m =
 const PlatformLayout = lazy(() => import('../layouts/PlatformLayout').then(m => ({ default: m.default })));
 
 const PlatformDashboard = lazy(() => import('../features/dashboard/PlatformDashboard').then(m => ({ default: m.PlatformDashboard })));
+const MaintenancePage = lazy(() => import('./MaintenancePage').then(m => ({ default: m.MaintenancePage })));
 
 import { PageLoader } from '../components/ui/LoadingSystem';
 
@@ -197,21 +209,24 @@ export const router = createBrowserRouter([
     children: [
       { path: 'dashboard', element: <ExecutiveDashboard /> },
       { path: 'customers', element: <CustomersList /> },
+      { path: 'customers/new', element: <CustomerForm /> },
+      { path: 'customers/:id', element: <CustomerProfile /> },
+      { path: 'customers/:id/edit', element: <CustomerForm /> },
       { path: 'vendors', element: <VendorsList /> },
       { path: 'vendors/new', element: <VendorForm /> },
       { path: 'vendors/:id', element: <VendorProfile /> },
       { path: 'vendors/:id/edit', element: <VendorForm /> },
-      { path: 'products', element: <InventoryDashboard /> },
-      { path: 'services', element: <InventoryDashboard /> },
-      {path: 'categories', element: <InventoryDashboard /> },
-      { path: 'brands', element: <InventoryDashboard /> },
+      { path: 'products', element: <ProductsList /> },
+      { path: 'services', element: <ProductsList /> },
+      {path: 'categories', element: <CategoriesList /> },
+      { path: 'brands', element: <MaintenancePage /> },
       { path: 'inventory', element: <InventoryDashboard /> },
       { path: 'warehouses', element: <WarehousesList /> },
       { path: 'batches', element: <BatchesList /> },
       { path: 'serials', element: <SerialsList /> },
       { path: 'bom', element: <BomList /> },
       { path: 'sales', element: <SalesDashboard /> },
-      { path: 'quotations', element: <SalesDashboard /> },
+      { path: 'quotations', element: <MaintenancePage /> },
       { path: 'sales-orders', element: <SalesOrdersList /> },
       { path: 'delivery-challans', element: <DeliveryNotesList /> },
       { path: 'delivery-notes', element: <DeliveryNotesList /> },
@@ -226,7 +241,7 @@ export const router = createBrowserRouter([
       { path: 'sales/receipts/new', element: <Navigate to="/receipts/new" replace /> },
       { path: 'purchase/receipts/new', element: <Navigate to="/receipts/new" replace /> },
       { path: 'expense/receipts/new', element: <Navigate to="/receipts/new" replace /> },
-      { path: 'recurring-invoices', element: <SalesDashboard /> },
+      { path: 'recurring-invoices', element: <MaintenancePage /> },
       { path: 'payments', element: <SalesDashboard /> },
       { path: 'purchases', element: <PurchasesDashboard /> },
       { path: 'purchase-orders', element: <PurchaseOrdersList /> },
@@ -246,37 +261,41 @@ export const router = createBrowserRouter([
       { path: 'accounting/ledger/:ledgerId', element: <LedgerInquiry /> },
       { path: 'journal-entries', element: <JournalVouchersList /> },
       { path: 'journal-entries/new', element: <JournalVoucherForm /> },
+      { path: 'journal-entries/:id', element: <JournalEntryDetails /> },
       { path: 'capital', element: <CapitalDashboard /> },
       { path: 'general-ledger', element: <GeneralLedger /> },
       { path: 'day-book', element: <DayBook /> },
       { path: 'trial-balance', element: <TrialBalance /> },
       { path: 'balance-sheet', element: <BalanceSheet /> },
       { path: 'profit-loss', element: <ProfitLossDashboard /> },
-      { path: 'cash-flow', element: <ChartOfAccounts /> },
+      { path: 'cash-flow', element: <MaintenancePage /> },
       { path: 'gst', element: <TaxesDashboard /> },
       { path: 'taxes', element: <TaxesDashboard /> },
       { path: 'reports', element: <FinancialReports /> },
       { path: 'reports/financial', element: <FinancialReports /> },
-      { path: 'reports/sales', element: <SalesDashboard /> },
-      { path: 'reports/purchases', element: <PurchasesDashboard /> },
+      { path: 'reports/sales', element: <MaintenancePage /> },
+      { path: 'reports/purchases', element: <MaintenancePage /> },
       { path: 'reports/gst', element: <TaxesDashboard /> },
-      { path: 'reports/inventory', element: <InventoryDashboard /> },
+      { path: 'reports/inventory', element: <MaintenancePage /> },
       { path: 'reports/payroll', element: <PayrollDashboard /> },
       { path: 'hr', element: <PayrollDashboard /> },
       { path: 'employees', element: <EmployeesList /> },
-      { path: 'attendance', element: <PayrollDashboard /> },
+      { path: 'attendance', element: <MaintenancePage /> },
       { path: 'payroll', element: <PayrollDashboard /> },
       { path: 'settings/general', element: <SettingsPage /> },
-      { path: 'company', element: <SettingsPage /> },
-      { path: 'branches', element: <SettingsPage /> },
-      { path: 'users', element: <SettingsPage /> },
-      { path: 'roles', element: <SettingsPage /> },
-      { path: 'profile', element: <SettingsPage /> },
-      { path: 'subscription', element: <SettingsPage /> },
+      { path: 'company', element: <CompanyProfilePage /> },
+      { path: 'branches', element: <BranchesPage /> },
+      { path: 'users', element: <UsersPage /> },
+      { path: 'roles', element: <RolesPage /> },
+      { path: 'profile', element: <CompanyProfilePage /> },
+      { path: 'subscription', element: <MaintenancePage /> },
       { path: 'backup-restore', element: <BackupRestoreCenter /> },
-      { path: 'help', element: <ExecutiveDashboard /> },
-      { path: 'notifications', element: <ExecutiveDashboard /> },
-      { path: 'search', element: <ExecutiveDashboard /> },
+      { path: 'settings/templates', element: <MaintenancePage /> }, // We can make a list page later
+      { path: 'settings/templates/new', element: <TemplateBuilder /> },
+      { path: 'settings/templates/:id', element: <TemplateBuilder /> },
+      { path: 'help', element: <HelpCenterPortal /> },
+      { path: 'notifications', element: <MaintenancePage /> },
+      { path: 'search', element: <MaintenancePage /> },
       { path: 'crm', element: <CrmDashboard /> }
     ],
   },

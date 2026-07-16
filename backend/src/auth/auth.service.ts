@@ -6,6 +6,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { BusinessDetailsDto, TaxDetailsDto, BranchSetupDto, SubscriptionDto } from './dto/onboard.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 import { BusinessType } from '@prisma/client';
 import { SessionService } from './session.service';
 import { MailService } from '../mail/mail.service';
@@ -35,7 +36,27 @@ export class AuthService {
   async login(loginDto: LoginDto, userAgent?: string, ipAddress?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: loginDto.email },
-      include: { companies: { include: { company: true } } }
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        passwordHash: true,
+        globalRole: true,
+        isActive: true,
+        lockoutUntil: true,
+        failedLoginAttempts: true,
+        emailVerified: true,
+        companies: {
+          select: {
+            companyId: true,
+            role: true,
+            customRoleId: true,
+            company: {
+              select: { onboardingStep: true }
+            }
+          }
+        }
+      }
     });
 
     if (!user) {
@@ -88,7 +109,7 @@ export class AuthService {
     const customRoleId = user.globalRole === 'SUPER_ADMIN' ? null : (firstCompanyUser?.customRoleId || null);
     const onboardingStep = user.globalRole === 'SUPER_ADMIN' ? 'COMPLETED' : (firstCompanyUser?.company?.onboardingStep || 'BUSINESS_DETAILS');
 
-    const refreshToken = await this.sessionService.createSession(user.id, userAgent, ipAddress, companyId || undefined);
+    const refreshToken = await this.sessionService.createSession(user.id, userAgent, ipAddress, companyId || undefined, loginDto.rememberMe);
 
     const payload = { 
       email: user.email, 
@@ -139,6 +160,8 @@ export class AuthService {
     console.log(`[OTP GENERATION] Secure verification OTP generated for ${registerDto.email}`);
     console.log(`======================================================\n`);
 
+    const otpHash = await bcrypt.hash(otp, salt);
+
     // Create the User first
     const user = await this.prisma.user.create({
       data: {
@@ -146,7 +169,7 @@ export class AuthService {
         passwordHash,
         name: `${registerDto.firstName} ${registerDto.lastName}`,
         emailVerified: false,
-        otpCode: otp,
+        otpCode: otpHash,
         otpExpiresAt,
         globalRole: 'ADMIN',
       },
@@ -191,7 +214,12 @@ export class AuthService {
       throw new BadRequestException('Email already verified');
     }
 
-    if (!user.otpCode || user.otpCode !== verifyEmailDto.otp) {
+    if (!user.otpCode) {
+      throw new BadRequestException('Invalid OTP code');
+    }
+
+    const isOtpValid = await bcrypt.compare(verifyEmailDto.otp, user.otpCode);
+    if (!isOtpValid) {
       throw new BadRequestException('Invalid OTP code');
     }
 
@@ -365,8 +393,8 @@ export class AuthService {
       }
     });
 
-    // Create default financial year
-    await this.prisma.financialYear.upsert({
+    // Create a Branch
+    const branch = await this.prisma.branch.upsert({
       where: {
         companyId_name: {
           companyId: companyId,
@@ -377,6 +405,26 @@ export class AuthService {
       create: {
         companyId: companyId,
         name: dto.branchName,
+        isDefault: true,
+      }
+    });
+
+    // Create default financial year
+    const startYear = new Date(dto.fiscalYearStart).getFullYear();
+    const endYear = new Date(dto.fiscalYearEnd).getFullYear();
+    const fyName = `FY-${startYear}-${endYear}`;
+
+    await this.prisma.financialYear.upsert({
+      where: {
+        companyId_name: {
+          companyId: companyId,
+          name: fyName,
+        }
+      },
+      update: {},
+      create: {
+        companyId: companyId,
+        name: fyName,
         startDate: new Date(dto.fiscalYearStart),
         endDate: new Date(dto.fiscalYearEnd),
         isActive: true,
@@ -439,7 +487,7 @@ export class AuthService {
     };
   }
 
-  async updateCompany(companyId: string, data: any) {
+  async updateCompany(companyId: string, data: UpdateCompanyDto) {
     return this.prisma.company.update({
       where: { id: companyId },
       data: {
@@ -450,6 +498,7 @@ export class AuthService {
         email: data.email,
         phone: data.phone,
         address: data.address,
+        pinCode: data.pinCode,
         state: data.state,
         country: data.country,
         currency: data.currency,
@@ -481,11 +530,13 @@ export class AuthService {
 
     const newOtp = this.generateSecureOtp();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const salt = await bcrypt.genSalt();
+    const otpHash = await bcrypt.hash(newOtp, salt);
 
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
-        otpCode: newOtp,
+        otpCode: otpHash,
         otpExpiresAt,
       },
     });
@@ -511,11 +562,13 @@ export class AuthService {
 
     const otp = this.generateSecureOtp();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const salt = await bcrypt.genSalt();
+    const otpHash = await bcrypt.hash(otp, salt);
 
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
-        otpCode: otp,
+        otpCode: otpHash,
         otpExpiresAt,
       },
     });
@@ -529,7 +582,11 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) throw new NotFoundException('User not found');
     
-    if (!user.otpCode || user.otpCode !== otp) {
+    if (!user.otpCode) {
+      throw new BadRequestException('Invalid OTP code');
+    }
+    const isOtpValid = await bcrypt.compare(otp, user.otpCode);
+    if (!isOtpValid) {
       throw new BadRequestException('Invalid OTP code');
     }
     if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {

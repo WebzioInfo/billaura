@@ -22,13 +22,18 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const roleId = request.user?.roleId;
+    const { globalRole, role, roleId } = request.user || {};
+
+    // SUPER_ADMIN and tenant ADMIN inherently bypass permission checks
+    if (globalRole === "SUPER_ADMIN" || role === "ADMIN") {
+      return true;
+    }
 
     if (!roleId) {
       return false;
     }
 
-    const role = await this.prisma.role.findFirst({
+    const tenantRole = await this.prisma.role.findFirst({
       where: {
         id: roleId,
         companyId: request.user.tenantId,
@@ -37,7 +42,7 @@ export class PermissionsGuard implements CanActivate {
     });
 
     const grantedPermissions =
-      role?.permissions?.map((p) => `${p.resource}:${p.action}`) || [];
+      tenantRole?.permissions?.map((p: any) => `${p.resource}:${p.action}`) || [];
     return requiredPermissions.every((permission) =>
       grantedPermissions.includes(permission),
     );
