@@ -155,6 +155,7 @@ model CompanySettings {
   whatsappSettings       Json?
   gstSettings            Json?
   invoiceSettings        Json?
+  defaultAccounts        Json?
   currentFinancialYearId String?
   logoBase64             String?
   useLogoOnDocuments     Boolean        @default(true)
@@ -1173,6 +1174,7 @@ model BankAccount {
   id                  String               @id @default(cuid())
   companyId           String
   branchId            String?
+  accountId           String?
   name                String
   accountName         String?
   accountNumber       String?
@@ -1188,6 +1190,7 @@ model BankAccount {
   isDefault           Boolean              @default(false)
   deletedAt           DateTime?
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account             Account?             @relation(fields: [accountId], references: [id])
   bankStatements      BankStatement[]
   bankTransactions    BankTransaction[]
   advances            EmployeeAdvance[]
@@ -1206,12 +1209,14 @@ model CashAccount {
   id               String             @id @default(cuid())
   companyId        String
   branchId         String?
+  accountId        String?
   name             String
   openingBalance   Decimal            @default(0) @db.Decimal(15, 2)
   currentBalance   Decimal            @default(0) @db.Decimal(15, 2)
   isDefault        Boolean            @default(false)
   deletedAt        DateTime?
   company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account          Account?           @relation(fields: [accountId], references: [id])
   cashTransactions CashTransaction[]
   advances         EmployeeAdvance[]
   expenses         Expense[]
@@ -1302,6 +1307,8 @@ model Account {
   incomeCategories  IncomeCategory[]
   journalLines      JournalLine[]
   receipts          Receipt[]
+  bankAccounts      BankAccount[]
+  cashAccounts      CashAccount[]
 
   @@unique([companyId, name])
   @@map("accounts")

@@ -5,10 +5,14 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 
 @Injectable()
 export class ExpensesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accountingEngine: AccountingEngineService
+  ) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -206,130 +210,42 @@ export class ExpensesService {
         data: { approvalStatus: dto.approvalStatus, approvedById: userId }
       });
 
-      // If approved, handle accounting and balances
+      // If approved, handle accounting and balances using AccountingEngineService
       if (dto.approvalStatus === 'APPROVED' && expense.approvalStatus !== 'APPROVED') {
         const totalAmount = Number(expense.totalAmount);
         
         let creditAccount = expense.bankAccountId
-          ? await tx.account.findFirst({ where: { id: expense.bankAccountId, companyId } })
+          ? await tx.bankAccount.findFirst({ where: { id: expense.bankAccountId, companyId }, include: { account: true } })
           : null;
 
         if (!creditAccount && expense.cashAccountId) {
-          const cashAcc = await tx.cashAccount.findUnique({ where: { id: expense.cashAccountId } });
-          if (cashAcc) {
-            creditAccount = await tx.account.findFirst({ where: { companyId, name: cashAcc.name } });
-          }
+          creditAccount = await tx.cashAccount.findFirst({ where: { id: expense.cashAccountId, companyId }, include: { account: true } }) as any;
         }
 
-        if (!creditAccount) {
-          const creditAccountName = 'Operating Bank Account';
-          creditAccount = await tx.account.findFirst({ where: { companyId, name: creditAccountName } });
-          if (!creditAccount) {
-            creditAccount = await tx.account.create({
-              data: { companyId, name: creditAccountName, category: 'ASSET', balance: 0 }
-            });
-          }
-        }
+        const creditAccountId = (creditAccount as any)?.accountId;
 
-        const isCash = creditAccount.name.toLowerCase().includes('cash') || 
-                       creditAccount.name.toLowerCase().includes('petty');
-
-        if (isCash) {
-          let cash = await tx.cashAccount.findFirst({
-            where: { companyId, name: creditAccount.name, deletedAt: null }
-          });
-          if (!cash) {
-            cash = await tx.cashAccount.create({
-              data: {
-                companyId,
-                name: creditAccount.name,
-                openingBalance: 0,
-                currentBalance: 0,
-                isDefault: false
-              }
-            });
-          }
-          await tx.cashAccount.update({
-            where: { id: cash.id },
-            data: { currentBalance: { decrement: totalAmount } }
-          });
-        } else {
-          let bank = await tx.bankAccount.findFirst({
-            where: {
-              companyId,
-              deletedAt: null,
-              OR: [
-                { name: creditAccount.name },
-                { bankName: creditAccount.name },
-                ...(creditAccount.code ? [{ accountNumber: creditAccount.code }] : []),
-              ]
-            }
-          });
-          if (!bank) {
-            bank = await tx.bankAccount.create({
-              data: {
-                companyId,
-                name: creditAccount.name,
-                accountName: creditAccount.name,
-                bankName: creditAccount.name,
-                accountNumber: creditAccount.code || null,
-                accountType: 'CURRENT',
-                openingBalance: 0,
-                currentBalance: 0,
-                status: 'ACTIVE',
-              }
-            });
-          }
-          await tx.bankAccount.update({
-            where: { id: bank.id },
-            data: { currentBalance: { decrement: totalAmount } }
-          });
+        if (!creditAccountId) {
+          throw new ConflictException('Payment source (Bank/Cash) is missing a mapped Ledger Account (accountId).');
         }
 
         // Ledger Entry
         const category = await tx.expenseCategory.findUnique({ where: { id: expense.categoryId || undefined } });
-        const expenseCategoryName = category?.name || 'Uncategorized Expense';
+        const expenseAccountId = category?.accountId;
 
-        let expenseAccount = category?.accountId
-          ? await tx.account.findFirst({ where: { id: category.accountId, companyId } })
-          : null;
-
-        if (!expenseAccount) {
-          expenseAccount = await tx.account.findFirst({
-            where: { companyId, name: expenseCategoryName },
-          });
+        if (!expenseAccountId) {
+          throw new ConflictException(`Expense category "${category?.name || 'Unknown'}" is missing a mapped Ledger Account (accountId).`);
         }
 
-        if (!expenseAccount) {
-          expenseAccount = await tx.account.create({
-            data: { companyId, name: expenseCategoryName, category: 'EXPENSE', balance: 0 },
-          });
-        }
-
-        await tx.journalEntry.create({
-          data: {
-            companyId,
-            date: expense.date,
-            reference: expense.expenseNo,
-            description: `Automatic expense posting ${expense.expenseNo}`,
-            lines: {
-              create: [
-                { accountId: expenseAccount.id, debit: totalAmount, credit: 0 },
-                { accountId: creditAccount.id, debit: 0, credit: totalAmount },
-              ],
-            },
-          },
-        });
-
-        await tx.account.update({
-          where: { id: expenseAccount.id },
-          data: { balance: { increment: totalAmount } },
-        });
-
-        await tx.account.update({
-          where: { id: creditAccount.id },
-          data: { balance: { decrement: totalAmount } },
-        });
+        await this.accountingEngine.postTransaction({
+          companyId,
+          date: expense.date,
+          reference: expense.expenseNo,
+          description: `Automatic expense posting ${expense.expenseNo}`,
+          lines: [
+            { accountId: expenseAccountId, debit: totalAmount, credit: 0 },
+            { accountId: creditAccountId, debit: 0, credit: totalAmount },
+          ]
+        }, tx);
       }
 
       return updatedExpense;
@@ -345,85 +261,14 @@ export class ExpensesService {
     const expense = await this.findOne(id);
 
     return this.prisma.$transaction(async (tx) => {
-      // If approved, reverse the journal and bank balances
+      // If approved, reverse the journal using AccountingEngineService
       if (expense.approvalStatus === 'APPROVED') {
-        const totalAmount = Number(expense.totalAmount);
-        
-        // Find original journal entries and create reversals
         const originalEntries = await tx.journalEntry.findMany({
-          where: { reference: expense.expenseNo },
-          include: { lines: true },
+          where: { reference: expense.expenseNo, companyId: expense.companyId },
         });
 
         for (const entry of originalEntries) {
-          const reversalLines = entry.lines.map(line => ({
-            accountId: line.accountId,
-            debit: Number(line.credit || 0),
-            credit: Number(line.debit || 0),
-          }));
-
-          await tx.journalEntry.create({
-            data: {
-              companyId: expense.companyId,
-              date: new Date(),
-              reference: `REV-${expense.expenseNo}`,
-              description: `Reversal for deleted expense ${expense.expenseNo}`,
-              lines: { create: reversalLines },
-            },
-          });
-
-          // Revert account balances
-          for (const line of reversalLines) {
-            const change = line.debit - line.credit;
-            await tx.account.update({
-              where: { id: line.accountId },
-              data: { balance: { increment: change } },
-            });
-          }
-        }
-
-        // Revert Bank/Cash balance
-        let creditAccount = expense.bankAccountId
-          ? await tx.account.findFirst({ where: { id: expense.bankAccountId, companyId: expense.companyId } })
-          : null;
-
-        if (!creditAccount) {
-          const creditAccountName = 'Operating Bank Account';
-          creditAccount = await tx.account.findFirst({ where: { companyId: expense.companyId, name: creditAccountName } });
-        }
-
-        if (creditAccount) {
-          const isCash = creditAccount.name.toLowerCase().includes('cash') || 
-                         creditAccount.name.toLowerCase().includes('petty');
-
-          if (isCash) {
-            const cash = await tx.cashAccount.findFirst({
-              where: { companyId: expense.companyId, name: creditAccount.name, deletedAt: null }
-            });
-            if (cash) {
-              await tx.cashAccount.update({
-                where: { id: cash.id },
-                data: { currentBalance: { increment: totalAmount } }
-              });
-            }
-          } else {
-            const bank = await tx.bankAccount.findFirst({
-              where: {
-                companyId: expense.companyId,
-                deletedAt: null,
-                OR: [
-                  { name: creditAccount.name },
-                  { bankName: creditAccount.name }
-                ]
-              }
-            });
-            if (bank) {
-              await tx.bankAccount.update({
-                where: { id: bank.id },
-                data: { currentBalance: { increment: totalAmount } }
-              });
-            }
-          }
+          await this.accountingEngine.reverseTransaction(entry.id, expense.companyId, tx, `Reversal for deleted expense ${expense.expenseNo}`);
         }
       }
 

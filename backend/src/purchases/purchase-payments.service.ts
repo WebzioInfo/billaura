@@ -5,10 +5,14 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 
 @Injectable()
 export class PurchasePaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accountingEngine: AccountingEngineService
+  ) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -240,30 +244,16 @@ export class PurchasePaymentsService {
         });
       }
 
-      await tx.journalEntry.create({
-        data: {
-          companyId,
-          date: new Date(dto.date),
-          reference: paymentNo,
-          description: `Automatic vendor payment posting ${paymentNo}`,
-          lines: {
-            create: [
-              { accountId: apAccount.id, debit: dto.amount, credit: 0 },
-              { accountId: ledger.id, debit: 0, credit: dto.amount },
-            ],
-          },
-        },
-      });
-
-      await tx.account.update({
-        where: { id: apAccount.id },
-        data: { balance: { increment: dto.amount } }, // liability debit decreases balance
-      });
-
-      await tx.account.update({
-        where: { id: ledger.id },
-        data: { balance: { decrement: dto.amount } }, // asset credit decreases balance
-      });
+      await this.accountingEngine.postTransaction({
+        companyId,
+        date: new Date(dto.date),
+        reference: paymentNo,
+        description: `Automatic vendor payment posting ${paymentNo}`,
+        lines: [
+          { accountId: apAccount.id, debit: dto.amount, credit: 0 },
+          { accountId: ledger.id, debit: 0, credit: dto.amount },
+        ],
+      }, tx);
 
       return payment;
     };
@@ -311,6 +301,15 @@ export class PurchasePaymentsService {
           },
         },
       });
+
+      // Reverse Journal Entries
+      const originalEntries = await tx.journalEntry.findMany({
+        where: { reference: payment.paymentNo, companyId: payment.companyId },
+      });
+
+      for (const entry of originalEntries) {
+        await this.accountingEngine.reverseTransaction(entry.id, payment.companyId, tx, `Reversal for deleted payment ${payment.paymentNo}`);
+      }
 
       // Soft delete payment
       return tx.transactionPayment.update({

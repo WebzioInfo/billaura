@@ -8,6 +8,7 @@ import { InvoicesService } from './invoices.service';
 import { PurchasesService } from '../purchases/purchases.service';
 import { PurchasePaymentsService } from '../purchases/purchase-payments.service';
 import { ExpensesService } from '../expenses/expenses.service';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 
 @Injectable()
 export class ReceiptsService {
@@ -17,6 +18,7 @@ export class ReceiptsService {
     private readonly purchasesService: PurchasesService,
     private readonly purchasePaymentsService: PurchasePaymentsService,
     private readonly expensesService: ExpensesService,
+    private readonly accountingEngine: AccountingEngineService,
   ) {}
 
   async findAll(query: ReceiptQueryDto) {
@@ -345,26 +347,16 @@ export class ReceiptsService {
         });
       }
 
-      await tx.journalEntry.create({
-        data: {
-          companyId,
-          date: new Date(dto.date),
-          reference: receiptNo,
-          description: `Automatic receipt posting ${receiptNo}`,
-          lines: {
-            create: [
-              { accountId: targetAccountId, debit: dto.amount, credit: 0 },
-              { accountId: arAccount.id, debit: 0, credit: dto.amount },
-            ],
-          },
-        },
-      });
-
-      // Credit accounts receivable balance
-      await tx.account.update({
-        where: { id: arAccount.id },
-        data: { balance: { decrement: dto.amount } },
-      });
+      await this.accountingEngine.postTransaction({
+        companyId,
+        date: new Date(dto.date),
+        reference: receiptNo,
+        description: `Automatic receipt posting ${receiptNo}`,
+        lines: [
+          { accountId: targetAccountId, debit: dto.amount, credit: 0 },
+          { accountId: arAccount.id, debit: 0, credit: dto.amount },
+        ],
+      }, tx);
 
       // Create Audit Log
       await tx.receiptAudit.create({
@@ -487,31 +479,14 @@ export class ReceiptsService {
         },
       });
 
-      // 5. Revert General Ledger Journal entries
-      const arAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Accounts Receivable' },
+      // 5. Revert General Ledger Journal entries using AccountingEngineService
+      const originalEntries = await tx.journalEntry.findMany({
+        where: { reference: receipt.receiptNo, companyId: receipt.companyId },
       });
-      if (arAccount) {
-        await tx.account.update({
-          where: { id: arAccount.id },
-          data: { balance: { increment: receipt.amount } },
-        });
-      }
 
-      await tx.journalEntry.create({
-        data: {
-          companyId,
-          date: new Date(),
-          reference: `REV-${receipt.receiptNo}`,
-          description: `Reversal entry for receipt void ${receipt.receiptNo}`,
-          lines: {
-            create: [
-              { accountId: receipt.accountId, debit: 0, credit: receipt.amount },
-              { accountId: arAccount?.id || receipt.accountId, debit: receipt.amount, credit: 0 },
-            ],
-          },
-        },
-      });
+      for (const entry of originalEntries) {
+        await this.accountingEngine.reverseTransaction(entry.id, receipt.companyId, tx, `Reversal entry for receipt void ${receipt.receiptNo}`);
+      }
 
       // Soft delete receipt
       await tx.receipt.update({

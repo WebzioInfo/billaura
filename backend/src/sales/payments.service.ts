@@ -5,10 +5,14 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accountingEngine: AccountingEngineService
+  ) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -208,40 +212,23 @@ export class PaymentsService {
         });
       }
 
-      const assetLedgerName = dto.method === 'CASH' ? 'Cash' : 'Bank Accounts';
-      let bankAccount = await tx.account.findFirst({
-        where: { companyId, name: assetLedgerName },
-      });
-      if (!bankAccount) {
-        bankAccount = await tx.account.create({
-          data: { companyId, name: assetLedgerName, category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
-        });
+      const bankAccRecord = await tx.bankAccount.findFirst({ where: { id: dto.bankAccountId, companyId }, include: { account: true } });
+      const assetLedgerId = (bankAccRecord as any)?.accountId;
+      
+      if (!assetLedgerId) {
+        throw new ConflictException('Selected Bank Account is missing a mapped Ledger Account (accountId).');
       }
 
-      await tx.journalEntry.create({
-        data: {
-          companyId,
-          date: new Date(dto.date),
-          reference: paymentNo,
-          description: `Automatic payment posting ${paymentNo}`,
-          lines: {
-            create: [
-              { accountId: bankAccount.id, debit: dto.amount, credit: 0 },
-              { accountId: arAccount.id, debit: 0, credit: dto.amount },
-            ],
-          },
-        },
-      });
-
-      await tx.account.update({
-        where: { id: bankAccount.id },
-        data: { balance: { increment: dto.amount } },
-      });
-
-      await tx.account.update({
-        where: { id: arAccount.id },
-        data: { balance: { decrement: dto.amount } },
-      });
+      await this.accountingEngine.postTransaction({
+        companyId,
+        date: new Date(dto.date),
+        reference: paymentNo,
+        description: `Automatic payment posting ${paymentNo}`,
+        lines: [
+          { accountId: assetLedgerId, debit: dto.amount, credit: 0 },
+          { accountId: arAccount.id, debit: 0, credit: dto.amount },
+        ],
+      }, tx);
 
       return payment;
     }, { timeout: 20000 });
@@ -284,6 +271,15 @@ export class PaymentsService {
           },
         },
       });
+
+      // Reverse Journal Entries
+      const originalEntries = await tx.journalEntry.findMany({
+        where: { reference: payment.paymentNo, companyId: payment.companyId },
+      });
+
+      for (const entry of originalEntries) {
+        await this.accountingEngine.reverseTransaction(entry.id, payment.companyId, tx, `Reversal for deleted payment ${payment.paymentNo}`);
+      }
 
       // Soft delete payment
       return tx.transactionPayment.update({

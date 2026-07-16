@@ -30,6 +30,8 @@ import { PageContainer, LoadingState, FormSection } from '@/components/ui/Layout
 import { DocumentSummarySidebar } from '@/components/ui/DocumentSummarySidebar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { FormErrorDisplay } from '@/components/ui';
+import { useAsyncForm } from '@/hooks/useAsyncForm';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 
@@ -94,18 +96,24 @@ export const InvoiceForm = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'DRAFT' | 'SENT'>('SENT');
 
-  const { register, control, handleSubmit, watch, formState: { errors }, setValue } = useForm<InvoiceFormValues>({
-    resolver: zodResolver(invoiceSchema as any) as any,
-    defaultValues: {
-      invoiceType: 'B2B',
-      invoiceNo: '',
-      date: new Date().toISOString().split('T')[0],
-      paymentTerms: 'NET_30',
-      currency: 'INR',
-      items: [{ productId: '', description: '', qty: 1, rate: 0, taxPercent: 18, discount: 0, unit: 'Pcs' }],
-      termsConditions: "1. Goods once sold will not be taken back or exchanged.\n2. Interest @ 18% per annum will be charged if payment is not received within due date.",
+  const form = useAsyncForm<InvoiceFormValues>(
+    {
+      resolver: zodResolver(invoiceSchema as any) as any,
+      defaultValues: {
+        invoiceType: 'B2B',
+        invoiceNo: '',
+        date: new Date().toISOString().split('T')[0],
+        paymentTerms: 'NET_30',
+        currency: 'INR',
+        items: [{ productId: '', description: '', qty: 1, rate: 0, taxPercent: 18, discount: 0, unit: 'Pcs' }],
+        termsConditions: "1. Goods once sold will not be taken back or exchanged.\n2. Interest @ 18% per annum will be charged if payment is not received within due date.",
+      },
     },
-  });
+    null,
+    () => ({})
+  );
+
+  const { register, control, handleFormSubmit, watch, formState: { errors }, setValue } = form;
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -479,7 +487,7 @@ export const InvoiceForm = () => {
         backTo={{ label: 'Invoices', path: '/invoices' }}
       />
       
-      <form onSubmit={handleSubmit(onSubmit as any)} className="flex flex-col xl:flex-row gap-6 items-start">
+      <form onSubmit={handleFormSubmit(onSubmit)} className="flex flex-col xl:flex-row gap-6 items-start">
         <div className="flex-1 min-w-0 space-y-6">
           {/* Main Details Panel */}
           <div className="glass-panel p-6 rounded-2xl border border-border space-y-6 text-left shadow-sm">
@@ -504,7 +512,7 @@ export const InvoiceForm = () => {
                 <option value="">Select Customer...</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name} {c.gstNumber ? `(${c.gstNumber})` : ''}</option>)}
               </select>
-              {errors.customerId && <p className="text-red-500 text-xs mt-1">{errors.customerId.message}</p>}
+              <FormErrorDisplay error={errors.customerId} />
             </div>
 
             <div>
@@ -516,13 +524,13 @@ export const InvoiceForm = () => {
                 disabled={nextNoLoading}
                 className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50" 
               />
-              {errors.invoiceNo && <p className="text-red-500 text-xs mt-1">{errors.invoiceNo.message}</p>}
+              <FormErrorDisplay error={errors.invoiceNo} />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice Date *</label>
               <input type="date" {...register('date')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
-              {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date.message}</p>}
+              <FormErrorDisplay error={errors.date} />
             </div>
 
             <div>

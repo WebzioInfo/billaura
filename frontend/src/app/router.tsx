@@ -76,6 +76,7 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then
 const BranchesPage = lazy(() => import('../features/settings/pages/BranchesPage').then(m => ({ default: m.BranchesPage })));
 const RolesPage = lazy(() => import('../features/settings/pages/RolesPage').then(m => ({ default: m.RolesPage })));
 const UsersPage = lazy(() => import('../features/settings/pages/UsersPage').then(m => ({ default: m.UsersPage })));
+const UserForm = lazy(() => import('../features/users/UserForm').then(m => ({ default: m.UserForm })));
 const CompanyProfilePage = lazy(() => import('../features/settings/pages/CompanyProfilePage').then(m => ({ default: m.CompanyProfilePage })));
 const BackupRestoreCenter = lazy(() => import('../features/settings/BackupRestoreCenter').then(m => ({ default: m.BackupRestoreCenter })));
 const ExecutiveDashboard = lazy(() => import('../features/dashboard/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
@@ -294,12 +295,17 @@ export const router = createBrowserRouter([
       { path: 'reports/payroll', element: <PayrollDashboard /> },
       { path: 'hr', element: <PayrollDashboard /> },
       { path: 'employees', element: <EmployeesList /> },
+      { path: 'departments', element: <DepartmentsList /> },
       { path: 'attendance', element: <MaintenancePage /> },
       { path: 'payroll', element: <PayrollDashboard /> },
+      { path: 'fixed-assets', element: <FixedAssetsList /> },
+      { path: 'projects', element: <ProjectsList /> },
       { path: 'settings/general', element: <SettingsPage /> },
       { path: 'company', element: <CompanyProfilePage /> },
       { path: 'branches', element: <BranchesPage /> },
       { path: 'users', element: <UsersPage /> },
+      { path: 'users/new', element: <UserForm /> },
+      { path: 'users/:id/edit', element: <UserForm /> },
       { path: 'roles', element: <RolesPage /> },
       { path: 'profile', element: <CompanyProfilePage /> },
       { path: 'subscription', element: <MaintenancePage /> },

@@ -67,7 +67,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     queryFn: () => api.get('/tax-groups').then(res => res.data || []),
   });
 
-  const { register, handleSubmit, setValue, reset, setError, formState: { errors } } = useAsyncForm(
+  const form = useAsyncForm(
     {
       defaultValues: {
         name: '',
@@ -118,6 +118,20 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     return () => window.removeEventListener('keydown', handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeInlineModal]);
+
+  const { register, handleFormSubmit, setValue, reset, setError, formState: { errors }, watch } = form;
+
+  const watchedTaxGroupId = watch('taxGroupId');
+
+  useEffect(() => {
+    if (watchedTaxGroupId && taxGroupsData.length > 0) {
+      const selectedTaxGroup = taxGroupsData.find(t => t.id === watchedTaxGroupId);
+      if (selectedTaxGroup && setValue) {
+        setValue('gstRate', selectedTaxGroup.totalRate, { shouldValidate: true, shouldDirty: true });
+        setValue('taxRate', selectedTaxGroup.totalRate, { shouldValidate: true, shouldDirty: true });
+      }
+    }
+  }, [watchedTaxGroupId, taxGroupsData, setValue]);
 
   const handleInlineCreate = (type: string) => {
     if (type === 'Category') {
@@ -290,7 +304,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-          <form id="productForm" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          <form id="productForm" onSubmit={handleFormSubmit(onSubmit)} className="space-y-8">
             
             {activeTab === 'general' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -451,8 +465,11 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">GST Rate (%)</label>
-                      <input type="number" step="0.01" {...register('gstRate')} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent" />
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                        GST Rate (%)
+                        <span className="text-[9px] bg-accent/10 text-accent px-1.5 py-0.5 rounded font-bold">Auto</span>
+                      </label>
+                      <input type="number" step="0.01" {...register('gstRate')} readOnly className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none cursor-not-allowed text-muted-foreground" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Tax Preference</label>

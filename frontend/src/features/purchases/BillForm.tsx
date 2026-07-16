@@ -8,9 +8,23 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PageContainer, LoadingState } from '@/components/ui/LayoutComponents';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, Input, Select, FormErrorDisplay } from '@/components/ui';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
+import { useAsyncForm } from '@/hooks/useAsyncForm';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const billSchema = z.object({
+  vendorId: z.string().min(1, 'Vendor is required'),
+  date: z.string().min(1, 'Billing Date is required'),
+  dueDate: z.string().optional(),
+  reference: z.string().optional(),
+  billingAddress: z.string().optional(),
+  shippingAddress: z.string().optional(),
+  placeOfSupply: z.string().optional(),
+});
+type BillFormValues = z.infer<typeof billSchema>;
 
 interface Vendor {
   id: string;
@@ -60,13 +74,33 @@ export const BillForm = () => {
   const isDuplicateMode = !!duplicateId;
 
   // Form State
-  const [vendorId, setVendorId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate] = useState('');
-  const [reference, setReference] = useState('');
-  const [billingAddress, setBillingAddress] = useState('');
-  const [shippingAddress, setShippingAddress] = useState('');
-  const [placeOfSupply, setPlaceOfSupply] = useState('');
+  const form = useAsyncForm<BillFormValues>(
+    {
+      resolver: zodResolver(billSchema as any) as any,
+      defaultValues: {
+        vendorId: '',
+        date: new Date().toISOString().split('T')[0],
+        dueDate: '',
+        reference: '',
+        billingAddress: '',
+        shippingAddress: '',
+        placeOfSupply: '',
+      }
+    },
+    null,
+    () => ({})
+  );
+
+  const { register, handleFormSubmit, formState: { errors }, watch, setValue } = form;
+
+  const vendorId = watch('vendorId');
+  const date = watch('date');
+  const dueDate = watch('dueDate');
+  const reference = watch('reference');
+  const billingAddress = watch('billingAddress');
+  const shippingAddress = watch('shippingAddress');
+  const placeOfSupply = watch('placeOfSupply');
+
   const [taxMode, setTaxMode] = useState<'CGST_SGST' | 'IGST'>('CGST_SGST');
   const [isRcm, setIsRcm] = useState(false);
   const [warehouseId, setWarehouseId] = useState('');
@@ -152,11 +186,11 @@ export const BillForm = () => {
   useEffect(() => {
     if (!existingBill) return;
 
-    setVendorId(existingBill.vendorId);
-    setReference(isDuplicateMode ? '' : (existingBill.reference || ''));
-    setBillingAddress(existingBill.billingAddress || '');
-    setShippingAddress(existingBill.shippingAddress || '');
-    setPlaceOfSupply(existingBill.placeOfSupply || '');
+    setValue('vendorId', existingBill.vendorId);
+    setValue('reference', isDuplicateMode ? '' : (existingBill.reference || ''));
+    setValue('billingAddress', existingBill.billingAddress || '');
+    setValue('shippingAddress', existingBill.shippingAddress || '');
+    setValue('placeOfSupply', existingBill.placeOfSupply || '');
     setTaxMode(existingBill.igstAmount > 0 ? 'IGST' : 'CGST_SGST');
     setIsRcm(existingBill.isRcm || false);
 
@@ -165,12 +199,12 @@ export const BillForm = () => {
       setWarehouseId(existingBill.gstBreakup.warehouseId || '');
       setNotes(existingBill.gstBreakup.notes || '');
       if (!isDuplicateMode) {
-        setDueDate(existingBill.gstBreakup.dueDate || '');
+        setValue('dueDate', existingBill.gstBreakup.dueDate || '');
       }
     }
 
     if (existingBill.date && !isDuplicateMode) {
-      setDate(existingBill.date.split('T')[0]);
+      setValue('date', existingBill.date.split('T')[0]);
     }
 
     // Populate line items
@@ -207,10 +241,10 @@ export const BillForm = () => {
   useEffect(() => {
     if (!existingPo) return;
 
-    setVendorId(existingPo.businessPartnerId);
-    setBillingAddress(existingPo.billingAddress || '');
-    setShippingAddress(existingPo.shippingAddress || '');
-    setPlaceOfSupply(existingPo.placeOfSupply || '');
+    setValue('vendorId', existingPo.businessPartnerId);
+    setValue('billingAddress', existingPo.billingAddress || '');
+    setValue('shippingAddress', existingPo.shippingAddress || '');
+    setValue('placeOfSupply', existingPo.placeOfSupply || '');
     setTaxMode(existingPo.taxMode);
 
     const poMeta = existingPo.gstBreakup || {};
@@ -247,12 +281,12 @@ export const BillForm = () => {
 
   // Set default place of supply & addresses when vendor is selected
   const handleVendorChange = (id: string) => {
-    setVendorId(id);
+    setValue('vendorId', id);
     const v = vendors.find(vendor => vendor.id === id);
     if (v) {
-      setBillingAddress(v.address || '');
-      setShippingAddress(v.address || '');
-      setPlaceOfSupply(v.state || '');
+      setValue('billingAddress', v.address || '');
+      setValue('shippingAddress', v.address || '');
+      setValue('placeOfSupply', v.state || '');
 
       // Auto check tax mode
       const compState = companyProfile?.state?.trim().toLowerCase() || '';
@@ -380,9 +414,9 @@ export const BillForm = () => {
     }
   });
 
-  const handleSave = () => {
+  const handleSave = (data: BillFormValues) => {
     // Validations
-    if (!vendorId) {
+    if (!data.vendorId) {
       toast.error('Please select a vendor');
       return;
     }
@@ -403,16 +437,16 @@ export const BillForm = () => {
 
     // Build Payload
     const payload = {
-      vendorId,
-      date: new Date(date).toISOString(),
-      reference,
-      billingAddress,
-      shippingAddress,
-      placeOfSupply,
+      vendorId: data.vendorId,
+      date: new Date(data.date).toISOString(),
+      reference: data.reference,
+      billingAddress: data.billingAddress,
+      shippingAddress: data.shippingAddress,
+      placeOfSupply: data.placeOfSupply,
       taxMode,
       isRcm,
       gstBreakup: {
-        dueDate: dueDate || undefined,
+        dueDate: data.dueDate || undefined,
         warehouseId: warehouseId || undefined,
         notes: notes || undefined,
         roundOff: totals.roundOff,
@@ -461,7 +495,8 @@ export const BillForm = () => {
               Cancel
             </Button>
             <Button
-              onClick={handleSave}
+              type="submit"
+              form="billForm"
               disabled={saveMutation.isPending}
               className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold shadow-lg shadow-primary/10 flex items-center gap-1.5 px-5 py-2.5"
             >
@@ -471,8 +506,7 @@ export const BillForm = () => {
           </div>
         </div>
 
-        {/* Form Body Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <form id="billForm" onSubmit={handleFormSubmit(handleSave as any)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Info Blocks (Left 2 cols) */}
           <div className="lg:col-span-2 space-y-6">
             {/* Vendor & Bill Info */}
@@ -483,72 +517,56 @@ export const BillForm = () => {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Vendor</label>
-                  <select
-                    value={vendorId}
-                    onChange={e => handleVendorChange(e.target.value)}
+                  <Select
+                    label="Vendor"
                     required
-                    className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all font-semibold"
-                  >
-                    <option value="">Select Vendor</option>
-                    {vendors.map(v => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
+                    {...register('vendorId')}
+                    onChange={(e: any) => handleVendorChange(e.target.value)}
+                    options={[
+                      { value: "", label: "Select Vendor" },
+                      ...vendors.map(v => ({ value: v.id, label: v.name }))
+                    ]}
+                  />
+                  <FormErrorDisplay error={errors.vendorId} />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Place of Supply / State</label>
-                  <input
-                    type="text"
-                    value={placeOfSupply}
-                    onChange={e => setPlaceOfSupply(e.target.value)}
+                  <Input
+                    label="Place of Supply / State"
+                    {...register('placeOfSupply')}
                     placeholder="Auto-filled state code"
-                    className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                   />
+                  <FormErrorDisplay error={errors.placeOfSupply} />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Billing Date</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={e => setDate(e.target.value)}
-                      required
-                      className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-                    />
-                  </div>
+                  <Input
+                    label="Billing Date"
+                    type="date"
+                    required
+                    {...register('date')}
+                  />
+                  <FormErrorDisplay error={errors.date} />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Due Date</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-                    />
-                  </div>
+                  <Input
+                    label="Due Date"
+                    type="date"
+                    {...register('dueDate')}
+                  />
+                  <FormErrorDisplay error={errors.dueDate} />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Vendor Reference / Invoice No</label>
-                  <div className="relative">
-                    <FileText className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder="e.g. INV/2026/001"
-                      value={reference}
-                      onChange={e => setReference(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-                    />
-                  </div>
+                  <Input
+                    label="Vendor Reference / Invoice No"
+                    {...register('reference')}
+                    placeholder="e.g. INV/2026/001"
+                  />
+                  <FormErrorDisplay error={errors.reference} />
                 </div>
               </div>
 
@@ -557,21 +575,21 @@ export const BillForm = () => {
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Billing Address</label>
                   <textarea
                     rows={2}
-                    value={billingAddress}
-                    onChange={e => setBillingAddress(e.target.value)}
+                    {...register('billingAddress')}
                     placeholder="Vendor invoice billing address"
                     className="w-full px-3.5 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all resize-none"
                   />
+                  <FormErrorDisplay error={errors.billingAddress} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Shipping Address</label>
                   <textarea
                     rows={2}
-                    value={shippingAddress}
-                    onChange={e => setShippingAddress(e.target.value)}
+                    {...register('shippingAddress')}
                     placeholder="Material delivery destination address"
                     className="w-full px-3.5 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all resize-none"
                   />
+                  <FormErrorDisplay error={errors.shippingAddress} />
                 </div>
               </div>
             </Card>
@@ -860,7 +878,8 @@ export const BillForm = () => {
 
               <div className="pt-4 space-y-2">
                 <Button
-                  onClick={handleSave}
+                  type="submit"
+                  form="billForm"
                   disabled={saveMutation.isPending}
                   className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-bold shadow-lg shadow-primary/10 flex items-center justify-center gap-1.5 py-3 transition-transform active:scale-[0.98]"
                 >
@@ -873,7 +892,7 @@ export const BillForm = () => {
               </div>
             </Card>
           </div>
-        </div>
+        </form>
       </div>
     </PageContainer>
   );

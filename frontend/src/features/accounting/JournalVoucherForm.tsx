@@ -14,6 +14,8 @@ import { PageContainer } from '../../components/ui/LayoutComponents';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { LedgerLookup } from '../../components/ui/LedgerLookup';
+import { FormErrorDisplay } from '../../components/ui';
+import { useAsyncForm } from '../../hooks/useAsyncForm';
 
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;
 
@@ -45,25 +47,31 @@ export const JournalVoucherForm = () => {
 
   // Ledger prefetching is removed in favor of LedgerLookup dynamic searching
 
+  const form = useAsyncForm<JournalFormValues>(
+    {
+      resolver: zodResolver(journalSchema as any) as any,
+      defaultValues: {
+        date: new Date().toISOString().split('T')[0],
+        reference: '',
+        description: '',
+        lines: [
+          { accountId: '', debit: 0, credit: 0 },
+          { accountId: '', debit: 0, credit: 0 },
+        ],
+      },
+    },
+    null,
+    () => ({})
+  );
+
   const {
     register,
     control,
-    handleSubmit,
+    handleFormSubmit,
     watch,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<JournalFormValues>({
-    resolver: zodResolver(journalSchema),
-    defaultValues: {
-      date: new Date().toISOString().split('T')[0],
-      reference: '',
-      description: '',
-      lines: [
-        { accountId: '', debit: 0, credit: 0 },
-        { accountId: '', debit: 0, credit: 0 },
-      ],
-    },
-  });
+  } = form;
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -103,37 +111,39 @@ export const JournalVoucherForm = () => {
         backTo={{ label: 'Journal Entries', path: '/journal-entries' }}
       />
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleFormSubmit(onSubmit as any)} className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Voucher Details</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label>Date</Label>
-              <input 
+            <div>
+              <Input
+                label="Date"
                 type="date"
-                className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ${errors.date ? 'border-red-500' : 'border-input'}`}
+                required
                 {...register('date')}
               />
-              {errors.date && <p className="text-sm text-red-500">{errors.date.message}</p>}
+              <FormErrorDisplay error={errors.date} />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="reference">Reference #</Label>
-              <Input id="reference" placeholder="e.g. JV-001" {...register('reference')} />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="description">Description *</Label>
-              <textarea 
-                id="description" 
-                className={`flex w-full rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.description ? 'border-red-500' : 'border-input'}`}
-                placeholder="Reason for this journal entry..." 
-                {...register('description')} 
-                rows={2}
+            
+            <div>
+              <Input
+                label="Reference No"
+                {...register('reference')}
+                placeholder="e.g. JV-001"
               />
-              {errors.description && <p className="text-sm text-red-500">{errors.description.message}</p>}
+              <FormErrorDisplay error={errors.reference} />
+            </div>
+
+            <div className="md:col-span-2">
+              <Input
+                label="Description / Narration"
+                required
+                {...register('description')}
+                placeholder="Enter narration for this journal entry"
+              />
+              <FormErrorDisplay error={errors.description} />
             </div>
           </CardContent>
         </Card>
@@ -217,7 +227,14 @@ export const JournalVoucherForm = () => {
             </div>
 
             {errors.lines?.root && (
-              <p className="text-sm text-red-500 font-medium">{errors.lines.root.message}</p>
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md">
+                <FormErrorDisplay error={errors.lines.root} />
+              </div>
+            )}
+            {errors.lines?.message && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md">
+                <p className="text-sm font-medium text-red-500">{errors.lines.message}</p>
+              </div>
             )}
 
             <Button

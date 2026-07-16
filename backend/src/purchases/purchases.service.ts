@@ -5,10 +5,14 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 
 @Injectable()
 export class PurchasesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accountingEngine: AccountingEngineService
+  ) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -300,20 +304,10 @@ export class PurchasesService {
       // Debit dynamic accounts
       for (const [accountId, amount] of Object.entries(accountDebits)) {
         journalLines.push({ accountId, debit: amount, credit: 0 });
-        
-        await tx.account.update({
-          where: { id: accountId },
-          data: { balance: { increment: amount } },
-        });
       }
 
       // Credit Accounts Payable
       journalLines.push({ accountId: apAccount.id, debit: 0, credit: grandTotal });
-      
-      await tx.account.update({
-        where: { id: apAccount.id },
-        data: { balance: { decrement: grandTotal } }, // liability credit balance increases
-      });
 
       const cgstAmt = isInterState ? 0 : taxTotal / 2;
       const sgstAmt = isInterState ? 0 : taxTotal / 2;
@@ -322,27 +316,18 @@ export class PurchasesService {
       if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
         journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });
         journalLines.push({ accountId: sgstAccount.id, debit: sgstAmt, credit: 0 });
-        
-        await tx.account.update({ where: { id: cgstAccount.id }, data: { balance: { increment: cgstAmt } } });
-        await tx.account.update({ where: { id: sgstAccount.id }, data: { balance: { increment: sgstAmt } } });
       }
       if (isInterState && igstAmt > 0 && igstAccount) {
         journalLines.push({ accountId: igstAccount.id, debit: igstAmt, credit: 0 });
-        
-        await tx.account.update({ where: { id: igstAccount.id }, data: { balance: { increment: igstAmt } } });
       }
 
-      await tx.journalEntry.create({
-        data: {
-          companyId,
-          date: new Date(dto.date),
-          reference: purchaseNo,
-          description: `Automatic purchase billing posting ${purchaseNo}`,
-          lines: {
-            create: journalLines,
-          },
-        },
-      });
+      await this.accountingEngine.postTransaction({
+        companyId,
+        date: new Date(dto.date),
+        reference: purchaseNo,
+        description: `Automatic purchase billing posting ${purchaseNo}`,
+        lines: journalLines,
+      }, tx);
 
       return purchase;
     };
@@ -647,20 +632,10 @@ export class PurchasesService {
       // Debit dynamic accounts
       for (const [accountId, amount] of Object.entries(accountDebits)) {
         journalLines.push({ accountId, debit: amount, credit: 0 });
-        
-        await tx.account.update({
-          where: { id: accountId },
-          data: { balance: { increment: amount } },
-        });
       }
 
       // Credit Accounts Payable
       journalLines.push({ accountId: apAccount.id, debit: 0, credit: grandTotal });
-      
-      await tx.account.update({
-        where: { id: apAccount.id },
-        data: { balance: { decrement: grandTotal } }, // liability credit balance increases
-      });
 
       const cgstAmt = isInterState ? 0 : taxTotal / 2;
       const sgstAmt = isInterState ? 0 : taxTotal / 2;
@@ -669,27 +644,18 @@ export class PurchasesService {
       if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
         journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });
         journalLines.push({ accountId: sgstAccount.id, debit: sgstAmt, credit: 0 });
-        
-        await tx.account.update({ where: { id: cgstAccount.id }, data: { balance: { increment: cgstAmt } } });
-        await tx.account.update({ where: { id: sgstAccount.id }, data: { balance: { increment: sgstAmt } } });
       }
       if (isInterState && igstAmt > 0 && igstAccount) {
         journalLines.push({ accountId: igstAccount.id, debit: igstAmt, credit: 0 });
-        
-        await tx.account.update({ where: { id: igstAccount.id }, data: { balance: { increment: igstAmt } } });
       }
 
-      await tx.journalEntry.create({
-        data: {
-          companyId,
-          date: new Date(dto.date),
-          reference: purchase.purchaseNo,
-          description: `Automatic purchase billing posting ${purchase.purchaseNo} (Updated)`,
-          lines: {
-            create: journalLines,
-          },
-        },
-      });
+      await this.accountingEngine.postTransaction({
+        companyId,
+        date: new Date(dto.date),
+        reference: purchase.purchaseNo,
+        description: `Automatic purchase billing posting ${purchase.purchaseNo} (Updated)`,
+        lines: journalLines,
+      }, tx);
 
       return updatedPurchase;
     }, { timeout: 20000 });
@@ -712,37 +678,13 @@ export class PurchasesService {
         },
       });
 
-      // Find original journal entries and create reversals
+      // Find original journal entries and create reversals using AccountingEngineService
       const originalEntries = await tx.journalEntry.findMany({
-        where: { reference: purchase.purchaseNo },
-        include: { lines: true },
+        where: { reference: purchase.purchaseNo, companyId: purchase.companyId },
       });
 
       for (const entry of originalEntries) {
-        const reversalLines = entry.lines.map(line => ({
-          accountId: line.accountId,
-          debit: Number(line.credit || 0),
-          credit: Number(line.debit || 0),
-        }));
-
-        await tx.journalEntry.create({
-          data: {
-            companyId: purchase.companyId,
-            date: new Date(),
-            reference: `REV-${purchase.purchaseNo}`,
-            description: `Reversal for deleted purchase ${purchase.purchaseNo}`,
-            lines: { create: reversalLines },
-          },
-        });
-
-        // Revert account balances
-        for (const line of reversalLines) {
-          const change = line.debit - line.credit;
-          await tx.account.update({
-            where: { id: line.accountId },
-            data: { balance: { increment: change } },
-          });
-        }
+        await this.accountingEngine.reverseTransaction(entry.id, purchase.companyId, tx, `Reversal for deleted purchase ${purchase.purchaseNo}`);
       }
 
       // Revert Stock Ledger

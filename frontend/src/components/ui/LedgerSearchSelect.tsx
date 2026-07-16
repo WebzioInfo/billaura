@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
-import { Search, Loader2, Check, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef, useLayoutEffect, KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { Search, Loader2, ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/services/api';
+import { FormErrorDisplay } from './FormErrorDisplay';
 
 const HighlightMatch = ({ text, match }: { text: string; match: string }) => {
   if (!text) return null;
@@ -111,6 +113,41 @@ export const LedgerSearchSelect = ({
   // Sync selected item details
   const [selectedLabel, setSelectedLabel] = useState('');
   const [selectedDetail, setSelectedDetail] = useState<any>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+
+  const updatePosition = () => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const dropdownHeight = 320; // max-h-80 (20rem = 320px)
+      
+      const isUp = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+      
+      setDropdownStyle({
+        position: 'fixed',
+        top: isUp ? rect.top - dropdownHeight - 4 : rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+        maxHeight: `${dropdownHeight}px`,
+      });
+    }
+  };
+
+  useLayoutEffect(() => {
+    updatePosition();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (value && options.length > 0) {
@@ -202,7 +239,7 @@ export const LedgerSearchSelect = ({
   return (
     <div className="w-full relative" ref={containerRef} onKeyDown={handleKeyDown}>
       {label && (
-        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">
+        <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
@@ -224,9 +261,12 @@ export const LedgerSearchSelect = ({
         <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
       </div>
 
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-surface border border-border rounded-xl shadow-xl max-h-80 flex flex-col overflow-hidden">
-          <div className="p-2 border-b border-border relative">
+      {isOpen && createPortal(
+        <div 
+          className="bg-surface border border-border rounded-xl shadow-xl flex flex-col overflow-hidden"
+          style={dropdownStyle}
+        >
+          <div className="p-2 border-b border-border relative shrink-0">
             <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
@@ -295,10 +335,16 @@ export const LedgerSearchSelect = ({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {error && <p className="mt-1.5 text-xs text-red-500 font-sans">{error}</p>}
+      {error && (
+        <div className="mt-1.5 text-xs text-red-500 flex items-center gap-1 animate-in fade-in slide-in-from-top-1 font-sans">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          {error}
+        </div>
+      )}
       {helperText && !error && <p className="mt-1.5 text-xs text-muted-foreground font-sans">{helperText}</p>}
     </div>
   );

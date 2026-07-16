@@ -11,8 +11,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full">
         {label && (
-          <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
+          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-0.5">
             {label}
+            {props.required && <span className="text-red-500 ml-1">*</span>}
           </label>
         )}
         <input

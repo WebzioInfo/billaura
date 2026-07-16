@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageContainer } from '@/components/ui/LayoutComponents';
-import { ConfirmDialog } from '@/components/ui';
+import { ConfirmDialog, JournalImpactView } from '@/components/ui';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
@@ -605,6 +605,14 @@ export const InvoiceDetails = () => {
                 )}
                 
               </div>
+            </Card>
+
+            {/* Accounting Impact */}
+            <Card className="p-6 border border-border/60 bg-surface shadow-sm space-y-4">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50 pb-2 flex items-center gap-2">
+                <FileText className="w-4 h-4" /> Accounting Impact
+              </div>
+              <JournalImpactView reference={invoice.invoiceNo} />
             </Card>
 
           </div>

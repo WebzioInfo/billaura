@@ -27,7 +27,10 @@ export class JournalEntriesService {
       companyId,
       ...(query.search
         ? {
-            description: { contains: query.search },
+            OR: [
+              { description: { contains: query.search } },
+              { reference: { contains: query.search } },
+            ],
           }
         : {}),
     };

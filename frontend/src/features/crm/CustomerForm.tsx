@@ -1,15 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { formatCurrency } from '@/lib/utils';
-import { DocTooltip } from '@/components/ui/DocTooltip';
 import { toast } from 'sonner';
 import { Save, Loader2 } from 'lucide-react';
-import { PageContainer, Section, FormSection, BackNavigation } from '@/components/ui/LayoutComponents';
+import { PageContainer, Section, FormSection } from '@/components/ui/LayoutComponents';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Button, Input, Select } from '@/components/ui';
+import { Button, Input, Select, AutoGenerateInput, FormErrorDisplay } from '@/components/ui';
 import apiClient from '@/services/api';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
+import { useAsyncForm } from '@/hooks/useAsyncForm';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const customerSchema = z.object({
+  name: z.string().min(1, 'Customer Name is required'),
+  customerCode: z.string().optional(),
+  tradeName: z.string().optional(),
+  customerType: z.string(),
+  gstin: z.string().optional(),
+  panNumber: z.string().optional(),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  mobile: z.string().optional(),
+  whatsapp: z.string().optional(),
+  address: z.string().optional(),
+  pinCode: z.string().optional(),
+  state: z.string().optional(),
+  placeOfSupply: z.string().optional(),
+  creditLimit: z.string().optional().or(z.number().transform(String)),
+  country: z.string().optional(),
+  notes: z.string().optional(),
+  status: z.string().optional(),
+  openingBalance: z.string().optional().or(z.number().transform(String)),
+}).superRefine((data, ctx) => {
+  if (data.customerType === 'REGISTERED' && !data.gstin) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "GSTIN is required for Registered businesses",
+      path: ["gstin"],
+    });
+  }
+});
+
+type CustomerFormValues = z.infer<typeof customerSchema>;
 
 export const CustomerForm = () => {
   const { id } = useParams();
@@ -17,27 +49,6 @@ export const CustomerForm = () => {
   const queryClient = useQueryClient();
   const isEditMode = Boolean(id);
   const [b2bMode, setB2bMode] = useState<boolean>(true);
-
-  const [formData, setFormData] = useState({
-    name: '',
-    customerCode: '',
-    tradeName: '',
-    customerType: 'UNREGISTERED',
-    gstin: '',
-    panNumber: '',
-    email: '',
-    mobile: '',
-    whatsapp: '',
-    address: '',
-    pinCode: '',
-    state: '',
-    placeOfSupply: '',
-    creditLimit: '',
-    country: 'India',
-    notes: '',
-    status: 'ACTIVE',
-    openingBalance: '',
-  });
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ['customer', id],
@@ -48,41 +59,76 @@ export const CustomerForm = () => {
     enabled: isEditMode,
   });
 
-  useDynamicTitle(isEditMode ? (customer?.name ? `Edit ${customer.name}` : 'Edit Customer') : 'New Customer');
-
-  useEffect(() => {
-    if (customer) {
-      const isB2b = customer.customerType !== 'UNREGISTERED' || !!customer.gstin || !!customer.tradeName;
+  const form = useAsyncForm<CustomerFormValues>(
+    {
+      resolver: zodResolver(customerSchema as any) as any,
+      defaultValues: {
+        name: '',
+        customerCode: '',
+        tradeName: '',
+        customerType: 'UNREGISTERED',
+        gstin: '',
+        panNumber: '',
+        email: '',
+        mobile: '',
+        whatsapp: '',
+        address: '',
+        pinCode: '',
+        state: '',
+        placeOfSupply: '',
+        creditLimit: '',
+        country: 'India',
+        notes: '',
+        status: 'ACTIVE',
+        openingBalance: '',
+      }
+    },
+    customer,
+    (data: any) => {
+      const isB2b = data.customerType !== 'UNREGISTERED' || !!data.gstin || !!data.tradeName;
       setB2bMode(isB2b);
-      setFormData({
-        name: customer.name || '',
-        customerCode: customer.bpCode || '',
-        tradeName: customer.tradeName || '',
-        customerType: customer.customerType || 'UNREGISTERED',
-        gstin: customer.gstin || '',
-        panNumber: customer.panNumber || '',
-        email: customer.email || '',
-        mobile: customer.phone || '',
-        whatsapp: customer.whatsapp || '',
-        address: customer.address || '',
-        pinCode: customer.pinCode || '',
-        state: customer.state || '',
-        placeOfSupply: customer.placeOfSupply || '',
-        creditLimit: customer.creditLimit || '',
-        country: customer.country || 'India',
-        notes: customer.notes || '',
-        status: customer.status || 'ACTIVE',
-        openingBalance: customer.receivableBalance || '',
-      });
+      return {
+        name: data.name || '',
+        customerCode: data.bpCode || '',
+        tradeName: data.tradeName || '',
+        customerType: data.customerType || 'UNREGISTERED',
+        gstin: data.gstin || '',
+        panNumber: data.panNumber || '',
+        email: data.email || '',
+        mobile: data.phone || '',
+        whatsapp: data.whatsapp || '',
+        address: data.address || '',
+        pinCode: data.pinCode || '',
+        state: data.state || '',
+        placeOfSupply: data.placeOfSupply || '',
+        creditLimit: data.creditLimit ? String(data.creditLimit) : '',
+        country: data.country || 'India',
+        notes: data.notes || '',
+        status: data.status || 'ACTIVE',
+        openingBalance: data.receivableBalance ? String(data.receivableBalance) : '',
+      };
     }
-  }, [customer]);
+  );
+
+  const { register, handleFormSubmit, setValue, formState: { errors } } = form;
+
+  useDynamicTitle(isEditMode ? (customer?.name ? `Edit ${customer?.name}` : 'Edit Customer') : 'New Customer');
 
   const saveMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      if (isEditMode) {
-        return apiClient.patch(`/customers/${id}`, data);
+    mutationFn: async (data: CustomerFormValues) => {
+      const submitData = { ...data, bpCode: data.customerCode };
+      if (!b2bMode) {
+        submitData.customerType = 'UNREGISTERED';
+        submitData.gstin = '';
+        submitData.panNumber = '';
+        submitData.tradeName = '';
+        submitData.creditLimit = '';
       }
-      return apiClient.post('/customers', data);
+      
+      if (isEditMode) {
+        return apiClient.patch(`/customers/${id}`, submitData);
+      }
+      return apiClient.post('/customers', submitData);
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -97,37 +143,8 @@ export const CustomerForm = () => {
     }
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error('Customer Name is required');
-      return;
-    }
-    
-    if (b2bMode && formData.customerType === 'REGISTERED' && !formData.gstin?.trim()) {
-      toast.error('GSTIN is required for Registered businesses');
-      return;
-    }
-    
-    const submitData = { ...formData };
-    if (!b2bMode) {
-      submitData.customerType = 'UNREGISTERED';
-      submitData.gstin = '';
-      submitData.panNumber = '';
-      submitData.tradeName = '';
-      submitData.creditLimit = '';
-    }
-    
-    saveMutation.mutate(submitData);
+  const onSubmit = (data: CustomerFormValues) => {
+    saveMutation.mutate(data);
   };
 
   if (isEditMode && isLoading) {
@@ -148,7 +165,7 @@ export const CustomerForm = () => {
         backTo={{ label: "Customers", path: "/app/customers" }}
         primaryAction={
           <Button 
-            onClick={handleSubmit} 
+            onClick={form.handleSubmit(onSubmit)} 
             disabled={saveMutation.isPending}
             variant="primary"
             className="flex items-center gap-2"
@@ -159,13 +176,17 @@ export const CustomerForm = () => {
         }
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form id="customerForm" onSubmit={handleFormSubmit(onSubmit)} className="space-y-6">
         <div className="flex items-center justify-center p-1 mb-6 bg-muted/50 rounded-lg border border-border w-fit mx-auto">
           <button
             type="button"
             onClick={() => {
               setB2bMode(false);
-              setFormData(prev => ({ ...prev, customerType: 'UNREGISTERED', gstin: '', panNumber: '', tradeName: '', creditLimit: '' }));
+              setValue('customerType', 'UNREGISTERED');
+              setValue('gstin', '');
+              setValue('panNumber', '');
+              setValue('tradeName', '');
+              setValue('creditLimit', '');
             }}
             className={`px-6 py-2 text-sm font-medium rounded-md transition-colors ${!b2bMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
           >
@@ -183,38 +204,39 @@ export const CustomerForm = () => {
         <Section>
           <FormSection title="Basic Information">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Customer Name *"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder={b2bMode ? "Contact Person Name" : "Customer Full Name"}
-                required
-              />
-              <Input
-                label="Customer Code"
-                name="customerCode"
-                value={formData.customerCode}
-                onChange={handleChange}
-                placeholder="Auto-generated if left empty"
-              />
+              <div>
+                <Input
+                  label="Customer Name"
+                  {...register('name')}
+                  placeholder={b2bMode ? "Contact Person Name" : "Customer Full Name"}
+                  required
+                />
+                <FormErrorDisplay error={errors.name} />
+              </div>
+              <div>
+                <AutoGenerateInput
+                  label="Customer Code"
+                  {...register('customerCode')}
+                  prefix="CUST-"
+                  onGenerate={(code) => setValue('customerCode', code)}
+                  placeholder="Auto-generated if left empty"
+                />
+                <FormErrorDisplay error={errors.customerCode} />
+              </div>
               {b2bMode && (
                 <>
-                  <Input
-                    label="Company / Trade Name"
-                    name="tradeName"
-                    value={formData.tradeName}
-                    onChange={handleChange}
-                    placeholder="Legal Business Name"
-                  />
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Customer Type
-                    </label>
+                  <div>
+                    <Input
+                      label="Company / Trade Name"
+                      {...register('tradeName')}
+                      placeholder="Legal Business Name"
+                    />
+                    <FormErrorDisplay error={errors.tradeName} />
+                  </div>
+                  <div>
                     <Select
-                      name="customerType"
-                      value={formData.customerType}
-                      onChange={handleChange}
+                      label="Customer Type"
+                      {...register('customerType')}
                       options={[
                         { value: 'UNREGISTERED', label: 'Unregistered' },
                         { value: 'REGISTERED', label: 'Registered Business (Regular)' },
@@ -223,6 +245,7 @@ export const CustomerForm = () => {
                         { value: 'EXPORT', label: 'Export' },
                       ]}
                     />
+                    <FormErrorDisplay error={errors.customerType} />
                   </div>
                 </>
               )}
@@ -233,29 +256,32 @@ export const CustomerForm = () => {
         <Section>
           <FormSection title="Contact Information">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Email Address"
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="email@example.com"
-              />
+              <div>
+                <Input
+                  label="Email Address"
+                  type="email"
+                  {...register('email')}
+                  placeholder="email@example.com"
+                />
+                <FormErrorDisplay error={errors.email} />
+              </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Phone / Mobile"
-                  name="mobile"
-                  value={formData.mobile}
-                  onChange={handleChange}
-                  placeholder="+91 99999 99999"
-                />
-                <Input
-                  label="WhatsApp"
-                  name="whatsapp"
-                  value={formData.whatsapp}
-                  onChange={handleChange}
-                  placeholder="+91 99999 99999"
-                />
+                <div>
+                  <Input
+                    label="Phone / Mobile"
+                    {...register('mobile')}
+                    placeholder="+91 99999 99999"
+                  />
+                  <FormErrorDisplay error={errors.mobile} />
+                </div>
+                <div>
+                  <Input
+                    label="WhatsApp"
+                    {...register('whatsapp')}
+                    placeholder="+91 99999 99999"
+                  />
+                  <FormErrorDisplay error={errors.whatsapp} />
+                </div>
               </div>
             </div>
           </FormSection>
@@ -265,53 +291,54 @@ export const CustomerForm = () => {
           <Section>
             <FormSection title="Tax & Financial Details">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  label="GSTIN"
-                  name="gstin"
-                  value={formData.gstin}
-                  onChange={handleChange}
-                  placeholder="27AAAAA0000A1Z5"
-                  className="font-mono uppercase"
-                />
-                <Input
-                  label="PAN Number"
-                  name="panNumber"
-                  value={formData.panNumber}
-                  onChange={handleChange}
-                  placeholder="AAAAA0000A"
-                  className="font-mono uppercase"
-                />
-                <Input
-                  label="Credit Limit"
-                  type="number"
-                  name="creditLimit"
-                  value={formData.creditLimit}
-                  onChange={handleChange}
-                  placeholder="0.00"
-                />
-                <Input
-                  label="Opening Balance"
-                  type="number"
-                  name="openingBalance"
-                  value={formData.openingBalance}
-                  onChange={handleChange}
-                  placeholder="0.00"
-                  disabled={isEditMode}
-                />
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Status
-                  </label>
+                <div>
+                  <Input
+                    label="GSTIN"
+                    {...register('gstin')}
+                    placeholder="27AAAAA0000A1Z5"
+                    className="font-mono uppercase"
+                  />
+                  <FormErrorDisplay error={errors.gstin} />
+                </div>
+                <div>
+                  <Input
+                    label="PAN Number"
+                    {...register('panNumber')}
+                    placeholder="AAAAA0000A"
+                    className="font-mono uppercase"
+                  />
+                  <FormErrorDisplay error={errors.panNumber} />
+                </div>
+                <div>
+                  <Input
+                    label="Credit Limit"
+                    type="number"
+                    {...register('creditLimit')}
+                    placeholder="0.00"
+                  />
+                  <FormErrorDisplay error={errors.creditLimit} />
+                </div>
+                <div>
+                  <Input
+                    label="Opening Balance"
+                    type="number"
+                    {...register('openingBalance')}
+                    placeholder="0.00"
+                    disabled={isEditMode}
+                  />
+                  <FormErrorDisplay error={errors.openingBalance} />
+                </div>
+                <div>
                   <Select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
+                    label="Status"
+                    {...register('status')}
                     options={[
                       { value: 'ACTIVE', label: 'Active' },
                       { value: 'INACTIVE', label: 'Inactive' },
                       { value: 'SUSPENDED', label: 'Suspended' },
                     ]}
                   />
+                  <FormErrorDisplay error={errors.status} />
                 </div>
               </div>
             </FormSection>
@@ -322,46 +349,49 @@ export const CustomerForm = () => {
           <FormSection title="Address">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                   Billing Address
                 </label>
                 <textarea
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
+                  {...register('address')}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none h-20"
                   placeholder="Complete address..."
                 />
+                <FormErrorDisplay error={errors.address} />
               </div>
-              <Input
-                label="PIN Code"
-                name="pinCode"
-                value={formData.pinCode}
-                onChange={handleChange}
-                placeholder="Enter PIN Code"
-              />
-              <Input
-                label="State"
-                name="state"
-                value={formData.state}
-                onChange={handleChange}
-                placeholder="Enter State"
-              />
-              <Input
-                label="Country"
-                name="country"
-                value={formData.country}
-                onChange={handleChange}
-                placeholder="Enter Country"
-              />
-              {b2bMode && (
+              <div>
                 <Input
-                  label="Place of Supply"
-                  name="placeOfSupply"
-                  value={formData.placeOfSupply}
-                  onChange={handleChange}
-                  placeholder="State Name (for GST purposes)"
+                  label="PIN Code"
+                  {...register('pinCode')}
+                  placeholder="Enter PIN Code"
                 />
+                <FormErrorDisplay error={errors.pinCode} />
+              </div>
+              <div>
+                <Input
+                  label="State"
+                  {...register('state')}
+                  placeholder="Enter State"
+                />
+                <FormErrorDisplay error={errors.state} />
+              </div>
+              <div>
+                <Input
+                  label="Country"
+                  {...register('country')}
+                  placeholder="Enter Country"
+                />
+                <FormErrorDisplay error={errors.country} />
+              </div>
+              {b2bMode && (
+                <div>
+                  <Input
+                    label="Place of Supply"
+                    {...register('placeOfSupply')}
+                    placeholder="State Name (for GST purposes)"
+                  />
+                  <FormErrorDisplay error={errors.placeOfSupply} />
+                </div>
               )}
             </div>
           </FormSection>
@@ -371,17 +401,16 @@ export const CustomerForm = () => {
           <Section>
             <FormSection title="Additional Information">
               <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Notes (Optional)
                   </label>
                   <textarea
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleChange}
+                    {...register('notes')}
                     className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none h-20"
                     placeholder="Enter any additional notes..."
                   />
+                  <FormErrorDisplay error={errors.notes} />
                 </div>
               </div>
             </FormSection>

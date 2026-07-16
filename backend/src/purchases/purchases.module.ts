@@ -10,8 +10,10 @@ import { PurchaseOrdersService } from "./purchase-orders.service";
 import { GoodsReceiptsController } from "./goods-receipts.controller";
 import { GoodsReceiptsService } from "./goods-receipts.service";
 
+import { AccountingModule } from "../accounting/accounting.module";
+
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, AccountingModule],
   controllers: [
     PurchasesController,
     PurchasePaymentsController,

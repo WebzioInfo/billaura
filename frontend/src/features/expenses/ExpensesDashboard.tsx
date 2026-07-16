@@ -31,7 +31,7 @@ type ExpenseFormValues = z.infer<typeof expenseSchema>;
 const categorySchema = z.object({
   name: z.string().min(1, 'Category name is required'),
   description: z.string().optional(),
-  accountId: z.string().optional(),
+  accountId: z.string().min(1, 'General Ledger Mapping is required'),
 });
 
 type CategoryFormValues = z.infer<typeof categorySchema>;
@@ -538,13 +538,14 @@ export const ExpensesDashboard = () => {
                     <input type="text" {...categoryForm.register('description')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">General Ledger Mapping Account</label>
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">General Ledger Mapping Account *</label>
                     <select {...categoryForm.register('accountId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                      <option value="">Unmapped (Name Matching Fallback)</option>
+                      <option value="">Select Target Account</option>
                       {expenseAccounts.map((a: any) => (
                         <option key={a.id} value={a.id}>{a.name}</option>
                       ))}
                     </select>
+                    {categoryForm.formState.errors.accountId && <span className="text-red-500 text-[10px] mt-1">{categoryForm.formState.errors.accountId.message}</span>}
                     <span className="text-[9px] text-muted-foreground/80 mt-1 block">Specify the general ledger target account to post approved expense debits to.</span>
                   </div>
                 </div>

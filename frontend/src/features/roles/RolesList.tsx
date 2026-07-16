@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
-import { Shield, Plus, Edit2, Trash2, Search, Loader2, Check } from 'lucide-react';
+import { Shield, Plus, Edit2, Trash2, Search, Loader2, Check, Copy } from 'lucide-react';
 import apiClient from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DeleteDialog } from '../../components/ui';
@@ -130,6 +130,18 @@ export const RolesList = () => {
     setSelectedPermissions(perms);
     reset({
       name: role.name,
+      description: role.description || '',
+      permissions: perms,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleCloneRole = (role: Role) => {
+    setEditingRole(null); // Creating a new one
+    const perms = role.permissions.map(p => ({ resource: p.resource, action: p.action }));
+    setSelectedPermissions(perms);
+    reset({
+      name: `${role.name} (Clone)`,
       description: role.description || '',
       permissions: perms,
     });
@@ -301,6 +313,13 @@ export const RolesList = () => {
                     title="Modify Role Permissions"
                   >
                     <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleCloneRole(role)}
+                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-background rounded-lg transition-colors cursor-pointer"
+                    title="Clone Custom Role"
+                  >
+                    <Copy className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(role.id)}

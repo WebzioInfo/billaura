@@ -7,6 +7,7 @@ import { Users, Search, Plus, Edit2, Trash2, Mail, Loader2, Shield } from 'lucid
 import apiClient from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DeleteDialog } from '../../components/ui';
+import { useNavigate } from 'react-router-dom';
 
 const userSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -40,6 +41,7 @@ interface CompanyUser {
 }
 
 export const UsersList = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -121,14 +123,7 @@ export const UsersList = () => {
   });
 
   const openAddModal = () => {
-    reset({
-      email: '',
-      name: '',
-      role: 'USER',
-      customRoleId: '',
-    });
-    setEditingUserId(null);
-    setIsModalOpen(true);
+    navigate('/users/new');
   };
 
   const openEditModal = (user: CompanyUser) => {

@@ -5,10 +5,14 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accountingEngine: AccountingEngineService
+  ) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -357,35 +361,13 @@ export class InvoicesService {
         journalLines.push({ accountId: igstAccount.id, debit: 0, credit: igstAmt });
       }
 
-      await tx.journalEntry.create({
-        data: {
-          companyId,
-          date: new Date(dto.date),
-          reference: invoiceNo,
-          description: `Automatic invoice posting ${invoiceNo}`,
-          lines: {
-            create: journalLines,
-          },
-        },
-      });
-
-      await tx.account.update({
-        where: { id: arAccount.id },
-        data: { balance: { increment: grandTotal } },
-      });
-
-      await tx.account.update({
-        where: { id: salesAccount.id },
-        data: { balance: { decrement: subTotal } }, // Revenue credit
-      });
-
-      if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
-        await tx.account.update({ where: { id: cgstAccount.id }, data: { balance: { decrement: cgstAmt } } });
-        await tx.account.update({ where: { id: sgstAccount.id }, data: { balance: { decrement: sgstAmt } } });
-      }
-      if (isInterState && igstAmt > 0 && igstAccount) {
-        await tx.account.update({ where: { id: igstAccount.id }, data: { balance: { decrement: igstAmt } } });
-      }
+      await this.accountingEngine.postTransaction({
+        companyId,
+        date: new Date(dto.date),
+        reference: invoiceNo,
+        description: `Automatic invoice posting ${invoiceNo}`,
+        lines: journalLines,
+      }, tx);
 
       // 8. Post automatic COGS journal entry
       if (totalCogs > 0) {
@@ -402,23 +384,16 @@ export class InvoicesService {
           });
         }
 
-        await tx.journalEntry.create({
-          data: {
-            companyId,
-            date: new Date(dto.date),
-            reference: invoiceNo,
-            description: `Automatic COGS posting ${invoiceNo}`,
-            lines: {
-              create: [
-                { accountId: cogsAccount.id, debit: totalCogs, credit: 0 },
-                { accountId: invAccount.id, debit: 0, credit: totalCogs },
-              ],
-            },
-          },
-        });
-
-        await tx.account.update({ where: { id: cogsAccount.id }, data: { balance: { increment: totalCogs } } });
-        await tx.account.update({ where: { id: invAccount.id }, data: { balance: { decrement: totalCogs } } });
+        await this.accountingEngine.postTransaction({
+          companyId,
+          date: new Date(dto.date),
+          reference: invoiceNo,
+          description: `Automatic COGS posting ${invoiceNo}`,
+          lines: [
+            { accountId: cogsAccount.id, debit: totalCogs, credit: 0 },
+            { accountId: invAccount.id, debit: 0, credit: totalCogs },
+          ],
+        }, tx);
       }
 
       return invoice;
@@ -447,38 +422,13 @@ export class InvoicesService {
         },
       });
 
-      // Find original journal entries and create reversals
+      // Find original journal entries and create reversals using AccountingEngineService
       const originalEntries = await tx.journalEntry.findMany({
-        where: { reference: invoice.invoiceNo },
-        include: { lines: true },
+        where: { reference: invoice.invoiceNo, companyId: invoice.companyId },
       });
 
       for (const entry of originalEntries) {
-        // Reverse lines
-        const reversalLines = entry.lines.map(line => ({
-          accountId: line.accountId,
-          debit: Number(line.credit || 0),
-          credit: Number(line.debit || 0),
-        }));
-
-        await tx.journalEntry.create({
-          data: {
-            companyId: invoice.companyId,
-            date: new Date(),
-            reference: `REV-${invoice.invoiceNo}`,
-            description: `Reversal for deleted invoice ${invoice.invoiceNo}`,
-            lines: { create: reversalLines },
-          },
-        });
-
-        // Revert account balances
-        for (const line of reversalLines) {
-          const change = line.debit - line.credit;
-          await tx.account.update({
-            where: { id: line.accountId },
-            data: { balance: { increment: change } },
-          });
-        }
+        await this.accountingEngine.reverseTransaction(entry.id, invoice.companyId, tx, `Reversal for deleted invoice ${invoice.invoiceNo}`);
       }
 
       // Revert Stock Ledger

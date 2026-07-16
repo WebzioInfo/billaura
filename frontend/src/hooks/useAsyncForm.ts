@@ -19,7 +19,7 @@ export function useAsyncForm<TFieldValues extends FieldValues = FieldValues, TCo
   asyncData: TData | undefined | null,
   resetMapper: (data: TData) => Partial<TFieldValues> | TFieldValues,
   resetOptions?: Parameters<UseFormReturn<TFieldValues, TContext>['reset']>[1]
-): UseFormReturn<TFieldValues, TContext> {
+): UseFormReturn<TFieldValues, TContext> & { handleFormSubmit: (onSubmit: (data: TFieldValues) => any) => ReturnType<UseFormReturn<TFieldValues, TContext>['handleSubmit']> } {
   const form = useForm<TFieldValues, TContext>(props);
   const mapperRef = useRef(resetMapper);
   const lastHydratedRef = useRef<string | null>(null);
@@ -41,5 +41,27 @@ export function useAsyncForm<TFieldValues extends FieldValues = FieldValues, TCo
     form.reset(mappedValues as any, resetOptions);
   }, [asyncData, form, resetOptions]);
 
-  return form;
+  const handleFormSubmit = (onSubmit: (data: TFieldValues) => any) => {
+    return form.handleSubmit(
+      async (data) => {
+        try {
+          await onSubmit(data);
+        } catch (error) {
+          throw error;
+        }
+      },
+      (errors) => {
+        const firstErrorKey = Object.keys(errors)[0];
+        if (firstErrorKey) {
+          const element = document.getElementsByName(firstErrorKey)[0];
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.focus();
+          }
+        }
+      }
+    );
+  };
+
+  return { ...form, handleFormSubmit } as UseFormReturn<TFieldValues, TContext> & { handleFormSubmit: (onSubmit: (data: TFieldValues) => any) => ReturnType<UseFormReturn<TFieldValues, TContext>['handleSubmit']> };
 }

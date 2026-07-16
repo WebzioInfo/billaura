@@ -8,9 +8,23 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PageContainer, LoadingState, FinancialSummary, SummaryRow } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, Input, Select, FormErrorDisplay } from '@/components/ui';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
+import { useAsyncForm } from '@/hooks/useAsyncForm';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const poSchema = z.object({
+  vendorId: z.string().min(1, 'Vendor is required'),
+  orderNo: z.string().min(1, 'Purchase Invoice Number is required'),
+  date: z.string().min(1, 'Order Date is required'),
+  referenceNo: z.string().optional(),
+  billingAddress: z.string().optional(),
+  shippingAddress: z.string().optional(),
+  placeOfSupply: z.string().optional(),
+});
+type POFormValues = z.infer<typeof poSchema>;
 
 interface Vendor {
   id: string;
@@ -65,16 +79,35 @@ export const PurchaseOrderForm = () => {
 
   const [saving, setSaving] = useState(false);
 
-  // Form Fields
-  const [vendorId, setVendorId] = useState('');
-  const [orderNo, setOrderNo] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [referenceNo, setReferenceNo] = useState('');
+  const form = useAsyncForm<POFormValues>(
+    {
+      resolver: zodResolver(poSchema as any) as any,
+      defaultValues: {
+        vendorId: '',
+        orderNo: '',
+        date: new Date().toISOString().split('T')[0],
+        referenceNo: '',
+        billingAddress: '',
+        shippingAddress: '',
+        placeOfSupply: '',
+      }
+    },
+    null,
+    () => ({})
+  );
+
+  const { register, handleFormSubmit, formState: { errors }, watch, setValue } = form;
+
+  const vendorId = watch('vendorId');
+  const orderNo = watch('orderNo');
+  const date = watch('date');
+  const referenceNo = watch('referenceNo');
+  const billingAddress = watch('billingAddress');
+  const shippingAddress = watch('shippingAddress');
+  const placeOfSupply = watch('placeOfSupply');
+
   const [notes, setNotes] = useState('');
   const [taxMode, setTaxMode] = useState<'CGST_SGST' | 'IGST' | 'NO_TAX'>('CGST_SGST');
-  const [placeOfSupply, setPlaceOfSupply] = useState('');
-  const [billingAddress, setBillingAddress] = useState('');
-  const [shippingAddress, setShippingAddress] = useState('');
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [status, setStatus] = useState<'DRAFT' | 'SENT' | 'ACCEPTED' | 'CANCELLED'>('DRAFT');
 
@@ -122,7 +155,7 @@ export const PurchaseOrderForm = () => {
 
   useEffect(() => {
     if (nextNoData?.nextNumber && !id && !isDuplicateMode) {
-      setOrderNo(nextNoData.nextNumber);
+      setValue('orderNo', nextNoData.nextNumber);
     }
   }, [nextNoData, id, isDuplicateMode]);
 
@@ -142,25 +175,25 @@ export const PurchaseOrderForm = () => {
   useEffect(() => {
     if (!existingPo) return;
 
-    setVendorId(existingPo.businessPartnerId);
+    setValue('vendorId', existingPo.businessPartnerId);
     setTaxMode(existingPo.taxMode);
-    setPlaceOfSupply(existingPo.placeOfSupply || '');
-    setBillingAddress(existingPo.billingAddress || '');
-    setShippingAddress(existingPo.shippingAddress || '');
+    setValue('placeOfSupply', existingPo.placeOfSupply || '');
+    setValue('billingAddress', existingPo.billingAddress || '');
+    setValue('shippingAddress', existingPo.shippingAddress || '');
     if (existingPo.billingAddress && existingPo.shippingAddress) {
       setSameAsBilling(existingPo.billingAddress === existingPo.shippingAddress);
     }
     setStatus(existingPo.status);
 
     if (!isDuplicateMode) {
-      setOrderNo(existingPo.orderNo);
-      setDate(existingPo.date.split('T')[0]);
+      setValue('orderNo', existingPo.orderNo);
+      setValue('date', existingPo.date.split('T')[0]);
     } else {
-      setDate(new Date().toISOString().split('T')[0]);
+      setValue('date', new Date().toISOString().split('T')[0]);
     }
 
     const meta = existingPo.gstBreakup || {};
-    setReferenceNo(meta.referenceNo || '');
+    setValue('referenceNo', meta.referenceNo || '');
     setNotes(meta.notes || '');
 
     if (existingPo.items && Array.isArray(existingPo.items)) {
@@ -177,10 +210,9 @@ export const PurchaseOrderForm = () => {
     }
   }, [existingPo, isDuplicateMode]);
 
-  // Synchronize billing to shipping if Same as Billing is checked
   useEffect(() => {
     if (sameAsBilling) {
-      setShippingAddress(billingAddress);
+      setValue('shippingAddress', billingAddress || '');
     }
   }, [billingAddress, sameAsBilling]);
 
@@ -188,16 +220,15 @@ export const PurchaseOrderForm = () => {
     return vendors.find(v => v.id === vendorId) || null;
   }, [vendorId, vendors]);
 
-  // Auto fill vendor details
   const handleVendorChange = (vId: string) => {
-    setVendorId(vId);
+    setValue('vendorId', vId);
     const v = vendors.find(x => x.id === vId);
     if (v) {
-      setBillingAddress(v.address || '');
+      setValue('billingAddress', v.address || '');
       if (sameAsBilling) {
-        setShippingAddress(v.address || '');
+        setValue('shippingAddress', v.address || '');
       }
-      setPlaceOfSupply(v.state || '');
+      setValue('placeOfSupply', v.state || '');
       
       // Determine tax mode based on vendor state and company state
       const compState = companyProfile?.state || '';
@@ -308,15 +339,13 @@ export const PurchaseOrderForm = () => {
     };
   }, [items, taxMode]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!vendorId) {
+  const handleSubmit = async (data: POFormValues) => {
+    if (!data.vendorId) {
       toast.error('Vendor / Supplier selection is required');
       return;
     }
 
-    if (!orderNo) {
+    if (!data.orderNo) {
       toast.error('Purchase Invoice Number is required');
       return;
     }
@@ -330,15 +359,15 @@ export const PurchaseOrderForm = () => {
     setSaving(true);
     try {
       const payload = {
-        businessPartnerId: vendorId,
-        orderNo,
-        date: new Date(date).toISOString(),
+        businessPartnerId: data.vendorId,
+        orderNo: data.orderNo,
+        date: new Date(data.date).toISOString(),
         taxMode,
-        placeOfSupply,
-        billingAddress,
-        shippingAddress,
+        placeOfSupply: data.placeOfSupply,
+        billingAddress: data.billingAddress,
+        shippingAddress: data.shippingAddress,
         notes: notes || undefined,
-        referenceNo: referenceNo || undefined,
+        referenceNo: data.referenceNo || undefined,
         status: isEditMode ? undefined : 'DRAFT',
         items: items.map(i => ({
           productId: i.productId,
@@ -383,7 +412,7 @@ export const PurchaseOrderForm = () => {
         backTo={{ label: 'Purchase Orders', path: '/purchase-orders' }}
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6 text-left">
+      <form id="poForm" onSubmit={handleFormSubmit(handleSubmit as any)} className="space-y-6 text-left">
         {/* Vendor & Details Block */}
         <div className="bg-surface border border-border rounded-2xl p-6 space-y-6 shadow-sm">
           <h3 className="font-extrabold text-base text-foreground flex items-center gap-1.5 border-b border-border pb-3">
@@ -392,44 +421,39 @@ export const PurchaseOrderForm = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Vendor Supplier *</label>
-              <select
-                value={vendorId}
-                onChange={e => handleVendorChange(e.target.value)}
+              <Select
+                label="Vendor Supplier"
                 required
                 disabled={isEditMode}
-                className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent"
-              >
-                <option value="">Select Vendor...</option>
-                {vendors.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
+                {...register('vendorId')}
+                onChange={(e: any) => handleVendorChange(e.target.value)}
+                options={[
+                  { value: "", label: "Select Vendor..." },
+                  ...vendors.map(v => ({ value: v.id, label: v.name }))
+                ]}
+              />
+              <FormErrorDisplay error={errors.vendorId} />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Purchase Invoice Number *</label>
-              <input
-                type="text"
-                value={orderNo}
-                onChange={e => setOrderNo(e.target.value)}
+              <Input
+                label="Purchase Invoice Number"
                 required
+                {...register('orderNo')}
                 placeholder="e.g. INV-001 or PUR-2026-001"
-                className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent font-bold font-mono"
+                className="font-bold font-mono"
               />
+              <FormErrorDisplay error={errors.orderNo} />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Order Date *</label>
-              <input
+              <Input
+                label="Order Date"
                 type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent"
+                {...register('date')}
               />
+              <FormErrorDisplay error={errors.date} />
             </div>
           </div>
 
@@ -457,25 +481,23 @@ export const PurchaseOrderForm = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-1">
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Ref Number / Quotation</label>
-              <input
-                type="text"
-                value={referenceNo}
-                onChange={e => setReferenceNo(e.target.value)}
+              <Input
+                label="Ref Number / Quotation"
+                {...register('referenceNo')}
                 placeholder="e.g. Supplier Quote Ref"
-                className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent"
               />
+              <FormErrorDisplay error={errors.referenceNo} />
             </div>
 
             <div className="md:col-span-1">
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Billing Address</label>
+              <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Billing Address</label>
               <textarea
                 rows={1}
-                value={billingAddress}
-                onChange={e => setBillingAddress(e.target.value)}
+                {...register('billingAddress')}
                 placeholder="Billing address details"
-                className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent resize-none text-muted-foreground"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:border-accent resize-none text-muted-foreground"
               />
+              <FormErrorDisplay error={errors.billingAddress} />
             </div>
 
             <div className="md:col-span-1">
@@ -493,12 +515,12 @@ export const PurchaseOrderForm = () => {
               </div>
               <textarea
                 rows={1}
-                value={sameAsBilling ? billingAddress : shippingAddress}
-                onChange={e => setShippingAddress(e.target.value)}
+                {...register('shippingAddress')}
                 disabled={sameAsBilling}
                 placeholder="Shipping address details"
-                className={`w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent resize-none text-muted-foreground ${sameAsBilling ? 'opacity-60 cursor-not-allowed bg-muted/20' : ''}`}
+                className={`w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:border-accent resize-none text-muted-foreground ${sameAsBilling ? 'opacity-60 cursor-not-allowed bg-muted/20' : ''}`}
               />
+              <FormErrorDisplay error={errors.shippingAddress} />
             </div>
           </div>
         </div>
