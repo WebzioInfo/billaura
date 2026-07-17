@@ -99,7 +99,7 @@ export const VendorForm = () => {
     }
   );
 
-  const { register, handleFormSubmit, formState: { errors } } = form;
+  const { register, handleFormSubmit, setValue, formState: { errors } } = form;
 
   useDynamicTitle(isEditMode ? (vendor?.name ? `Edit ${vendor?.name}` : 'Edit Vendor') : 'New Vendor');
 
@@ -180,11 +180,12 @@ export const VendorForm = () => {
                 <div>
                   <AutoGenerateInput 
                     label="Vendor Code" 
+                    documentType="VENDOR"
+                    onGenerate={async (code) => setValue('vendorCode', code, { shouldValidate: true })}
                     {...register('vendorCode')} 
+                    error={errors.vendorCode?.message as string}
                     placeholder="e.g. VEND-001"
-                    onGenerate={async () => {}}
                   />
-                  <FormErrorDisplay error={errors.vendorCode} />
                 </div>
 
                 <div>

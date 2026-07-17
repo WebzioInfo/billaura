@@ -642,11 +642,15 @@ model StockLedger {
 }
 
 model DocumentSequence {
-  id            String  @id @default(cuid())
+  id            String       @id @default(cuid())
   companyId     String
   documentType  String
-  currentNumber Int     @default(0)
-  company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  currentNumber Int          @default(0)
+  prefix        String?
+  suffix        String?
+  padding       Int          @default(6)
+  sequenceType  SequenceType @default(SEQUENTIAL)
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, documentType])
   @@map("document_sequences")
@@ -1536,10 +1540,10 @@ model DocumentTemplate {
   isSystem    Boolean  @default(false)
   isDefault   Boolean  @default(false)
   theme       String   @default("classic")
-  colors      Json?    // { primary: string, secondary: string }
-  typography  Json?    // { font: string, size: string }
-  layout      Json?    // { margins: string, paperSize: string, orientation: string }
-  elements    Json?    // toggles like { showLogo: boolean, showGst: boolean, etc }
+  colors      Json? // { primary: string, secondary: string }
+  typography  Json? // { font: string, size: string }
+  layout      Json? // { margins: string, paperSize: string, orientation: string }
+  elements    Json? // toggles like { showLogo: boolean, showGst: boolean, etc }
   terms       String?  @db.Text
   notes       String?  @db.Text
   createdAt   DateTime @default(now())
@@ -2391,6 +2395,11 @@ enum StockMovementType {
   ADJUSTMENT
   RETURN
   OPENING_STOCK
+}
+
+enum SequenceType {
+  SEQUENTIAL
+  RANDOM
 }
 
 enum DocumentStatus {

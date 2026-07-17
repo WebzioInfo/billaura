@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { SequenceService } from '../shared/sequence/sequence.service';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
@@ -8,7 +9,10 @@ import type { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sequenceService: SequenceService
+  ) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -70,12 +74,24 @@ export class ProductsService {
     }
 
     // Check SKU uniqueness
-    if (dto.sku) {
+    let finalSku = dto.sku;
+    if (finalSku) {
       const existing = await this.prisma.product.findFirst({
-        where: { companyId, sku: dto.sku },
+        where: { companyId, sku: finalSku },
       });
       if (existing) {
-        throw new ConflictException(`Product with SKU '${dto.sku}' already exists`);
+        throw new ConflictException(`Product with SKU '${finalSku}' already exists`);
+      }
+    } else {
+      finalSku = await this.sequenceService.generateNextSequence(companyId, 'SKU');
+    }
+
+    // Determine GST Rate from TaxGroup if provided
+    let gstRate = dto.gstRate || 0;
+    if (dto.taxGroupId) {
+      const taxGroup = await this.prisma.taxGroup.findUnique({ where: { id: dto.taxGroupId } });
+      if (taxGroup) {
+        gstRate = Number(taxGroup.totalRate);
       }
     }
 
@@ -87,7 +103,7 @@ export class ProductsService {
           brand: dto.brand || null,
           unit: dto.unit || 'PCS',
           taxGroupId: dto.taxGroupId || null,
-          sku: dto.sku || null,
+          sku: finalSku,
           alias: dto.alias || null,
           barcode: dto.barcode || null,
           hsnCode: dto.hsnCode || null,
@@ -96,8 +112,8 @@ export class ProductsService {
           itemType: dto.itemType || 'FINISHED_GOOD',
           weight: dto.weight || null,
           weightType: dto.weightType || null,
-          taxRate: dto.taxRate || 0,
-          gstRate: dto.gstRate || 0,
+          taxRate: gstRate,
+          gstRate: gstRate,
           taxType: dto.taxType || null,
           taxCategory: dto.taxCategory || 'TAXABLE',
           isExempt: dto.isExempt || false,
@@ -153,18 +169,36 @@ export class ProductsService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    if (dto.sku && dto.sku !== product.sku) {
+    let finalSku = dto.sku;
+    if (finalSku && finalSku !== product.sku) {
       const existing = await this.prisma.product.findFirst({
-        where: { companyId, sku: dto.sku, NOT: { id } },
+        where: { companyId, sku: finalSku, NOT: { id } },
       });
       if (existing) {
-        throw new ConflictException(`Product with SKU '${dto.sku}' already exists`);
+        throw new ConflictException(`Product with SKU '${finalSku}' already exists`);
+      }
+    } else if (!finalSku) {
+       finalSku = await this.sequenceService.generateNextSequence(companyId, 'SKU');
+    }
+
+    let gstRate = dto.gstRate !== undefined ? dto.gstRate : product.gstRate;
+    if (dto.taxGroupId) {
+      const taxGroup = await this.prisma.taxGroup.findUnique({ where: { id: dto.taxGroupId } });
+      if (taxGroup) {
+        gstRate = Number(taxGroup.totalRate);
       }
     }
 
+    const dataToUpdate = {
+      ...dto,
+      sku: finalSku,
+      gstRate: gstRate,
+      taxRate: gstRate
+    };
+
     return this.prisma.product.update({
       where: { id },
-      data: dto as any,
+      data: dataToUpdate as any,
     });
   }
 

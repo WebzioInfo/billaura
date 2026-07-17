@@ -1,4 +1,8 @@
 import { Module } from "@nestjs/common";
+import { SequenceModule } from "./sequence/sequence.module";
 
-@Module({})
+@Module({
+  imports: [SequenceModule],
+  exports: [SequenceModule]
+})
 export class SharedModule {}

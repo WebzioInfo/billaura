@@ -211,17 +211,16 @@ export const CustomerForm = () => {
                   placeholder={b2bMode ? "Contact Person Name" : "Customer Full Name"}
                   required
                 />
-                <FormErrorDisplay error={errors.name} />
               </div>
               <div>
-                <AutoGenerateInput
-                  label="Customer Code"
-                  {...register('customerCode')}
-                  prefix="CUST-"
-                  onGenerate={(code) => setValue('customerCode', code)}
-                  placeholder="Auto-generated if left empty"
-                />
-                <FormErrorDisplay error={errors.customerCode} />
+                  <AutoGenerateInput
+                    label="Customer Code"
+                    documentType="CUSTOMER"
+                    onGenerate={(code) => setValue('customerCode', code, { shouldValidate: true })}
+                    {...register('customerCode')}
+                    error={errors.customerCode?.message as string}
+                    placeholder="Auto-generated if left empty"
+                  />
               </div>
               {b2bMode && (
                 <>
