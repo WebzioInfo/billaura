@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Bu
 import apiClient from '@/services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { DeleteDialog, ConfirmDialog } from '@/components/ui';
 import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
 
@@ -183,11 +183,11 @@ export const BillsList = () => {
       await apiClient.delete(`/purchases/${id}`);
     },
     onSuccess: () => {
-      toast.success('Bill deleted successfully');
+      notification.success('Bill deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['bills'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete bill');
+      notification.error(err.response?.data?.message || 'Failed to delete bill');
     }
   });
 
@@ -196,13 +196,13 @@ export const BillsList = () => {
       await apiClient.post('/purchases/payments', payload);
     },
     onSuccess: () => {
-      toast.success('Vendor payment recorded successfully');
+      notification.success('Vendor payment recorded successfully');
       setIsPaymentModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       queryClient.invalidateQueries({ queryKey: ['bankAccounts'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to record payment');
+      notification.error(err.response?.data?.message || 'Failed to record payment');
     }
   });
 
@@ -211,11 +211,11 @@ export const BillsList = () => {
       await apiClient.delete(`/purchases/${id}`);
     },
     onSuccess: () => {
-      toast.success('Bill cancelled and ledger entries reverted successfully');
+      notification.success('Bill cancelled and ledger entries reverted successfully');
       queryClient.invalidateQueries({ queryKey: ['bills'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to cancel bill');
+      notification.error(err.response?.data?.message || 'Failed to cancel bill');
     }
   });
 
@@ -339,15 +339,15 @@ export const BillsList = () => {
     e.preventDefault();
     if (!paymentBill) return;
     if (paymentAmount <= 0) {
-      toast.error('Payment amount must be greater than zero');
+      notification.error('Payment amount must be greater than zero');
       return;
     }
     if (paymentAmount > getOutstandingBalance(paymentBill)) {
-      toast.error('Payment amount cannot exceed the outstanding balance');
+      notification.error('Payment amount cannot exceed the outstanding balance');
       return;
     }
     if (!selectedBankAccountId) {
-      toast.error('Please select a bank account');
+      notification.error('Please select a bank account');
       return;
     }
 
@@ -395,10 +395,10 @@ export const BillsList = () => {
             >
               <Plus className="w-4 h-4" /> New Bill
             </Button>
-            <Button variant="outline" className="gap-1.5" onClick={() => toast.info('Importing is currently a mock action')}>
+            <Button variant="outline" className="gap-1.5" onClick={() => notification.info('Importing is currently a mock action')}>
               <Download className="w-4 h-4" /> Import
             </Button>
-            <Button variant="outline" className="gap-1.5" onClick={() => toast.info('Exporting data as CSV...')}>
+            <Button variant="outline" className="gap-1.5" onClick={() => notification.info('Exporting data as CSV...')}>
               Export
             </Button>
             <Button variant="outline" className="p-2.5" onClick={() => window.print()}>

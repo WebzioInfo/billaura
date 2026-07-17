@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaClient } from "@prisma/client";
 import { CompanyContext } from "../common/context/company-context";
+import { auditExtension } from "./audit.extension";
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
@@ -66,7 +67,7 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
           },
         },
       },
-    });
+    }).$extends(auditExtension);
 
     return new Proxy(this, {
       get(target, prop, receiver) {

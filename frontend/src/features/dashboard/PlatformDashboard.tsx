@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import {
   Users, ArrowUpRight, CheckCircle, 
   DollarSign, Plus, Search, Mail, 
@@ -105,7 +105,7 @@ export function PlatformDashboard() {
       }
     } catch (err: any) {
       console.error('Platform data load failure:', err);
-      toast.error('Failed to load platform operations records');
+      notification.error('Failed to load platform operations records');
     } finally {
       setIsLoading(false);
     }
@@ -120,7 +120,7 @@ export function PlatformDashboard() {
   const handleToggleSuspend = async (companyId: string) => {
     try {
       const res = await api.post(`/platform/companies/${companyId}/suspend`, {});
-      toast.success(`Company operational status updated to ${res?.data?.status || 'changed'}`);
+      notification.success(`Company operational status updated to ${res?.data?.status || 'changed'}`);
 
       // Update local state list
       setCompanies(prev => prev.map(c => {
@@ -130,7 +130,7 @@ export function PlatformDashboard() {
         return c;
       }));
     } catch {
-      toast.error('Failed to toggle company status');
+      notification.error('Failed to toggle company status');
     }
   };
 
@@ -143,9 +143,9 @@ export function PlatformDashboard() {
     if (!companyToDelete) return;
     try {
       await api.delete(`/platform/companies/${companyToDelete.id}`);
-      toast.success('Company deleted successfully');
+      notification.success('Company deleted successfully');
       setCompanies(prev => prev.filter(c => c.id !== companyToDelete.id));
-    } catch { toast.error('Failed to delete company'); } finally { setCompanyToDelete(null); }
+    } catch { notification.error('Failed to delete company'); } finally { setCompanyToDelete(null); }
   };
 
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -159,11 +159,11 @@ export function PlatformDashboard() {
         email: editingUser.email,
         globalRole: editingUser.globalRole,
       });
-      toast.success('User updated successfully');
+      notification.success('User updated successfully');
       setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...editingUser } : u));
       setEditingUser(null);
     } catch {
-      toast.error('Failed to update user');
+      notification.error('Failed to update user');
     }
   };
 
@@ -176,22 +176,22 @@ export function PlatformDashboard() {
     if (!userToDelete) return;
     try {
       await api.delete(`/platform/users/${userToDelete.id}`);
-      toast.success('User deleted successfully');
+      notification.success('User deleted successfully');
       setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
-    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to load data'); } finally { setUserToDelete(null); }
+    } catch (e: any) { notification.error(e.response?.data?.message || 'Failed to load data'); } finally { setUserToDelete(null); }
   };
 
   const handleCreatePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await api.post('/platform/plans', newPlan);
-      toast.success('Subscription pricing tier added successfully');
+      notification.success('Subscription pricing tier added successfully');
       setShowAddPlanModal(false);
       // Reload plans
       const res = await api.get('/platform/plans');
       setPlans(res?.data || res || []);
     } catch {
-      toast.error('Failed to create plan');
+      notification.error('Failed to create plan');
     }
   };
 
@@ -199,9 +199,9 @@ export function PlatformDashboard() {
     e.preventDefault();
     try {
       await api.post('/platform/settings', smtpSettings);
-      toast.success('SMTP Server credentials configuration updated');
+      notification.success('SMTP Server credentials configuration updated');
     } catch {
-      toast.error('Failed to update system settings');
+      notification.error('Failed to update system settings');
     }
   };
 

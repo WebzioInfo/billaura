@@ -1,5 +1,5 @@
 import { UseFormSetError } from 'react-hook-form';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 /**
  * Handles API errors by binding validation errors to react-hook-form fields
@@ -12,7 +12,7 @@ export const handleApiFormError = (err: any, setError?: UseFormSetError<any>) =>
   const data = err?.response?.data;
   
   if (!data) {
-    toast.error(err.message || 'An unexpected error occurred');
+    notification.error('The request could not be completed. Please try again.');
     return;
   }
 
@@ -34,19 +34,19 @@ export const handleApiFormError = (err: any, setError?: UseFormSetError<any>) =>
     });
 
     if (unmappedErrors.length > 0) {
-      toast.error(unmappedErrors.join(', '));
+      notification.error(unmappedErrors.join(', '));
     } else {
-      toast.error('Please fix the validation errors in the form');
+      notification.error('Please fix the validation errors in the form');
     }
     return;
   }
 
   // Generic string message
   if (typeof data.message === 'string') {
-    toast.error(data.message);
+    notification.error(data.message);
     return;
   }
 
   // Fallback
-  toast.error('Failed to process request');
+  notification.error('Failed to process request');
 };

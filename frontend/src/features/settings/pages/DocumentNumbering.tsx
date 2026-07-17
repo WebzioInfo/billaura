@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from '@/utils/toast';
+import notification from '@/services/NotificationService';
 import apiClient from '@/services/api';
 import { Button, Input, Select } from '@/components/ui';
 import { Loader2, Save, FileText, Settings, RefreshCw } from 'lucide-react';
@@ -63,11 +63,11 @@ export const DocumentNumbering = () => {
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Sequence settings saved successfully');
+      notification.success('Sequence settings saved successfully');
       queryClient.invalidateQueries({ queryKey: ['sequence-config'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to save sequence settings');
+      notification.error(err.response?.data?.message || 'Failed to save sequence settings');
     }
   });
 

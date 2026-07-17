@@ -527,17 +527,19 @@ model CrmActivity {
 }
 
 model TaxGroup {
-  id        String    @id @default(cuid())
-  companyId String
-  name      String
-  totalRate Decimal   @db.Decimal(5, 2)
-  cgstRate  Decimal   @default(0) @db.Decimal(5, 2)
-  sgstRate  Decimal   @default(0) @db.Decimal(5, 2)
-  igstRate  Decimal   @default(0) @db.Decimal(5, 2)
-  cessRate  Decimal   @default(0) @db.Decimal(5, 2)
-  createdAt DateTime  @default(now())
-  products  Product[]
-  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                String            @id @default(cuid())
+  companyId         String
+  name              String
+  totalRate         Decimal           @db.Decimal(5, 2)
+  cgstRate          Decimal           @default(0) @db.Decimal(5, 2)
+  sgstRate          Decimal           @default(0) @db.Decimal(5, 2)
+  igstRate          Decimal           @default(0) @db.Decimal(5, 2)
+  cessRate          Decimal           @default(0) @db.Decimal(5, 2)
+  createdAt         DateTime          @default(now())
+  products          Product[]
+  expenseCategories ExpenseCategory[]
+  expenses          Expense[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, name])
   @@map("tax_groups")
@@ -1058,6 +1060,13 @@ model ExpenseCategory {
   company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   expenses    Expense[]
 
+  defaultTaxApplicable     Boolean   @default(false)
+  defaultTaxGroupId        String?
+  defaultTaxGroup          TaxGroup? @relation(fields: [defaultTaxGroupId], references: [id])
+  defaultTaxMode           String?
+  defaultInputTaxAccountId String?
+  defaultInputTaxAccount   Account?  @relation("ExpenseCategoryDefaultInputTaxAccount", fields: [defaultInputTaxAccountId], references: [id])
+
   @@unique([companyId, name])
   @@map("expense_categories")
 }
@@ -1075,6 +1084,16 @@ model Expense {
   date                DateTime
   amount              Decimal             @db.Decimal(15, 2)
   taxAmount           Decimal             @default(0) @db.Decimal(15, 2)
+  taxApplicable       Boolean             @default(false)
+  taxGroupId          String?
+  taxGroup            TaxGroup?           @relation(fields: [taxGroupId], references: [id])
+  taxMode             String?
+  taxType             String?
+  taxableAmount       Decimal             @default(0) @db.Decimal(15, 2)
+  cgstAmount          Decimal             @default(0) @db.Decimal(15, 2)
+  sgstAmount          Decimal             @default(0) @db.Decimal(15, 2)
+  igstAmount          Decimal             @default(0) @db.Decimal(15, 2)
+  cessAmount          Decimal             @default(0) @db.Decimal(15, 2)
   totalAmount         Decimal             @db.Decimal(15, 2)
   paymentMethod       PaymentMethod?
   paidFromType        PaidFromType?
@@ -1304,25 +1323,26 @@ model InternalTransfer {
 }
 
 model Account {
-  id                String              @id @default(cuid())
-  companyId         String
-  name              String
-  code              String?
-  isGroup           Boolean             @default(false)
-  parentId          String?
-  category          AccountCategory
-  subCategory       AccountSubCategory?
-  balance           Decimal             @default(0) @db.Decimal(15, 2)
-  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  parent            Account?            @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children          Account[]           @relation("AccountHierarchy")
-  expenseCategories ExpenseCategory[]
-  incomeCategories  IncomeCategory[]
-  journalLines      JournalLine[]
-  receipts          Receipt[]
-  bankAccounts      BankAccount[]
-  cashAccounts      CashAccount[]
-  receiptPayments   ReceiptPayment[]
+  id                        String              @id @default(cuid())
+  companyId                 String
+  name                      String
+  code                      String?
+  isGroup                   Boolean             @default(false)
+  parentId                  String?
+  category                  AccountCategory
+  subCategory               AccountSubCategory?
+  balance                   Decimal             @default(0) @db.Decimal(15, 2)
+  company                   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent                    Account?            @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children                  Account[]           @relation("AccountHierarchy")
+  expenseCategories         ExpenseCategory[]
+  expenseCategoryInputTaxes ExpenseCategory[]   @relation("ExpenseCategoryDefaultInputTaxAccount")
+  incomeCategories          IncomeCategory[]
+  journalLines              JournalLine[]
+  receipts                  Receipt[]
+  bankAccounts              BankAccount[]
+  cashAccounts              CashAccount[]
+  receiptPayments           ReceiptPayment[]
 
   @@unique([companyId, name])
   @@map("accounts")

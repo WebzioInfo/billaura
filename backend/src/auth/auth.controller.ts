@@ -13,7 +13,12 @@ import {
   Param,
   Patch,
   UnauthorizedException,
+  BadRequestException,
+  Res,
+  Req,
 } from "@nestjs/common";
+import { Response, Request as ExpressRequest } from "express";
+import { Throttle } from "@nestjs/throttler";
 import { AuthService } from "./auth.service";
 import { SessionService } from "./session.service";
 import { LoginDto } from "./dto/login.dto";
@@ -27,6 +32,7 @@ import {
 } from "./dto/onboard.dto";
 import { UpdateCompanyDto } from "./dto/update-company.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 
 import { ConfigService } from "@nestjs/config";
 
@@ -38,16 +44,51 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
+  private getCookie(request: ExpressRequest, name: string): string | undefined {
+    const prefix = `${name}=`;
+    const cookie = request.headers.cookie?.split(";").map((value) => value.trim()).find((value) => value.startsWith(prefix));
+    return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : undefined;
+  }
+
+  private setSessionCookies(response: Response, refreshToken: string): void {
+    const isProduction = this.configService.get<string>("NODE_ENV") === "production";
+    const domain = this.configService.get<string>("COOKIE_DOMAIN") || undefined;
+    const path = `/${this.configService.getOrThrow<string>("API_PREFIX")}/auth`;
+    const options = { secure: isProduction, sameSite: "lax" as const, path, domain, maxAge: 30 * 24 * 60 * 60 * 1000 };
+    response.cookie("ba_refresh", refreshToken, { ...options, httpOnly: true });
+    response.cookie("ba_csrf", require("crypto").randomBytes(32).toString("hex"), { ...options, httpOnly: false });
+  }
+
+  private clearSessionCookies(response: Response): void {
+    const domain = this.configService.get<string>("COOKIE_DOMAIN") || undefined;
+    const path = `/${this.configService.getOrThrow<string>("API_PREFIX")}/auth`;
+    response.clearCookie("ba_refresh", { path, domain });
+    response.clearCookie("ba_csrf", { path, domain });
+  }
+
+  private assertCsrf(request: ExpressRequest): void {
+    const cookieToken = this.getCookie(request, "ba_csrf");
+    const headerToken = request.headers["x-csrf-token"];
+    if (!cookieToken || typeof headerToken !== "string" || cookieToken !== headerToken) {
+      throw new BadRequestException("Invalid session request");
+    }
+  }
+
   @Post("login")
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() loginDto: LoginDto,
     @Headers("user-agent") userAgent: string,
     @Ip() ip: string,
+    @Res({ passthrough: true }) response: Response,
   ) {
     const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
     const safeIp = ip ? ip.substring(0, 45) : undefined;
-    return this.authService.login(loginDto, safeUserAgent, safeIp);
+    const result = await this.authService.login(loginDto, safeUserAgent, safeIp);
+    this.setSessionCookies(response, result.refresh_token);
+    const { refresh_token: _refreshToken, ...safeResult } = result;
+    return safeResult;
   }
 
   @Post("register")
@@ -57,33 +98,46 @@ export class AuthController {
 
   @Post("verify-email")
   @HttpCode(HttpStatus.OK)
-  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
-    return this.authService.verifyEmail(verifyEmailDto);
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto, @Res({ passthrough: true }) response: Response) {
+    const result = await this.authService.verifyEmail(verifyEmailDto);
+    this.setSessionCookies(response, result.refresh_token);
+    const { refresh_token: _refreshToken, ...safeResult } = result;
+    return safeResult;
   }
 
   @Post("refresh")
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   async refresh(
-    @Body("refreshToken") refreshToken: string,
+    @Req() request: ExpressRequest,
     @Headers("user-agent") userAgent: string,
     @Ip() ip: string,
+    @Res({ passthrough: true }) response: Response,
   ) {
+    this.assertCsrf(request);
+    const refreshToken = this.getCookie(request, "ba_refresh");
     if (!refreshToken) {
       throw new UnauthorizedException("No refresh token provided");
     }
     const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
     const safeIp = ip ? ip.substring(0, 45) : undefined;
-    return this.authService.refreshTokens(refreshToken, safeUserAgent, safeIp);
+    const result = await this.authService.refreshTokens(refreshToken, safeUserAgent, safeIp);
+    this.setSessionCookies(response, result.refresh_token);
+    const { refresh_token: _refreshToken, ...safeResult } = result;
+    return safeResult;
   }
 
   @UseGuards(JwtAuthGuard)
   @Post("logout")
   @HttpCode(HttpStatus.OK)
-  async logout(@Body("refreshToken") refreshToken: string) {
+  async logout(@Req() request: ExpressRequest, @Res({ passthrough: true }) response: Response) {
+    this.assertCsrf(request);
+    const refreshToken = this.getCookie(request, "ba_refresh");
     if (refreshToken) {
       await this.sessionService.revokeSessionByToken(refreshToken);
     }
-    return { success: true, message: "Logged out successfully" };
+    this.clearSessionCookies(response);
+    return { success: true, message: "Session ended" };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -179,7 +233,8 @@ export class AuthController {
 
   @Post("reset-password")
   @HttpCode(HttpStatus.OK)
-  async resetPassword(@Body() dto: any) {
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
   }
 }

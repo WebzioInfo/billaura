@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { 
   Shield, Search, RefreshCw, Loader2, Download, Printer, 
   ArrowUpRight, ArrowDownLeft, Percent 
@@ -119,7 +119,7 @@ export const TaxesDashboard = () => {
   const handleExportCsv = () => {
     const list = activeTab === 'gstr1' ? gstr1List : gstr2List;
     if (list.length === 0) {
-      toast.error('No records available to export');
+      notification.error('No records available to export');
       return;
     }
 
@@ -148,7 +148,7 @@ export const TaxesDashboard = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('Report exported to CSV successfully');
+    notification.success('Report exported to CSV successfully');
   };
 
   const handlePrint = () => {

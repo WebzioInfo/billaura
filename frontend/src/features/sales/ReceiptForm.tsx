@@ -9,7 +9,7 @@ import { PageContainer, LoadingState, FinancialSummary, SummaryRow, AsyncSelect 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useQuery } from '@tanstack/react-query';
 import { useBankAccounts } from '@/hooks/useBankAccounts';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
@@ -394,6 +394,8 @@ export const ReceiptForm = () => {
   // Form Fields & Bank Account selection
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [businessPartnerId, setBusinessPartnerId] = useState('');
+  const [isSplitPayment, setIsSplitPayment] = useState(false);
+  const [splitPayments, setSplitPayments] = useState<any[]>([{ paymentMethod: 'CASH', amount: 0, accountId: '', referenceNo: '' }]);
   const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
   const [bankAccountId, setBankAccountId] = useState('');
   const [selectedBank, setSelectedBank] = useState<any>(null);
@@ -579,7 +581,7 @@ export const ReceiptForm = () => {
   const handleClearAllocations = () => {
     setAllocations({});
     setManualInvoiceIds([]);
-    toast.info('Allocations cleared');
+    notification.info('Allocations cleared');
   };
 
   const handleAllocationChange = (invoiceId: string, val: number) => {
@@ -596,7 +598,7 @@ export const ReceiptForm = () => {
 
     if (otherAllocationsSum + amountToAlloc > amount) {
       amountToAlloc = Math.max(0, amount - otherAllocationsSum);
-      toast.warning('Total allocation capped at Receipt Amount');
+      notification.warning('Total allocation capped at Receipt Amount');
     }
 
     setAllocations(prev => ({
@@ -674,21 +676,21 @@ export const ReceiptForm = () => {
     e.preventDefault();
 
     if (!businessPartnerId) {
-      toast.error('Select a Customer');
+      notification.error('Select a Customer');
       return;
     }
     if (amount <= 0) {
-      toast.error('Amount must be greater than zero');
+      notification.error('Amount must be greater than zero');
       return;
     }
 
     if (!id && amount > totalCustomerOutstanding) {
-      toast.error('Receipt amount exceeds outstanding balance');
+      notification.error('Receipt amount exceeds outstanding balance');
       return;
     }
 
     if (totalAllocated > amount) {
-      toast.error('Total allocated amount cannot exceed receipt amount');
+      notification.error('Total allocated amount cannot exceed receipt amount');
       return;
     }
 
@@ -706,7 +708,13 @@ export const ReceiptForm = () => {
         clearanceDate: clearanceDate || undefined,
         bankCharges: bankCharges || undefined,
         cashier: cashier || undefined,
-        notes: notes || undefined
+        notes: notes || undefined,
+        splitPayments: isSplitPayment ? splitPayments.map(sp => ({
+          paymentMethod: sp.paymentMethod,
+          amount: Number(sp.amount),
+          accountId: sp.accountId || undefined,
+          referenceNo: sp.referenceNo || undefined
+        })) : undefined
       };
 
       payload.allocations = Object.entries(allocations)
@@ -725,15 +733,15 @@ export const ReceiptForm = () => {
           notes: notes || undefined,
           status
         });
-        toast.success('Receipt updated successfully');
+        notification.success('Receipt updated successfully');
       } else {
         await apiClient.post('/receipts', payload);
-        toast.success('Receipt recorded successfully');
+        notification.success('Receipt recorded successfully');
       }
 
       navigate('/receipts');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to save receipt');
+      notification.error(err.response?.data?.message || 'Failed to save receipt');
     } finally {
       setSaving(false);
     }
@@ -991,6 +999,111 @@ export const ReceiptForm = () => {
           {/* LEFT COLUMN (Primary Information) - 8/12 on desktop, 7/12 on laptop */}
           <div className="xl:col-span-8 lg:col-span-7 space-y-6">
 
+            {/* Split Payment Toggle */}
+            <div className="bg-surface border border-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
+              <div>
+                <h4 className="text-sm font-bold text-foreground">Split Payment</h4>
+                <p className="text-xs text-muted-foreground">Enable to pay using multiple payment methods</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer" 
+                  checked={isSplitPayment}
+                  onChange={(e) => setIsSplitPayment(e.target.checked)}
+                  disabled={isView}
+                />
+                <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
+              </label>
+            </div>
+
+            {isSplitPayment && (
+              <div className="bg-surface border border-border rounded-2xl p-6 space-y-4 shadow-sm">
+                 <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex justify-between items-center">
+                  <span className="flex items-center gap-2">Payment Methods</span>
+                  {!isView && (
+                    <button type="button" onClick={() => setSplitPayments([...splitPayments, { paymentMethod: 'CASH', amount: 0, accountId: '', referenceNo: '' }])} className="text-xs text-accent hover:underline flex items-center gap-1">
+                      Add Method
+                    </button>
+                  )}
+                </h3>
+                <div className="space-y-4">
+                  {splitPayments.map((sp, idx) => (
+                    <div key={idx} className="flex flex-wrap md:flex-nowrap gap-3 items-end p-3 bg-muted/20 rounded-xl border border-border">
+                      <div className="w-full md:w-1/4">
+                        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Method</label>
+                        <select
+                          value={sp.paymentMethod}
+                          onChange={(e) => {
+                            const newArr = [...splitPayments];
+                            newArr[idx].paymentMethod = e.target.value;
+                            setSplitPayments(newArr);
+                          }}
+                          disabled={isView}
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-accent"
+                        >
+                          <option value="BANK_TRANSFER">Bank</option>
+                          <option value="CASH">Cash</option>
+                          <option value="UPI">UPI</option>
+                          <option value="CHEQUE">Cheque</option>
+                          <option value="CREDIT_CARD">Card</option>
+                        </select>
+                      </div>
+                      <div className="w-full md:w-1/4">
+                        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Amount</label>
+                        <input
+                          type="number"
+                          value={sp.amount}
+                          onChange={(e) => {
+                            const newArr = [...splitPayments];
+                            newArr[idx].amount = Number(e.target.value);
+                            setSplitPayments(newArr);
+                          }}
+                          disabled={isView}
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                      <div className="w-full md:w-1/3">
+                        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Account / Ref</label>
+                        <input
+                          type="text"
+                          placeholder="Account or Ref"
+                          value={sp.referenceNo || sp.accountId}
+                          onChange={(e) => {
+                            const newArr = [...splitPayments];
+                            if (sp.paymentMethod === 'BANK_TRANSFER' || sp.paymentMethod === 'UPI') {
+                               newArr[idx].accountId = e.target.value;
+                            } else {
+                               newArr[idx].referenceNo = e.target.value;
+                            }
+                            setSplitPayments(newArr);
+                          }}
+                          disabled={isView}
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                      {!isView && splitPayments.length > 1 && (
+                        <button type="button" onClick={() => {
+                          const newArr = splitPayments.filter((_, i) => i !== idx);
+                          setSplitPayments(newArr);
+                        }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  
+                  {splitPayments.reduce((s, a) => s + Number(a.amount), 0) !== amount && amount > 0 && (
+                    <div className="text-xs font-bold text-red-500 bg-red-50 p-2 rounded-lg flex items-center gap-2">
+                      Split amounts sum ({splitPayments.reduce((s, a) => s + Number(a.amount), 0)}) must equal Receipt Amount ({amount})
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!isSplitPayment && (
+              <>
             {/* Card 1 - Receipt Details */}
             <div className="bg-surface border border-border rounded-2xl p-6 space-y-4 shadow-sm">
               <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
@@ -1115,6 +1228,9 @@ export const ReceiptForm = () => {
                 />
               </div>
             </div>
+
+            </>
+            )}
 
             {/* Card 3 - Outstanding Invoices Allocation Block */}
             {businessPartnerId && (

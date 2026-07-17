@@ -11,7 +11,7 @@ import { PageContainer, LoadingState, EmptyState, FinancialSummary, SummaryRow }
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { ConfirmDialog } from '@/components/ui';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 
@@ -42,7 +42,7 @@ export const PurchaseOrderDetails = () => {
 
   useDynamicTitle(po ? (po.orderNo ? `Purchase: ${po.orderNo}` : 'Purchase Order') : null);
 
-  const { data: auditLogs = [] } = useQuery<any[]>({
+  const { data: auditLogs = [] } = useQuery<unknown[]>({
     queryKey: ['purchase-order-audit', id],
     queryFn: async () => {
       const res = await apiClient.get(`/purchase-orders/${id}/audit`);
@@ -51,7 +51,7 @@ export const PurchaseOrderDetails = () => {
     enabled: !!po
   });
 
-  const { data: linkedGrns = [] } = useQuery<any[]>({
+  const { data: linkedGrns = [] } = useQuery<unknown[]>({
     queryKey: ['linked-grns', id],
     queryFn: async () => {
       const res = await apiClient.get('/goods-receipts', { params: { purchaseOrderId: id } });
@@ -61,7 +61,7 @@ export const PurchaseOrderDetails = () => {
     enabled: !!po
   });
 
-  const { data: warehouses = [] } = useQuery<any[]>({
+  const { data: warehouses = [] } = useQuery<unknown[]>({
     queryKey: ['warehouses'],
     queryFn: async () => {
       const res = await apiClient.get('/warehouses');
@@ -119,7 +119,7 @@ export const PurchaseOrderDetails = () => {
 
     const itemsToSubmit = grnItems.filter(i => i.currentReceiveQty > 0);
     if (itemsToSubmit.length === 0) {
-      toast.error('Please specify a receive quantity greater than 0 for at least one item.');
+      notification.error('Please specify a receive quantity greater than 0 for at least one item.');
       return;
     }
 
@@ -139,12 +139,12 @@ export const PurchaseOrderDetails = () => {
       };
 
       await apiClient.post('/goods-receipts', payload);
-      toast.success('Goods Receipt recorded and stock balances updated!');
+      notification.success('Goods Receipt recorded and stock balances updated!');
       setGrnModalOpen(false);
       refetchPo();
       queryClient.invalidateQueries({ queryKey: ['linked-grns', id] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create Goods Receipt');
+      notification.error(err.response?.data?.message || 'Failed to create Goods Receipt');
     }
   };
 
@@ -152,7 +152,7 @@ export const PurchaseOrderDetails = () => {
     setEmailing(true);
     setTimeout(() => {
       setEmailing(false);
-      toast.success(`Purchase Order ${po?.orderNo} sent successfully to ${po?.businessPartner?.email || 'supplier'}!`);
+      notification.success(`Purchase Order ${po?.orderNo} sent successfully to ${po?.businessPartner?.email || 'supplier'}!`);
     }, 1500);
   };
 
@@ -164,10 +164,10 @@ export const PurchaseOrderDetails = () => {
     setCancelling(true);
     try {
       await apiClient.patch(`/purchase-orders/${po.id}`, { status: 'CANCELLED' });
-      toast.success('Purchase Order marked as CANCELLED');
+      notification.success('Purchase Order marked as CANCELLED');
       refetchPo();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to cancel Purchase Order');
+      notification.error(err.response?.data?.message || 'Failed to cancel Purchase Order');
     } finally {
       setCancelling(false);
       setShowCancelPoDialog(false);
@@ -177,10 +177,10 @@ export const PurchaseOrderDetails = () => {
   const handleApprovePo = async () => {
     try {
       await apiClient.patch(`/purchase-orders/${po.id}`, { status: 'ACCEPTED' });
-      toast.success('Purchase Order marked as APPROVED / CONFIRMED');
+      notification.success('Purchase Order marked as APPROVED / CONFIRMED');
       refetchPo();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to approve Purchase Order');
+      notification.error(err.response?.data?.message || 'Failed to approve Purchase Order');
     }
   };
 
@@ -463,7 +463,7 @@ export const PurchaseOrderDetails = () => {
                   className="w-full px-3.5 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none"
                 >
                   <option value="">Select Warehouse...</option>
-                  {warehouses.map(w => (
+                  {warehouses.map((w: any) => (
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>

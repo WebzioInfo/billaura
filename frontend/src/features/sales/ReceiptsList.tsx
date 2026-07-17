@@ -12,7 +12,7 @@ import { DeleteDialog } from '@/components/ui';
 import { DataTable } from '@/components/ui/data-table/DataTable';
 import { ColumnDef } from '@tanstack/react-table';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useQuery } from '@tanstack/react-query';
 
 interface RowActionsProps {
@@ -228,9 +228,9 @@ export const ReceiptsList = () => {
   const handlePrint = async (id: string) => {
     try {
       const res = await apiClient.post(`/receipts/${id}/print`);
-      toast.success(res.data?.message || 'Receipt sent to printer spool');
+      notification.success(res.data?.message || 'Receipt sent to printer spool');
     } catch {
-      toast.error('Failed to trigger receipt print');
+      notification.error('Failed to trigger receipt print');
     }
   };
 
@@ -238,10 +238,10 @@ export const ReceiptsList = () => {
     if (!receiptToVoid) return;
     try {
       await apiClient.delete(`/receipts/${receiptToVoid.rawId}`);
-      toast.success('Receipt voided and reversed successfully');
+      notification.success('Receipt voided and reversed successfully');
       fetchReceipts();
     } catch {
-      toast.error('Failed to void receipt');
+      notification.error('Failed to void receipt');
     } finally {
       setReceiptToVoid(null);
     }

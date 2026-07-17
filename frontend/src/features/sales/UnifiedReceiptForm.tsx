@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { LedgerSearchSelect } from '@/components/ui/LedgerSearchSelect';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 interface FormLineItem {
   keyId: string;
@@ -504,14 +504,14 @@ export const UnifiedReceiptForm = () => {
       return apiClient.post('/receipts', payload);
     },
     onSuccess: () => {
-      toast.success('Receipt created successfully');
+      notification.success('Receipt created successfully');
       queryClient.invalidateQueries({ queryKey: ['receipts'] });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['payments'] });
       navigate('/receipts');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to record receipt');
+      notification.error(err.response?.data?.message || 'Failed to record receipt');
     }
   });
 

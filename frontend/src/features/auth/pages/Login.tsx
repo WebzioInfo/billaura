@@ -28,16 +28,11 @@ export const Login = () => {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
-    console.groupCollapsed('[LOGIN FLOW]');
-    console.log('Login button clicked');
-    console.log('Validation passed');
-    console.log('Calling login()');
-    
     setIsLoading(true);
     setError(null);
     try {
       const response = await authService.login(data);
-      TokenService.setTokens(response.access_token, response.refresh_token);
+      TokenService.setAccessToken(response.access_token);
       setSession(response.user, response.access_token);
       
       if (response.user.globalRole === 'SUPER_ADMIN') {
@@ -61,7 +56,6 @@ export const Login = () => {
       }
     } finally {
       setIsLoading(false);
-      console.groupEnd();
     }
   };
 

@@ -9,7 +9,7 @@ import { PageContainer, LoadingState, Breadcrumb } from '@/components/ui/LayoutC
 import { Badge, Button } from '@/components/ui';
 import apiClient from '@/services/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 import { getCustomerDisplayName } from '@/utils/entityNames';
 
@@ -60,16 +60,16 @@ export const CustomerProfile = () => {
     if (!window.confirm("Are you sure you want to delete this customer?")) return;
     try {
       await apiClient.delete(`/customers/${id}`);
-      toast.success("Customer deleted successfully");
+      notification.success("Customer deleted successfully");
       navigate("/app/customers");
     } catch (e: any) {
-      toast.error(e.response?.data?.message || "Failed to delete customer");
+      notification.error(e.response?.data?.message || "Failed to delete customer");
     }
   };
 
   const handleExport = () => {
     if (!ledger?.transactions || ledger.transactions.length === 0) {
-      toast.error("No transactions to export");
+      notification.error("No transactions to export");
       return;
     }
     const headers = ['Date', 'Type', 'Reference', 'Debit', 'Credit'];

@@ -9,7 +9,6 @@ import {
   Building2, Percent, Calendar, CheckCircle2, CreditCard,
   ArrowRight, Loader2, LogOut
 } from 'lucide-react';
-import { TokenService } from '../../../services/auth/TokenService';
 
 // Steps definition
 type Step = 'BUSINESS_DETAILS' | 'TAX_DETAILS' | 'BRANCH_SETUP' | 'SUBSCRIPTION' | 'COMPLETED';
@@ -60,12 +59,8 @@ export const OnboardingWizard = () => {
 
   const handleLogout = async () => {
     try {
-      const refreshToken = TokenService.getRefreshToken();
-      if (refreshToken) {
-        await api.post('/auth/logout', { refreshToken });
-      }
-    } catch (e) {
-      console.error('Logout failed:', e);
+      await api.post('/auth/logout');
+    } catch {
     } finally {
       clearSession();
       navigate('/login');

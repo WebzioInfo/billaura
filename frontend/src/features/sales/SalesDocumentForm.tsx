@@ -33,7 +33,7 @@ import { Card } from '@/components/ui/Card';
 import { FormErrorDisplay } from '@/components/ui';
 import { useAsyncForm } from '@/hooks/useAsyncForm';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { ReferralSection } from './components/form/ReferralSection';
 
 const INDIAN_STATES = [
@@ -200,7 +200,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
   const hasError = meError || custError || prodError || unitsError || nextNoError;
   useEffect(() => {
     if (hasError) {
-      toast.error("Failed to load customer or product master data");
+      notification.error("Failed to load customer or product master data");
     }
   }, [hasError]);
 
@@ -429,7 +429,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       if (docType === 'PROFORMA') actualPayload.invoiceType = 'PROFORMA_INVOICE';
       
       await apiClient.post(endpoint, actualPayload);
-      toast.success(
+      notification.success(
         submitStatus === 'DRAFT'
           ? `${docType} draft saved successfully!`
           : `${docType} created and issued successfully!`
@@ -437,7 +437,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       navigate(docType === 'QUOTATION' ? '/quotations' : '/invoices');
     } catch (err: any) {
       console.error(err);
-      toast.error(err.response?.data?.message || `Failed to create ${docType.toLowerCase()}`);
+      notification.error(err.response?.data?.message || `Failed to create ${docType.toLowerCase()}`);
     } finally {
       setIsSubmitting(false);
     }

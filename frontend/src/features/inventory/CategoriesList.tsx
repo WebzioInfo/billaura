@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/components/ui';
 import { PageContainer, EmptyState } from '@/components/ui/LayoutComponents';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui';
 
@@ -26,10 +26,10 @@ export const CategoriesList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
-      toast.success('Category deleted successfully');
+      notification.success('Category deleted successfully');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete category');
+      notification.error(err.response?.data?.message || 'Failed to delete category');
     }
   });
 
@@ -44,10 +44,10 @@ export const CategoriesList = () => {
     if (!name) return;
     try {
       await apiClient.post('/inventory/categories', { name });
-      toast.success('Category created successfully');
+      notification.success('Category created successfully');
       queryClient.invalidateQueries({ queryKey: ['categories'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create category');
+      notification.error(err.response?.data?.message || 'Failed to create category');
     }
   };
 
@@ -56,10 +56,10 @@ export const CategoriesList = () => {
     if (!name || name === category.name) return;
     try {
       await apiClient.patch(`/inventory/categories/${category.id}`, { name });
-      toast.success('Category updated successfully');
+      notification.success('Category updated successfully');
       queryClient.invalidateQueries({ queryKey: ['categories'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to update category');
+      notification.error(err.response?.data?.message || 'Failed to update category');
     }
   };
 

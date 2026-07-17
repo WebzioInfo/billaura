@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { Shield, Plus, Edit2, Trash2, Search, Loader2, Check, Copy } from 'lucide-react';
 import apiClient from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -92,11 +92,11 @@ export const RolesList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
-      toast.success(editingRole ? 'Access role updated successfully' : 'Custom access role configured successfully');
+      notification.success(editingRole ? 'Access role updated successfully' : 'Custom access role configured successfully');
       setIsModalOpen(false);
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     }
   });
 
@@ -106,10 +106,10 @@ export const RolesList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
-      toast.success('Role removed successfully');
+      notification.success('Role removed successfully');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete role');
+      notification.error(err.response?.data?.message || 'Failed to delete role');
     }
   });
 

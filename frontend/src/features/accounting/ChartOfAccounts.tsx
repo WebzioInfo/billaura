@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { 
   BookOpen, Plus, Loader2, Calendar, Trash2, Pencil 
 } from 'lucide-react';
@@ -298,10 +298,10 @@ export const ChartOfAccounts = () => {
     try {
       if (editingId) {
         await api.patch(`/accounts/${editingId}`, values);
-        toast.success('Account updated successfully');
+        notification.success('Account updated successfully');
       } else {
         await api.post('/accounts', values);
-        toast.success('New ledger account created');
+        notification.success('New ledger account created');
       }
       setIsAccountModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
@@ -309,7 +309,7 @@ export const ChartOfAccounts = () => {
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['account-lookup'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -322,14 +322,14 @@ export const ChartOfAccounts = () => {
     const sumCredit = values.lines.reduce((s, l) => s + Number(l.credit || 0), 0);
 
     if (Math.abs(sumDebit - sumCredit) > 0.01) {
-      toast.error(`Debits (${sumDebit}) must equal Credits (${sumCredit})`);
+      notification.error(`Debits (${sumDebit}) must equal Credits (${sumCredit})`);
       setIsSubmitting(false);
       return;
     }
 
     try {
       await api.post('/journal-entries', values);
-      toast.success('Journal entry posted successfully');
+      notification.success('Journal entry posted successfully');
       setIsJournalModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
@@ -337,7 +337,7 @@ export const ChartOfAccounts = () => {
       queryClient.invalidateQueries({ queryKey: ['balance-sheet'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Posting failed');
+      notification.error(err.response?.data?.message || 'Posting failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -354,10 +354,10 @@ export const ChartOfAccounts = () => {
     if (!accountToDelete) return;
     try {
       await api.delete(`/accounts/${accountToDelete.id}`);
-      toast.success('Account deleted');
+      notification.success('Account deleted');
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Deletion failed');
+      notification.error(err.response?.data?.message || 'Deletion failed');
     } finally { setAccountToDelete(null); }
   };
 

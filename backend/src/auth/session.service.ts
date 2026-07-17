@@ -99,8 +99,10 @@ export class SessionService {
       : 24 * 60 * 60 * 1000;
     const expiresAt = new Date(Date.now() + durationMs);
 
-    await this.prisma.session.update({
-      where: { id: session.id },
+    // Compare-and-swap makes refresh rotation single-use even when two requests race.
+    // A replayed token cannot overwrite the token produced by the first request.
+    const rotated = await this.prisma.session.updateMany({
+      where: { id: session.id, tokenHash, isRevoked: false },
       data: {
         tokenHash: newTokenHash,
         lastUsedAt: new Date(),
@@ -112,6 +114,10 @@ export class SessionService {
         os: os || session.os,
       },
     });
+
+    if (rotated.count !== 1) {
+      throw new UnauthorizedException('Refresh token has already been used');
+    }
 
     return {
       newRefreshToken: newRawToken,

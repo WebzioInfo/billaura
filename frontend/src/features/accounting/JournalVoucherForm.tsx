@@ -5,7 +5,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, ArrowLeft, Save } from 'lucide-react';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 import api from '../../services/api';
 import { Button } from '../../components/ui/Button';
@@ -89,13 +89,13 @@ export const JournalVoucherForm = () => {
       return api.post('/journal-entries', data);
     },
     onSuccess: () => {
-      toast.success('Journal Voucher created successfully');
+      notification.success('Journal Voucher created successfully');
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       navigate('/journal-entries');
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to create journal voucher');
+      notification.error(error.response?.data?.message || 'Failed to create journal voucher');
     },
   });
 

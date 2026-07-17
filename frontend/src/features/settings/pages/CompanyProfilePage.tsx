@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Building2, ShieldAlert, Loader2, Save, UploadCloud, X } from 'lucide-react';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import apiClient from '@/services/api';
 import { useSessionStore } from '@/features/auth/stores/sessionStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -87,11 +87,11 @@ export const CompanyProfilePage = () => {
     if (!file) return;
 
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      toast.error("Unsupported file type. Please upload PNG, JPG, or WEBP.");
+      notification.error("Unsupported file type. Please upload PNG, JPG, or WEBP.");
       return;
     }
     if (file.size > MAX_FILE_SIZE) {
-      toast.error("Image exceeds 5MB limit. Please choose a smaller file.");
+      notification.error("Image exceeds 5MB limit. Please choose a smaller file.");
       return;
     }
 
@@ -121,7 +121,7 @@ export const CompanyProfilePage = () => {
         logoBase64: finalLogo
       };
       await apiClient.patch('/auth/company', payload);
-      toast.success('Workspace profile settings updated successfully');
+      notification.success('Workspace profile settings updated successfully');
       
       queryClient.invalidateQueries({ queryKey: ['company-profile'] });
       
@@ -129,7 +129,7 @@ export const CompanyProfilePage = () => {
         setSession({ ...user, companyName: values.companyName, logoBase64: finalLogo }, accessToken);
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to update company profile');
+      notification.error(err.response?.data?.message || 'Failed to update company profile');
     } finally {
       setIsSubmitting(false);
     }

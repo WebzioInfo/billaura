@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { 
   FileText, Search, Plus, Trash2,
   Loader2
@@ -333,11 +333,11 @@ export const SalesDashboard = () => {
     setIsSubmitting(true);
     try {
       await api.post('/sales/invoices', values);
-      toast.success('Tax invoice generated and posted successfully');
+      notification.success('Tax invoice generated and posted successfully');
       setIsInvoiceModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Invoice posting failed');
+      notification.error(err.response?.data?.message || 'Invoice posting failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -347,11 +347,11 @@ export const SalesDashboard = () => {
     setIsSubmitting(true);
     try {
       await api.post('/sales/payments', values);
-      toast.success('Payment received and auto-allocated successfully');
+      notification.success('Payment received and auto-allocated successfully');
       setIsPaymentModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['payments'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Payment posting failed');
+      notification.error(err.response?.data?.message || 'Payment posting failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -361,10 +361,10 @@ export const SalesDashboard = () => {
     if (!invoiceToDelete) return;
     try {
       await api.delete(`/sales/invoices/${invoiceToDelete.id}`);
-      toast.success('Invoice deleted successfully');
+      notification.success('Invoice deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to delete invoice');
+      notification.error(err.response?.data?.message || 'Failed to delete invoice');
     } finally { setInvoiceToDelete(null); }
   }, [invoiceToDelete]);
 
@@ -372,10 +372,10 @@ export const SalesDashboard = () => {
     if (!paymentToRevert) return;
     try {
       await api.delete(`/sales/payments/${paymentToRevert.id}`);
-      toast.success('Payment reverted successfully');
+      notification.success('Payment reverted successfully');
       queryClient.invalidateQueries({ queryKey: ['payments'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to revert payment');
+      notification.error(err.response?.data?.message || 'Failed to revert payment');
     } finally { setPaymentToRevert(null); }
   }, [paymentToRevert]);
 

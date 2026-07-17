@@ -28,7 +28,6 @@ import { IncomeModule } from "./income/income.module";
 import { BackupModule } from "./backup/backup.module";
 import { ScheduleModule } from "@nestjs/schedule";
 import { StorageModule } from "./storage/storage.module";
-import { PrismaTestController } from "./prisma-test.controller";
 import { FinanceModule } from "./finance/finance.module";
 import { UsersModule } from "./users/users.module";
 
@@ -78,7 +77,6 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
     CommissionsModule,
     AuditLogsModule,
   ],
-  controllers: [PrismaTestController],
   providers: [
     {
       provide: APP_GUARD,

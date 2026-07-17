@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/data-table/DataTable';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 export const CommissionRulesSettings = () => {
   const queryClient = useQueryClient();
@@ -29,12 +29,12 @@ export const CommissionRulesSettings = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['commission-rules'] });
-      toast.success(editingRule ? 'Rule updated successfully' : 'Rule created successfully');
+      notification.success(editingRule ? 'Rule updated successfully' : 'Rule created successfully');
       setIsModalOpen(false);
       setEditingRule(null);
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to save commission rule');
+      notification.error(err.response?.data?.message || 'Failed to save commission rule');
     }
   });
 

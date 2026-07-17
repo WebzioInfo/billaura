@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { PageContainer } from '@/components/ui/LayoutComponents';
 import { ConfirmDialog, JournalImpactView } from '@/components/ui';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
 import { PdfDownloadButton } from '@/components/pdf/PdfDownloadButton';
 import { PdfDocumentProps } from '@/components/pdf/StandardPdfDocument';
@@ -87,12 +87,12 @@ export const InvoiceDetails = () => {
       await apiClient.delete(`/sales/invoices/${id}`);
     },
     onSuccess: () => {
-      toast.success('Invoice cancelled and reversed from ledger accounts successfully');
+      notification.success('Invoice cancelled and reversed from ledger accounts successfully');
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       navigate('/invoices');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to cancel invoice');
+      notification.error(err.response?.data?.message || 'Failed to cancel invoice');
     }
   });
 
@@ -108,7 +108,7 @@ export const InvoiceDetails = () => {
       });
     },
     onSuccess: () => {
-      toast.success('Payment recorded and credited to customer receivables');
+      notification.success('Payment recorded and credited to customer receivables');
       setIsRecordPaymentOpen(false);
       setPaymentAmount('');
       setPaymentNotes('');
@@ -116,7 +116,7 @@ export const InvoiceDetails = () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to record payment');
+      notification.error(err.response?.data?.message || 'Failed to record payment');
     }
   });
 
@@ -125,7 +125,7 @@ export const InvoiceDetails = () => {
   };
 
   const handleSendEmail = () => {
-    toast.promise(
+    notification.promise(
       new Promise((resolve) => setTimeout(resolve, 1500)),
       {
         loading: 'Generating and sending tax invoice PDF...',
@@ -143,12 +143,12 @@ export const InvoiceDetails = () => {
     e.preventDefault();
     const amount = parseFloat(paymentAmount);
     if (isNaN(amount) || amount <= 0) {
-      toast.error('Please enter a valid payment amount');
+      notification.error('Please enter a valid payment amount');
       return;
     }
     const balance = outstanding;
     if (amount > balance) {
-      toast.error('Payment amount cannot exceed outstanding invoice balance');
+      notification.error('Payment amount cannot exceed outstanding invoice balance');
       return;
     }
     recordPaymentMutation.mutate(amount);

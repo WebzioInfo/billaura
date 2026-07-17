@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { Save, Loader2 } from 'lucide-react';
 import { PageContainer, Section, FormSection } from '@/components/ui/LayoutComponents';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -13,7 +13,7 @@ import { useAsyncForm } from '@/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-const customerSchema = z.object({
+const bpSchema = z.object({
   name: z.string().min(1, 'Customer Name is required'),
   customerCode: z.string().optional(),
   tradeName: z.string().optional(),
@@ -42,27 +42,32 @@ const customerSchema = z.object({
   }
 });
 
-type CustomerFormValues = z.infer<typeof customerSchema>;
+type BusinessPartnerFormValues = z.infer<typeof bpSchema>;
 
-export const CustomerForm = () => {
+export const BusinessPartnerForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isVendor = window.location.pathname.includes('/vendors');
+  const entityType = isVendor ? 'VENDOR' : 'CUSTOMER';
+  const entityPath = isVendor ? 'vendors' : 'customers';
+  const entityLabel = isVendor ? 'Vendor' : 'Customer';
+
   const isEditMode = Boolean(id);
   const [b2bMode, setB2bMode] = useState<boolean>(true);
 
   const { data: customer, isLoading } = useQuery({
-    queryKey: ['customer', id],
+    queryKey: [entityPath, id],
     queryFn: async () => {
-      const res = await apiClient.get(`/customers/${id}`);
+      const res = await apiClient.get(`/${entityPath}/${id}`);
       return res.data?.data || res.data;
     },
     enabled: isEditMode,
   });
 
-  const form = useAsyncForm<CustomerFormValues>(
+  const form = useAsyncForm<BusinessPartnerFormValues>(
     {
-      resolver: zodResolver(customerSchema as any) as any,
+      resolver: zodResolver(bpSchema as any) as any,
       defaultValues: {
         name: '',
         customerCode: '',
@@ -114,11 +119,18 @@ export const CustomerForm = () => {
   const { register, handleFormSubmit, setValue, formState: { errors } } = form;
 
   const displayName = getCustomerDisplayName(customer);
-  useDynamicTitle(isEditMode ? (customer ? `Edit ${displayName}` : 'Edit Customer') : 'New Customer');
+  useDynamicTitle(isEditMode ? (customer ? `Edit ${displayName}` : `Edit ${entityLabel}`) : `New ${entityLabel}`);
 
   const saveMutation = useMutation({
-    mutationFn: async (data: CustomerFormValues) => {
-      const submitData = { ...data, bpCode: data.customerCode };
+    mutationFn: async (data: BusinessPartnerFormValues) => {
+      const submitData: any = { ...data, bpCode: data.customerCode };
+      if (isVendor) {
+        submitData.type = 'VENDOR';
+        submitData.vendorCode = data.customerCode;
+        submitData.vendorType = data.customerType;
+      } else {
+        submitData.type = 'CUSTOMER';
+      }
       if (!b2bMode) {
         submitData.customerType = 'UNREGISTERED';
         submitData.gstin = '';
@@ -128,24 +140,24 @@ export const CustomerForm = () => {
       }
       
       if (isEditMode) {
-        return apiClient.patch(`/customers/${id}`, submitData);
+        return apiClient.patch(`/${entityPath}/${id}`, submitData);
       }
-      return apiClient.post('/customers', submitData);
+      return apiClient.post(`/${entityPath}`, submitData);
     },
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
-      queryClient.invalidateQueries({ queryKey: ['customer', id] });
-      toast.success(isEditMode ? 'Customer updated successfully' : 'Customer created successfully');
+      queryClient.invalidateQueries({ queryKey: [entityPath] });
+      queryClient.invalidateQueries({ queryKey: [entityPath, id] });
+      notification.success(isEditMode ? 'Customer updated successfully' : 'Customer created successfully');
       
       const newId = isEditMode ? id : (res.data?.id || res.data?.data?.id);
-      navigate(newId ? `/app/customers/${newId}` : '/app/customers');
+      navigate(newId ? `/app/${entityPath}/${newId}` : `/app/${entityPath}`);
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to save customer');
+      notification.error(err.response?.data?.message || 'Failed to save customer');
     }
   });
 
-  const onSubmit = (data: CustomerFormValues) => {
+  const onSubmit = (data: BusinessPartnerFormValues) => {
     saveMutation.mutate(data);
   };
 
@@ -162,10 +174,10 @@ export const CustomerForm = () => {
   return (
     <PageContainer maxWidth="5xl">
         <PageHeader 
-          title={isEditMode ? 'Edit Customer' : 'New Customer'}
+          title={isEditMode ? `Edit ${entityLabel}` : `New ${entityLabel}`}
           breadcrumbs={[
-            { label: 'Customers', href: '/app/customers' },
-            { label: isEditMode ? (customer ? displayName : 'Edit Customer') : 'New Customer' }
+            { label: entityLabel + "s", href: `/app/${entityPath}` },
+            { label: isEditMode ? (customer ? displayName : `Edit ${entityLabel}`) : `New ${entityLabel}` }
           ]}
           primaryAction={
           <Button 
@@ -175,7 +187,7 @@ export const CustomerForm = () => {
             className="flex items-center gap-2"
           >
             {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {isEditMode ? 'Save Changes' : 'Create Customer'}
+            {isEditMode ? 'Save Changes' : `Create ${entityLabel}`}
           </Button>
         }
       />
@@ -210,7 +222,7 @@ export const CustomerForm = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Input
-                  label="Customer Name"
+                  label={`${entityLabel} Name`}
                   {...register('name')}
                   placeholder={b2bMode ? "Contact Person Name" : "Customer Full Name"}
                   required
@@ -218,8 +230,8 @@ export const CustomerForm = () => {
               </div>
               <div>
                   <AutoGenerateInput
-                    label="Customer Code"
-                    documentType="CUSTOMER"
+                    label={`${entityLabel} Code`}
+                    documentType={entityType}
                     onGenerate={(code) => setValue('customerCode', code, { shouldValidate: true })}
                     {...register('customerCode')}
                     error={errors.customerCode?.message as string}
@@ -238,7 +250,7 @@ export const CustomerForm = () => {
                   </div>
                   <div>
                     <Select
-                      label="Customer Type"
+                      label={`${entityLabel} Type`}
                       {...register('customerType')}
                       options={[
                         { value: 'UNREGISTERED', label: 'Unregistered' },
@@ -430,7 +442,7 @@ export const CustomerForm = () => {
             variant="primary"
             className="min-w-[120px]"
           >
-            {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (isEditMode ? 'Save Changes' : 'Create Customer')}
+            {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (isEditMode ? 'Save Changes' : `Create ${entityLabel}`)}
           </Button>
         </div>
       </form>

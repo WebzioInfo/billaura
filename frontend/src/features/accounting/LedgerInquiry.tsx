@@ -8,7 +8,7 @@ import apiClient from '@/services/api';
 import { Card } from '@/components/ui/Card';
 import { TableLoader } from '@/components/ui/LoadingSystem';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 export function LedgerInquiry() {
   const { ledgerId } = useParams<{ ledgerId: string }>();
@@ -185,7 +185,7 @@ export function LedgerInquiry() {
   };
 
   const handleExportExcel = () => {
-    toast.success('Excel statement exported successfully');
+    notification.success('Excel statement exported successfully');
   };
 
   const handleResize = (col: string, startWidth: number, startX: number) => {

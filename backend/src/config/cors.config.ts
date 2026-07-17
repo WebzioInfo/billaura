@@ -14,5 +14,6 @@ export const corsOptions = (allowedOrigins: string[]): CorsOptions => ({
     'Cache-Control',
     'Pragma',
     'Expires',
+    'X-CSRF-Token',
   ],
 });

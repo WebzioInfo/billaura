@@ -118,6 +118,15 @@ export class ExpensesService {
           amount,
           taxAmount,
           totalAmount,
+          taxApplicable: dto.taxApplicable || false,
+          taxGroupId: dto.taxGroupId || null,
+          taxMode: dto.taxMode || null,
+          taxType: dto.taxType || null,
+          taxableAmount: dto.taxableAmount || dto.amount,
+          cgstAmount: dto.cgstAmount || 0,
+          sgstAmount: dto.sgstAmount || 0,
+          igstAmount: dto.igstAmount || 0,
+          cessAmount: dto.cessAmount || 0,
           paymentMethod: dto.paymentMethod || null,
           status: 'DRAFT',
           approvalStatus: 'PENDING',
@@ -157,6 +166,15 @@ export class ExpensesService {
         date: dto.date !== undefined ? new Date(dto.date) : undefined,
         amount: dto.amount !== undefined ? dto.amount : undefined,
         taxAmount: dto.taxAmount !== undefined ? dto.taxAmount : undefined,
+        taxApplicable: dto.taxApplicable !== undefined ? dto.taxApplicable : undefined,
+        taxGroupId: dto.taxGroupId !== undefined ? dto.taxGroupId : undefined,
+        taxMode: dto.taxMode !== undefined ? dto.taxMode : undefined,
+        taxType: dto.taxType !== undefined ? dto.taxType : undefined,
+        taxableAmount: dto.taxableAmount !== undefined ? dto.taxableAmount : undefined,
+        cgstAmount: dto.cgstAmount !== undefined ? dto.cgstAmount : undefined,
+        sgstAmount: dto.sgstAmount !== undefined ? dto.sgstAmount : undefined,
+        igstAmount: dto.igstAmount !== undefined ? dto.igstAmount : undefined,
+        cessAmount: dto.cessAmount !== undefined ? dto.cessAmount : undefined,
         totalAmount,
         paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod : undefined,
         billNumber: dto.billNumber !== undefined ? dto.billNumber : undefined,
@@ -218,15 +236,45 @@ export class ExpensesService {
           throw new ConflictException(`Expense category "${category?.name || 'Unknown'}" is missing a mapped Ledger Account (accountId).`);
         }
 
+        let inputCgstAccountId: string | undefined;
+        let inputSgstAccountId: string | undefined;
+        let inputIgstAccountId: string | undefined;
+
+        if (expense.taxApplicable) {
+          const settings = await tx.companySettings.findUnique({ where: { companyId } });
+          const defaultAccounts = settings?.defaultAccounts as any || {};
+          inputCgstAccountId = defaultAccounts.inputCgstAccountId;
+          inputSgstAccountId = defaultAccounts.inputSgstAccountId;
+          inputIgstAccountId = defaultAccounts.inputIgstAccountId;
+        }
+
+        const lines = [
+          { accountId: expenseAccountId, debit: Number(expense.taxableAmount || expense.amount), credit: 0 },
+          { accountId: creditAccountId, debit: 0, credit: totalAmount },
+        ];
+
+        if (expense.taxApplicable) {
+          if (expense.taxType === 'IGST' && Number(expense.igstAmount) > 0) {
+            if (!inputIgstAccountId) throw new ConflictException('Input IGST ledger is not configured in settings.');
+            lines.push({ accountId: inputIgstAccountId, debit: Number(expense.igstAmount), credit: 0 });
+          } else {
+            if (Number(expense.cgstAmount) > 0) {
+              if (!inputCgstAccountId) throw new ConflictException('Input CGST ledger is not configured in settings.');
+              lines.push({ accountId: inputCgstAccountId, debit: Number(expense.cgstAmount), credit: 0 });
+            }
+            if (Number(expense.sgstAmount) > 0) {
+              if (!inputSgstAccountId) throw new ConflictException('Input SGST ledger is not configured in settings.');
+              lines.push({ accountId: inputSgstAccountId, debit: Number(expense.sgstAmount), credit: 0 });
+            }
+          }
+        }
+
         await this.accountingEngine.postTransaction({
           companyId,
           date: expense.date,
           reference: expense.expenseNo,
           description: `Automatic expense posting ${expense.expenseNo}`,
-          lines: [
-            { accountId: expenseAccountId, debit: totalAmount, credit: 0 },
-            { accountId: creditAccountId, debit: 0, credit: totalAmount },
-          ]
+          lines
         }, tx);
       }
 
@@ -299,6 +347,10 @@ export class ExpensesService {
         name: dto.name,
         description: dto.description || null,
         accountId: dto.accountId || null,
+        defaultTaxApplicable: (dto as any).defaultTaxApplicable || false,
+        defaultTaxGroupId: (dto as any).defaultTaxGroupId || null,
+        defaultTaxMode: (dto as any).defaultTaxMode || null,
+        defaultInputTaxAccountId: (dto as any).defaultInputTaxAccountId || null,
         type: 'CUSTOM'
       }
     });
@@ -323,6 +375,10 @@ export class ExpensesService {
         name: dto.name !== undefined ? dto.name : undefined,
         description: dto.description !== undefined ? dto.description : undefined,
         accountId: dto.accountId !== undefined ? dto.accountId : undefined,
+        defaultTaxApplicable: (dto as any).defaultTaxApplicable !== undefined ? (dto as any).defaultTaxApplicable : undefined,
+        defaultTaxGroupId: (dto as any).defaultTaxGroupId !== undefined ? (dto as any).defaultTaxGroupId : undefined,
+        defaultTaxMode: (dto as any).defaultTaxMode !== undefined ? (dto as any).defaultTaxMode : undefined,
+        defaultInputTaxAccountId: (dto as any).defaultInputTaxAccountId !== undefined ? (dto as any).defaultInputTaxAccountId : undefined,
         isActive: dto.isActive !== undefined ? dto.isActive : undefined
       }
     });

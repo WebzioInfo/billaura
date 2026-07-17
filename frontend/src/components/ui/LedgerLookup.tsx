@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { Search, Loader2, Check, ChevronDown, PlusCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 const HighlightMatch = ({ text, match }: { text: string; match: string }) => {
   if (!text) return null;
@@ -357,7 +357,7 @@ const CreateLedgerDialog = ({
 
       onSuccess(res.data);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create ledger');
+      notification.error(err.response?.data?.message || 'Failed to create ledger');
     } finally {
       setIsSubmitting(false);
     }

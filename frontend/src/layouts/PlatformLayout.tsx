@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
 import { authService } from '../services/api';
-import { TokenService } from '../services/auth/TokenService';
 import { Ribbon } from '@/components/workspace/Ribbon';
 import { AiCopilot } from '@/components/workspace/AiCopilot';
 
@@ -19,10 +18,8 @@ export default function PlatformLayout() {
 
   const handleLogout = async () => {
     try {
-      const refreshToken = TokenService.getRefreshToken();
-      await authService.logout(refreshToken);
-    } catch (e) {
-      console.error('Logout failed:', e);
+      await authService.logout();
+    } catch {
     } finally {
       clearSession();
       navigate('/login');

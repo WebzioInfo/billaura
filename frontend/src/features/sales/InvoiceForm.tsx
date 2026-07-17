@@ -33,7 +33,7 @@ import { Card } from '@/components/ui/Card';
 import { FormErrorDisplay } from '@/components/ui';
 import { useAsyncForm } from '@/hooks/useAsyncForm';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa",
@@ -184,7 +184,7 @@ export const InvoiceForm = () => {
   const hasError = meError || custError || prodError || unitsError || nextNoError;
   useEffect(() => {
     if (hasError) {
-      toast.error("Failed to load customer or product master data");
+      notification.error("Failed to load customer or product master data");
     }
   }, [hasError]);
 
@@ -408,7 +408,7 @@ export const InvoiceForm = () => {
       };
 
       await apiClient.post('/sales/invoices', payload);
-      toast.success(
+      notification.success(
         submitStatus === 'DRAFT'
           ? 'Invoice draft saved successfully!'
           : 'Invoice created and issued successfully!'
@@ -416,7 +416,7 @@ export const InvoiceForm = () => {
       navigate('/invoices');
     } catch (err: any) {
       console.error(err);
-      toast.error(err.response?.data?.message || 'Failed to create sales invoice');
+      notification.error(err.response?.data?.message || 'Failed to create sales invoice');
     } finally {
       setIsSubmitting(false);
     }

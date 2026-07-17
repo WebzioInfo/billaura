@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { 
   Package, Search, Plus, Edit2, Trash2, Warehouse as WarehouseIcon, 
   Tag, Loader2, Landmark, RefreshCw, Barcode, Scale, AlertTriangle 
@@ -208,15 +208,15 @@ export const InventoryDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/products/${editingId}`, values);
-        toast.success('Product updated successfully');
+        notification.success('Product updated successfully');
       } else {
         await api.post('/products', values);
-        toast.success('Product registered successfully');
+        notification.success('Product registered successfully');
       }
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -227,15 +227,15 @@ export const InventoryDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/warehouses/${editingId}`, values);
-        toast.success('Warehouse updated successfully');
+        notification.success('Warehouse updated successfully');
       } else {
         await api.post('/warehouses', values);
-        toast.success('Warehouse created successfully');
+        notification.success('Warehouse created successfully');
       }
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['warehouses'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -246,15 +246,15 @@ export const InventoryDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/inventory/categories/${editingId}`, values);
-        toast.success('Category updated successfully');
+        notification.success('Category updated successfully');
       } else {
         await api.post('/inventory/categories', values);
-        toast.success('Category created successfully');
+        notification.success('Category created successfully');
       }
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['categories'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -265,15 +265,15 @@ export const InventoryDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/inventory/brands/${editingId}`, values);
-        toast.success('Brand updated successfully');
+        notification.success('Brand updated successfully');
       } else {
         await api.post('/inventory/brands', values);
-        toast.success('Brand created successfully');
+        notification.success('Brand created successfully');
       }
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['brands'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -282,7 +282,7 @@ export const InventoryDashboard = () => {
   const handleCreateWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!warehouseName.trim()) {
-      toast.error('Warehouse Name is required');
+      notification.error('Warehouse Name is required');
       return;
     }
     setIsSubmittingWarehouse(true);
@@ -292,7 +292,7 @@ export const InventoryDashboard = () => {
         location: warehouseLocation.trim(),
         isDefault: warehouseDefault,
       });
-      toast.success('Warehouse created successfully');
+      notification.success('Warehouse created successfully');
       
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['warehouses'] });
@@ -311,7 +311,7 @@ export const InventoryDashboard = () => {
       setWarehouseLocation('');
       setWarehouseDefault(false);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to create warehouse');
+      notification.error(err.response?.data?.message || 'Failed to create warehouse');
     } finally {
       setIsSubmittingWarehouse(false);
     }
@@ -321,11 +321,11 @@ export const InventoryDashboard = () => {
     setIsSubmitting(true);
     try {
       await api.post('/inventory/adjust', values);
-      toast.success('Stock adjusted successfully');
+      notification.success('Stock adjusted successfully');
       setIsAdjustModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['stocks'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Adjustment failed');
+      notification.error(err.response?.data?.message || 'Adjustment failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -820,10 +820,10 @@ export const InventoryDashboard = () => {
                                    : activeTab === 'categories' ? '/inventory/categories'
                                    : '/inventory/brands';
                     await api.delete(`${endpoint}/${id}`);
-                    toast.success('Item deleted successfully');
+                    notification.success('Item deleted successfully');
                     queryClient.invalidateQueries({ queryKey: [activeTab] });
                   } catch (err) {
-                    toast.error('Deletion failed');
+                    notification.error('Deletion failed');
                   }
                 }}
                 className="px-4 py-2 rounded-xl bg-red-650 text-white font-bold hover:bg-red-700 text-sm cursor-pointer"

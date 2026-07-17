@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/components/ui';
 import { PageContainer, EmptyState } from '@/components/ui/LayoutComponents';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui';
 import ProductFormModal from './ProductFormModal';
@@ -31,10 +31,10 @@ export const ProductsList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
-      toast.success('Product deleted successfully');
+      notification.success('Product deleted successfully');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete product');
+      notification.error(err.response?.data?.message || 'Failed to delete product');
     }
   });
 

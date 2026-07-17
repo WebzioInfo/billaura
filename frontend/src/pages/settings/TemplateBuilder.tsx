@@ -4,7 +4,7 @@ import { useTemplateBuilderStore } from '@/stores/templateBuilderStore';
 import { DocumentRenderer } from '@/components/documents/DocumentRenderer';
 import { templateService } from '@/services/api/templateService';
 import { Loader2, Save, ArrowLeft, Palette, LayoutTemplate, ToggleLeft, FileText, Monitor, Smartphone, Printer } from 'lucide-react';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 export default function TemplateBuilder() {
   const { id } = useParams();
@@ -26,7 +26,7 @@ export default function TemplateBuilder() {
       const data = await templateService.getTemplate(id!);
       setTemplate(data);
     } catch (error) {
-      toast.error('Failed to load template');
+      notification.error('Failed to load template');
       navigate('/settings/templates');
     } finally {
       setIsLoading(false);
@@ -38,14 +38,14 @@ export default function TemplateBuilder() {
     try {
       if (id) {
         await templateService.updateTemplate(id, template);
-        toast.success('Template updated successfully');
+        notification.success('Template updated successfully');
       } else {
         const newTemplate = await templateService.createTemplate(template);
-        toast.success('Template created successfully');
+        notification.success('Template created successfully');
         navigate(`/settings/templates/${newTemplate.id}`);
       }
     } catch (error) {
-      toast.error('Failed to save template');
+      notification.error('Failed to save template');
     } finally {
       setIsSaving(false);
     }

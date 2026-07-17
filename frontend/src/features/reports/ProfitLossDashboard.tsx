@@ -13,7 +13,7 @@ import {
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useQuery } from '@tanstack/react-query';
 
 export default function ProfitLossDashboard() {
@@ -69,7 +69,7 @@ export default function ProfitLossDashboard() {
     }
     
     doc.save('Profit_Loss_Statement.pdf');
-    toast.success('PDF Exported Successfully');
+    notification.success('PDF Exported Successfully');
   };
 
   const exportExcel = () => {
@@ -86,7 +86,7 @@ export default function ProfitLossDashboard() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Profit & Loss");
     XLSX.writeFile(wb, "Profit_Loss_Statement.xlsx");
-    toast.success('Excel Exported Successfully');
+    notification.success('Excel Exported Successfully');
   };
 
   if (loading) {

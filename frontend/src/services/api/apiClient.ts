@@ -53,6 +53,11 @@ export class ApiClient {
           config.headers.Authorization = `Bearer ${token}`;
         }
         
+        const csrfToken = TokenService.getCsrfToken();
+        if (csrfToken && config.headers) {
+          config.headers["X-CSRF-Token"] = csrfToken;
+        }
+
         const companyId = useSessionStore.getState().user?.companyId;
         if (companyId && config.headers) {
           config.headers['x-company-id'] = companyId;
@@ -197,20 +202,19 @@ export const apiClient = new ApiClient({
   baseURL: env.API_BASE_URL,
   refreshSession: async () => {
     try {
-      const refreshToken = TokenService.getRefreshToken();
-      if (!refreshToken) {
-        throw new Error("No refresh token available");
-      }
-
       const response = await axios.post(
         `${env.API_BASE_URL}/auth/refresh`,
-        { refreshToken }
+        undefined,
+        {
+          withCredentials: true,
+          headers: { "X-CSRF-Token": TokenService.getCsrfToken() ?? "" },
+        },
       );
       
       const payload = response.data?.data || response.data;
-      const { access_token, refresh_token, user } = payload;
-      if (access_token && refresh_token && user) {
-        TokenService.setTokens(access_token, refresh_token);
+      const { access_token, user } = payload;
+      if (access_token && user) {
+        TokenService.setAccessToken(access_token);
         useSessionStore.getState().setSession(user, access_token);
       } else {
         throw new Error("Invalid response format");
@@ -222,7 +226,7 @@ export const apiClient = new ApiClient({
         useSessionStore.getState().clearSession();
       } else if (!err.response) {
         // Network error (no response)
-        console.warn("Network error during refresh, not clearing session to allow retry later.");
+        // Preserve the session state so a temporary network outage can recover.
       } else {
         TokenService.clearTokens();
         useSessionStore.getState().clearSession();

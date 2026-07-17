@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { 
   Building2, Search, Plus, Edit2, Trash2, 
   MapPin, Phone, Mail, Loader2, Landmark 
@@ -77,12 +77,12 @@ export const BranchesList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
-      toast.success(editingBranch ? 'Branch details updated successfully' : 'New branch registered successfully');
+      notification.success(editingBranch ? 'Branch details updated successfully' : 'New branch registered successfully');
       setIsModalOpen(false);
     },
     onError: (err: any) => {
       const msg = err.response?.data?.error || err.response?.data?.message || 'Action failed';
-      toast.error(msg);
+      notification.error(msg);
     }
   });
 
@@ -92,10 +92,10 @@ export const BranchesList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
-      toast.success('Branch removed successfully');
+      notification.success('Branch removed successfully');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to delete branch');
+      notification.error(err.response?.data?.error || err.response?.data?.message || 'Failed to delete branch');
     }
   });
 

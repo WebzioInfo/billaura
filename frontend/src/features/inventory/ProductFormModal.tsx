@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck } from 'lucide-react';
 import api from '../../services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAsyncForm } from '../../hooks/useAsyncForm';
 import { handleApiFormError } from '../../utils/error-handler';
@@ -11,6 +11,8 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { AutoGenerateInput } from '../../components/ui/AutoGenerateInput';
 import { FormErrorDisplay } from '../../components/ui/FormErrorDisplay';
+import { Controller } from 'react-hook-form';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
 
 const productSchema = z.object({
   name: z.string().min(1, 'Item Name is required'),
@@ -60,17 +62,17 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
 
   const queryClient = useQueryClient();
 
-  const { data: categories = [] } = useQuery<any[]>({
+  const { data: categories = [] } = useQuery<unknown[]>({
     queryKey: ['categories'],
     queryFn: () => api.get('/inventory/categories').then(res => res.data || []),
   });
 
-  const { data: brands = [] } = useQuery<any[]>({
+  const { data: brands = [] } = useQuery<unknown[]>({
     queryKey: ['brands'],
     queryFn: () => api.get('/inventory/brands').then(res => res.data || []),
   });
 
-  const { data: units = [] } = useQuery<any[]>({
+  const { data: units = [] } = useQuery<unknown[]>({
     queryKey: ['units'],
     queryFn: () => api.get('/units').then(res => res.data || []),
   });
@@ -120,7 +122,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     })
   );
 
-  const { register, handleFormSubmit, setValue, setError, formState: { errors }, watch } = form;
+  const { register, handleFormSubmit, setValue, setError, formState: { errors }, watch, control } = form;
 
   const watchedTaxGroupId = watch('taxGroupId');
 
@@ -134,6 +136,21 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     }
   }, [watchedTaxGroupId, taxGroupsData, setValue]);
 
+  useEffect(() => {
+    if (Object.keys(errors).length > 0) {
+      const firstError = Object.keys(errors)[0];
+      const generalFields = ['name', 'sku', 'alias', 'barcode', 'itemType', 'category', 'brand', 'unit'];
+      const inventoryFields = ['minStock', 'maxStock', 'reorderLevel', 'valuationMethod', 'salesAccountId', 'purchaseAccountId', 'inventoryAccountId'];
+      const ratesFields = ['sellingPrice', 'purchasePrice'];
+      const complianceFields = ['hsnCode', 'eInvoiceHsn', 'taxGroupId', 'gstRate', 'taxCategory'];
+
+      if (generalFields.includes(firstError)) setActiveTab('general');
+      else if (inventoryFields.includes(firstError)) setActiveTab('inventory');
+      else if (ratesFields.includes(firstError)) setActiveTab('rates');
+      else if (complianceFields.includes(firstError)) setActiveTab('compliance');
+    }
+  }, [errors]);
+
   const onSubmit = async (data: ProductFormValues) => {
     setIsLoading(true);
     try {
@@ -143,10 +160,10 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
 
       if (product?.id) {
         await api.put(`/products/${product.id}`, payload);
-        toast.success('Product updated successfully');
+        notification.success('Product updated successfully');
       } else {
         await api.post('/products', payload);
-        toast.success('Product created successfully');
+        notification.success('Product created successfully');
       }
       queryClient.invalidateQueries({ queryKey: ['products'] });
       onSuccess();
@@ -189,7 +206,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-          <form id="productForm" onSubmit={handleFormSubmit(onSubmit)} className="space-y-8">
+          <form id="productForm" onSubmit={handleFormSubmit(onSubmit)} noValidate className="space-y-8">
             
             <div className={activeTab === 'general' ? 'block' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -216,18 +233,52 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                 
                 <div className="space-y-4 bg-muted/30 p-5 rounded-2xl border border-border">
                   <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-accent" /> Classification</h3>
-                  <Select label="Category (Item Group)" {...register('category')} error={errors.category?.message as string} options={[
-                    { label: 'Select Category...', value: '' },
-                    ...categories.map(c => ({ label: c.name, value: c.id }))
-                  ]} />
-                  <Select label="Brand" {...register('brand')} error={errors.brand?.message as string} options={[
-                    { label: 'Select Brand...', value: '' },
-                    ...brands.map(b => ({ label: b.name, value: b.id }))
-                  ]} />
-                  <Select label="Unit of Measure" required {...register('unit')} error={errors.unit?.message as string} options={[
-                    { label: 'Select Unit...', value: '' },
-                    ...units.map(u => ({ label: `${u.name} (${u.abbreviation})`, value: u.id }))
-                  ]} />
+                  <Controller
+                    control={control}
+                    name="category"
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Category (Item Group)"
+                        value={field.value || ''}
+                        onChange={(val) => field.onChange(val)}
+                        error={errors.category?.message as string}
+                        options={categories}
+                        mapOption={(c) => ({ label: c.name, value: c.id })}
+                        placeholder="Select Category..."
+                      />
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name="brand"
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Brand"
+                        value={field.value || ''}
+                        onChange={(val) => field.onChange(val)}
+                        error={errors.brand?.message as string}
+                        options={brands}
+                        mapOption={(b) => ({ label: b.name, value: b.id })}
+                        placeholder="Select Brand..."
+                      />
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name="unit"
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Unit of Measure"
+                        required
+                        value={field.value || ''}
+                        onChange={(val) => field.onChange(val)}
+                        error={errors.unit?.message as string}
+                        options={units}
+                        mapOption={(u) => ({ label: `${u.name} (${u.abbreviation})`, value: u.id })}
+                        placeholder="Select Unit..."
+                      />
+                    )}
+                  />
                 </div>
               </div>
             </div>
@@ -248,15 +299,51 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                 </div>
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><Hash className="w-4 h-4 text-purple-500" /> Accounting Integration</h3>
-                  <Select label="Sales Account" {...register('salesAccountId')} error={errors.salesAccountId?.message as string} options={[
-                    { label: 'Default (Sales Income)', value: '' }
-                  ]} />
-                  <Select label="Purchase Account" {...register('purchaseAccountId')} error={errors.purchaseAccountId?.message as string} options={[
-                    { label: 'Default (Cost of Goods Sold)', value: '' }
-                  ]} />
-                  <Select label="Inventory Asset Account" {...register('inventoryAccountId')} error={errors.inventoryAccountId?.message as string} options={[
-                    { label: 'Default (Inventory Asset)', value: '' }
-                  ]} />
+                  <Controller
+                    control={control}
+                    name="salesAccountId"
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Sales Account"
+                        value={field.value || ''}
+                        onChange={(val) => field.onChange(val)}
+                        error={errors.salesAccountId?.message as string}
+                        options={[]}
+                        mapOption={() => ({ label: '', value: '' })}
+                        placeholder="Default (Sales Income)"
+                      />
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name="purchaseAccountId"
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Purchase Account"
+                        value={field.value || ''}
+                        onChange={(val) => field.onChange(val)}
+                        error={errors.purchaseAccountId?.message as string}
+                        options={[]}
+                        mapOption={() => ({ label: '', value: '' })}
+                        placeholder="Default (Cost of Goods Sold)"
+                      />
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventoryAccountId"
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Inventory Asset Account"
+                        value={field.value || ''}
+                        onChange={(val) => field.onChange(val)}
+                        error={errors.inventoryAccountId?.message as string}
+                        options={[]}
+                        mapOption={() => ({ label: '', value: '' })}
+                        placeholder="Default (Inventory Asset)"
+                      />
+                    )}
+                  />
                 </div>
               </div>
             </div>
@@ -279,10 +366,21 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                     <Input label="HSN / SAC Code" {...register('hsnCode')} error={errors.hsnCode?.message as string} />
                     <Input label="E-Invoice HSN" {...register('eInvoiceHsn')} error={errors.eInvoiceHsn?.message as string} />
                   </div>
-                  <Select label="Tax Group (%)" {...register('taxGroupId')} error={errors.taxGroupId?.message as string} options={[
-                    { label: 'Select Tax Group...', value: '' },
-                    ...taxGroupsData.map(t => ({ label: `${t.name} (${t.totalRate}%)`, value: t.id }))
-                  ]} />
+                  <Controller
+                    control={control}
+                    name="taxGroupId"
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Tax Group (%)"
+                        value={field.value || ''}
+                        onChange={(val) => field.onChange(val)}
+                        error={errors.taxGroupId?.message as string}
+                        options={taxGroupsData}
+                        mapOption={(t) => ({ label: `${t.name} (${t.totalRate}%)`, value: t.id })}
+                        placeholder="Select Tax Group..."
+                      />
+                    )}
+                  />
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Input 

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import {
   Building, Search, Plus, Trash2, 
   Loader2, Briefcase 
@@ -168,11 +168,11 @@ export const DepartmentsList = () => {
     setIsSubmitting(true);
     try {
       await api.post('/departments', values);
-      toast.success('Department created successfully');
+      notification.success('Department created successfully');
       setIsModalOpen(false);
       fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -182,11 +182,11 @@ export const DepartmentsList = () => {
     setIsSubmitting(true);
     try {
       await api.post('/designations', values);
-      toast.success('Designation created successfully');
+      notification.success('Designation created successfully');
       setIsModalOpen(false);
       fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -196,11 +196,11 @@ export const DepartmentsList = () => {
     setIsSubmitting(true);
     try {
       await api.post('/employees', values);
-      toast.success('Employee registered successfully');
+      notification.success('Employee registered successfully');
       setIsModalOpen(false);
       fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -210,11 +210,11 @@ export const DepartmentsList = () => {
     setIsSubmitting(true);
     try {
       await api.post('/attendances', values);
-      toast.success('Attendance check-in logged');
+      notification.success('Attendance check-in logged');
       setIsModalOpen(false);
       fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Logging failed');
+      notification.error(err.response?.data?.message || 'Logging failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -243,7 +243,7 @@ export const DepartmentsList = () => {
       const bankAcc = accountsList.find((a: any) => a.name.toLowerCase().includes('bank') || a.name.toLowerCase().includes('cash'));
 
       if (!salaryAcc || !bankAcc) {
-        toast.error('Ledger setup missing. Run initial Accounting page to seed Chart of Accounts.');
+        notification.error('Ledger setup missing. Run initial Accounting page to seed Chart of Accounts.');
         setIsSubmitting(false);
         return;
       }
@@ -258,9 +258,9 @@ export const DepartmentsList = () => {
         ],
       });
 
-    toast.success(`Payslip generated. ${formatCurrency(Number(emp.basicSalary))} posted to ledger.`);
+    notification.success(`Payslip generated. ${formatCurrency(Number(emp.basicSalary))} posted to ledger.`);
     } catch {
-      toast.error('Payroll run transaction error');
+      notification.error('Payroll run transaction error');
     } finally {
       setIsSubmitting(false);
       setPayrollTarget(null);
@@ -279,10 +279,10 @@ export const DepartmentsList = () => {
       const tab = itemToDelete._tab || activeTab;
       const endpoint = tab === 'employees' ? '/employees' : tab === 'departments' ? '/departments' : '/designations';
       await api.delete(`${endpoint}/${itemToDelete.id}`);
-      toast.success('Item deleted successfully');
+      notification.success('Item deleted successfully');
       fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Deletion failed');
+      notification.error(err.response?.data?.message || 'Deletion failed');
     } finally { setItemToDelete(null); }
   };
 

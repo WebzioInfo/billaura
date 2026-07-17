@@ -9,7 +9,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/Button';
 import { DeleteDialog } from '@/components/ui';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 export const VendorsList = () => {
   const navigate = useNavigate();
@@ -45,11 +45,11 @@ export const VendorsList = () => {
       await apiClient.delete(`/vendors/${id}`);
     },
     onSuccess: () => {
-      toast.success('Vendor deleted successfully');
+      notification.success('Vendor deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to delete vendor');
+      notification.error(error.response?.data?.message || 'Failed to delete vendor');
     }
   });
 

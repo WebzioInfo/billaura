@@ -7,6 +7,7 @@ import { RegisterDto } from './dto/register.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { BusinessDetailsDto, TaxDetailsDto, BranchSetupDto, SubscriptionDto } from './dto/onboard.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { BusinessType } from '@prisma/client';
 import { SessionService } from './session.service';
 import { MailService } from '../mail/mail.service';
@@ -155,10 +156,6 @@ export class AuthService {
 
     const otp = this.generateSecureOtp();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins expiry
-
-    console.log(`\n======================================================`);
-    console.log(`[OTP GENERATION] Secure verification OTP generated for ${registerDto.email}`);
-    console.log(`======================================================\n`);
 
     const otpHash = await bcrypt.hash(otp, salt);
 
@@ -596,13 +593,13 @@ export class AuthService {
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  async resetPassword(passwordDto: any) {
+  async resetPassword(passwordDto: ResetPasswordDto) {
     const { email, otp, password } = passwordDto;
 
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) throw new NotFoundException('User not found');
 
-    if (!user.otpCode || user.otpCode !== otp) {
+    if (!user.otpCode || !(await bcrypt.compare(otp, user.otpCode))) {
       throw new BadRequestException('Invalid OTP code');
     }
     if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) {
@@ -620,6 +617,8 @@ export class AuthService {
         otpExpiresAt: null,
       },
     });
+
+    await this.sessionService.revokeAllSessions(user.id);
 
     return { success: true, message: 'Password reset successfully' };
   }

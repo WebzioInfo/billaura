@@ -2,7 +2,7 @@ import React from 'react';
 import { Input, InputProps } from './Input';
 import { Wand2, Loader2 } from 'lucide-react';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 interface AutoGenerateInputProps extends Omit<InputProps, 'onChange'> {
   documentType: string;
@@ -25,7 +25,7 @@ export const AutoGenerateInput = React.forwardRef<HTMLInputElement, AutoGenerate
           throw new Error('Failed to fetch sequence');
         }
       } catch (err) {
-        toast.error('Failed to auto-generate code');
+        notification.error('Failed to auto-generate code');
       } finally {
         setLoading(false);
       }

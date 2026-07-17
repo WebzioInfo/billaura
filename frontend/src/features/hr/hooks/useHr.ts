@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hrApi, GenerateSalarySlipDto, PaySalarySlipDto } from '../api/hr.api';
 import { handleApiFormError } from '../../../utils/error-handler';
 import { UseFormSetError } from 'react-hook-form';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 export const useSalarySlips = () => {
   return useQuery({
@@ -17,14 +17,14 @@ export const useGenerateSalarySlip = (setError?: UseFormSetError<any>) => {
   return useMutation({
     mutationFn: (data: GenerateSalarySlipDto) => hrApi.generateSalarySlip(data),
     onSuccess: () => {
-      toast.success('Salary slip generated successfully');
+      notification.success('Salary slip generated successfully');
       queryClient.invalidateQueries({ queryKey: ['hr', 'salary-slips'] });
     },
     onError: (error: any) => {
       if (setError) {
         handleApiFormError(error, setError);
       } else {
-        toast.error(error.response?.data?.message || 'Failed to generate salary slip');
+        notification.error(error.response?.data?.message || 'Failed to generate salary slip');
       }
     },
   });
@@ -36,14 +36,14 @@ export const usePaySalarySlip = (setError?: UseFormSetError<any>) => {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: PaySalarySlipDto }) => hrApi.paySalarySlip(id, data),
     onSuccess: () => {
-      toast.success('Salary slip marked as paid');
+      notification.success('Salary slip marked as paid');
       queryClient.invalidateQueries({ queryKey: ['hr', 'salary-slips'] });
     },
     onError: (error: any) => {
       if (setError) {
         handleApiFormError(error, setError);
       } else {
-        toast.error(error.response?.data?.message || 'Failed to pay salary slip');
+        notification.error(error.response?.data?.message || 'Failed to pay salary slip');
       }
     },
   });

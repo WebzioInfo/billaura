@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import {
   Search, Plus, Edit2, Trash2,
   Loader2, DollarSign, ShoppingCart
@@ -460,16 +460,16 @@ export const PurchasesDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/vendors/${editingId}`, values);
-        toast.success('Vendor updated successfully');
+        notification.success('Vendor updated successfully');
       } else {
         await api.post('/vendors', values);
-        toast.success('Vendor registered successfully');
+        notification.success('Vendor registered successfully');
       }
       setIsVendorModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
       queryClient.invalidateQueries({ queryKey: ['vendors_lookup'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -479,9 +479,9 @@ export const PurchasesDashboard = () => {
     if (!vendorToDelete) return;
     try {
       await api.delete(`/vendors/${vendorToDelete.id}`);
-      toast.success('Vendor deleted successfully');
+      notification.success('Vendor deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
-    } catch { toast.error('Deletion failed'); } finally { setVendorToDelete(null); }
+    } catch { notification.error('Deletion failed'); } finally { setVendorToDelete(null); }
   };
 
   const handlePurchaseProductChange = (index: number, productId: string) => {
@@ -496,11 +496,11 @@ export const PurchasesDashboard = () => {
     setIsSubmitting(true);
     try {
       await api.post('/purchases', values);
-      toast.success('Purchase bill posted and stock items updated successfully');
+      notification.success('Purchase bill posted and stock items updated successfully');
       setIsPurchaseModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['purchases'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Purchase posting failed');
+      notification.error(err.response?.data?.message || 'Purchase posting failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -510,22 +510,22 @@ export const PurchasesDashboard = () => {
     setIsSubmitting(true);
     try {
       await api.post('/purchases/payments', values);
-      toast.success('Vendor payout recorded successfully');
+      notification.success('Vendor payout recorded successfully');
       setIsPaymentModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['payments'] });
     } catch (err: any) {
       const status = err.response?.status;
       const message = err.response?.data?.message;
       if (status === 400) {
-        toast.error(message || 'Complete all required payout fields.');
+        notification.error(message || 'Complete all required payout fields.');
       } else if (status === 404) {
-        toast.error(message || 'Selected supplier or bank account was not found.');
+        notification.error(message || 'Selected supplier or bank account was not found.');
       } else if (status === 409) {
-        toast.error(message || 'Payout cannot be recorded until financial setup is complete.');
+        notification.error(message || 'Payout cannot be recorded until financial setup is complete.');
       } else if (status >= 500) {
-        toast.error('Unexpected server error while recording payout.');
+        notification.error('Unexpected server error while recording payout.');
       } else {
-        toast.error(message || 'Payout failed');
+        notification.error(message || 'Payout failed');
       }
     } finally {
       setIsSubmitting(false);
@@ -536,18 +536,18 @@ export const PurchasesDashboard = () => {
     if (!purchaseToDelete) return;
     try {
       await api.delete(`/purchases/${purchaseToDelete.id}`);
-      toast.success('Purchase bill removed');
+      notification.success('Purchase bill removed');
       queryClient.invalidateQueries({ queryKey: ['purchases'] });
-    } catch (err: any) { toast.error(err.response?.data?.message || 'Deletion failed'); } finally { setPurchaseToDelete(null); }
+    } catch (err: any) { notification.error(err.response?.data?.message || 'Deletion failed'); } finally { setPurchaseToDelete(null); }
   };
 
   const confirmRevertPayment = async () => {
     if (!paymentToRevert) return;
     try {
       await api.delete(`/purchases/payments/${paymentToRevert.id}`);
-      toast.success('Payout deleted');
+      notification.success('Payout deleted');
       queryClient.invalidateQueries({ queryKey: ['payments'] });
-    } catch (err: any) { toast.error(err.response?.data?.message || 'Reversion failed'); } finally { setPaymentToRevert(null); }
+    } catch (err: any) { notification.error(err.response?.data?.message || 'Reversion failed'); } finally { setPaymentToRevert(null); }
   };
 
 

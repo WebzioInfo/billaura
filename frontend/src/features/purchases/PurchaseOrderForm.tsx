@@ -10,7 +10,7 @@ import { PageContainer, LoadingState, FinancialSummary, SummaryRow } from '@/com
 import { Card } from '@/components/ui/Card';
 import { Button, Input, Select, FormErrorDisplay } from '@/components/ui';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useAsyncForm } from '@/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -340,18 +340,18 @@ export const PurchaseOrderForm = () => {
 
   const handleSubmit = async (data: POFormValues) => {
     if (!data.vendorId) {
-      toast.error('Vendor / Supplier selection is required');
+      notification.error('Vendor / Supplier selection is required');
       return;
     }
 
     if (!data.orderNo) {
-      toast.error('Purchase Invoice Number is required');
+      notification.error('Purchase Invoice Number is required');
       return;
     }
 
     const invalidRow = items.find(i => !i.productId || i.qty <= 0 || i.rate <= 0);
     if (invalidRow) {
-      toast.error('All line items must have a product, quantity > 0, and rate > 0');
+      notification.error('All line items must have a product, quantity > 0, and rate > 0');
       return;
     }
 
@@ -379,15 +379,15 @@ export const PurchaseOrderForm = () => {
 
       if (id && isEditMode) {
         await apiClient.patch(`/purchase-orders/${id}`, payload);
-        toast.success('Purchase Order updated successfully');
+        notification.success('Purchase Order updated successfully');
       } else {
         await apiClient.post('/purchase-orders', payload);
-        toast.success('Purchase Order recorded successfully');
+        notification.success('Purchase Order recorded successfully');
       }
 
       navigate('/purchase-orders');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to save purchase order');
+      notification.error(err.response?.data?.message || 'Failed to save purchase order');
     } finally {
       setSaving(false);
     }

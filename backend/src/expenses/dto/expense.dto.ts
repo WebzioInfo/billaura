@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsDateString,
   IsEnum,
+  IsBoolean,
 } from "class-validator";
 import { PaymentMethod, PaidFromType, ApprovalStatus } from "@prisma/client";
 
@@ -72,6 +73,42 @@ export class CreateExpenseDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  taxApplicable?: boolean;
+
+  @IsString()
+  @IsOptional()
+  taxGroupId?: string;
+
+  @IsString()
+  @IsOptional()
+  taxMode?: string;
+
+  @IsString()
+  @IsOptional()
+  taxType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  taxableAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  cgstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  sgstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  igstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  cessAmount?: number;
 }
 
 export class UpdateExpenseApprovalDto {
@@ -120,6 +157,42 @@ export class UpdateExpenseDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  taxApplicable?: boolean;
+
+  @IsString()
+  @IsOptional()
+  taxGroupId?: string;
+
+  @IsString()
+  @IsOptional()
+  taxMode?: string;
+
+  @IsString()
+  @IsOptional()
+  taxType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  taxableAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  cgstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  sgstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  igstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  cessAmount?: number;
 }
 
 export class CreateExpenseCategoryDto {
@@ -134,6 +207,22 @@ export class CreateExpenseCategoryDto {
   @IsString()
   @IsOptional()
   accountId?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  defaultTaxApplicable?: boolean;
+
+  @IsString()
+  @IsOptional()
+  defaultTaxGroupId?: string;
+
+  @IsString()
+  @IsOptional()
+  defaultTaxMode?: string;
+
+  @IsString()
+  @IsOptional()
+  defaultInputTaxAccountId?: string;
 }
 
 export class UpdateExpenseCategoryDto {
@@ -148,4 +237,20 @@ export class UpdateExpenseCategoryDto {
   @IsString()
   @IsOptional()
   accountId?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  defaultTaxApplicable?: boolean;
+
+  @IsString()
+  @IsOptional()
+  defaultTaxGroupId?: string;
+
+  @IsString()
+  @IsOptional()
+  defaultTaxMode?: string;
+
+  @IsString()
+  @IsOptional()
+  defaultInputTaxAccountId?: string;
 }

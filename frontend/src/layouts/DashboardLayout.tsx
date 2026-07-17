@@ -10,7 +10,6 @@ import { CommandPalette } from '@/components/workspace/CommandPalette';
 import { QuickCreate } from '@/components/workspace/QuickCreate';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { authService } from '../services/api';
-import { TokenService } from '../services/auth/TokenService';
 
 export default function DashboardLayout() {
   const { user, clearSession } = useSessionStore();
@@ -46,10 +45,8 @@ export default function DashboardLayout() {
 
   const handleLogout = async () => {
     try {
-      const refreshToken = TokenService.getRefreshToken();
-      await authService.logout(refreshToken);
-    } catch (e) {
-      console.error('Logout failed:', e);
+      await authService.logout();
+    } catch {
     } finally {
       clearSession();
       navigate('/login');

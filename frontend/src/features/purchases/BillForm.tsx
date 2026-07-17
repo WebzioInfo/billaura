@@ -10,7 +10,7 @@ import { PageContainer, LoadingState } from '@/components/ui/LayoutComponents';
 import { Card } from '@/components/ui/Card';
 import { Button, Input, Select, FormErrorDisplay } from '@/components/ui';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useAsyncForm } from '@/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -339,7 +339,7 @@ export const BillForm = () => {
 
   const removeLine = (index: number) => {
     if (items.length === 1) {
-      toast.warning('A purchase bill must contain at least one line item');
+      notification.warning('A purchase bill must contain at least one line item');
       return;
     }
     setItems(items.filter((_, idx) => idx !== index));
@@ -405,33 +405,33 @@ export const BillForm = () => {
       }
     },
     onSuccess: () => {
-      toast.success(isEditMode ? 'Vendor bill updated successfully' : 'Vendor bill created successfully');
+      notification.success(isEditMode ? 'Vendor bill updated successfully' : 'Vendor bill created successfully');
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       navigate('/bills');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to save purchase bill');
+      notification.error(err.response?.data?.message || 'Failed to save purchase bill');
     }
   });
 
   const handleSave = (data: BillFormValues) => {
     // Validations
     if (!data.vendorId) {
-      toast.error('Please select a vendor');
+      notification.error('Please select a vendor');
       return;
     }
     if (!date) {
-      toast.error('Please select a billing date');
+      notification.error('Please select a billing date');
       return;
     }
     const emptyProductIdx = items.findIndex(i => !i.productId);
     if (emptyProductIdx !== -1) {
-      toast.error(`Please select a product for line item ${emptyProductIdx + 1}`);
+      notification.error(`Please select a product for line item ${emptyProductIdx + 1}`);
       return;
     }
     const zeroQtyIdx = items.findIndex(i => Number(i.qty) <= 0);
     if (zeroQtyIdx !== -1) {
-      toast.error(`Quantity must be greater than zero for line item ${zeroQtyIdx + 1}`);
+      notification.error(`Quantity must be greater than zero for line item ${zeroQtyIdx + 1}`);
       return;
     }
 

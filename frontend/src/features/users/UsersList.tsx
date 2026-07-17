@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { Users, Search, Plus, Edit2, Trash2, Mail, Loader2, Shield } from 'lucide-react';
 import apiClient from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -100,12 +100,12 @@ export const UsersList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast.success(editingUserId ? 'User role updated successfully' : 'User invited successfully');
+      notification.success(editingUserId ? 'User role updated successfully' : 'User invited successfully');
       setIsModalOpen(false);
     },
     onError: (err: any) => {
       const msg = err.response?.data?.error || err.response?.data?.message || 'Action failed';
-      toast.error(msg);
+      notification.error(msg);
     }
   });
 
@@ -115,10 +115,10 @@ export const UsersList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast.success('User removed successfully');
+      notification.success('User removed successfully');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to remove user');
+      notification.error(err.response?.data?.error || err.response?.data?.message || 'Failed to remove user');
     }
   });
 

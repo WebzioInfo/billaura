@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/components/ui';
 import { PageContainer, EmptyState } from '@/components/ui/LayoutComponents';
 import apiClient from '@/services/api';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui';
 
@@ -27,10 +27,10 @@ export const CustomersList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
-      toast.success('Customer deleted successfully');
+      notification.success('Customer deleted successfully');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete customer');
+      notification.error(err.response?.data?.message || 'Failed to delete customer');
     }
   });
 

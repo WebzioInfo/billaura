@@ -2,7 +2,7 @@ import React from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { Save, ArrowLeft, Upload, Loader2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageContainer } from '../../components/ui/LayoutComponents';
@@ -77,10 +77,10 @@ export const UserForm = () => {
     try {
       setIsSubmitting(true);
       await apiClient.post('/users/enterprise-create', values);
-      toast.success('User created successfully');
+      notification.success('User created successfully');
       navigate('/users');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message || 'Failed to create user');
+      notification.error(err.response?.data?.error || err.message || 'Failed to create user');
     } finally {
       setIsSubmitting(false);
     }

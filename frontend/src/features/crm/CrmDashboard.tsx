@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { 
   Users, Search, Plus, Edit2, Trash2, 
   Phone, Mail, Calendar, Loader2, TrendingUp, Check, Briefcase, Eye 
@@ -249,15 +249,15 @@ export const CrmDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/customers/${editingId}`, values);
-        toast.success('Customer updated successfully');
+        notification.success('Customer updated successfully');
       } else {
         await api.post('/customers', values);
-        toast.success('Customer registered successfully');
+        notification.success('Customer registered successfully');
       }
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -268,15 +268,15 @@ export const CrmDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/crm/leads/${editingId}`, values);
-        toast.success('Lead updated successfully');
+        notification.success('Lead updated successfully');
       } else {
         await api.post('/crm/leads', values);
-        toast.success('Lead created successfully');
+        notification.success('Lead created successfully');
       }
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -287,15 +287,15 @@ export const CrmDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/crm/contacts/${editingId}`, values);
-        toast.success('Contact updated successfully');
+        notification.success('Contact updated successfully');
       } else {
         await api.post('/crm/contacts', values);
-        toast.success('Contact created successfully');
+        notification.success('Contact created successfully');
       }
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -306,15 +306,15 @@ export const CrmDashboard = () => {
     try {
       if (editingId) {
         await api.patch(`/crm/activities/${editingId}`, values);
-        toast.success('Activity updated successfully');
+        notification.success('Activity updated successfully');
       } else {
         await api.post('/crm/activities', values);
-        toast.success('Activity created successfully');
+        notification.success('Activity created successfully');
       }
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: [activeTab] });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Action failed');
+      notification.error(err.response?.data?.message || 'Action failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -332,18 +332,18 @@ export const CrmDashboard = () => {
       const tab = itemToDelete._activeTab || activeTab;
       const endpoint = tab === 'customers' ? '/customers' : tab === 'leads' ? '/crm/leads' : tab === 'contacts' ? '/crm/contacts' : '/crm/activities';
       await api.delete(`${endpoint}/${itemToDelete.id}`);
-      toast.success('Item deleted successfully');
+      notification.success('Item deleted successfully');
       queryClient.invalidateQueries({ queryKey: [tab] });
-    } catch { toast.error('Deletion failed'); } finally { setItemToDelete(null); }
+    } catch { notification.error('Deletion failed'); } finally { setItemToDelete(null); }
   };
 
   const toggleActivityCompletion = async (act: Activity) => {
     try {
       await api.patch(`/crm/activities/${act.id}`, { isCompleted: !act.isCompleted });
-      toast.success(act.isCompleted ? 'Task marked incomplete' : 'Task completed successfully');
+      notification.success(act.isCompleted ? 'Task marked incomplete' : 'Task completed successfully');
       queryClient.invalidateQueries({ queryKey: ['activities'] });
     } catch {
-      toast.error('Failed to update activity status');
+      notification.error('Failed to update activity status');
     }
   };
 

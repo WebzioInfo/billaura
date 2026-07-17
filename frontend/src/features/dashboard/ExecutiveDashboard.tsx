@@ -177,7 +177,7 @@ const QuickActions = ({ navigate }: { navigate: ReturnType<typeof useNavigate> }
 
   return (
     <WidgetCard title="Quick Action Center">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-12">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-10">
         {actions.map((action) => {
           const Icon = action.icon;
           return (
@@ -248,12 +248,12 @@ export const ExecutiveDashboard = () => {
     <div className="space-y-4 text-left pb-6">
       <section className="bg-surface border border-border rounded-lg p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-center">
-          <div className="lg:col-span-5">
+          <div className="lg:col-span-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Welcome back</p>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-foreground">{data.company.name}</h1>
             <p className="mt-1 text-xs text-muted-foreground">FY {data.company.financialYear} - {formatDate(data.company.today)}</p>
           </div>
-          <button onClick={() => navigate('/search')} className="flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm text-muted-foreground lg:col-span-4 cursor-pointer hover:border-accent">
+          <button onClick={() => navigate('/search')} className="flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm text-muted-foreground lg:col-span-5 cursor-pointer hover:border-accent">
             <Search className="h-4 w-4" />
             Search customers, invoices, vendors, products, ledgers
             <kbd className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>

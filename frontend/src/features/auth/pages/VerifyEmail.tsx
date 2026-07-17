@@ -55,7 +55,7 @@ export const VerifyEmail = () => {
         otp: data.otp,
       });
 
-      TokenService.setTokens(response.data.access_token, response.data.refresh_token);
+      TokenService.setAccessToken(response.data.access_token);
       setSession(response.data.user, response.data.access_token);
       
       setSuccess(true);
@@ -202,4 +202,3 @@ export const VerifyEmail = () => {
     </div>
   );
 };
-

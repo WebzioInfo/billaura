@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import { Search, Plus, Trash2, Edit2, Download, AlertCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/services/api';
@@ -12,6 +12,7 @@ import { DeleteDialog, AsyncSelect } from '@/components/ui';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ExpenseReceiptPdf } from './components/ExpenseReceiptPdf';
+import { useTaxEngine } from '@/hooks/useTaxEngine';
 
 const expenseSchema = z.object({
   categoryId: z.string().min(1, 'Select a category'),
@@ -24,6 +25,15 @@ const expenseSchema = z.object({
   reference: z.string().optional(),
   description: z.string().optional(),
   notes: z.string().optional(),
+  taxApplicable: z.boolean().optional(),
+  taxGroupId: z.string().optional(),
+  taxMode: z.string().optional(),
+  taxType: z.string().optional(),
+  taxableAmount: z.number().optional(),
+  cgstAmount: z.number().optional(),
+  sgstAmount: z.number().optional(),
+  igstAmount: z.number().optional(),
+  cessAmount: z.number().optional(),
 });
 
 type ExpenseFormValues = z.infer<typeof expenseSchema>;
@@ -32,6 +42,10 @@ const categorySchema = z.object({
   name: z.string().min(1, 'Category name is required'),
   description: z.string().optional(),
   accountId: z.string().min(1, 'General Ledger Mapping is required'),
+  defaultTaxApplicable: z.boolean().optional(),
+  defaultTaxGroupId: z.string().optional(),
+  defaultTaxMode: z.string().optional(),
+  defaultInputTaxAccountId: z.string().optional(),
 });
 
 type CategoryFormValues = z.infer<typeof categorySchema>;
@@ -65,6 +79,15 @@ export const ExpensesDashboard = () => {
       billNumber: '',
       description: '',
       notes: '',
+      taxApplicable: false,
+      taxGroupId: '',
+      taxMode: 'EXCLUDING_TAX',
+      taxType: 'CGST_SGST',
+      taxableAmount: 0,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      igstAmount: 0,
+      cessAmount: 0,
     }
   });
 
@@ -74,6 +97,10 @@ export const ExpensesDashboard = () => {
       name: '',
       description: '',
       accountId: '',
+      defaultTaxApplicable: false,
+      defaultTaxGroupId: '',
+      defaultTaxMode: 'EXCLUDING_TAX',
+      defaultInputTaxAccountId: '',
     }
   });
 
@@ -126,6 +153,56 @@ export const ExpensesDashboard = () => {
   const accounts = Array.isArray(accountsData) ? accountsData : [];
   const expenseAccounts = accounts.filter((a: any) => a.category === 'EXPENSE');
 
+  const { data: taxGroupsData } = useQuery({
+    queryKey: ['tax-groups'],
+    queryFn: async () => {
+      const res = await apiClient.get('/tax-groups');
+      return res.data || [];
+    }
+  });
+  const taxGroups = Array.isArray(taxGroupsData) ? taxGroupsData : [];
+
+  const taxApplicable = form.watch('taxApplicable');
+  const amount = form.watch('amount');
+  const taxGroupId = form.watch('taxGroupId');
+  const taxMode = form.watch('taxMode') as 'EXCLUDING_TAX' | 'INCLUDING_TAX';
+  const categoryId = form.watch('categoryId');
+
+  const selectedTaxGroup = taxGroups.find(t => t.id === taxGroupId);
+  const taxRate = selectedTaxGroup?.totalRate || 0;
+
+  const taxEngineResult = useTaxEngine(
+    amount,
+    taxRate,
+    taxMode || 'EXCLUDING_TAX',
+    undefined,
+    undefined,
+    0
+  );
+
+  useEffect(() => {
+    if (taxApplicable) {
+      form.setValue('taxableAmount', taxEngineResult.taxableAmount);
+      form.setValue('cgstAmount', taxEngineResult.cgstAmount);
+      form.setValue('sgstAmount', taxEngineResult.sgstAmount);
+      form.setValue('igstAmount', taxEngineResult.igstAmount);
+      form.setValue('cessAmount', taxEngineResult.cessAmount);
+      form.setValue('taxAmount', taxEngineResult.taxAmount);
+      form.setValue('taxType', taxEngineResult.taxType);
+    }
+  }, [taxEngineResult, taxApplicable, form]);
+
+  useEffect(() => {
+    if (categoryId) {
+      const cat = categories.find(c => c.id === categoryId);
+      if (cat && cat.defaultTaxApplicable !== undefined) {
+        form.setValue('taxApplicable', cat.defaultTaxApplicable);
+        if (cat.defaultTaxGroupId) form.setValue('taxGroupId', cat.defaultTaxGroupId);
+        if (cat.defaultTaxMode) form.setValue('taxMode', cat.defaultTaxMode);
+      }
+    }
+  }, [categoryId, categories, form]);
+
   // Claim Mutations
   const saveExpense = useMutation({
     mutationFn: async (values: ExpenseFormValues) => {
@@ -135,36 +212,36 @@ export const ExpensesDashboard = () => {
       return apiClient.post('/expenses', values);
     },
     onSuccess: () => {
-      toast.success(editingId ? 'Expense updated successfully' : 'Expense created successfully');
+      notification.success(editingId ? 'Expense updated successfully' : 'Expense created successfully');
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setIsModalOpen(false);
       setEditingId(null);
       form.reset();
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to save expense');
+      notification.error(err.response?.data?.message || 'Failed to save expense');
     }
   });
 
   const deleteExpense = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/expenses/${id}`),
     onSuccess: () => {
-      toast.success('Expense claim cancelled & reversed successfully');
+      notification.success('Expense claim cancelled & reversed successfully');
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to cancel expense');
+      notification.error(err.response?.data?.message || 'Failed to cancel expense');
     }
   });
 
   const approveExpense = useMutation({
     mutationFn: async (id: string) => apiClient.put(`/expenses/${id}/approval`, { approvalStatus: 'APPROVED' }),
     onSuccess: () => {
-      toast.success('Expense claim approved & posted successfully');
+      notification.success('Expense claim approved & posted successfully');
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to approve expense');
+      notification.error(err.response?.data?.message || 'Failed to approve expense');
     }
   });
 
@@ -175,6 +252,10 @@ export const ExpensesDashboard = () => {
         name: values.name,
         description: values.description || undefined,
         accountId: values.accountId || undefined,
+        defaultTaxApplicable: values.defaultTaxApplicable,
+        defaultTaxGroupId: values.defaultTaxGroupId || undefined,
+        defaultTaxMode: values.defaultTaxMode || undefined,
+        defaultInputTaxAccountId: values.defaultInputTaxAccountId || undefined,
       };
       if (editingCategoryId) {
         return apiClient.put(`/expenses/categories/${editingCategoryId}`, payload);
@@ -182,25 +263,25 @@ export const ExpensesDashboard = () => {
       return apiClient.post('/expenses/categories', payload);
     },
     onSuccess: () => {
-      toast.success(editingCategoryId ? 'Category updated' : 'Category created');
+      notification.success(editingCategoryId ? 'Category updated' : 'Category created');
       queryClient.invalidateQueries({ queryKey: ['expense-categories'] });
       setIsCategoryModalOpen(false);
       setEditingCategoryId(null);
       categoryForm.reset();
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to save category');
+      notification.error(err.response?.data?.message || 'Failed to save category');
     }
   });
 
   const deleteCategory = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/expenses/categories/${id}`),
     onSuccess: () => {
-      toast.success('Category removed successfully');
+      notification.success('Category removed successfully');
       queryClient.invalidateQueries({ queryKey: ['expense-categories'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete category');
+      notification.error(err.response?.data?.message || 'Failed to delete category');
     }
   });
 
@@ -210,13 +291,17 @@ export const ExpensesDashboard = () => {
       name: cat.name,
       description: cat.description || '',
       accountId: cat.accountId || '',
+      defaultTaxApplicable: cat.defaultTaxApplicable || false,
+      defaultTaxGroupId: cat.defaultTaxGroupId || '',
+      defaultTaxMode: cat.defaultTaxMode || 'EXCLUDING_TAX',
+      defaultInputTaxAccountId: cat.defaultInputTaxAccountId || '',
     });
     setIsCategoryModalOpen(true);
   };
 
   const handleEdit = (exp: any) => {
     if (exp.approvalStatus === 'APPROVED') {
-      toast.error('Cannot edit an approved expense claim');
+      notification.error('Cannot edit an approved expense claim');
       return;
     }
     setEditingId(exp.id);
@@ -230,6 +315,15 @@ export const ExpensesDashboard = () => {
       billNumber: exp.billNumber || '',
       description: exp.description || '',
       notes: exp.notes || '',
+      taxApplicable: exp.taxApplicable || false,
+      taxGroupId: exp.taxGroupId || '',
+      taxMode: exp.taxMode || 'EXCLUDING_TAX',
+      taxType: exp.taxType || 'CGST_SGST',
+      taxableAmount: Number(exp.taxableAmount || 0),
+      cgstAmount: Number(exp.cgstAmount || 0),
+      sgstAmount: Number(exp.sgstAmount || 0),
+      igstAmount: Number(exp.igstAmount || 0),
+      cessAmount: Number(exp.cessAmount || 0),
     });
     prevPaymentMethodRef.current = exp.paymentMethod || 'BANK_TRANSFER';
     setIsModalOpen(true);
@@ -470,9 +564,54 @@ export const ExpensesDashboard = () => {
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Base Amount *</label>
                     <input type="number" step="0.01" {...form.register('amount', { valueAsNumber: true })} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Tax Amount</label>
-                    <input type="number" step="0.01" {...form.register('taxAmount', { valueAsNumber: true })} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
+                  <div className="col-span-2 mt-4 pt-4 border-t border-border/40">
+                    <h3 className="text-xs font-bold mb-3 flex items-center justify-between">
+                      Tax Information
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <span className="text-[10px] text-muted-foreground uppercase">Tax Applicable</span>
+                        <input type="checkbox" {...form.register('taxApplicable')} className="rounded border-border text-accent focus:ring-accent" />
+                      </label>
+                    </h3>
+                    
+                    {taxApplicable && (
+                      <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
+                        <div>
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Tax Group *</label>
+                          <select {...form.register('taxGroupId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                            <option value="">Select Tax Rate</option>
+                            {taxGroups.map((t: any) => (
+                              <option key={t.id} value={t.id}>{t.name} ({t.totalRate}%)</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Tax Mode *</label>
+                          <select {...form.register('taxMode')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                            <option value="EXCLUDING_TAX">Amount Excluding Tax (Base + Tax = Total)</option>
+                            <option value="INCLUDING_TAX">Amount Including Tax (Reverse Calculated)</option>
+                          </select>
+                        </div>
+
+                        <div className="col-span-2 grid grid-cols-4 gap-3 pt-3 border-t border-border/40">
+                          <div>
+                            <label className="block text-[10px] text-muted-foreground uppercase mb-1">Taxable</label>
+                            <div className="text-sm font-bold font-mono text-foreground">₹{form.watch('taxableAmount')?.toFixed(2)}</div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-muted-foreground uppercase mb-1">{form.watch('taxType') === 'IGST' ? 'IGST' : 'CGST'}</label>
+                            <div className="text-sm font-bold font-mono text-muted-foreground">₹{form.watch('taxType') === 'IGST' ? form.watch('igstAmount')?.toFixed(2) : form.watch('cgstAmount')?.toFixed(2)}</div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-muted-foreground uppercase mb-1">{form.watch('taxType') === 'IGST' ? '-' : 'SGST'}</label>
+                            <div className="text-sm font-bold font-mono text-muted-foreground">₹{form.watch('taxType') === 'IGST' ? '0.00' : form.watch('sgstAmount')?.toFixed(2)}</div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-accent uppercase mb-1">Total Paid</label>
+                            <div className="text-sm font-black font-mono text-accent">₹{form.watch('taxMode') === 'INCLUDING_TAX' ? Number(form.watch('amount') || 0).toFixed(2) : (Number(form.watch('taxableAmount') || 0) + Number(form.watch('taxAmount') || 0)).toFixed(2)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="col-span-2">
                     <AsyncSelect
@@ -547,6 +686,34 @@ export const ExpensesDashboard = () => {
                     </select>
                     {categoryForm.formState.errors.accountId && <span className="text-red-500 text-[10px] mt-1">{categoryForm.formState.errors.accountId.message}</span>}
                     <span className="text-[9px] text-muted-foreground/80 mt-1 block">Specify the general ledger target account to post approved expense debits to.</span>
+                  </div>
+                  
+                  <div className="mt-4 pt-4 border-t border-border/40 space-y-4">
+                    <h3 className="text-xs font-bold flex items-center gap-2">
+                      <input type="checkbox" {...categoryForm.register('defaultTaxApplicable')} id="cat-tax-app" className="rounded border-border text-accent focus:ring-accent" />
+                      <label htmlFor="cat-tax-app" className="cursor-pointer">Default Tax Applicable</label>
+                    </h3>
+
+                    {categoryForm.watch('defaultTaxApplicable') && (
+                      <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
+                        <div>
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Default Tax Group</label>
+                          <select {...categoryForm.register('defaultTaxGroupId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                            <option value="">Select Tax Rate</option>
+                            {taxGroups.map((t: any) => (
+                              <option key={t.id} value={t.id}>{t.name} ({t.totalRate}%)</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Default Tax Mode</label>
+                          <select {...categoryForm.register('defaultTaxMode')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                            <option value="EXCLUDING_TAX">Amount Excluding Tax</option>
+                            <option value="INCLUDING_TAX">Amount Including Tax</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-border/40">

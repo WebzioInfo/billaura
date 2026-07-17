@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 import api from '../../services/api';
 import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
@@ -38,7 +38,7 @@ export const CapitalDashboard = () => {
       });
     },
     onSuccess: () => {
-      toast.success(formData.type === 'INTRODUCED' ? 'Capital recorded' : 'Drawing recorded');
+      notification.success(formData.type === 'INTRODUCED' ? 'Capital recorded' : 'Drawing recorded');
       queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
@@ -50,14 +50,14 @@ export const CapitalDashboard = () => {
       }));
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to record transaction');
+      notification.error(err.response?.data?.message || 'Failed to record transaction');
     }
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.amount || !formData.bankAccountId) {
-      toast.error('Amount and Bank Account are required');
+      notification.error('Amount and Bank Account are required');
       return;
     }
     mutation.mutate(formData);

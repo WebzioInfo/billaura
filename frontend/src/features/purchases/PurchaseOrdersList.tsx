@@ -13,7 +13,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import apiClient from '@/services/api';
 import { DeleteDialog } from '@/components/ui';
-import { toast } from 'sonner';
+import notification from '@/services/NotificationService';
 
 export const PurchaseOrdersList = () => {
   const navigate = useNavigate();
@@ -33,7 +33,7 @@ export const PurchaseOrdersList = () => {
   const [poToDelete, setPoToDelete] = useState<any>(null);
 
   // Fetch Master Data
-  const { data: vendors = [] } = useQuery<any[]>({
+  const { data: vendors = [] } = useQuery<unknown[]>({
     queryKey: ['vendors'],
     queryFn: async () => {
       const res = await apiClient.get('/vendors');
@@ -42,7 +42,7 @@ export const PurchaseOrdersList = () => {
     }
   });
 
-  const { data: warehouses = [] } = useQuery<any[]>({
+  const { data: warehouses = [] } = useQuery<unknown[]>({
     queryKey: ['warehouses'],
     queryFn: async () => {
       const res = await apiClient.get('/warehouses');
@@ -132,11 +132,11 @@ export const PurchaseOrdersList = () => {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/purchase-orders/${id}`),
     onSuccess: () => {
-      toast.success('Purchase Order deleted');
+      notification.success('Purchase Order deleted');
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete Purchase Order');
+      notification.error(err.response?.data?.message || 'Failed to delete Purchase Order');
     }
   });
 
@@ -149,10 +149,10 @@ export const PurchaseOrdersList = () => {
   const handleCancelPo = async (id: string) => {
     try {
       await apiClient.patch(`/purchase-orders/${id}`, { status: 'CANCELLED' });
-      toast.success('Purchase Order cancelled successfully');
+      notification.success('Purchase Order cancelled successfully');
       refetch();
     } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Failed to cancel Purchase Order');
+      notification.error(e.response?.data?.message || 'Failed to cancel Purchase Order');
     }
   };
 
@@ -239,7 +239,7 @@ export const PurchaseOrdersList = () => {
                 className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
               >
                 <option value="">All Suppliers</option>
-                {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                {vendors.map((v: any) => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
             </div>
 
@@ -268,7 +268,7 @@ export const PurchaseOrdersList = () => {
                 className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
               >
                 <option value="">All Warehouses</option>
-                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
 
