@@ -6,12 +6,14 @@ import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
+import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accountingEngine: AccountingEngineService
+    private readonly accountingEngine: AccountingEngineService,
+    private readonly sequenceService: SequenceService
   ) {}
 
   async findAll(query: PaginationQueryDto) {
@@ -88,28 +90,7 @@ export class PaymentsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Generate payment number
-      let sequence = await tx.documentSequence.findFirst({
-        where: { companyId, documentType: 'PAYMENT' },
-      });
-
-      if (!sequence) {
-        sequence = await tx.documentSequence.create({
-          data: {
-            companyId,
-            documentType: 'PAYMENT',
-            currentNumber: 0,
-          },
-        });
-      }
-
-      const nextNumber = sequence.currentNumber + 1;
-      await tx.documentSequence.update({
-        where: { id: sequence.id },
-        data: { currentNumber: nextNumber },
-      });
-
-      const paymentNo = `PAY-${String(nextNumber).padStart(5, '0')}`;
+      const paymentNo = await this.sequenceService.generateNextSequence(companyId, 'PAYMENT', tx);
 
       // 2. Create Payment record
       const payment = await tx.transactionPayment.create({

@@ -6,6 +6,9 @@ import * as z from 'zod';
 import { Building2, Settings, ShieldAlert, Loader2, Save, UploadCloud, X } from 'lucide-react';
 import { BranchesList } from '../branches/BranchesList';
 import { RolesList } from '../roles/RolesList';
+import { DocumentNumbering } from './pages/DocumentNumbering';
+import { CommissionRulesSettings } from './pages/CommissionRulesSettings';
+import { AuditLogsSettings } from './pages/AuditLogs';
 import { toast } from 'sonner';
 import apiClient from '../../services/api';
 import { useSessionStore } from '../auth/stores/sessionStore';
@@ -44,6 +47,9 @@ export const SettingsPage = () => {
   if (path.includes('/profile') || path.includes('/company')) defaultTab = 'profile';
   if (path.includes('/users')) defaultTab = 'users';
   if (path.includes('/subscription')) defaultTab = 'subscription';
+  if (path.includes('/numbering')) defaultTab = 'numbering';
+  if (path.includes('/commissions')) defaultTab = 'commissions';
+  if (path.includes('/audit-logs')) defaultTab = 'audit-logs';
 
   const activeTab = searchParams.get('tab') || defaultTab;
   
@@ -214,12 +220,45 @@ export const SettingsPage = () => {
         >
           Company Profile
         </button>
-      </div>
+        <button
+            onClick={() => setActiveTab('numbering')}
+            className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'numbering' 
+                ? 'border-accent text-accent' 
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Document Numbering
+          </button>
+          <button
+            onClick={() => setActiveTab('commissions')}
+            className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'commissions' 
+                ? 'border-accent text-accent' 
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Commission Rules
+          </button>
+          <button
+            onClick={() => setActiveTab('audit-logs')}
+            className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'audit-logs' 
+                ? 'border-accent text-accent' 
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4" />
+            Audit Logs
+          </button>
+        </div>
 
-      {/* Tab Panels */}
       <div className="mt-6">
         {activeTab === 'branches' && <BranchesList />}
         {activeTab === 'roles' && <RolesList />}
+        {activeTab === 'numbering' && <DocumentNumbering />}
+        {activeTab === 'commissions' && <CommissionRulesSettings />}
+        {activeTab === 'audit-logs' && <AuditLogsSettings />}
         
         {activeTab === 'profile' && (
           isLoading ? (

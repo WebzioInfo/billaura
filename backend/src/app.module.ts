@@ -36,6 +36,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 import { DocumentTemplatesModule } from "./settings/document-templates/document-templates.module";
+import { CommissionsModule } from './commissions/commissions.module';
+import { AuditLogsModule } from './audit-logs/audit-logs.module';
 
 @Module({
   imports: [
@@ -73,6 +75,8 @@ import { DocumentTemplatesModule } from "./settings/document-templates/document-
     FinanceModule,
     UsersModule,
     DocumentTemplatesModule,
+    CommissionsModule,
+    AuditLogsModule,
   ],
   controllers: [PrismaTestController],
   providers: [

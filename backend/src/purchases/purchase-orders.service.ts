@@ -4,10 +4,14 @@ import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto/purchase-o
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
+import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
 export class PurchaseOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sequenceService: SequenceService
+  ) {}
 
   async findAll(query: any) {
     const companyId = CompanyContext.getCompanyId();
@@ -76,16 +80,13 @@ export class PurchaseOrdersService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
-    let sequence = await this.prisma.documentSequence.findFirst({
-      where: { companyId, documentType: 'PURCHASE_ORDER' },
-    });
-
-    if (!sequence) {
-      return { nextNumber: 'PO-00001' };
+    // Generate preview using SequenceService
+    const config = await this.sequenceService.getConfig(companyId, 'PURCHASE_ORDER');
+    if (config) {
+      const nextNum = config.currentNumber + 1;
+      return { nextNumber: `${config.prefix || 'PO-'}${String(nextNum).padStart(config.padding || 5, '0')}` };
     }
-
-    const nextNum = sequence.currentNumber + 1;
-    return { nextNumber: `PO-${String(nextNum).padStart(5, '0')}` };
+    return { nextNumber: 'PO-00001' };
   }
 
   async findOne(id: string) {
@@ -103,65 +104,34 @@ export class PurchaseOrdersService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context required');
 
-    let orderNo = dto.orderNo;
-    if (orderNo) {
-      const existing = await this.prisma.purchaseOrder.findFirst({
-        where: { companyId, orderNo },
-      });
-      if (existing) throw new ConflictException('Purchase Order number already in use');
-
-      // Sync sequence if matches expected auto format
-      let sequence = await this.prisma.documentSequence.findFirst({
-        where: { companyId, documentType: 'PURCHASE_ORDER' },
-      });
-      if (!sequence) {
-        sequence = await this.prisma.documentSequence.create({
-          data: { companyId, documentType: 'PURCHASE_ORDER', currentNumber: 0 },
+    return this.prisma.$transaction(async (tx) => {
+      let orderNo = dto.orderNo;
+      if (orderNo) {
+        const existing = await tx.purchaseOrder.findFirst({
+          where: { companyId, orderNo },
         });
+        if (existing) throw new ConflictException('Purchase Order number already in use');
+      } else {
+        // Auto-generate order number
+        orderNo = await this.sequenceService.generateNextSequence(companyId, 'PURCHASE_ORDER', tx);
       }
-      const nextNum = sequence.currentNumber + 1;
-      const expectedAuto = `PO-${String(nextNum).padStart(5, '0')}`;
-      if (orderNo === expectedAuto) {
-        await this.prisma.documentSequence.update({
-          where: { id: sequence.id },
-          data: { currentNumber: nextNum },
-        });
-      }
-    } else {
-      // Auto-generate order number
-      let sequence = await this.prisma.documentSequence.findFirst({
-        where: { companyId, documentType: 'PURCHASE_ORDER' },
-      });
-      if (!sequence) {
-        sequence = await this.prisma.documentSequence.create({
-          data: { companyId, documentType: 'PURCHASE_ORDER', currentNumber: 0 },
-        });
-      }
-      const nextNum = sequence.currentNumber + 1;
-      await this.prisma.documentSequence.update({
-        where: { id: sequence.id },
-        data: { currentNumber: nextNum },
-      });
-      orderNo = `PO-${String(nextNum).padStart(5, '0')}`;
-    }
 
-    const user = userId ? await this.prisma.user.findUnique({ where: { id: userId } }) : null;
+      const user = userId ? await tx.user.findUnique({ where: { id: userId } }) : null;
 
-    const subTotal = dto.items.reduce((sum, item) => sum + (item.qty * item.rate), 0);
-    const taxTotal = dto.items.reduce((sum, item) => sum + ((item.qty * item.rate * item.taxPercent) / 100), 0);
-    const grandTotal = subTotal + taxTotal;
+      const subTotal = dto.items.reduce((sum, item) => sum + (item.qty * item.rate), 0);
+      const taxTotal = dto.items.reduce((sum, item) => sum + ((item.qty * item.rate * item.taxPercent) / 100), 0);
+      const grandTotal = subTotal + taxTotal;
+      const metadata = {
+        expectedDeliveryDate: dto.expectedDeliveryDate,
+        warehouseId: dto.warehouseId,
+        buyer: dto.buyer,
+        notes: dto.notes,
+        referenceNo: dto.referenceNo,
+        createdByName: user?.name || user?.email || 'System Admin',
+        receivedQty: {}
+      };
 
-    const metadata = {
-      expectedDeliveryDate: dto.expectedDeliveryDate,
-      warehouseId: dto.warehouseId,
-      buyer: dto.buyer,
-      notes: dto.notes,
-      referenceNo: dto.referenceNo,
-      createdByName: user?.name || user?.email || 'System Admin',
-      receivedQty: {}
-    };
-
-    const po = await this.prisma.purchaseOrder.create({
+    const po = await tx.purchaseOrder.create({
       data: {
         companyId,
         businessPartnerId: dto.businessPartnerId,
@@ -197,6 +167,7 @@ export class PurchaseOrdersService {
     }
 
     return po;
+    });
   }
 
   async update(id: string, dto: UpdatePurchaseOrderDto, userId?: string) {

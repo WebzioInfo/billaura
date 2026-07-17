@@ -41,6 +41,18 @@ export class CreateInvoiceDto {
   @IsNotEmpty()
   date: string;
 
+  @IsString()
+  @IsOptional()
+  referralSourceType?: string;
+
+  @IsString()
+  @IsOptional()
+  employeeId?: string;
+
+  @IsString()
+  @IsOptional()
+  referralPartnerId?: string;
+
   @IsDateString()
   @IsOptional()
   dueDate?: string;

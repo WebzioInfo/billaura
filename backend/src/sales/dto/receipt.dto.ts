@@ -11,6 +11,40 @@ import {
 import { Type } from "class-transformer";
 import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
 
+export class SplitPaymentDto {
+  @IsString()
+  @IsNotEmpty()
+  paymentMethod: string;
+
+  @IsNumber()
+  @Min(0.01)
+  amount: number;
+
+  @IsString()
+  @IsOptional()
+  accountId?: string;
+
+  @IsString()
+  @IsOptional()
+  referenceNo?: string;
+
+  @IsString()
+  @IsOptional()
+  chequeNo?: string;
+
+  @IsString()
+  @IsOptional()
+  transactionId?: string;
+
+  @IsDateString()
+  @IsOptional()
+  clearanceDate?: string;
+
+  @IsNumber()
+  @IsOptional()
+  bankCharges?: number;
+}
+
 export class ReceiptAllocationDto {
   @IsString()
   @IsNotEmpty()
@@ -35,8 +69,8 @@ export class CreateReceiptDto {
   accountId?: string;
 
   @IsString()
-  @IsNotEmpty()
-  paymentMethod: string;
+  @IsOptional()
+  paymentMethod?: string;
 
   @IsNumber()
   @Min(0.01)
@@ -83,6 +117,12 @@ export class CreateReceiptDto {
   @ValidateNested({ each: true })
   @Type(() => ReceiptAllocationDto)
   allocations?: ReceiptAllocationDto[];
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => SplitPaymentDto)
+  splitPayments?: SplitPaymentDto[];
 }
 
 export class UpdateReceiptDto {
@@ -134,6 +174,12 @@ export class UpdateReceiptDto {
   @IsString()
   @IsOptional()
   status?: string;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => SplitPaymentDto)
+  splitPayments?: SplitPaymentDto[];
 }
 
 export class ReceiptQueryDto extends PaginationQueryDto {

@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Button, Input, Select, AutoGenerateInput, FormErrorDisplay } from '@/components/ui';
 import apiClient from '@/services/api';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
+import { getVendorDisplayName } from '@/utils/entityNames';
 import { useAsyncForm } from '@/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -101,7 +102,8 @@ export const VendorForm = () => {
 
   const { register, handleFormSubmit, setValue, formState: { errors } } = form;
 
-  useDynamicTitle(isEditMode ? (vendor?.name ? `Edit ${vendor?.name}` : 'Edit Vendor') : 'New Vendor');
+  const displayName = getVendorDisplayName(vendor);
+  useDynamicTitle(isEditMode ? (vendor ? `Edit ${displayName}` : 'Edit Vendor') : 'New Vendor');
 
   const saveMutation = useMutation({
     mutationFn: async (data: VendorFormValues) => {
@@ -141,10 +143,12 @@ export const VendorForm = () => {
 
   return (
     <PageContainer maxWidth="5xl">
-      <PageHeader
-        title={isEditMode ? "Edit Vendor" : "New Vendor"}
-        description="Fill in the vendor details below."
-        backTo={{ label: "Vendors", path: "/app/vendors" }}
+      <PageHeader 
+        title={isEditMode ? 'Edit Vendor' : 'New Vendor'}
+        breadcrumbs={[
+          { label: 'Vendors', href: '/app/vendors' },
+          { label: isEditMode ? (vendor ? displayName : 'Edit Vendor') : 'New Vendor' }
+        ]}
         primaryAction={
           <Button 
             onClick={form.handleSubmit(onSubmit)} 

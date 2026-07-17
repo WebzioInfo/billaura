@@ -27,8 +27,8 @@ export class InvoicesController {
   }
 
   @Get("next-number")
-  async getNextNumber() {
-    return this.invoicesService.getNextInvoiceNumber();
+  async getNextNumber(@Query('type') type?: string) {
+    return this.invoicesService.getNextInvoiceNumber(type);
   }
 
   @Get(":id")

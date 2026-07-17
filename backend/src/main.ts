@@ -11,7 +11,9 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor";
 import { RequestContextInterceptor } from "./common/interceptors/request-context.interceptor";
 import { NoCacheInterceptor } from "./common/interceptors/no-cache.interceptor";
+import { AuditInterceptor } from "./common/interceptors/audit.interceptor";
 import { AppLogger } from "./logging/app-logger.service";
+import { PrismaService } from "./database/prisma.service";
 
 import { corsOptions } from "./config/cors.config";
 
@@ -49,10 +51,13 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter(logger));
+  const prismaService = app.get(PrismaService);
+
   app.useGlobalInterceptors(
     new RequestContextInterceptor(),
     new ResponseEnvelopeInterceptor(),
     new NoCacheInterceptor(),
+    new AuditInterceptor(prismaService)
   );
 
   const swaggerConfig = new DocumentBuilder()

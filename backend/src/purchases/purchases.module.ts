@@ -11,9 +11,10 @@ import { GoodsReceiptsController } from "./goods-receipts.controller";
 import { GoodsReceiptsService } from "./goods-receipts.service";
 
 import { AccountingModule } from "../accounting/accounting.module";
+import { SharedModule } from "../shared/shared.module";
 
 @Module({
-  imports: [DatabaseModule, AccountingModule],
+  imports: [DatabaseModule, AccountingModule, SharedModule],
   controllers: [
     PurchasesController,
     PurchasePaymentsController,

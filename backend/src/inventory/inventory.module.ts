@@ -21,7 +21,6 @@ import { SerialsController } from "./serials.controller";
 import { BomService } from "./bom.service";
 import { BomController } from "./bom.controller";
 
-import { DatabaseModule } from "../database/database.module";
 import { SharedModule } from "../shared/shared.module";
 
 @Module({

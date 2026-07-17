@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/data-table/DataTable';
 import apiClient from '@/services/api';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
+import { getVendorDisplayName } from '@/utils/entityNames';
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
@@ -35,7 +36,8 @@ export const VendorProfile = () => {
     }
   });
 
-  useDynamicTitle(vendor?.name);
+  const displayName = getVendorDisplayName(vendor);
+  useDynamicTitle(vendor ? displayName : null);
 
   // Recent Purchases
   const { data: purchasesData, isLoading: loadingPurchases } = useQuery({
@@ -134,7 +136,7 @@ export const VendorProfile = () => {
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-foreground tracking-tight">{vendor.name}</h1>
+              <h1 className="text-3xl font-bold text-foreground tracking-tight">{displayName}</h1>
               <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary uppercase tracking-wider">
                 {vendor.bpCode || vendor.vendorCode}
               </span>

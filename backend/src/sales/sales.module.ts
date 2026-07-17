@@ -17,9 +17,18 @@ import { DeliveryNotesService } from "./delivery-notes.service";
 import { PurchasesModule } from "../purchases/purchases.module";
 import { ExpensesModule } from "../expenses/expenses.module";
 import { AccountingModule } from "../accounting/accounting.module";
+import { SharedModule } from "../shared/shared.module";
+import { CommissionsModule } from "../commissions/commissions.module";
 
 @Module({
-  imports: [DatabaseModule, PurchasesModule, ExpensesModule, AccountingModule],
+  imports: [
+    DatabaseModule,
+    PurchasesModule,
+    ExpensesModule,
+    AccountingModule,
+    SharedModule,
+    CommissionsModule,
+  ],
   controllers: [
     InvoicesController,
     PaymentsController,

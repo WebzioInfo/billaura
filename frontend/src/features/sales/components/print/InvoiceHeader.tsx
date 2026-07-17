@@ -13,7 +13,6 @@ interface InvoiceHeaderProps {
     invoiceNumber: string;
     invoiceDate: string;
     dueDate?: string;
-    paymentTerms?: string;
     placeOfSupply?: string;
     salesPerson?: string;
   };
@@ -50,7 +49,6 @@ export const InvoiceHeader: React.FC<InvoiceHeaderProps> = ({ company, invoice }
         <div className="w-1/2 flex flex-col gap-1 pr-4 border-r">
           <div className="flex"><span className="w-32 text-gray-600">Invoice Number</span><span className="font-medium">: {invoice.invoiceNumber}</span></div>
           <div className="flex"><span className="w-32 text-gray-600">Invoice Date</span><span className="font-medium">: {invoice.invoiceDate}</span></div>
-          {invoice.paymentTerms && <div className="flex"><span className="w-32 text-gray-600">Terms</span><span className="font-medium">: {invoice.paymentTerms}</span></div>}
           {invoice.dueDate && <div className="flex"><span className="w-32 text-gray-600">Due Date</span><span className="font-medium">: {invoice.dueDate}</span></div>}
         </div>
         <div className="w-1/2 flex flex-col gap-1 pl-4">

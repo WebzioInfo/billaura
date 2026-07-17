@@ -6,12 +6,14 @@ import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
+import { CommissionsService } from '../commissions/commissions.service';
 
 @Injectable()
 export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accountingEngine: AccountingEngineService
+    private readonly accountingEngine: AccountingEngineService,
+    private readonly commissionsService: CommissionsService
   ) {}
 
   async findAll(query: PaginationQueryDto) {
@@ -202,12 +204,30 @@ export class InvoicesService {
 
       // Determine Enums
       const invoiceTypeEnum = (dto.invoiceType as any) || 'TAX_INVOICE';
+      
+      // Evaluate Commission if requested
+      let commissionRecordId: string | null = null;
+      if (dto.referralSourceType) {
+        const commission = await this.commissionsService.evaluateCommission({
+          companyId,
+          referenceType: 'INVOICE',
+          referenceId: invoiceNo,
+          referralSourceType: dto.referralSourceType as any,
+          employeeId: dto.employeeId,
+          businessPartnerId: dto.referralPartnerId,
+          baseAmount: subTotal
+        });
+        if (commission) {
+          commissionRecordId = commission.id;
+        }
+      }
 
       // 3. Create Invoice record
       const invoice = await tx.invoice.create({
         data: {
           companyId,
           businessPartnerId: dto.customerId,
+          commissionRecordId,
           invoiceNo,
           invoiceType: invoiceTypeEnum,
           placeOfSupply: dto.placeOfSupply,
@@ -235,165 +255,181 @@ export class InvoicesService {
       });
 
       // 4. Update customer outstanding balance
-      await tx.businessPartner.update({
-        where: { id: dto.customerId },
-        data: {
-          receivableBalance: {
-            increment: grandTotal,
+      if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
+        await tx.businessPartner.update({
+          where: { id: dto.customerId },
+          data: {
+            receivableBalance: {
+              increment: grandTotal,
+            },
           },
-        },
-      });
+        });
+      }
+
+      // Update commission record with actual invoice ID
+      if (commissionRecordId) {
+        await tx.commissionRecord.update({
+          where: { id: commissionRecordId },
+          data: { referenceId: invoice.id }
+        });
+      }
 
       // 5. Create Customer Statement record
-      await tx.customerStatement.create({
-        data: {
-          companyId,
-          businessPartnerId: dto.customerId,
-          date: new Date(dto.date),
-          type: 'INVOICE',
-          reference: invoiceNo,
-          debit: grandTotal,
-          credit: 0,
-          balance: Number(customer.receivableBalance) + grandTotal,
-        },
-      });
+      if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
+        await tx.customerStatement.create({
+          data: {
+            companyId,
+            businessPartnerId: dto.customerId,
+            date: new Date(dto.date),
+            type: 'INVOICE',
+            reference: invoiceNo,
+            debit: grandTotal,
+            credit: 0,
+            balance: Number(customer.receivableBalance) + grandTotal,
+          },
+        });
+      }
 
       // 6. Reduce stock quantities and create movement logs
-      for (const item of itemsToCreate) {
-        // Find default warehouse stock
-        const defaultWh = await tx.warehouse.findFirst({
-          where: { companyId, isDefault: true },
-        });
-
-        if (defaultWh) {
-          const stock = await tx.stock.findFirst({
-            where: { companyId, productId: item.productId, warehouseId: defaultWh.id },
+      if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
+        for (const item of itemsToCreate) {
+          // Find default warehouse stock
+          const defaultWh = await tx.warehouse.findFirst({
+            where: { companyId, isDefault: true },
           });
 
-          const currentQty = stock ? Number(stock.quantity) : 0;
-          const newQty = currentQty - item.qty;
-
-          if (stock) {
-            await tx.stock.update({
-              where: { id: stock.id },
-              data: {
-                quantity: newQty,
-                availableQuantity: newQty,
-              },
+          if (defaultWh) {
+            const stock = await tx.stock.findFirst({
+              where: { companyId, productId: item.productId, warehouseId: defaultWh.id },
             });
-          } else {
-            await tx.stock.create({
+
+            const currentQty = stock ? Number(stock.quantity) : 0;
+            const newQty = currentQty - item.qty;
+
+            if (stock) {
+              await tx.stock.update({
+                where: { id: stock.id },
+                data: {
+                  quantity: newQty,
+                  availableQuantity: newQty,
+                },
+              });
+            } else {
+              await tx.stock.create({
+                data: {
+                  companyId,
+                  productId: item.productId,
+                  warehouseId: defaultWh.id,
+                  quantity: newQty,
+                  availableQuantity: newQty,
+                },
+              });
+            }
+
+            // Stock ledger entry
+            await tx.stockLedger.create({
               data: {
                 companyId,
                 productId: item.productId,
-                warehouseId: defaultWh.id,
-                quantity: newQty,
-                availableQuantity: newQty,
+                type: 'SALE',
+                quantityBefore: currentQty,
+                quantityChange: -item.qty,
+                quantityAfter: newQty,
+                notes: `Issued via Invoice ${invoiceNo}`,
+                referenceId: invoice.id,
+                referenceType: 'INVOICE'
               },
             });
           }
-
-          // Stock ledger entry
-          await tx.stockLedger.create({
-            data: {
-              companyId,
-              productId: item.productId,
-              type: 'SALE',
-              quantityBefore: currentQty,
-              quantityChange: -item.qty,
-              quantityAfter: newQty,
-              notes: `Issued via Invoice ${invoiceNo}`,
-              referenceId: invoice.id,
-              referenceType: 'INVOICE'
-            },
-          });
         }
       }
 
       // 7. Post automatic journal entry to General Ledger
-      let arAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Accounts Receivable' },
-      });
-      if (!arAccount) {
-        arAccount = await tx.account.create({
-          data: { companyId, name: 'Accounts Receivable', category: 'ASSET', balance: 0 },
+      if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
+        let arAccount = await tx.account.findFirst({
+          where: { companyId, name: 'Accounts Receivable' },
         });
-      }
-
-      let salesAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Sales Revenue' },
-      });
-      if (!salesAccount) {
-        salesAccount = await tx.account.create({
-          data: { companyId, name: 'Sales Revenue', category: 'REVENUE', balance: 0 },
-        });
-      }
-
-      // Find or create Tax Accounts
-      const getTaxAccount = async (name: string) => {
-        let acc = await tx.account.findFirst({ where: { companyId, name } });
-        if (!acc) {
-          acc = await tx.account.create({
-            data: { companyId, name, category: 'LIABILITY', subCategory: 'CURRENT_LIABILITY', balance: 0 },
+        if (!arAccount) {
+          arAccount = await tx.account.create({
+            data: { companyId, name: 'Accounts Receivable', category: 'ASSET', balance: 0 },
           });
         }
-        return acc;
-      };
 
-      const cgstAccount = isInterState ? null : await getTaxAccount('Output CGST');
-      const sgstAccount = isInterState ? null : await getTaxAccount('Output SGST');
-      const igstAccount = isInterState ? await getTaxAccount('Output IGST') : null;
-
-      const journalLines = [
-        { accountId: arAccount.id, debit: grandTotal, credit: 0 },
-        { accountId: salesAccount.id, debit: 0, credit: subTotal },
-      ];
-
-      const cgstAmt = isInterState ? 0 : taxTotal / 2;
-      const sgstAmt = isInterState ? 0 : taxTotal / 2;
-      const igstAmt = isInterState ? taxTotal : 0;
-
-      if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
-        journalLines.push({ accountId: cgstAccount.id, debit: 0, credit: cgstAmt });
-        journalLines.push({ accountId: sgstAccount.id, debit: 0, credit: sgstAmt });
-      }
-      if (isInterState && igstAmt > 0 && igstAccount) {
-        journalLines.push({ accountId: igstAccount.id, debit: 0, credit: igstAmt });
-      }
-
-      await this.accountingEngine.postTransaction({
-        companyId,
-        date: new Date(dto.date),
-        reference: invoiceNo,
-        description: `Automatic invoice posting ${invoiceNo}`,
-        lines: journalLines,
-      }, tx);
-
-      // 8. Post automatic COGS journal entry
-      if (totalCogs > 0) {
-        let cogsAccount = await tx.account.findFirst({ where: { companyId, name: 'Cost of Goods Sold' } });
-        if (!cogsAccount) {
-          cogsAccount = await tx.account.create({
-            data: { companyId, name: 'Cost of Goods Sold', category: 'EXPENSE', subCategory: 'COGS', balance: 0 },
+        let salesAccount = await tx.account.findFirst({
+          where: { companyId, name: 'Sales Revenue' },
+        });
+        if (!salesAccount) {
+          salesAccount = await tx.account.create({
+            data: { companyId, name: 'Sales Revenue', category: 'REVENUE', balance: 0 },
           });
         }
-        let invAccount = await tx.account.findFirst({ where: { companyId, name: 'Inventory' } });
-        if (!invAccount) {
-          invAccount = await tx.account.create({
-            data: { companyId, name: 'Inventory', category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
-          });
+
+        // Find or create Tax Accounts
+        const getTaxAccount = async (name: string) => {
+          let acc = await tx.account.findFirst({ where: { companyId, name } });
+          if (!acc) {
+            acc = await tx.account.create({
+              data: { companyId, name, category: 'LIABILITY', subCategory: 'CURRENT_LIABILITY', balance: 0 },
+            });
+          }
+          return acc;
+        };
+
+        const cgstAccount = isInterState ? null : await getTaxAccount('Output CGST');
+        const sgstAccount = isInterState ? null : await getTaxAccount('Output SGST');
+        const igstAccount = isInterState ? await getTaxAccount('Output IGST') : null;
+
+        const journalLines = [
+          { accountId: arAccount.id, debit: grandTotal, credit: 0 },
+          { accountId: salesAccount.id, debit: 0, credit: subTotal },
+        ];
+
+        const cgstAmt = isInterState ? 0 : taxTotal / 2;
+        const sgstAmt = isInterState ? 0 : taxTotal / 2;
+        const igstAmt = isInterState ? taxTotal : 0;
+
+        if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
+          journalLines.push({ accountId: cgstAccount.id, debit: 0, credit: cgstAmt });
+          journalLines.push({ accountId: sgstAccount.id, debit: 0, credit: sgstAmt });
+        }
+        if (isInterState && igstAmt > 0 && igstAccount) {
+          journalLines.push({ accountId: igstAccount.id, debit: 0, credit: igstAmt });
         }
 
         await this.accountingEngine.postTransaction({
           companyId,
           date: new Date(dto.date),
           reference: invoiceNo,
-          description: `Automatic COGS posting ${invoiceNo}`,
-          lines: [
-            { accountId: cogsAccount.id, debit: totalCogs, credit: 0 },
-            { accountId: invAccount.id, debit: 0, credit: totalCogs },
-          ],
+          description: `Automatic invoice posting ${invoiceNo}`,
+          lines: journalLines,
         }, tx);
+
+        // 8. Post automatic COGS journal entry
+        if (totalCogs > 0) {
+          let cogsAccount = await tx.account.findFirst({ where: { companyId, name: 'Cost of Goods Sold' } });
+          if (!cogsAccount) {
+            cogsAccount = await tx.account.create({
+              data: { companyId, name: 'Cost of Goods Sold', category: 'EXPENSE', subCategory: 'COGS', balance: 0 },
+            });
+          }
+          let invAccount = await tx.account.findFirst({ where: { companyId, name: 'Inventory' } });
+          if (!invAccount) {
+            invAccount = await tx.account.create({
+              data: { companyId, name: 'Inventory', category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+            });
+          }
+
+          await this.accountingEngine.postTransaction({
+            companyId,
+            date: new Date(dto.date),
+            reference: invoiceNo,
+            description: `Automatic COGS posting ${invoiceNo}`,
+            lines: [
+              { accountId: cogsAccount.id, debit: totalCogs, credit: 0 },
+              { accountId: invAccount.id, debit: 0, credit: totalCogs },
+            ],
+          }, tx);
+        }
       }
 
       return invoice;
@@ -477,21 +513,41 @@ export class InvoicesService {
     });
   }
 
-  async getNextInvoiceNumber() {
+  async getNextInvoiceNumber(type?: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
 
+    let prefix = 'INV';
+    let docType = 'INVOICE';
+
+    if (type === 'PROFORMA') {
+      prefix = 'PF';
+      docType = 'PROFORMA_INVOICE';
+    } else if (type === 'QUOTATION') {
+      prefix = 'QT';
+      docType = 'QUOTATION';
+    } else if (type === 'CREDIT_NOTE') {
+      prefix = 'CN';
+      docType = 'CREDIT_NOTE';
+    } else if (type === 'DEBIT_NOTE') {
+      prefix = 'DN';
+      docType = 'DEBIT_NOTE';
+    } else if (type === 'DELIVERY_CHALLAN') {
+      prefix = 'DC';
+      docType = 'DELIVERY_CHALLAN';
+    }
+
     let sequence = await this.prisma.documentSequence.findFirst({
-      where: { companyId, documentType: 'INVOICE' },
+      where: { companyId, documentType: docType as any },
     });
 
     if (!sequence) {
-      return { nextNumber: 'INV-00001' };
+      return { nextNumber: `${prefix}-00001` };
     }
 
     const nextNum = sequence.currentNumber + 1;
-    return { nextNumber: `INV-${String(nextNum).padStart(5, '0')}` };
+    return { nextNumber: `${prefix}-${String(nextNum).padStart(5, '0')}` };
   }
 }

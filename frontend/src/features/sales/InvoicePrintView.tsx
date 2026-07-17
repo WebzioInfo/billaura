@@ -16,10 +16,10 @@ export const InvoicePrintView = () => {
       try {
         const res = await apiClient.get(`/sales/invoices/${id}`);
         const data = res.data?.data || res.data;
-        
+
         // Transform backend data to InvoiceTemplateData
         const isIgst = data.items?.some((i: any) => i.igstAmount > 0) || false;
-        
+
         const templateData: InvoiceTemplateData = {
           company: {
             name: data.company?.name || 'Your Company',
@@ -33,7 +33,6 @@ export const InvoicePrintView = () => {
             invoiceNumber: data.invoiceNumber,
             invoiceDate: new Date(data.date).toLocaleDateString(),
             dueDate: data.dueDate ? new Date(data.dueDate).toLocaleDateString() : undefined,
-            paymentTerms: data.paymentTerms,
             placeOfSupply: data.placeOfSupply,
             salesPerson: data.salesPerson?.name,
           },
@@ -81,7 +80,7 @@ export const InvoicePrintView = () => {
           qrData: data.qrCodeData || `upi://pay?pa=test@upi&pn=Test&am=${data.totalAmount}`,
           bankDetails: data.bankDetails
         };
-        
+
         setInvoiceData(templateData);
       } catch (err) {
         console.error('Error fetching invoice', err);
@@ -89,7 +88,7 @@ export const InvoicePrintView = () => {
         setLoading(false);
       }
     };
-    
+
     if (id) {
       fetchInvoice();
     }
@@ -113,27 +112,27 @@ export const InvoicePrintView = () => {
       {/* Top action bar - Hidden during print */}
       <div className="no-print bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-[210mm] mx-auto px-4 py-3 flex justify-between items-center">
-          <button 
+          <button
             onClick={() => navigate('/invoices')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft size={18} /> Back
           </button>
-          
+
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={handlePrint}
               className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition"
             >
               <Printer size={16} /> Print
             </button>
-            <button 
+            <button
               onClick={handleDownloadPDF}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
             >
               <Download size={16} /> Download PDF
             </button>
-            <button 
+            <button
               className="flex items-center gap-2 bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition"
             >
               <Share2 size={16} /> Share

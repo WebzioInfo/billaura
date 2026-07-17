@@ -11,6 +11,7 @@ import apiClient from '@/services/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
+import { getCustomerDisplayName } from '@/utils/entityNames';
 
 export const CustomerProfile = () => {
   const { id } = useParams();
@@ -25,7 +26,8 @@ export const CustomerProfile = () => {
     }
   });
 
-  useDynamicTitle(customer?.name);
+  const displayName = getCustomerDisplayName(customer);
+  useDynamicTitle(customer ? displayName : null);
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery({
     queryKey: ['customer', id, 'analytics'],
@@ -114,11 +116,11 @@ export const CustomerProfile = () => {
         <div className="px-6 py-6 border-b border-border bg-muted/10 flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="w-16 h-16 rounded-xl bg-accent/10 text-accent flex items-center justify-center text-2xl font-bold">
-              {customer.name.charAt(0).toUpperCase()}
+              {displayName.charAt(0).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold text-foreground">{customer.name}</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">{displayName}</h1>
                 <Badge variant={customer.customerType === 'REGISTERED' ? 'success' : 'default'}>
                   {customer.customerType}
                 </Badge>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  ArrowLeft, Plus, Trash2, Copy, Save, AlertCircle, ShoppingCart, 
+import {
+  ArrowLeft, Plus, Trash2, Copy, Save, AlertCircle, ShoppingCart,
   Building, Calendar, FileText, Landmark, FileCheck, HelpCircle, Loader2, Info
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -36,7 +36,6 @@ interface Vendor {
   state?: string;
   phone?: string;
   email?: string;
-  paymentTerms?: string;
   receivableBalance?: number;
   payableBalance?: number;
 }
@@ -204,7 +203,7 @@ export const PurchaseOrderForm = () => {
         qty: Number(i.qty),
         unit: i.product?.unit || i.unit || 'Pcs',
         rate: Number(i.rate),
-        discount: 0, 
+        discount: 0,
         taxPercent: Number(i.taxPercent || 0)
       })));
     }
@@ -229,7 +228,7 @@ export const PurchaseOrderForm = () => {
         setValue('shippingAddress', v.address || '');
       }
       setValue('placeOfSupply', v.state || '');
-      
+
       // Determine tax mode based on vendor state and company state
       const compState = companyProfile?.state || '';
       const vendState = v.state || '';
@@ -531,10 +530,10 @@ export const PurchaseOrderForm = () => {
             <h3 className="font-extrabold text-base text-foreground flex items-center gap-1.5">
               <Building className="w-5 h-5 text-accent" /> Purchase Items Grid
             </h3>
-            <Button 
+            <Button
               onClick={addRow}
-              type="button" 
-              variant="outline" 
+              type="button"
+              variant="outline"
               className="text-xs font-bold flex items-center gap-1 cursor-pointer transition-all hover:bg-accent/5 hover:text-accent hover:border-accent/30"
             >
               <Plus className="w-3.5 h-3.5" /> Add Row
@@ -576,7 +575,7 @@ export const PurchaseOrderForm = () => {
                             <option key={p.id} value={p.id}>{p.name} {p.sku ? `(SKU: ${p.sku})` : ''}</option>
                           ))}
                         </select>
-                        
+
                         {(() => {
                           const pObj = products.find(p => p.id === item.productId);
                           if (!pObj) return null;
@@ -591,9 +590,9 @@ export const PurchaseOrderForm = () => {
                             </div>
                           );
                         })()}
-                        
-                        <input 
-                          type="text" 
+
+                        <input
+                          type="text"
                           placeholder="Line description / specifications..."
                           value={item.description}
                           onChange={e => handleLineChange(index, 'description', e.target.value)}
@@ -601,16 +600,16 @@ export const PurchaseOrderForm = () => {
                         />
                       </td>
                       <td className="py-4 px-1">
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           min="1"
                           value={item.qty}
                           onChange={e => handleLineChange(index, 'qty', Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent font-bold font-mono" 
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent font-bold font-mono"
                         />
                       </td>
                       <td className="py-4 px-1">
-                        <input 
+                        <input
                           type="text"
                           value={item.unit}
                           onChange={e => handleLineChange(index, 'unit', e.target.value)}
@@ -620,28 +619,28 @@ export const PurchaseOrderForm = () => {
                       <td className="py-4 px-1">
                         <div className="relative">
                           <span className="absolute left-2.5 top-2 text-xs text-muted-foreground font-mono">₹</span>
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             step="0.01"
                             value={item.rate}
                             onChange={e => handleLineChange(index, 'rate', Number(e.target.value))}
-                            className="w-full pl-6 pr-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent font-mono" 
+                            className="w-full pl-6 pr-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent font-mono"
                           />
                         </div>
                       </td>
                       <td className="py-4 px-1">
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           min="0"
                           max="100"
                           value={item.discount}
                           onChange={e => handleLineChange(index, 'discount', Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent font-mono" 
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent font-mono"
                         />
                       </td>
                       {taxMode !== 'NO_TAX' && (
                         <td className="py-4 px-1">
-                          <select 
+                          <select
                             value={item.taxPercent}
                             onChange={e => handleLineChange(index, 'taxPercent', Number(e.target.value))}
                             className="w-full px-2 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent"
@@ -667,9 +666,9 @@ export const PurchaseOrderForm = () => {
                             <Copy className="w-3.5 h-3.5" />
                           </button>
                           {items.length > 1 && (
-                            <button 
-                              type="button" 
-                              onClick={() => removeRow(index)} 
+                            <button
+                              type="button"
+                              onClick={() => removeRow(index)}
                               className="text-red-500 hover:text-red-700 p-1 cursor-pointer rounded-lg hover:bg-red-50/10"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -688,7 +687,7 @@ export const PurchaseOrderForm = () => {
             <div className="md:col-span-2 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Terms, Notes & Conditions</label>
-                <textarea 
+                <textarea
                   rows={4}
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
@@ -702,7 +701,6 @@ export const PurchaseOrderForm = () => {
                   <p className="font-extrabold text-foreground border-b border-border pb-1 mb-2 uppercase">Supplier Account Summary</p>
                   <p className="flex justify-between"><span>Supplier:</span> <span className="font-bold text-foreground">{selectedVendor.name}</span></p>
                   <p className="flex justify-between"><span>Outstanding Balance:</span> <span className="font-bold text-red-500 font-mono">₹{Number(selectedVendor.payableBalance || 0).toLocaleString('en-IN')}</span></p>
-                  <p className="flex justify-between"><span>Payment Terms:</span> <span className="text-muted-foreground">{selectedVendor.paymentTerms || 'Due on Receipt'}</span></p>
                 </div>
               )}
             </div>
@@ -715,7 +713,7 @@ export const PurchaseOrderForm = () => {
                   <SummaryRow label="Discount Saved" value={-summary.totalDiscount} isPositive />
                 )}
                 <SummaryRow label="Taxable Value" value={summary.taxableValue} />
-                
+
                 {taxMode === 'CGST_SGST' && summary.cgst > 0 && (
                   <>
                     <SummaryRow label="Input CGST" value={summary.cgst} className="pl-4 border-b-0 py-1" />
@@ -738,10 +736,10 @@ export const PurchaseOrderForm = () => {
                 <SummaryRow label="Grand Total" value={summary.grandTotal} isTotal />
 
                 <div className="pt-4 flex gap-3">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => navigate('/purchase-orders')} 
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate('/purchase-orders')}
                     className="flex-1 font-bold text-xs"
                   >
                     Cancel

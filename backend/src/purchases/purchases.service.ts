@@ -6,12 +6,14 @@ import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
+import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
 export class PurchasesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accountingEngine: AccountingEngineService
+    private readonly accountingEngine: AccountingEngineService,
+    private readonly sequenceService: SequenceService
   ) {}
 
   async findAll(query: PaginationQueryDto) {
@@ -81,28 +83,8 @@ export class PurchasesService {
     }
 
     const execute = async (tx: Prisma.TransactionClient) => {
-      // 1. Generate purchase number using DocumentSequence
-      let sequence = await tx.documentSequence.findFirst({
-        where: { companyId, documentType: 'PURCHASE' },
-      });
-
-      if (!sequence) {
-        sequence = await tx.documentSequence.create({
-          data: {
-            companyId,
-            documentType: 'PURCHASE',
-            currentNumber: 0,
-          },
-        });
-      }
-
-      const nextNumber = sequence.currentNumber + 1;
-      await tx.documentSequence.update({
-        where: { id: sequence.id },
-        data: { currentNumber: nextNumber },
-      });
-
-      const purchaseNo = `PUR-${String(nextNumber).padStart(5, '0')}`;
+      // 1. Generate purchase number using SequenceService
+      const purchaseNo = await this.sequenceService.generateNextSequence(companyId, 'BILL', tx);
 
       // Interstate check
       const company = await tx.company.findUnique({

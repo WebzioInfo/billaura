@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Button, Input, Select, AutoGenerateInput, FormErrorDisplay } from '@/components/ui';
 import apiClient from '@/services/api';
 import { useDynamicTitle } from '@/hooks/useDynamicTitle';
+import { getCustomerDisplayName } from '@/utils/entityNames';
 import { useAsyncForm } from '@/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -112,7 +113,8 @@ export const CustomerForm = () => {
 
   const { register, handleFormSubmit, setValue, formState: { errors } } = form;
 
-  useDynamicTitle(isEditMode ? (customer?.name ? `Edit ${customer?.name}` : 'Edit Customer') : 'New Customer');
+  const displayName = getCustomerDisplayName(customer);
+  useDynamicTitle(isEditMode ? (customer ? `Edit ${displayName}` : 'Edit Customer') : 'New Customer');
 
   const saveMutation = useMutation({
     mutationFn: async (data: CustomerFormValues) => {
@@ -159,11 +161,13 @@ export const CustomerForm = () => {
 
   return (
     <PageContainer maxWidth="5xl">
-      <PageHeader
-        title={isEditMode ? "Edit Customer" : "New Customer"}
-        description="Fill in the customer details below."
-        backTo={{ label: "Customers", path: "/app/customers" }}
-        primaryAction={
+        <PageHeader 
+          title={isEditMode ? 'Edit Customer' : 'New Customer'}
+          breadcrumbs={[
+            { label: 'Customers', href: '/app/customers' },
+            { label: isEditMode ? (customer ? displayName : 'Edit Customer') : 'New Customer' }
+          ]}
+          primaryAction={
           <Button 
             onClick={form.handleSubmit(onSubmit)} 
             disabled={saveMutation.isPending}

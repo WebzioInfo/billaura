@@ -34,6 +34,7 @@ import { FormErrorDisplay } from '@/components/ui';
 import { useAsyncForm } from '@/hooks/useAsyncForm';
 import apiClient from '@/services/api';
 import { toast } from 'sonner';
+import { ReferralSection } from './components/form/ReferralSection';
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa",
@@ -80,6 +81,9 @@ const invoiceSchema = z.object({
   placeOfSupply: z.string().optional(),
   notes: z.string().optional(),
   termsConditions: z.string().optional(),
+  referralSourceType: z.string().optional(),
+  employeeId: z.string().optional(),
+  referralPartnerId: z.string().optional(),
   items: z.array(invoiceItemSchema).min(1, 'At least one line item is required'),
 });
 
@@ -87,13 +91,20 @@ type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
 import { useQuery } from '@tanstack/react-query';
 
-export const InvoiceForm = () => {
+export type SalesDocumentType = 'INVOICE' | 'PROFORMA' | 'QUOTATION' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'DELIVERY_CHALLAN';
+
+interface SalesDocumentFormProps {
+  initialDocType?: SalesDocumentType;
+}
+
+export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDocType = 'INVOICE' }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryCustomerId = searchParams.get('customerId');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'DRAFT' | 'SENT'>('SENT');
+  const [docType, setDocType] = useState<SalesDocumentType>(initialDocType);
 
   const form = useAsyncForm<InvoiceFormValues>(
     {
@@ -152,8 +163,13 @@ export const InvoiceForm = () => {
   });
 
   const { data: nextNoData, error: nextNoError, isLoading: nextNoLoading, refetch: refetchNextNo } = useQuery<any>({
-    queryKey: ['invoices', 'next-number'],
-    queryFn: () => apiClient.get('/sales/invoices/next-number'),
+    queryKey: ['sales-documents', 'next-number', docType],
+    queryFn: () => {
+      let endpoint = '/sales/invoices/next-number';
+      if (docType === 'QUOTATION') endpoint = '/sales/quotations/next-number';
+      if (docType === 'PROFORMA') endpoint = '/sales/invoices/next-number?type=PROFORMA';
+      return apiClient.get(endpoint);
+    },
     staleTime: 0,
     retry: 1,
     refetchOnWindowFocus: false,
@@ -379,7 +395,7 @@ export const InvoiceForm = () => {
 
       const payload = {
         customerId: data.customerId,
-        invoiceNo: data.invoiceNo,
+        docNo: data.invoiceNo,
         date: new Date(data.date).toISOString(),
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
         invoiceType: backendType,
@@ -388,7 +404,6 @@ export const InvoiceForm = () => {
         items: data.items.map(item => {
           const discountPercent = Number(item.discount) || 0;
           const rate = Number(item.rate);
-          // Standardize discount mapping inside rate or descriptive line
           const originalLineTotal = rate * Number(item.qty);
           const lineDiscount = originalLineTotal * (discountPercent / 100);
           const finalTaxableRate = (originalLineTotal - lineDiscount) / Number(item.qty);
@@ -399,7 +414,7 @@ export const InvoiceForm = () => {
               ? `${item.description || ''} (Discount ${discountPercent}%)`
               : item.description,
             qty: Number(item.qty),
-            rate: finalTaxableRate, // Save rate post-discount to match backend expectations
+            rate: finalTaxableRate,
             taxPercent: data.invoiceType === 'NO_TAX' ? 0 : Number(item.taxPercent),
           };
         }),
@@ -407,16 +422,22 @@ export const InvoiceForm = () => {
         termsConditions: data.termsConditions,
       };
 
-      await apiClient.post('/sales/invoices', payload);
+      let endpoint = '/sales/invoices';
+      if (docType === 'QUOTATION') endpoint = '/sales/quotations';
+      
+      const actualPayload = { ...payload, documentType: docType };
+      if (docType === 'PROFORMA') actualPayload.invoiceType = 'PROFORMA_INVOICE';
+      
+      await apiClient.post(endpoint, actualPayload);
       toast.success(
         submitStatus === 'DRAFT'
-          ? 'Invoice draft saved successfully!'
-          : 'Invoice created and issued successfully!'
+          ? `${docType} draft saved successfully!`
+          : `${docType} created and issued successfully!`
       );
-      navigate('/invoices');
+      navigate(docType === 'QUOTATION' ? '/quotations' : '/invoices');
     } catch (err: any) {
       console.error(err);
-      toast.error(err.response?.data?.message || 'Failed to create sales invoice');
+      toast.error(err.response?.data?.message || `Failed to create ${docType.toLowerCase()}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -467,9 +488,9 @@ export const InvoiceForm = () => {
   return (
     <PageContainer maxWidth="7xl">
       <PageHeader
-        title="Create Invoice"
-        description="Draft or issue a premium sales invoice"
-        backTo={{ label: 'Invoices', path: '/invoices' }}
+        title={`Create ${docType.replace('_', ' ')}`}
+        description={`Draft or issue a premium ${docType.toLowerCase().replace('_', ' ')}`}
+        backTo={{ label: 'Documents', path: docType === 'QUOTATION' ? '/quotations' : '/invoices' }}
       />
 
       <form onSubmit={handleFormSubmit(onSubmit)} className="flex flex-col xl:flex-row gap-6 items-start">
@@ -482,13 +503,31 @@ export const InvoiceForm = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice Type</label>
-                <select {...register('invoiceType')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                  <option value="B2B">B2B (Tax Invoice)</option>
-                  <option value="B2C">B2C (Retail Invoice)</option>
-                  <option value="NO_TAX">No Tax (Bill of Supply)</option>
-                </select>
+              <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Document Type *</label>
+                  <select
+                    value={docType}
+                    onChange={(e) => setDocType(e.target.value as SalesDocumentType)}
+                    className="w-full px-4 py-2.5 bg-accent/5 border border-accent/20 rounded-xl text-sm font-bold text-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  >
+                    <option value="INVOICE">Sales Invoice</option>
+                    <option value="PROFORMA">Proforma Invoice</option>
+                    <option value="QUOTATION">Quotation</option>
+                    <option value="CREDIT_NOTE">Credit Note</option>
+                    <option value="DEBIT_NOTE">Debit Note</option>
+                    <option value="DELIVERY_CHALLAN">Delivery Challan</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Tax Mode</label>
+                  <select {...register('invoiceType')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
+                    <option value="B2B">B2B (Tax Invoice)</option>
+                    <option value="B2C">B2C (Retail Invoice)</option>
+                    <option value="NO_TAX">No Tax (Bill of Supply)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="md:col-span-2">
@@ -501,13 +540,13 @@ export const InvoiceForm = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice # *</label>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Document # *</label>
                 <input
                   type="text"
                   {...register('invoiceNo')}
-                  placeholder="INV-XXXXX"
+                  placeholder="DOC-XXXXX"
                   disabled={nextNoLoading}
-                  className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50"
+                  className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50"
                 />
                 <FormErrorDisplay error={errors.invoiceNo} />
               </div>
@@ -697,6 +736,10 @@ export const InvoiceForm = () => {
               </table>
             </div>
 
+            <div className="pt-6 border-t border-border mt-4">
+              <ReferralSection form={form} />
+            </div>
+
             {/* Notes and Terms Input */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-border mt-4">
               <div className="space-y-4">
@@ -884,7 +927,7 @@ export const InvoiceForm = () => {
               <div className="flex justify-between items-start gap-4">
                 <div>
                   <h4 className="text-2xl font-bold uppercase tracking-wide text-foreground">
-                    {invoiceType === 'NO_TAX' ? 'Bill of Supply' : 'Tax Invoice'}
+                    {invoiceType === 'NO_TAX' ? 'Bill of Supply' : docType.replace('_', ' ')}
                   </h4>
                   <p className="text-xs text-muted-foreground mt-1">FY 2026-2027 Workspace Document</p>
                 </div>
@@ -911,7 +954,7 @@ export const InvoiceForm = () => {
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
                     <span className="block font-semibold text-muted-foreground uppercase tracking-wider">Document No</span>
-                    <span className="text-sm font-bold text-foreground">INV-XXXXX (Auto)</span>
+                    <span className="text-sm font-bold text-foreground">DOC-XXXXX (Auto)</span>
                   </div>
                   <div>
                     <span className="block font-semibold text-muted-foreground uppercase tracking-wider">Document Date</span>

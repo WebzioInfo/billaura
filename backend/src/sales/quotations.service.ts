@@ -5,10 +5,14 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
+import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
 export class QuotationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sequenceService: SequenceService
+  ) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -77,27 +81,7 @@ export class QuotationsService {
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Generate quotation number
-      let sequence = await tx.documentSequence.findFirst({
-        where: { companyId, documentType: 'QUOTATION' },
-      });
-
-      if (!sequence) {
-        sequence = await tx.documentSequence.create({
-          data: {
-            companyId,
-            documentType: 'QUOTATION',
-            currentNumber: 0,
-          },
-        });
-      }
-
-      const nextNumber = sequence.currentNumber + 1;
-      await tx.documentSequence.update({
-        where: { id: sequence.id },
-        data: { currentNumber: nextNumber },
-      });
-
-      const quotationNo = `QTN-${String(nextNumber).padStart(5, '0')}`;
+      const quotationNo = await this.sequenceService.generateNextSequence(companyId, 'QUOTATION', tx);
 
       // 2. Fetch items and calculate subtotal
       let subTotal = 0;

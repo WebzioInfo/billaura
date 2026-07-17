@@ -9,6 +9,7 @@ import { PurchasesService } from '../purchases/purchases.service';
 import { PurchasePaymentsService } from '../purchases/purchase-payments.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
+import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
 export class ReceiptsService {
@@ -19,6 +20,7 @@ export class ReceiptsService {
     private readonly purchasePaymentsService: PurchasePaymentsService,
     private readonly expensesService: ExpensesService,
     private readonly accountingEngine: AccountingEngineService,
+    private readonly sequenceService: SequenceService,
   ) {}
 
   async findAll(query: ReceiptQueryDto) {
@@ -36,12 +38,12 @@ export class ReceiptsService {
             OR: [
               { receiptNo: { contains: query.search } },
               { businessPartner: { name: { contains: query.search } } },
-              { referenceNo: { contains: query.search } },
+              { payments: { some: { referenceNo: { contains: query.search } } } },
             ],
           }
         : {}),
       ...(query.customerId ? { businessPartnerId: query.customerId } : {}),
-      ...(query.paymentMethod ? { paymentMethod: query.paymentMethod } : {}),
+      ...(query.paymentMethod ? { payments: { some: { paymentMethod: query.paymentMethod } } } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.startDate && query.endDate
         ? {
@@ -58,7 +60,7 @@ export class ReceiptsService {
         where,
         skip,
         take,
-        include: { businessPartner: true, account: true, receivedBy: true },
+        include: { businessPartner: true, payments: { include: { account: true } }, receivedBy: true },
         orderBy: { date: 'desc' },
       }),
       this.prisma.receipt.count({ where }),
@@ -77,8 +79,8 @@ export class ReceiptsService {
       where: { id },
       include: {
         businessPartner: true,
-        account: true,
         receivedBy: true,
+        payments: { include: { account: true } },
         allocations: { include: { invoice: true } },
         attachments: true,
         audits: { include: { user: true } },
@@ -107,8 +109,8 @@ export class ReceiptsService {
       _sum: { amount: true },
     });
 
-    const paymentMethodsGroup = await this.prisma.receipt.groupBy({
-      where: activeWhere,
+    const paymentMethodsGroup = await this.prisma.receiptPayment.groupBy({
+      where: { receipt: activeWhere },
       by: ['paymentMethod'],
       _sum: { amount: true },
       _count: { id: true },
@@ -162,73 +164,78 @@ export class ReceiptsService {
       throw new BadRequestException('Receipt amount exceeds outstanding balance');
     }
 
-    let targetAccountId = dto.accountId;
-    if (!targetAccountId) {
-      const isCash = dto.paymentMethod === 'CASH';
-      const ledgerName = isCash ? 'Cash' : 'Bank Accounts';
-      let resolvedAccount = await this.prisma.account.findFirst({
-        where: { companyId, name: ledgerName },
-      });
-      if (!resolvedAccount) {
-        resolvedAccount = await this.prisma.account.create({
-          data: { companyId, name: ledgerName, category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+    const normalizedSplits = dto.splitPayments && dto.splitPayments.length > 0
+      ? dto.splitPayments
+      : [
+          {
+            paymentMethod: dto.paymentMethod,
+            amount: dto.amount,
+            accountId: dto.accountId,
+            referenceNo: dto.referenceNo,
+            chequeNo: dto.chequeNo,
+            transactionId: dto.transactionId,
+            clearanceDate: dto.clearanceDate,
+            bankCharges: dto.bankCharges,
+          }
+        ];
+
+    const sumSplits = normalizedSplits.reduce((sum, sp) => sum + Number(sp.amount), 0);
+    if (Math.abs(sumSplits - Number(dto.amount)) > 0.01) {
+      throw new BadRequestException('Sum of split payments must equal total receipt amount');
+    }
+
+    for (const split of normalizedSplits) {
+      if (!split.accountId) {
+        const isCash = split.paymentMethod === 'CASH';
+        const ledgerName = isCash ? 'Cash' : 'Bank Accounts';
+        let resolvedAccount = await this.prisma.account.findFirst({
+          where: { companyId, name: ledgerName },
         });
-      }
-      targetAccountId = resolvedAccount.id;
-    } else {
-      const account = await this.prisma.account.findFirst({
-        where: { id: targetAccountId, companyId },
-      });
-      if (!account) {
-        throw new NotFoundException(`Account with ID ${targetAccountId} not found`);
+        if (!resolvedAccount) {
+          resolvedAccount = await this.prisma.account.create({
+            data: { companyId, name: ledgerName, category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+          });
+        }
+        split.accountId = resolvedAccount.id;
+      } else {
+        const account = await this.prisma.account.findFirst({
+          where: { id: split.accountId, companyId },
+        });
+        if (!account) {
+          throw new NotFoundException(`Account with ID ${split.accountId} not found`);
+        }
       }
     }
 
     const execute = async (tx: Prisma.TransactionClient) => {
       // 1. Generate receipt number
-      let sequence = await tx.documentSequence.findFirst({
-        where: { companyId, documentType: 'RECEIPT' },
-      });
+      const receiptNo = await this.sequenceService.generateNextSequence(companyId, 'RECEIPT', tx);
 
-      if (!sequence) {
-        sequence = await tx.documentSequence.create({
-          data: {
-            companyId,
-            documentType: 'RECEIPT',
-            currentNumber: 0,
-          },
-        });
-      }
-
-      const nextNumber = sequence.currentNumber + 1;
-      await tx.documentSequence.update({
-        where: { id: sequence.id },
-        data: { currentNumber: nextNumber },
-      });
-
-      const receiptNo = `REC-${String(nextNumber).padStart(5, '0')}`;
-
-      // 2. Create Receipt record
+      // 2. Create Receipt record and Payments
       const receipt = await tx.receipt.create({
         data: {
           companyId,
           receiptNo,
           date: new Date(dto.date),
           businessPartnerId: dto.businessPartnerId,
-          accountId: targetAccountId,
-          paymentMethod: dto.paymentMethod,
           amount: dto.amount,
-          referenceNo: dto.referenceNo || null,
-          chequeNo: dto.chequeNo || null,
-          transactionId: dto.transactionId || null,
-          clearanceDate: dto.clearanceDate ? new Date(dto.clearanceDate) : null,
-          bankCharges: dto.bankCharges || 0,
-          cashier: dto.cashier || null,
-          notes: dto.notes || null,
           currency: dto.currency || 'INR',
           exchangeRate: dto.exchangeRate || 1.0,
           receivedById: userId,
           status: 'COMPLETED',
+          payments: {
+            create: normalizedSplits.map(split => ({
+              account: { connect: { id: split.accountId! } },
+              paymentMethod: split.paymentMethod || 'CASH',
+              amount: split.amount,
+              referenceNo: split.referenceNo || null,
+              chequeNo: split.chequeNo || null,
+              transactionId: split.transactionId || null,
+              clearanceDate: split.clearanceDate ? new Date(split.clearanceDate) : null,
+              bankCharges: split.bankCharges || 0,
+              notes: dto.notes || null
+            }))
+          }
         },
       });
 
@@ -313,15 +320,17 @@ export class ReceiptsService {
         },
       });
 
-      // 5. Update Cash/Bank Account balance
-      await tx.account.update({
-        where: { id: targetAccountId },
-        data: {
-          balance: {
-            increment: dto.amount,
+      // 5. Update Cash/Bank Account balances
+      for (const split of normalizedSplits) {
+        await tx.account.update({
+          where: { id: split.accountId! },
+          data: {
+            balance: {
+              increment: split.amount,
+            },
           },
-        },
-      });
+        });
+      }
 
       // 6. Write Customer Statement
       await tx.customerStatement.create({
@@ -347,15 +356,21 @@ export class ReceiptsService {
         });
       }
 
+      const journalLines = [
+        ...normalizedSplits.map(split => ({
+          accountId: split.accountId!,
+          debit: split.amount,
+          credit: 0
+        })),
+        { accountId: arAccount.id, debit: 0, credit: dto.amount }
+      ];
+
       await this.accountingEngine.postTransaction({
         companyId,
         date: new Date(dto.date),
         reference: receiptNo,
         description: `Automatic receipt posting ${receiptNo}`,
-        lines: [
-          { accountId: targetAccountId, debit: dto.amount, credit: 0 },
-          { accountId: arAccount.id, debit: 0, credit: dto.amount },
-        ],
+        lines: journalLines,
       }, tx);
 
       // Create Audit Log
@@ -389,13 +404,6 @@ export class ReceiptsService {
       const updated = await tx.receipt.update({
         where: { id },
         data: {
-          referenceNo: dto.referenceNo !== undefined ? dto.referenceNo : receipt.referenceNo,
-          chequeNo: dto.chequeNo !== undefined ? dto.chequeNo : receipt.chequeNo,
-          transactionId: dto.transactionId !== undefined ? dto.transactionId : receipt.transactionId,
-          clearanceDate: dto.clearanceDate !== undefined ? (dto.clearanceDate ? new Date(dto.clearanceDate) : null) : receipt.clearanceDate,
-          bankCharges: dto.bankCharges !== undefined ? dto.bankCharges : receipt.bankCharges,
-          cashier: dto.cashier !== undefined ? dto.cashier : receipt.cashier,
-          notes: dto.notes !== undefined ? dto.notes : receipt.notes,
           status: dto.status !== undefined ? dto.status : receipt.status,
         },
       });
@@ -455,15 +463,17 @@ export class ReceiptsService {
         },
       });
 
-      // 3. Revert Cash/Bank Account balance
-      await tx.account.update({
-        where: { id: receipt.accountId },
-        data: {
-          balance: {
-            decrement: receipt.amount,
+      // 3. Revert Cash/Bank Account balances
+      for (const payment of receipt.payments) {
+        await tx.account.update({
+          where: { id: payment.accountId },
+          data: {
+            balance: {
+              decrement: payment.amount,
+            },
           },
-        },
-      });
+        });
+      }
 
       // 4. Revert Customer Statement (create contra entry or delete)
       await tx.customerStatement.create({
@@ -537,14 +547,19 @@ export class ReceiptsService {
         const receiptDto = {
           date: dto.date,
           businessPartnerId: dto.businessPartnerId,
-          accountId: dto.accountId,
-          paymentMethod: dto.paymentMethod,
           amount: Number(invoice.grandTotal),
-          referenceNo: dto.referenceNo,
-          chequeNo: dto.chequeNo,
-          transactionId: dto.transactionId,
-          clearanceDate: dto.clearanceDate,
-          bankCharges: dto.bankCharges,
+          splitPayments: [
+            {
+              paymentMethod: dto.paymentMethod,
+              amount: Number(invoice.grandTotal),
+              accountId: dto.accountId,
+              referenceNo: dto.referenceNo,
+              chequeNo: dto.chequeNo,
+              transactionId: dto.transactionId,
+              clearanceDate: dto.clearanceDate,
+              bankCharges: dto.bankCharges
+            }
+          ],
           cashier: dto.cashier,
           notes: dto.notes,
           allocations: [
@@ -670,13 +685,15 @@ export class ReceiptsService {
       throw new BadRequestException('Invalid receipt type');
     }
 
-    let sequence = await this.prisma.documentSequence.findFirst({
-      where: { companyId, documentType: docType as any },
-    });
-
-    const currentNumber = sequence ? sequence.currentNumber : 0;
-    const nextNumber = currentNumber + 1;
-    return `${prefix}-${String(nextNumber).padStart(5, '0')}`;
+    // Generate receipt number preview without actually consuming it
+    // Wait, generateNextSequence actually consumes it!
+    // Since this is a preview function, we should use getConfig.
+    const config = await this.sequenceService.getConfig(companyId, docType);
+    if (config) {
+      const nextNumber = config.currentNumber + 1;
+      return `${config.prefix || prefix + '-'}${String(nextNumber).padStart(config.padding || 5, '0')}`;
+    }
+    return `${prefix}-00001`;
   }
 
   async preview(dto: any) {

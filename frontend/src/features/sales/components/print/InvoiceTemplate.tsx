@@ -19,7 +19,6 @@ export interface InvoiceTemplateData {
     invoiceNumber: string;
     invoiceDate: string;
     dueDate?: string;
-    paymentTerms?: string;
     placeOfSupply?: string;
     salesPerson?: string;
   };

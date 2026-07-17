@@ -6,12 +6,14 @@ import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
+import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
 export class ExpensesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accountingEngine: AccountingEngineService
+    private readonly accountingEngine: AccountingEngineService,
+    private readonly sequenceService: SequenceService
   ) {}
 
   async findAll(query: PaginationQueryDto) {
@@ -93,27 +95,7 @@ export class ExpensesService {
 
     const execute = async (tx: Prisma.TransactionClient) => {
       // 1. Generate expense sequence number
-      let sequence = await tx.documentSequence.findFirst({
-        where: { companyId, documentType: 'EXPENSE' },
-      });
-
-      if (!sequence) {
-        sequence = await tx.documentSequence.create({
-          data: {
-            companyId,
-            documentType: 'EXPENSE',
-            currentNumber: 0,
-          },
-        });
-      }
-
-      const nextNumber = sequence.currentNumber + 1;
-      await tx.documentSequence.update({
-        where: { id: sequence.id },
-        data: { currentNumber: nextNumber },
-      });
-
-      const expenseNo = `EXP-${String(nextNumber).padStart(5, '0')}`;
+      const expenseNo = await this.sequenceService.generateNextSequence(companyId, 'EXPENSE', tx);
       const amount = Number(dto.amount);
       const taxAmount = Number(dto.taxAmount || 0);
       const totalAmount = amount + taxAmount;

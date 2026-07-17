@@ -46,7 +46,7 @@ const VendorProfile = lazy(() => import('../features/vendors/VendorProfile').the
 const VendorForm = lazy(() => import('../features/vendors/VendorForm').then(m => ({ default: m.VendorForm })));
 const InvoicesList = lazy(() => import('../features/sales/InvoicesList').then(m => ({ default: m.InvoicesList })));
 const InvoicePrintView = lazy(() => import('../features/sales/InvoicePrintView').then(m => ({ default: m.InvoicePrintView })));
-const InvoiceForm = lazy(() => import('../features/sales/InvoiceForm').then(m => ({ default: m.InvoiceForm })));
+const SalesDocumentForm = lazy(() => import('../features/sales/SalesDocumentForm').then(m => ({ default: m.SalesDocumentForm })));
 const InvoiceDetails = lazy(() => import('../features/sales/InvoiceDetails').then(m => ({ default: m.InvoiceDetails })));
 const ReceiptsList = lazy(() => import('../features/sales/ReceiptsList').then(m => ({ default: m.ReceiptsList })));
 const ReceiptForm = lazy(() => import('../features/sales/ReceiptForm').then(m => ({ default: m.ReceiptForm })));
@@ -242,13 +242,15 @@ export const router = createBrowserRouter([
       { path: 'bom', element: <BomList /> },
       { path: 'sales', element: <SalesDashboard /> },
       { path: 'quotations', element: <MaintenancePage /> },
+      { path: 'quotations/new', element: <SalesDocumentForm initialDocType="QUOTATION" /> },
       { path: 'sales-orders', element: <SalesOrdersList /> },
       { path: 'delivery-challans', element: <DeliveryNotesList /> },
       { path: 'delivery-notes', element: <DeliveryNotesList /> },
       { path: 'invoices', element: <InvoicesList /> },
       { path: 'invoices/:id', element: <InvoiceDetails /> },
       { path: 'invoices/:id/print', element: <InvoicePrintView /> },
-      { path: 'invoices/new', element: <InvoiceForm /> },
+      { path: 'invoices/new', element: <SalesDocumentForm initialDocType="INVOICE" /> },
+      { path: 'proformas/new', element: <SalesDocumentForm initialDocType="PROFORMA" /> },
       { path: 'receipts', element: <ReceiptsList /> },
       { path: 'receipts/new', element: <ReceiptForm /> },
       { path: 'receipts/:id', element: <ReceiptForm /> },
