@@ -5,14 +5,14 @@ import {
   DollarSign, CheckCircle, RefreshCw, Eye, Receipt, SlidersHorizontal,
   MoreVertical
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Button } from '@/components/ui/Button';
-import { PageContainer, EmptyState, LoadingState, AmountText, TableLoader, SummaryCardLoader } from '@/components/ui';
-import { DeleteDialog } from '@/components/ui';
-import { DataTable } from '@/components/ui/data-table/DataTable';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Button } from '@/shared/components/ui/Button';
+import { PageContainer, EmptyState, LoadingState, AmountText, TableLoader, SummaryCardLoader } from '@/shared/components/ui';
+import { DeleteDialog } from '@/shared/components/ui';
+import { DataTable } from '@/shared/components/ui/data-table/DataTable';
 import { ColumnDef } from '@tanstack/react-table';
-import apiClient from '@/services/api';
-import notification from '@/services/NotificationService';
+import apiClient from '@/core/api';
+import notification from '@/core/services/NotificationService';
 import { useQuery } from '@tanstack/react-query';
 
 interface RowActionsProps {

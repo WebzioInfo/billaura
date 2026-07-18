@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hrApi, GenerateSalarySlipDto, PaySalarySlipDto } from '../api/hr.api';
-import { handleApiFormError } from '../../../utils/error-handler';
+import { handleApiFormError } from '../../../shared/utils/error-handler';
 import { UseFormSetError } from 'react-hook-form';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 
 export const useSalarySlips = () => {
   return useQuery({

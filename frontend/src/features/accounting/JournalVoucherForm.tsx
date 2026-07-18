@@ -5,17 +5,17 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, ArrowLeft, Save } from 'lucide-react';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 
-import api from '../../services/api';
-import { Button } from '../../components/ui/Button';
-import { PageHeader } from '../../components/ui/PageHeader';
-import { PageContainer } from '../../components/ui/LayoutComponents';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
-import { Input } from '../../components/ui/Input';
-import { LedgerLookup } from '../../components/ui/LedgerLookup';
-import { FormErrorDisplay } from '../../components/ui';
-import { useAsyncForm } from '../../hooks/useAsyncForm';
+import { apiClient as api } from '../../core/api/apiClient';
+import { Button } from '../../shared/components/ui/Button';
+import { PageHeader } from '../../shared/components/ui/PageHeader';
+import { PageContainer } from '../../shared/components/ui/LayoutComponents';
+import { Card, CardHeader, CardTitle, CardContent } from '../../shared/components/ui/Card';
+import { Input } from '../../shared/components/ui/Input';
+import { LedgerLookup } from '../../shared/components/ui/LedgerLookup';
+import { FormErrorDisplay } from '../../shared/components/ui';
+import { useAsyncForm } from '../../shared/hooks/useAsyncForm';
 
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;
 

@@ -3,9 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import api from '../../../services/api';
+import { apiClient as api } from '../../../core/api/apiClient';
 import { useSessionStore } from '../stores/sessionStore';
-import { TokenService } from '../../../services/auth/TokenService';
+import { TokenService } from '../../../core/auth/TokenService';
 import { BarChart3, Mail, AlertCircle, Loader2, CheckCircle2, RotateCw } from 'lucide-react';
 
 const verifySchema = z.object({
@@ -17,7 +17,7 @@ type VerifyFormValues = z.infer<typeof verifySchema>;
 export const VerifyEmail = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const setSession = useSessionStore((state) => state.setSession);
+  const setSession = useSessionStore((state: any) => state.setSession);
   const email = searchParams.get('email') || '';
   
   const [error, setError] = useState<string | null>(null);
@@ -202,3 +202,5 @@ export const VerifyEmail = () => {
     </div>
   );
 };
+
+

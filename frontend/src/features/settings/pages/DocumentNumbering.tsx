@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import notification from '@/services/NotificationService';
-import apiClient from '@/services/api';
-import { Button, Input, Select } from '@/components/ui';
+import notification from '@/core/services/NotificationService';
+import apiClient from '@/core/api';
+import { Button, Input, Select } from '@/shared/components/ui';
 import { Loader2, Save, FileText, Settings, RefreshCw } from 'lucide-react';
 
 const DOCUMENT_TYPES = [

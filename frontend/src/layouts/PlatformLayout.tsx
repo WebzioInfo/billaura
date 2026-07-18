@@ -5,9 +5,9 @@ import {
   CreditCard, LifeBuoy, DollarSign, Activity, FileText, Settings
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
-import { authService } from '../services/api';
-import { Ribbon } from '@/components/workspace/Ribbon';
-import { AiCopilot } from '@/components/workspace/AiCopilot';
+import { authService } from '../core/api';
+import { Ribbon } from '@/shared/components/workspace/Ribbon';
+import { AiCopilot } from '@/shared/components/workspace/AiCopilot';
 
 export default function PlatformLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);

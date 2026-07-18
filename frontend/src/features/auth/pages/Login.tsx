@@ -3,9 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { authService } from '../../../services/api';
+import { authService } from '../../../core/api';
 import { useSessionStore } from '../stores/sessionStore';
-import { TokenService } from '../../../services/auth/TokenService';
+import { TokenService } from '../../../core/auth/TokenService';
 import { Lock, Mail, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
 const loginSchema = z.object({
@@ -18,7 +18,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export const Login = () => {
   const navigate = useNavigate();
-  const setSession = useSessionStore((state) => state.setSession);
+  const setSession = useSessionStore((state: any) => state.setSession);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -32,8 +32,8 @@ export const Login = () => {
     setError(null);
     try {
       const response = await authService.login(data);
-      TokenService.setAccessToken(response.access_token);
-      setSession(response.user, response.access_token);
+      TokenService.setTokens(response.accessToken, response.refreshToken);
+      setSession(response.user, response.accessToken);
       
       if (response.user.globalRole === 'SUPER_ADMIN') {
         navigate('/platform/dashboard');
@@ -173,3 +173,5 @@ export const Login = () => {
     </div>
   );
 };
+
+

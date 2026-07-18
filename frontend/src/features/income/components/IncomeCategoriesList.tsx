@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { DataTable } from '../../../components/ui/data-table';
-import { Button } from '../../../components/ui/Button';
+import { DataTable } from '../../../shared/components/ui/data-table';
+import { Button } from '../../../shared/components/ui/Button';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { IncomeCategoryFormModal } from './IncomeCategoryFormModal';
-import api from '../../../services/api';
+import { apiClient as api } from '../../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export function IncomeCategoriesList() {

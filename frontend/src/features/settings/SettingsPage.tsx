@@ -9,11 +9,11 @@ import { RolesList } from '../roles/RolesList';
 import { DocumentNumbering } from './pages/DocumentNumbering';
 import { CommissionRulesSettings } from './pages/CommissionRulesSettings';
 import { AuditLogsSettings } from './pages/AuditLogs';
-import notification from '@/services/NotificationService';
-import apiClient from '../../services/api';
+import notification from '@/core/services/NotificationService';
+import { apiClient } from '../../core/api/apiClient';
 import { useSessionStore } from '../auth/stores/sessionStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAsyncForm } from '../../hooks/useAsyncForm';
+import { useAsyncForm } from '../../shared/hooks/useAsyncForm';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];

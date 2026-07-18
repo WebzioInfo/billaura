@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, History, Calendar, User, Activity, FileText } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import apiClient from '@/services/api';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import apiClient from '@/core/api';
 
 export const AuditLogsSettings = () => {
   const [page, setPage] = useState(1);

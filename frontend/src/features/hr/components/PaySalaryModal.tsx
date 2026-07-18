@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { usePaySalarySlip } from '../hooks/useHr';
-import { Button } from '@/components/ui/Button';
-import { apiClient } from '@/services/api/apiClient';
+import { Button } from '@/shared/components/ui/Button';
+import { apiClient } from '@/core/api/apiClient';
 
 interface Props {
   onClose: () => void;

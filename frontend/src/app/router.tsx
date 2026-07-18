@@ -1,10 +1,11 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ProtectedRoute } from '../features/auth/components/ProtectedRoute';
-import { ErrorBoundary } from '../components/ErrorBoundary';
+import { GuestGuard } from '../features/auth/components/GuestGuard';
+import { ErrorBoundary } from '../shared/components/ErrorBoundary';
 import { NotFound } from '../pages/NotFound';
 import { Unauthorized } from '../pages/Unauthorized';
-import { KeyboardNavigationProvider } from '../components/workspace/KeyboardNavigationProvider';
+import { KeyboardNavigationProvider } from '../shared/components/workspace/KeyboardNavigationProvider';
 
 // --- Lazy Loaded Enterprise Modules ---
 const DepartmentsList = lazy(() => import('../features/departments/DepartmentsList').then(m => ({ default: m.DepartmentsList })));
@@ -28,6 +29,7 @@ const SerialsList = lazy(() => import('../features/inventory/SerialsList').then(
 const CategoriesList = lazy(() => import('../features/inventory/CategoriesList').then(m => ({ default: m.CategoriesList })));
 const BomList = lazy(() => import('../features/inventory/BomList').then(m => ({ default: m.BomList })));
 const ProductsList = lazy(() => import('../features/inventory/ProductsList').then(m => ({ default: m.ProductsList })));
+const BrandsList = lazy(() => import('../features/inventory/BrandsList').then(m => ({ default: m.BrandsList })));
 
 const BankingDashboard = lazy(() => import('../features/banking/BankingDashboard').then(m => ({ default: m.BankingDashboard })));
 const BankTransactionsList = lazy(() => import('../features/banking/BankTransactionsList').then(m => ({ default: m.BankTransactionsList })));
@@ -52,6 +54,8 @@ const ReceiptsList = lazy(() => import('../features/sales/ReceiptsList').then(m 
 const ReceiptForm = lazy(() => import('../features/sales/ReceiptForm').then(m => ({ default: m.ReceiptForm })));
 const SalesOrdersList = lazy(() => import('../features/sales/SalesOrdersList').then(m => ({ default: m.SalesOrdersList })));
 const DeliveryNotesList = lazy(() => import('../features/sales/DeliveryNotesList').then(m => ({ default: m.DeliveryNotesList })));
+const QuotationsList = lazy(() => import('../features/sales/QuotationsList').then(m => ({ default: m.QuotationsList })));
+const RecurringInvoicesList = lazy(() => import('../features/sales/RecurringInvoicesList').then(m => ({ default: m.RecurringInvoicesList })));
 
 const BillsList = lazy(() => import('../features/purchases/BillsList').then(m => ({ default: m.BillsList })));
 const BillForm = lazy(() => import('../features/purchases/BillForm').then(m => ({ default: m.BillForm })));
@@ -64,6 +68,13 @@ const BalanceSheet = lazy(() => import('../features/reports/BalanceSheet').then(
 const GeneralLedger = lazy(() => import('../features/reports/GeneralLedger').then(m => ({ default: m.GeneralLedger })));
 const DayBook = lazy(() => import('../features/reports/DayBook').then(m => ({ default: m.DayBook })));
 const FinancialReports = lazy(() => import('../features/reports/FinancialReports').then(m => ({ default: m.FinancialReports })));
+const CashFlowDashboard = lazy(() => import('../features/reports/CashFlowDashboard').then(m => ({ default: m.CashFlowDashboard })));
+const ReportView = lazy(() => import('../features/reports/ReportView').then(m => ({ default: m.ReportView })));
+const AttendanceList = lazy(() => import('../features/hr/AttendanceList').then(m => ({ default: m.AttendanceList })));
+const SubscriptionManager = lazy(() => import('../features/settings/SubscriptionManager').then(m => ({ default: m.SubscriptionManager })));
+const TemplatesList = lazy(() => import('../features/settings/TemplatesList').then(m => ({ default: m.TemplatesList })));
+const NotificationsCenter = lazy(() => import('../features/common/NotificationsCenter').then(m => ({ default: m.NotificationsCenter })));
+const GlobalSearch = lazy(() => import('../features/common/GlobalSearch').then(m => ({ default: m.GlobalSearch })));
 
 // --- Onboarding & Auth Pages ---
 const Login = lazy(() => import('../features/auth/pages/Login').then(m => ({ default: m.Login })));
@@ -95,9 +106,7 @@ const WorkspaceLayout = lazy(() => import('../layouts/WorkspaceLayout').then(m =
 const PlatformLayout = lazy(() => import('../layouts/PlatformLayout').then(m => ({ default: m.default })));
 
 const PlatformDashboard = lazy(() => import('../features/dashboard/PlatformDashboard').then(m => ({ default: m.PlatformDashboard })));
-const MaintenancePage = lazy(() => import('./MaintenancePage').then(m => ({ default: m.MaintenancePage })));
-
-import { PageLoader } from '../components/ui/LoadingSystem';
+import { PageLoader } from '../shared/components/ui/LoadingSystem';
 
 const LoadingFallback = () => (
   <div className="h-screen w-screen flex flex-col items-center justify-center bg-white text-slate-800 space-y-6 select-none relative overflow-hidden">
@@ -163,7 +172,7 @@ export const router = createBrowserRouter([
   // Auth & Onboarding Flow
   {
     path: '/',
-    element: <Suspense fallback={<LoadingFallback />}><ErrorBoundary><AuthLayout /></ErrorBoundary></Suspense>,
+    element: <Suspense fallback={<LoadingFallback />}><ErrorBoundary><GuestGuard><AuthLayout /></GuestGuard></ErrorBoundary></Suspense>,
     errorElement: <ErrorBoundary />,
     children: [
       { path: 'login', element: <Login /> },
@@ -233,15 +242,15 @@ export const router = createBrowserRouter([
       { path: 'vendors/:id/edit', element: <CustomerForm /> },
       { path: 'products', element: <ProductsList /> },
       { path: 'services', element: <ProductsList /> },
-      {path: 'categories', element: <CategoriesList /> },
-      { path: 'brands', element: <MaintenancePage /> },
+      { path: 'categories', element: <CategoriesList /> },
+      { path: 'brands', element: <BrandsList /> },
       { path: 'inventory', element: <InventoryDashboard /> },
       { path: 'warehouses', element: <WarehousesList /> },
       { path: 'batches', element: <BatchesList /> },
       { path: 'serials', element: <SerialsList /> },
       { path: 'bom', element: <BomList /> },
       { path: 'sales', element: <SalesDashboard /> },
-      { path: 'quotations', element: <MaintenancePage /> },
+      { path: 'quotations', element: <QuotationsList /> },
       { path: 'quotations/new', element: <SalesDocumentForm initialDocType="QUOTATION" /> },
       { path: 'sales-orders', element: <SalesOrdersList /> },
       { path: 'delivery-challans', element: <DeliveryNotesList /> },
@@ -258,7 +267,7 @@ export const router = createBrowserRouter([
       { path: 'sales/receipts/new', element: <Navigate to="/receipts/new" replace /> },
       { path: 'purchase/receipts/new', element: <Navigate to="/receipts/new" replace /> },
       { path: 'expense/receipts/new', element: <Navigate to="/receipts/new" replace /> },
-      { path: 'recurring-invoices', element: <MaintenancePage /> },
+      { path: 'recurring-invoices', element: <RecurringInvoicesList /> },
       { path: 'payments', element: <SalesDashboard /> },
       { path: 'purchases', element: <PurchasesDashboard /> },
       { path: 'purchase-orders', element: <PurchaseOrdersList /> },
@@ -285,20 +294,20 @@ export const router = createBrowserRouter([
       { path: 'trial-balance', element: <TrialBalance /> },
       { path: 'balance-sheet', element: <BalanceSheet /> },
       { path: 'profit-loss', element: <ProfitLossDashboard /> },
-      { path: 'cash-flow', element: <MaintenancePage /> },
+      { path: 'cash-flow', element: <CashFlowDashboard /> },
       { path: 'gst', element: <TaxesDashboard /> },
       { path: 'taxes', element: <TaxesDashboard /> },
       { path: 'reports', element: <FinancialReports /> },
       { path: 'reports/financial', element: <FinancialReports /> },
-      { path: 'reports/sales', element: <MaintenancePage /> },
-      { path: 'reports/purchases', element: <MaintenancePage /> },
+      { path: 'reports/sales', element: <ReportView title="Sales Report" /> },
+      { path: 'reports/purchases', element: <ReportView title="Purchases Report" /> },
       { path: 'reports/gst', element: <TaxesDashboard /> },
-      { path: 'reports/inventory', element: <MaintenancePage /> },
+      { path: 'reports/inventory', element: <ReportView title="Inventory Report" /> },
       { path: 'reports/payroll', element: <PayrollDashboard /> },
       { path: 'hr', element: <PayrollDashboard /> },
       { path: 'employees', element: <EmployeesList /> },
       { path: 'departments', element: <DepartmentsList /> },
-      { path: 'attendance', element: <MaintenancePage /> },
+      { path: 'attendance', element: <AttendanceList /> },
       { path: 'payroll', element: <PayrollDashboard /> },
       { path: 'fixed-assets', element: <FixedAssetsList /> },
       { path: 'projects', element: <ProjectsList /> },
@@ -310,14 +319,14 @@ export const router = createBrowserRouter([
       { path: 'users/:id/edit', element: <UserForm /> },
       { path: 'roles', element: <RolesPage /> },
       { path: 'profile', element: <CompanyProfilePage /> },
-      { path: 'subscription', element: <MaintenancePage /> },
+      { path: 'subscription', element: <SubscriptionManager /> },
       { path: 'backup-restore', element: <BackupRestoreCenter /> },
-      { path: 'settings/templates', element: <MaintenancePage /> }, // We can make a list page later
+      { path: 'settings/templates', element: <TemplatesList /> }, // We can make a list page later
       { path: 'settings/templates/new', element: <TemplateBuilder /> },
       { path: 'settings/templates/:id', element: <TemplateBuilder /> },
       { path: 'help', element: <HelpCenterPortal /> },
-      { path: 'notifications', element: <MaintenancePage /> },
-      { path: 'search', element: <MaintenancePage /> },
+      { path: 'notifications', element: <NotificationsCenter /> },
+      { path: 'search', element: <GlobalSearch /> },
       { path: 'crm', element: <CrmDashboard /> }
     ],
   },

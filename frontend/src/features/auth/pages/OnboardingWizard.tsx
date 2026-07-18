@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import api from '../../../services/api';
+import { apiClient as api } from '../../../core/api/apiClient';
 import { useSessionStore } from '../stores/sessionStore';
 import {
   Building2, Percent, Calendar, CheckCircle2, CreditCard,
@@ -431,3 +431,4 @@ export const OnboardingWizard = () => {
     </div>
   );
 };
+

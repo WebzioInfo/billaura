@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { Users, Search, Plus, Edit2, Trash2, Mail, Loader2, Shield } from 'lucide-react';
-import apiClient from '../../services/api';
+import { apiClient } from '../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DeleteDialog } from '../../components/ui';
+import { DeleteDialog } from '../../shared/components/ui';
 import { useNavigate } from 'react-router-dom';
 
 const userSchema = z.object({

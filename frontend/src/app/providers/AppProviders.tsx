@@ -1,7 +1,7 @@
 import { PropsWithChildren } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from 'react-hot-toast';
-import { queryClient } from "@/services/query/queryClient";
+import { queryClient } from "@/core/query/queryClient";
 import { SessionProvider } from "@/features/auth/providers/SessionProvider";
 import { ThemeProvider } from "@/features/theme/ThemeProvider";
 import { NetworkProvider } from "@/providers/NetworkProvider";

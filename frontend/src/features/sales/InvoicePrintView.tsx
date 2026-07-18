@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Printer, Download, Share2, ArrowLeft } from 'lucide-react';
 import { InvoiceTemplate, InvoiceTemplateData } from './components/print/InvoiceTemplate';
-import apiClient from '@/services/api';
+import apiClient from '@/core/api';
 
 export const InvoicePrintView = () => {
   const { id } = useParams();

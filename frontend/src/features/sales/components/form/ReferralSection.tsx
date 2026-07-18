@@ -1,10 +1,10 @@
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
-import { FormSection } from '@/components/ui/LayoutComponents';
-import { Card } from '@/components/ui/Card';
+import { FormSection } from '@/shared/components/ui/LayoutComponents';
+import { Card } from '@/shared/components/ui/Card';
 import { Users, Building } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import apiClient from '@/services/api';
+import apiClient from '@/core/api';
 
 export const ReferralSection = ({ form }: { form: UseFormReturn<any> }) => {
   const { watch, register, setValue } = form;

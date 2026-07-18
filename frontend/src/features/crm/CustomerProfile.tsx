@@ -5,13 +5,13 @@ import {
   Building2, Phone, Mail, MapPin, Edit, FileText, IndianRupee,
   Activity, Hash, Shield, Printer, Download, Trash2,
 } from 'lucide-react';
-import { PageContainer, LoadingState, Breadcrumb } from '@/components/ui/LayoutComponents';
-import { Badge, Button } from '@/components/ui';
-import apiClient from '@/services/api';
+import { PageContainer, LoadingState, Breadcrumb } from '@/shared/components/ui/LayoutComponents';
+import { Badge, Button } from '@/shared/components/ui';
+import apiClient from '@/core/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import notification from '@/services/NotificationService';
-import { useDynamicTitle } from '@/hooks/useDynamicTitle';
-import { getCustomerDisplayName } from '@/utils/entityNames';
+import notification from '@/core/services/NotificationService';
+import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
+import { getCustomerDisplayName } from '@/shared/utils/entityNames';
 
 export const CustomerProfile = () => {
   const { id } = useParams();

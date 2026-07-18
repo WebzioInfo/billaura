@@ -6,14 +6,14 @@ import {
   Printer, Mail, AlertCircle, CheckCircle, FileCheck, HelpCircle, ArrowRight,
   TrendingUp, Play, Clock, User, ShieldAlert, RotateCcw
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { PageContainer, LoadingState, EmptyState, FinancialSummary, SummaryRow } from '@/components/ui';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import apiClient from '@/services/api';
-import notification from '@/services/NotificationService';
-import { ConfirmDialog } from '@/components/ui';
-import { useDynamicTitle } from '@/hooks/useDynamicTitle';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageContainer, LoadingState, EmptyState, FinancialSummary, SummaryRow } from '@/shared/components/ui';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import apiClient from '@/core/api';
+import notification from '@/core/services/NotificationService';
+import { ConfirmDialog } from '@/shared/components/ui';
+import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 
 export const PurchaseOrderDetails = () => {
   const { id } = useParams();

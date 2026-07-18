@@ -1,7 +1,7 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { useGenerateSalarySlip } from '../hooks/useHr';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/shared/components/ui/Button';
 
 interface Props {
   onClose: () => void;

@@ -15,11 +15,11 @@ export class CreateProductDto {
 
   @IsString()
   @IsOptional()
-  category?: string;
+  categoryId?: string;
 
   @IsString()
   @IsOptional()
-  brand?: string;
+  brandId?: string;
 
   @IsEnum(UnitType)
   @IsOptional()
@@ -132,6 +132,54 @@ export class CreateProductDto {
   @IsString()
   @IsOptional()
   inventoryAccountId?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isPurchasable?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isSellable?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isInventoryItem?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isTaxable?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isTrackStock?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isTrackBatch?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isTrackSerial?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isManufactured?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isService?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isDigital?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isAsset?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isExpense?: boolean;
 
   @IsBoolean()
   @IsOptional()

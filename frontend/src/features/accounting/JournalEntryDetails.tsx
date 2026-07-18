@@ -2,11 +2,11 @@ import React, { useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, BookOpen, Printer, AlertTriangle } from 'lucide-react';
-import { PageContainer } from '@/components/ui/LayoutComponents';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import apiClient from '@/services/api';
-import { useDynamicTitle } from '@/hooks/useDynamicTitle';
+import { PageContainer } from '@/shared/components/ui/LayoutComponents';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import apiClient from '@/core/api';
+import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', {

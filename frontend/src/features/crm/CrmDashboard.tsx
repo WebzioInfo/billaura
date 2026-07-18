@@ -3,16 +3,16 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { 
   Users, Search, Plus, Edit2, Trash2, 
   Phone, Mail, Calendar, Loader2, TrendingUp, Check, Briefcase, Eye 
 } from 'lucide-react';
-import api from '../../services/api';
-import { DeleteDialog } from '../../components/ui';
+import { apiClient as api } from '../../core/api/apiClient';
+import { DeleteDialog } from '../../shared/components/ui';
 import { CustomerDetailModal } from './CustomerDetailModal';
 import { useQueryClient } from '@tanstack/react-query';
-import { useApiList } from '../../hooks/useApiList';
+import { useApiList } from '../../shared/hooks/useApiList';
 
 // --- SCHEMAS ---
 const customerSchema = z.object({

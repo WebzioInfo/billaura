@@ -5,13 +5,13 @@ import {
   ArrowLeft, Edit2, Phone, Mail, Building, MapPin, DollarSign, 
   ShoppingCart, CreditCard, Activity, ArrowUpRight, CheckCircle2, AlertCircle, FileText
 } from 'lucide-react';
-import { PageContainer, LoadingState, EmptyState } from '@/components/ui/LayoutComponents';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { DataTable } from '@/components/ui/data-table/DataTable';
-import apiClient from '@/services/api';
-import { useDynamicTitle } from '@/hooks/useDynamicTitle';
-import { getVendorDisplayName } from '@/utils/entityNames';
+import { PageContainer, LoadingState, EmptyState } from '@/shared/components/ui/LayoutComponents';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { DataTable } from '@/shared/components/ui/data-table/DataTable';
+import apiClient from '@/core/api';
+import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
+import { getVendorDisplayName } from '@/shared/utils/entityNames';
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);

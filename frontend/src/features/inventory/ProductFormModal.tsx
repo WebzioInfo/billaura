@@ -1,19 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck } from 'lucide-react';
-import api from '../../services/api';
-import notification from '@/services/NotificationService';
+import { apiClient as api } from '../../core/api/apiClient';
+import notification from '@/core/services/NotificationService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAsyncForm } from '../../hooks/useAsyncForm';
-import { handleApiFormError } from '../../utils/error-handler';
+import { useAsyncForm } from '../../shared/hooks/useAsyncForm';
+import { handleApiFormError } from '../../shared/utils/error-handler';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Input } from '../../components/ui/Input';
-import { Select } from '../../components/ui/Select';
-import { AutoGenerateInput } from '../../components/ui/AutoGenerateInput';
-import { FormErrorDisplay } from '../../components/ui/FormErrorDisplay';
+import { Input } from '../../shared/components/ui/Input';
+import { Select } from '../../shared/components/ui/Select';
+import { AutoGenerateInput } from '../../shared/components/ui/AutoGenerateInput';
+import { FormErrorDisplay } from '../../shared/components/ui/FormErrorDisplay';
 import { Controller } from 'react-hook-form';
-import { SearchableSelect } from '../../components/ui/SearchableSelect';
+import { SearchableSelect } from '../../shared/components/ui/SearchableSelect';
+import { SearchableMasterDropdown } from '../../shared/components/ui/SearchableMasterDropdown';
+import { CategoryFormModal } from '../../shared/components/ui/CategoryFormModal';
+import { BrandFormModal } from './BrandFormModal';
 
+const PRODUCT_TYPE_CONFIG: Record<string, any> = {
+  INVENTORY: { isInventoryItem: true, isService: false, isAsset: false, isExpense: false, isDigital: false, isTrackStock: true, isPurchasable: true, isSellable: true },
+  NON_INVENTORY: { isInventoryItem: false, isService: false, isAsset: false, isExpense: false, isDigital: false, isTrackStock: false, isPurchasable: true, isSellable: true },
+  SERVICE: { isInventoryItem: false, isService: true, isAsset: false, isExpense: false, isDigital: false, isTrackStock: false, isPurchasable: true, isSellable: true },
+  RAW_MATERIAL: { isInventoryItem: true, isService: false, isAsset: false, isExpense: false, isDigital: false, isTrackStock: true, isPurchasable: true, isSellable: false },
+  FINISHED_GOOD: { isInventoryItem: true, isService: false, isAsset: false, isExpense: false, isDigital: false, isTrackStock: true, isPurchasable: false, isSellable: true },
+  ASSET: { isInventoryItem: true, isService: false, isAsset: true, isExpense: false, isDigital: false, isTrackStock: true, isPurchasable: true, isSellable: false },
+  EXPENSE: { isInventoryItem: false, isService: false, isAsset: false, isExpense: true, isDigital: false, isTrackStock: false, isPurchasable: true, isSellable: false },
+  DIGITAL: { isInventoryItem: false, isService: false, isAsset: false, isExpense: false, isDigital: true, isTrackStock: false, isPurchasable: false, isSellable: true },
+};
 const productSchema = z.object({
   name: z.string().min(1, 'Item Name is required'),
   sku: z.string().optional(),
@@ -22,8 +35,8 @@ const productSchema = z.object({
   eInvoiceHsn: z.string().optional(),
   barcode: z.string().optional(),
   itemType: z.string().default('FINISHED_GOOD'),
-  category: z.string().optional(),
-  brand: z.string().optional(),
+  categoryId: z.string().optional(),
+  brandId: z.string().optional(),
   unit: z.string().min(1, 'Unit of Measure is required'),
   taxGroupId: z.string().optional(),
   scheduleNo: z.string().optional(),
@@ -45,9 +58,37 @@ const productSchema = z.object({
   salesAccountId: z.string().optional(),
   purchaseAccountId: z.string().optional(),
   inventoryAccountId: z.string().optional(),
+  isPurchasable: z.boolean().default(true),
+  isSellable: z.boolean().default(true),
+  isInventoryItem: z.boolean().default(true),
+  isTaxable: z.boolean().default(true),
+  isTrackStock: z.boolean().default(true),
+  isTrackBatch: z.boolean().default(false),
+  isTrackSerial: z.boolean().default(false),
+  isManufactured: z.boolean().default(false),
+  isService: z.boolean().default(false),
+  isDigital: z.boolean().default(false),
+  isAsset: z.boolean().default(false),
+  isExpense: z.boolean().default(false),
   isActive: z.boolean().default(true),
+}).superRefine((data, ctx) => {
+  if (data.isTaxable) {
+    if (!data.taxGroupId && (!data.gstRate || data.gstRate === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Tax Group is required for taxable items',
+        path: ['taxGroupId'],
+      });
+    }
+    if (!data.hsnCode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: data.isService ? 'SAC Code is required' : 'HSN Code is required',
+        path: ['hsnCode'],
+      });
+    }
+  }
 });
-
 type ProductFormValues = z.infer<typeof productSchema>;
 
 interface ProductFormModalProps {
@@ -59,6 +100,8 @@ interface ProductFormModalProps {
 export default function ProductFormModal({ onClose, onSuccess, product }: ProductFormModalProps) {
   const [activeTab, setActiveTab] = useState('general');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -92,10 +135,10 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
         hsnCode: '',
         eInvoiceHsn: '',
         barcode: '',
-        itemType: 'FINISHED_GOOD',
-        category: '',
-        brand: '',
-        unit: 'PCS',
+        itemType: product?.itemType || 'FINISHED_GOOD',
+        categoryId: product?.categoryId || product?.category?.id || '',
+        brandId: product?.brandId || product?.brand?.id || '',
+        unit: product?.unit || 'PCS',
         taxGroupId: '',
         scheduleNo: '',
         weight: 0,
@@ -113,7 +156,19 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
         reorderLevel: 0,
         pluNo: '',
         valuationMethod: 'AVERAGE',
-        isActive: true,
+        isPurchasable: product?.isPurchasable ?? true,
+        isSellable: product?.isSellable ?? true,
+        isInventoryItem: product?.isInventoryItem ?? true,
+        isTaxable: product?.isTaxable ?? true,
+        isTrackStock: product?.isTrackStock ?? true,
+        isTrackBatch: product?.isTrackBatch ?? false,
+        isTrackSerial: product?.isTrackSerial ?? false,
+        isManufactured: product?.isManufactured ?? false,
+        isService: product?.isService ?? false,
+        isDigital: product?.isDigital ?? false,
+        isAsset: product?.isAsset ?? false,
+        isExpense: product?.isExpense ?? false,
+        isActive: product?.isActive ?? true,
       }
     },
     product,
@@ -125,6 +180,12 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   const { register, handleFormSubmit, setValue, setError, formState: { errors }, watch, control } = form;
 
   const watchedTaxGroupId = watch('taxGroupId');
+  const isInventoryItem = watch('isInventoryItem');
+  const isTaxable = watch('isTaxable');
+  const isService = watch('isService');
+
+  const purchasePrice = watch('purchasePrice') || 0;
+  const sellingPrice = watch('sellingPrice') || 0;
 
   useEffect(() => {
     if (watchedTaxGroupId && taxGroupsData.length > 0) {
@@ -136,6 +197,18 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     }
   }, [watchedTaxGroupId, taxGroupsData, setValue]);
 
+  const handleItemTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setValue('itemType', val);
+    
+    const config = PRODUCT_TYPE_CONFIG[val];
+    if (config) {
+      Object.entries(config).forEach(([key, value]) => {
+        setValue(key as any, value);
+      });
+    }
+  };
+
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
       const firstError = Object.keys(errors)[0];
@@ -145,11 +218,11 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       const complianceFields = ['hsnCode', 'eInvoiceHsn', 'taxGroupId', 'gstRate', 'taxCategory'];
 
       if (generalFields.includes(firstError)) setActiveTab('general');
-      else if (inventoryFields.includes(firstError)) setActiveTab('inventory');
+      else if (inventoryFields.includes(firstError) && isInventoryItem) setActiveTab('inventory');
       else if (ratesFields.includes(firstError)) setActiveTab('rates');
-      else if (complianceFields.includes(firstError)) setActiveTab('compliance');
+      else if (complianceFields.includes(firstError) && isTaxable) setActiveTab('compliance');
     }
-  }, [errors]);
+  }, [errors, isInventoryItem, isTaxable]);
 
   const onSubmit = async (data: ProductFormValues) => {
     setIsLoading(true);
@@ -191,7 +264,13 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
         </div>
 
         <div className="flex border-b border-border px-6 mt-4 gap-6">
-          {['general', 'inventory', 'rates', 'compliance'].map((tab) => (
+          {['general', 'inventory', 'rates', 'compliance']
+            .filter(tab => {
+              if (tab === 'inventory' && !isInventoryItem) return false;
+              if (tab === 'compliance' && !isTaxable) return false;
+              return true;
+            })
+            .map((tab) => (
             <button
               key={tab}
               type="button"
@@ -224,61 +303,101 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                     />
                     <Input label="Barcode / PLU" {...register('barcode')} error={errors.barcode?.message as string} placeholder="Scan barcode..." />
                   </div>
-                  <Select label="Item Type" {...register('itemType')} error={errors.itemType?.message as string} options={[
-                    { label: 'Inventory Item (Finished Good)', value: 'FINISHED_GOOD' },
+                  <Select label="Item Type" {...register('itemType')} onChange={handleItemTypeChange} error={errors.itemType?.message as string} options={[
+                    { label: 'Inventory Product', value: 'INVENTORY' },
+                    { label: 'Non-Inventory Product', value: 'NON_INVENTORY' },
+                    { label: 'Service', value: 'SERVICE' },
                     { label: 'Raw Material', value: 'RAW_MATERIAL' },
-                    { label: 'Service (Non-Inventory)', value: 'SERVICE' },
+                    { label: 'Finished Good', value: 'FINISHED_GOOD' },
+                    { label: 'Asset', value: 'ASSET' },
+                    { label: 'Expense Item', value: 'EXPENSE' },
+                    { label: 'Digital Product', value: 'DIGITAL' },
                   ]} />
                 </div>
                 
-                <div className="space-y-4 bg-muted/30 p-5 rounded-2xl border border-border">
-                  <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-accent" /> Classification</h3>
-                  <Controller
-                    control={control}
-                    name="category"
-                    render={({ field }) => (
-                      <SearchableSelect
-                        label="Category (Item Group)"
-                        value={field.value || ''}
-                        onChange={(val) => field.onChange(val)}
-                        error={errors.category?.message as string}
-                        options={categories}
-                        mapOption={(c) => ({ label: c.name, value: c.id })}
-                        placeholder="Select Category..."
+                <div className="space-y-4">
+                  <div className="bg-muted/30 p-5 rounded-2xl border border-border">
+                    <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><Tag className="w-4 h-4 text-accent" /> Classification</h3>
+                    <Controller
+                      control={control}
+                      name="categoryId"
+                      render={({ field }) => (
+                        <SearchableMasterDropdown
+                          label="Category (Item Group)"
+                          value={field.value || ''}
+                          onChange={(val) => field.onChange(val)}
+                          error={errors.categoryId?.message as string}
+                          apiPath="/inventory/categories"
+                          queryKeyPrefix="product_categories"
+                          mapOption={(c: any) => ({ label: c.categoryName || c.name, value: c.id })}
+                          placeholder="Select Category..."
+                          onCreateNew={() => setIsCategoryModalOpen(true)}
+                          createNewText="Create New Category"
+                        />
+                      )}
+                    />
+                    <div className="mt-4">
+                      <Controller
+                        control={control}
+                        name="brandId"
+                        render={({ field }) => (
+                          <SearchableMasterDropdown
+                            label="Brand"
+                            value={field.value || ''}
+                            onChange={(val) => field.onChange(val)}
+                            error={errors.brandId?.message as string}
+                            apiPath="/inventory/brands"
+                            queryKeyPrefix="brands"
+                            mapOption={(b: any) => ({ label: b.brandName || b.name, value: b.id })}
+                            placeholder="Select Brand..."
+                            onCreateNew={() => setIsBrandModalOpen(true)}
+                            createNewText="Create New Brand"
+                          />
+                        )}
                       />
-                    )}
-                  />
-                  <Controller
-                    control={control}
-                    name="brand"
-                    render={({ field }) => (
-                      <SearchableSelect
-                        label="Brand"
-                        value={field.value || ''}
-                        onChange={(val) => field.onChange(val)}
-                        error={errors.brand?.message as string}
-                        options={brands}
-                        mapOption={(b) => ({ label: b.name, value: b.id })}
-                        placeholder="Select Brand..."
+                    </div>
+                    <div className="mt-4">
+                      <Controller
+                        control={control}
+                        name="unit"
+                        render={({ field }) => (
+                          <SearchableSelect
+                            label="Base Unit"
+                            value={field.value || 'PCS'}
+                            onChange={(val) => field.onChange(val)}
+                            error={errors.unit?.message as string}
+                            options={units}
+                            mapOption={(u) => ({ label: `${u.name} (${u.code})`, value: u.code })}
+                            placeholder="Select Unit..."
+                          />
+                        )}
                       />
-                    )}
-                  />
-                  <Controller
-                    control={control}
-                    name="unit"
-                    render={({ field }) => (
-                      <SearchableSelect
-                        label="Unit of Measure"
-                        required
-                        value={field.value || ''}
-                        onChange={(val) => field.onChange(val)}
-                        error={errors.unit?.message as string}
-                        options={units}
-                        mapOption={(u) => ({ label: `${u.name} (${u.abbreviation})`, value: u.id })}
-                        placeholder="Select Unit..."
-                      />
-                    )}
-                  />
+                    </div>
+                  </div>
+
+                  <div className="bg-muted/30 p-5 rounded-2xl border border-border">
+                    <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-purple-500" /> Configuration</h3>
+                    <div className="grid grid-cols-2 gap-3 opacity-70 pointer-events-none">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={watch('isPurchasable')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Purchasable
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={watch('isSellable')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Sellable
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={watch('isInventoryItem')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Inventory Item
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" {...register('isTaxable')} className="w-4 h-4 text-accent border-border rounded focus:ring-accent pointer-events-auto" /> Taxable
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={watch('isTrackStock')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Track Stock
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={watch('isService')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Service
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -352,8 +471,32 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><IndianRupee className="w-4 h-4 text-green-500" /> Pricing</h3>
-                  <Input type="number" step="0.01" label="Sales Rate / Selling Price" {...register('sellingPrice')} error={errors.sellingPrice?.message as string} />
                   <Input type="number" step="0.01" label="Purchase Rate / Cost Price" {...register('purchasePrice')} error={errors.purchasePrice?.message as string} />
+                  <Input type="number" step="0.01" label="Sales Rate / Selling Price" {...register('sellingPrice')} error={errors.sellingPrice?.message as string} />
+                </div>
+                
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">Margin & Profitability</h3>
+                  <div className="bg-muted/30 p-6 rounded-2xl border border-border grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Gross Profit</p>
+                      <p className={`text-2xl font-black mt-1 ${sellingPrice - purchasePrice >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        ₹{(sellingPrice - purchasePrice).toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Margin %</p>
+                      <p className={`text-2xl font-black mt-1 ${sellingPrice > 0 ? (sellingPrice - purchasePrice) / sellingPrice * 100 >= 0 ? 'text-green-500' : 'text-red-500' : 'text-foreground'}`}>
+                        {sellingPrice > 0 ? ((sellingPrice - purchasePrice) / sellingPrice * 100).toFixed(2) : '0.00'}%
+                      </p>
+                    </div>
+                    <div className="col-span-2 mt-2 pt-4 border-t border-border/50">
+                      <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Markup %</p>
+                      <p className="text-lg font-bold mt-1 text-foreground">
+                        {purchasePrice > 0 ? ((sellingPrice - purchasePrice) / purchasePrice * 100).toFixed(2) : '0.00'}%
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -363,7 +506,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-blue-500" /> Tax & Compliance</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <Input label="HSN / SAC Code" {...register('hsnCode')} error={errors.hsnCode?.message as string} />
+                    <Input label={isService ? "SAC Code" : "HSN Code"} {...register('hsnCode')} error={errors.hsnCode?.message as string} />
                     <Input label="E-Invoice HSN" {...register('eInvoiceHsn')} error={errors.eInvoiceHsn?.message as string} />
                   </div>
                   <Controller
@@ -423,6 +566,23 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
           </div>
         </div>
       </div>
+
+      <CategoryFormModal 
+        isOpen={isCategoryModalOpen} 
+        onClose={() => setIsCategoryModalOpen(false)} 
+        onSuccess={(newCat) => {
+          setValue('categoryId', newCat.id, { shouldValidate: true });
+          setIsCategoryModalOpen(false);
+        }} 
+      />
+      
+      <BrandFormModal 
+        isOpen={isBrandModalOpen} 
+        onClose={() => setIsBrandModalOpen(false)} 
+        brand={null}
+        // onSuccess is not directly exposed by BrandFormModal, but it invalidates queries.
+        // We'll just rely on the user to re-select it if needed, or we can update BrandFormModal to return onSuccess.
+      />
     </div>
   );
 }

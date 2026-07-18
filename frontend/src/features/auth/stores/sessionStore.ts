@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Permission, SessionState, SessionUser } from "../types";
-import { TokenService } from "../../../services/auth/TokenService";
+import { TokenService } from "../../../core/auth/TokenService";
 
 interface SessionStore extends SessionState {
   accessToken: string | null;
@@ -19,6 +19,16 @@ export const useSessionStore = create<SessionStore>()(
       isLoading: false,
       isAuthenticated: false,
       setSession: (user, accessToken, permissions = []) => {
+        if (user) {
+          localStorage.setItem('billaura_user', JSON.stringify(user));
+          if (user.tenantId || user.companyId) {
+            localStorage.setItem('billaura_tenant', JSON.stringify({ id: user.tenantId || user.companyId }));
+          }
+        }
+        if (permissions) {
+          localStorage.setItem('billaura_permissions', JSON.stringify(permissions));
+        }
+
         set((state) => ({
           user,
           accessToken: accessToken !== undefined ? accessToken : state.accessToken,
@@ -30,6 +40,10 @@ export const useSessionStore = create<SessionStore>()(
       setLoading: (isLoading) => set({ isLoading }),
       clearSession: () => {
         TokenService.clearTokens();
+        localStorage.removeItem('billaura_user');
+        localStorage.removeItem('billaura_tenant');
+        localStorage.removeItem('billaura_permissions');
+        
         set({
           user: null,
           accessToken: null,

@@ -31,7 +31,7 @@ import {
   Users,
   Wallet,
 } from 'lucide-react';
-import apiClient from '../../services/api';
+import { apiClient } from '../../core/api/apiClient';
 
 type MoneyMetricKey = keyof DashboardData['metrics'];
 

@@ -3,13 +3,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Building2, ShieldAlert, Loader2, Save, UploadCloud, X } from 'lucide-react';
-import notification from '@/services/NotificationService';
-import apiClient from '@/services/api';
+import notification from '@/core/services/NotificationService';
+import apiClient from '@/core/api';
 import { useSessionStore } from '@/features/auth/stores/sessionStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAsyncForm } from '@/hooks/useAsyncForm';
-import { PageContainer } from '@/components/ui/LayoutComponents';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
+import { PageContainer } from '@/shared/components/ui/LayoutComponents';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];

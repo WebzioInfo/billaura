@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Modal } from '../../../components/ui/Modal';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
-import api from '../../../services/api';
-import { LedgerLookup } from '../../../components/ui/LedgerLookup';
+import { Modal } from '../../../shared/components/ui/Modal';
+import { Button } from '../../../shared/components/ui/Button';
+import { Input } from '../../../shared/components/ui/Input';
+import { apiClient as api } from '../../../core/api/apiClient';
+import { LedgerLookup } from '../../../shared/components/ui/LedgerLookup';
 
 import { useQuery } from '@tanstack/react-query';
 

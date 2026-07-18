@@ -1,6 +1,6 @@
 import React from 'react';
-import { PageContainer } from '@/components/ui/LayoutComponents';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/shared/components/ui/LayoutComponents';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { UsersList } from '../../users/UsersList';
 
 export const UsersPage = () => {

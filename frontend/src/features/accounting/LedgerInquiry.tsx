@@ -4,11 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { 
   Search, BookOpen, Printer, Download, ArrowUpDown, ChevronRight, X, AlertCircle
 } from 'lucide-react';
-import apiClient from '@/services/api';
-import { Card } from '@/components/ui/Card';
-import { TableLoader } from '@/components/ui/LoadingSystem';
-import { useDynamicTitle } from '@/hooks/useDynamicTitle';
-import notification from '@/services/NotificationService';
+import apiClient from '@/core/api';
+import { Card } from '@/shared/components/ui/Card';
+import { TableLoader } from '@/shared/components/ui/LoadingSystem';
+import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
+import notification from '@/core/services/NotificationService';
 
 export function LedgerInquiry() {
   const { ledgerId } = useParams<{ ledgerId: string }>();

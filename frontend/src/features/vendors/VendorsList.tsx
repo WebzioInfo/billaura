@@ -2,14 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, RefreshCw, Eye, Edit2, Trash2, Users, MapPin, Building2, Phone } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { PageContainer, EmptyState, LoadingState, TableLoader, SummaryCardLoader } from '@/components/ui';
-import { DataTable } from '@/components/ui/data-table/DataTable';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageContainer, EmptyState, LoadingState, TableLoader, SummaryCardLoader } from '@/shared/components/ui';
+import { DataTable } from '@/shared/components/ui/data-table/DataTable';
 import { ColumnDef } from '@tanstack/react-table';
-import { Button } from '@/components/ui/Button';
-import { DeleteDialog } from '@/components/ui';
-import apiClient from '@/services/api';
-import notification from '@/services/NotificationService';
+import { Button } from '@/shared/components/ui/Button';
+import { DeleteDialog } from '@/shared/components/ui';
+import apiClient from '@/core/api';
+import notification from '@/core/services/NotificationService';
 
 export const VendorsList = () => {
   const navigate = useNavigate();

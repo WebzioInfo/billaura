@@ -1,9 +1,9 @@
 import { Outlet } from "react-router-dom";
 import { SidebarLayout } from "./SidebarLayout";
 import { TopNavigation } from "./TopNavigation";
-import { CommandPalette } from "@/components/ui/CommandPalette";
-import { HelpDrawer } from "@/components/ui/HelpDrawer";
-import { useGlobalKeyboardShortcuts } from "@/hooks/useGlobalKeyboardShortcuts";
+import { CommandPalette } from "@/shared/components/ui/CommandPalette";
+import { HelpDrawer } from "@/shared/components/ui/HelpDrawer";
+import { useGlobalKeyboardShortcuts } from "@/shared/hooks/useGlobalKeyboardShortcuts";
 
 export function AppShell() {
   useGlobalKeyboardShortcuts();
@@ -19,3 +19,4 @@ export function AppShell() {
     </div>
   );
 }
+

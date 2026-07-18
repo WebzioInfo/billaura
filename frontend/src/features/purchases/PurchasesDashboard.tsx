@@ -3,20 +3,20 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import {
   Search, Plus, Edit2, Trash2,
   Loader2, DollarSign, ShoppingCart
 } from 'lucide-react';
-import api from '../../services/api';
-import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
-import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
+import { apiClient as api } from '../../core/api/apiClient';
+import { PdfDownloadButton } from '../../shared/components/pdf/PdfDownloadButton';
+import { DataTable, DataTableColumnHeader, FilterPanel } from '../../shared/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { LedgerSearchSelect } from '../../components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer, TableLoader } from '../../components/ui';
-import { useApiList } from '../../hooks/useApiList';
-import { useBankAccounts } from '../../hooks/useBankAccounts';
+import { LedgerSearchSelect } from '../../shared/components/ui/LedgerSearchSelect';
+import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer, TableLoader } from '../../shared/components/ui';
+import { useApiList } from '../../shared/hooks/useApiList';
+import { useBankAccounts } from '../../features/banking/hooks/useBankAccounts';
 
 // --- SCHEMAS ---
 const vendorSchema = z.object({

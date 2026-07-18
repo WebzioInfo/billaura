@@ -1,8 +1,8 @@
-import { WorkspaceTabs } from "@/components/workspace/WorkspaceTabs";
-import { NotificationCenter } from "../components/ui/NotificationCenter";
+import { WorkspaceTabs } from "@/shared/components/workspace/WorkspaceTabs";
+import { NotificationCenter } from "../shared/components/ui/NotificationCenter";
 import { Search, Command, HelpCircle } from "lucide-react";
 import { useCommandPaletteStore } from "@/store/commandPaletteStore";
-import { useHelpStore } from "@/stores/helpStore";
+import { useHelpStore } from "@/shared/stores/helpStore";
 
 export function TopNavigation() {
   const openPalette = useCommandPaletteStore(state => state.openPalette);
@@ -44,3 +44,4 @@ export function TopNavigation() {
     </header>
   );
 }
+

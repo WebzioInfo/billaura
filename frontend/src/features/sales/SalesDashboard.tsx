@@ -3,19 +3,19 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { 
   FileText, Search, Plus, Trash2,
   Loader2
 } from 'lucide-react';
-import api from '../../services/api';
-import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
-import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
+import { apiClient as api } from '../../core/api/apiClient';
+import { PdfDownloadButton } from '../../shared/components/pdf/PdfDownloadButton';
+import { DataTable, DataTableColumnHeader, FilterPanel } from '../../shared/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useApiList } from '../../hooks/useApiList';
-import { LedgerSearchSelect } from '../../components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog } from '../../components/ui';
+import { useApiList } from '../../shared/hooks/useApiList';
+import { LedgerSearchSelect } from '../../shared/components/ui/LedgerSearchSelect';
+import { DeleteDialog, ConfirmDialog } from '../../shared/components/ui';
 
 // --- SCHEMAS ---
 const invoiceItemSchema = z.object({

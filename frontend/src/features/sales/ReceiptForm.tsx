@@ -5,14 +5,14 @@ import {
   Banknote, HelpCircle, Loader2, ArrowLeft, Info, Landmark, Wallet,
   CheckCircle, FileCheck, AlertCircle, RefreshCw, Printer, Edit3
 } from 'lucide-react';
-import { PageContainer, LoadingState, FinancialSummary, SummaryRow, AsyncSelect } from '@/components/ui';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Button } from '@/components/ui/Button';
-import apiClient from '@/services/api';
-import notification from '@/services/NotificationService';
+import { PageContainer, LoadingState, FinancialSummary, SummaryRow, AsyncSelect } from '@/shared/components/ui';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Button } from '@/shared/components/ui/Button';
+import apiClient from '@/core/api';
+import notification from '@/core/services/NotificationService';
 import { useQuery } from '@tanstack/react-query';
-import { useBankAccounts } from '@/hooks/useBankAccounts';
-import { useDynamicTitle } from '@/hooks/useDynamicTitle';
+import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
+import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import { UnifiedReceiptForm } from './UnifiedReceiptForm';
 
 interface Invoice {

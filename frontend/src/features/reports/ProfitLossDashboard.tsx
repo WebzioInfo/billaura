@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
 import { Download, Printer, FileText, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
-import { apiClient } from '@/services/api/apiClient';
+import { apiClient } from '@/core/api/apiClient';
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -13,7 +13,7 @@ import {
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { useQuery } from '@tanstack/react-query';
 
 export default function ProfitLossDashboard() {

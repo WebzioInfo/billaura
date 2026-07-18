@@ -3,17 +3,17 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { 
   BookOpen, Plus, Loader2, Calendar, Trash2, Pencil 
 } from 'lucide-react';
-import api from '../../services/api';
-import { DataTable, DataTableColumnHeader, FilterPanel } from '../../components/ui/data-table';
+import { apiClient as api } from '../../core/api/apiClient';
+import { DataTable, DataTableColumnHeader, FilterPanel } from '../../shared/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useApiList } from '../../hooks/useApiList';
-import { LedgerLookup } from '../../components/ui/LedgerLookup';
-import { DeleteDialog } from '../../components/ui';
+import { useApiList } from '../../shared/hooks/useApiList';
+import { LedgerLookup } from '../../shared/components/ui/LedgerLookup';
+import { DeleteDialog } from '../../shared/components/ui';
 
 // --- SCHEMAS ---
 const accountSchema = z.object({

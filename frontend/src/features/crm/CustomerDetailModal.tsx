@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import api from '../../services/api';
+import { apiClient as api } from '../../core/api/apiClient';
 
 interface CustomerDetailModalProps {
   customer: any;

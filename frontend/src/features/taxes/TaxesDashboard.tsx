@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { 
   Shield, Search, RefreshCw, Loader2, Download, Printer, 
   ArrowUpRight, ArrowDownLeft, Percent 
 } from 'lucide-react';
-import api from '../../services/api';
+import { apiClient as api } from '../../core/api/apiClient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // --- TYPES ---

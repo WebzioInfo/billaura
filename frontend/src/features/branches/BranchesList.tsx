@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { 
   Building2, Search, Plus, Edit2, Trash2, 
   MapPin, Phone, Mail, Loader2, Landmark 
 } from 'lucide-react';
-import apiClient from '../../services/api';
+import { apiClient } from '../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DeleteDialog } from '../../components/ui';
+import { DeleteDialog } from '../../shared/components/ui';
 
 const branchSchema = z.object({
   name: z.string().min(2, 'Branch name must be at least 2 characters'),

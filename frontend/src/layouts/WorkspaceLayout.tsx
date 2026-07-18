@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { TopBar } from '@/components/workspace/TopBar';
-import { Ribbon } from '@/components/workspace/Ribbon';
-import { WorkspaceTabs } from '@/components/workspace/WorkspaceTabs';
-import { TopProgressBar } from '@/components/ui';
+import { TopBar } from '@/shared/components/workspace/TopBar';
+import { Ribbon } from '@/shared/components/workspace/Ribbon';
+import { WorkspaceTabs } from '@/shared/components/workspace/WorkspaceTabs';
+import { TopProgressBar } from '@/shared/components/ui';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts';
+import { useGlobalShortcuts } from '@/shared/hooks/useGlobalShortcuts';
 
 export function WorkspaceLayout() {
   const { tabs, activeTabId } = useWorkspaceStore();

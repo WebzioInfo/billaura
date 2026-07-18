@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card, CardHeader, CardTitle, CardContent } from '../../shared/components/ui/Card';
+import { Button } from '../../shared/components/ui/Button';
 import { Download, RefreshCw, Trash2, Database, Archive, Shield, UploadCloud } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient as api } from '../../services/api/apiClient';
+import { apiClient as api } from '../../core/api/apiClient';
 import { format } from 'date-fns';
-import { DataTable } from '../../components/ui/data-table/DataTable';
+import { DataTable } from '../../shared/components/ui/data-table/DataTable';
 
 export const BackupRestoreCenter = () => {
   const queryClient = useQueryClient();

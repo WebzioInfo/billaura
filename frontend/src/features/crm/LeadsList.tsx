@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Users, Plus, Search } from 'lucide-react';
-import api from '../../services/api';
+import { apiClient as api } from '../../core/api/apiClient';
 
 export const LeadsList = () => {
   const [leads, setLeads] = useState<any[]>([]);

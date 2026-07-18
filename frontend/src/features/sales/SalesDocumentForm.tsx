@@ -25,15 +25,15 @@ const mapUnit = (unitStr: string) => {
   if (lower === 'nos') return 'Nos';
   return unitStr.charAt(0).toUpperCase() + unitStr.slice(1).toLowerCase();
 };
-import { PageHeader } from '@/components/ui/PageHeader';
-import { PageContainer, LoadingState, FormSection } from '@/components/ui/LayoutComponents';
-import { DocumentSummarySidebar } from '@/components/ui/DocumentSummarySidebar';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { FormErrorDisplay } from '@/components/ui';
-import { useAsyncForm } from '@/hooks/useAsyncForm';
-import apiClient from '@/services/api';
-import notification from '@/services/NotificationService';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageContainer, LoadingState, FormSection } from '@/shared/components/ui/LayoutComponents';
+import { DocumentSummarySidebar } from '@/shared/components/ui/DocumentSummarySidebar';
+import { Button } from '@/shared/components/ui/Button';
+import { Card } from '@/shared/components/ui/Card';
+import { FormErrorDisplay } from '@/shared/components/ui';
+import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
+import apiClient from '@/core/api';
+import notification from '@/core/services/NotificationService';
 import { ReferralSection } from './components/form/ReferralSection';
 
 const INDIAN_STATES = [

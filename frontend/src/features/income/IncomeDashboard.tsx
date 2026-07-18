@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Card } from '@/shared/components/ui/Card';
 import { FileText, Wallet, TrendingUp, Tags } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/shared/components/ui/Button';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import api from '../../services/api';
+import { apiClient as api } from '../../core/api/apiClient';
 
 // Dummy components for now, we will implement them next.
 import { OtherIncomesList } from './components/OtherIncomesList';

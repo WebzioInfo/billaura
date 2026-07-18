@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTemplateBuilderStore } from '@/stores/templateBuilderStore';
-import { DocumentRenderer } from '@/components/documents/DocumentRenderer';
-import { templateService } from '@/services/api/templateService';
+import { useTemplateBuilderStore } from '@/features/settings/stores/templateBuilderStore';
+import { DocumentRenderer } from '@/shared/components/documents/DocumentRenderer';
+import { templateService } from '@/features/settings/services/templateService';
 import { Loader2, Save, ArrowLeft, Palette, LayoutTemplate, ToggleLeft, FileText, Monitor, Smartphone, Printer } from 'lucide-react';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 
 export default function TemplateBuilder() {
   const { id } = useParams();

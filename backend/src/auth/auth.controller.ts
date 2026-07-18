@@ -86,9 +86,8 @@ export class AuthController {
     const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
     const safeIp = ip ? ip.substring(0, 45) : undefined;
     const result = await this.authService.login(loginDto, safeUserAgent, safeIp);
-    this.setSessionCookies(response, result.refresh_token);
-    const { refresh_token: _refreshToken, ...safeResult } = result;
-    return safeResult;
+    this.setSessionCookies(response, result.refreshToken);
+    return result;
   }
 
   @Post("register")
@@ -100,9 +99,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto, @Res({ passthrough: true }) response: Response) {
     const result = await this.authService.verifyEmail(verifyEmailDto);
-    this.setSessionCookies(response, result.refresh_token);
-    const { refresh_token: _refreshToken, ...safeResult } = result;
-    return safeResult;
+    this.setSessionCookies(response, result.refreshToken);
+    return result;
   }
 
   @Post("refresh")
@@ -115,16 +113,17 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     this.assertCsrf(request);
-    const refreshToken = this.getCookie(request, "ba_refresh");
+    
+    // Accept refresh token from body OR cookie
+    const refreshToken = (request.body as any)?.refreshToken || this.getCookie(request, "ba_refresh");
     if (!refreshToken) {
       throw new UnauthorizedException("No refresh token provided");
     }
     const safeUserAgent = userAgent ? userAgent.substring(0, 190) : undefined;
     const safeIp = ip ? ip.substring(0, 45) : undefined;
     const result = await this.authService.refreshTokens(refreshToken, safeUserAgent, safeIp);
-    this.setSessionCookies(response, result.refresh_token);
-    const { refresh_token: _refreshToken, ...safeResult } = result;
-    return safeResult;
+    this.setSessionCookies(response, result.refreshToken);
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)

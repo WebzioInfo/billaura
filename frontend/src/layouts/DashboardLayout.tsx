@@ -4,12 +4,12 @@ import {
   Bell, Search, Settings, LogOut, Landmark, User 
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
-import { Ribbon } from '@/components/workspace/Ribbon';
-import { WorkspaceTabs } from '@/components/workspace/WorkspaceTabs';
-import { CommandPalette } from '@/components/workspace/CommandPalette';
-import { QuickCreate } from '@/components/workspace/QuickCreate';
+import { Ribbon } from '@/shared/components/workspace/Ribbon';
+import { WorkspaceTabs } from '@/shared/components/workspace/WorkspaceTabs';
+import { CommandPalette } from '@/shared/components/workspace/CommandPalette';
+import { QuickCreate } from '@/shared/components/workspace/QuickCreate';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { authService } from '../services/api';
+import { authService } from '../core/api';
 
 export default function DashboardLayout() {
   const { user, clearSession } = useSessionStore();

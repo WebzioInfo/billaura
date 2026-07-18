@@ -1,12 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { Plus, Eye, Edit, Trash2 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/components/ui';
-import { PageContainer, EmptyState } from '@/components/ui/LayoutComponents';
-import apiClient from '@/services/api';
-import notification from '@/services/NotificationService';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/shared/components/ui';
+import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
+import apiClient from '@/core/api';
+import notification from '@/core/services/NotificationService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui';
+import { Button } from '@/shared/components/ui';
 
 export const CustomersList = () => {
   const queryClient = useQueryClient();

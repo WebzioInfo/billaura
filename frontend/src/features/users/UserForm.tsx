@@ -2,14 +2,14 @@ import React from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { Save, ArrowLeft, Upload, Loader2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { PageContainer } from '../../components/ui/LayoutComponents';
-import { PageHeader } from '../../components/ui/PageHeader';
-import { Input, Select, FormErrorDisplay } from '../../components/ui';
-import { useAsyncForm } from '../../hooks/useAsyncForm';
-import apiClient from '../../services/api';
+import { PageContainer } from '../../shared/components/ui/LayoutComponents';
+import { PageHeader } from '../../shared/components/ui/PageHeader';
+import { Input, Select, FormErrorDisplay } from '../../shared/components/ui';
+import { useAsyncForm } from '../../shared/hooks/useAsyncForm';
+import { apiClient } from '../../core/api/apiClient';
 
 const userFormSchema = z.object({
   fullName: z.string().min(2, 'Full Name is required'),

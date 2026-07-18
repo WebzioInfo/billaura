@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useSalarySlips } from '../hooks/useHr';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card';
-import { DataTable } from '../../../components/ui/data-table/DataTable';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/components/ui/Card';
+import { DataTable } from '../../../shared/components/ui/data-table/DataTable';
+import { Badge } from '../../../shared/components/ui/Badge';
+import { Button } from '../../../shared/components/ui/Button';
 import { GenerateSalaryModal } from '../components/GenerateSalaryModal';
 import { PaySalaryModal } from '../components/PaySalaryModal';
-import { apiClient } from '../../../services/api/apiClient';
+import { apiClient } from '../../../core/api/apiClient';
 import { Plus } from 'lucide-react';
 
 export const PayrollDashboard: React.FC = () => {

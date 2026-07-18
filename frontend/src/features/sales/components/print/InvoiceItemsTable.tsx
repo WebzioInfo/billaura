@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatIndianCurrency } from '../../../../utils/currencyFormatter';
+import { formatIndianCurrency } from '../../../../shared/utils/currencyFormatter';
 
 export interface InvoiceItem {
   id: string;

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { Save, Loader2 } from 'lucide-react';
-import { PageContainer, Section, FormSection } from '@/components/ui/LayoutComponents';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Button, Input, Select, AutoGenerateInput, FormErrorDisplay } from '@/components/ui';
-import apiClient from '@/services/api';
-import { useDynamicTitle } from '@/hooks/useDynamicTitle';
-import { getCustomerDisplayName } from '@/utils/entityNames';
-import { useAsyncForm } from '@/hooks/useAsyncForm';
+import { PageContainer, Section, FormSection } from '@/shared/components/ui/LayoutComponents';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Button, Input, Select, AutoGenerateInput, FormErrorDisplay } from '@/shared/components/ui';
+import apiClient from '@/core/api';
+import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
+import { getCustomerDisplayName } from '@/shared/utils/entityNames';
+import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 

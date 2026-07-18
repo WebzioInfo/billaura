@@ -1,6 +1,6 @@
 import { PropsWithChildren } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { LoadingScreen } from "@/components/feedback/LoadingScreen";
+import { LoadingScreen } from "@/shared/components/feedback/LoadingScreen";
 import { useSessionStore } from "../stores/sessionStore";
 
 interface ProtectedRouteProps extends PropsWithChildren {

@@ -6,14 +6,14 @@ import {
   CheckCircle, XCircle, FileText, Download, Printer, Mail,
   ChevronDown, AlertCircle, ShoppingCart, TrendingUp, Info
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { PageContainer, EmptyState, LoadingState } from '@/components/ui/LayoutComponents';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import apiClient from '@/services/api';
-import { DeleteDialog } from '@/components/ui';
-import notification from '@/services/NotificationService';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageContainer, EmptyState, LoadingState } from '@/shared/components/ui/LayoutComponents';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import apiClient from '@/core/api';
+import { DeleteDialog } from '@/shared/components/ui';
+import notification from '@/core/services/NotificationService';
 
 export const PurchaseOrdersList = () => {
   const navigate = useNavigate();

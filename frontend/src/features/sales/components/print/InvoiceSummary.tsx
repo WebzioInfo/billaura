@@ -1,6 +1,6 @@
 import React from 'react';
-import { formatIndianCurrency } from '../../../../utils/currencyFormatter';
-import { numberToWords } from '../../../../utils/numberToWords';
+import { formatIndianCurrency } from '../../../../shared/utils/currencyFormatter';
+import { numberToWords } from '../../../../shared/utils/numberToWords';
 
 interface InvoiceSummaryProps {
   totals: {

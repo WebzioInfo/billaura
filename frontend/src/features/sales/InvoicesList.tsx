@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { Plus, Receipt, Eye, Sparkles } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, PageContainer, EmptyState, TableLoader } from '@/components/ui';
-import apiClient from '@/services/api';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, PageContainer, EmptyState, TableLoader } from '@/shared/components/ui';
+import apiClient from '@/core/api';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 

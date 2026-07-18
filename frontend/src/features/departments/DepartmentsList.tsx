@@ -3,14 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import {
   Building, Search, Plus, Trash2, 
   Loader2, Briefcase 
 } from 'lucide-react';
-import api from '../../services/api';
+import { apiClient as api } from '../../core/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
-import { DeleteDialog, ConfirmDialog } from '../../components/ui';
+import { DeleteDialog, ConfirmDialog } from '../../shared/components/ui';
 
 // --- SCHEMAS ---
 const departmentSchema = z.object({

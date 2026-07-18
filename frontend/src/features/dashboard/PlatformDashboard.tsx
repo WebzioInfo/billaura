@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import {
   Users, ArrowUpRight, CheckCircle, 
   DollarSign, Plus, Search, Mail, 
   RefreshCw, Layers, LifeBuoy, Bell, Server, Trash2, Edit2
 } from 'lucide-react';
-import api from '@/services/api';
-import { DeleteDialog } from '@/components/ui';
+import api from '@/core/api';
+import { DeleteDialog } from '@/shared/components/ui';
 
 // Format Helpers
 const formatCurrency = (val: number) => {

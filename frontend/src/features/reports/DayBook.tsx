@@ -1,8 +1,8 @@
 import React from 'react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { AmountText } from '@/components/ui';
-import apiClient from '@/services/api';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { AmountText } from '@/shared/components/ui';
+import apiClient from '@/core/api';
 import { Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 

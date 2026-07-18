@@ -14,6 +14,8 @@ import { SalesOrdersController } from "./sales-orders.controller";
 import { SalesOrdersService } from "./sales-orders.service";
 import { DeliveryNotesController } from "./delivery-notes.controller";
 import { DeliveryNotesService } from "./delivery-notes.service";
+import { RecurringInvoicesController } from "./recurring-invoices.controller";
+import { RecurringInvoicesService } from "./recurring-invoices.service";
 import { PurchasesModule } from "../purchases/purchases.module";
 import { ExpensesModule } from "../expenses/expenses.module";
 import { AccountingModule } from "../accounting/accounting.module";
@@ -37,6 +39,7 @@ import { CommissionsModule } from "../commissions/commissions.module";
     ReceiptsController,
     SalesOrdersController,
     DeliveryNotesController,
+    RecurringInvoicesController,
   ],
   providers: [
     InvoicesService,
@@ -46,6 +49,7 @@ import { CommissionsModule } from "../commissions/commissions.module";
     ReceiptsService,
     SalesOrdersService,
     DeliveryNotesService,
+    RecurringInvoicesService,
   ],
   exports: [
     InvoicesService,
@@ -53,7 +57,9 @@ import { CommissionsModule } from "../commissions/commissions.module";
     QuotationsService,
     ReceiptsService,
     SalesOrdersService,
+    SalesOrdersService,
     DeliveryNotesService,
+    RecurringInvoicesService,
   ],
 })
 export class SalesModule {}

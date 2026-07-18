@@ -113,6 +113,8 @@ model Company {
   webhooks            Webhook[]
   commissionRules     CommissionRule[]
   commissionRecords   CommissionRecord[]
+  brands              Brand[]
+  productCategories   ProductCategory[]
 
   @@index([status])
   @@index([createdAt])
@@ -548,8 +550,8 @@ model TaxGroup {
 model Product {
   id                  String               @id @default(cuid())
   companyId           String
-  category            String?
-  brand               String?
+  categoryId          String?
+  brandId             String?
   unit                UnitType             @default(PCS)
   taxGroupId          String?
   sku                 String?
@@ -579,6 +581,18 @@ model Product {
   salesAccountId      String?
   purchaseAccountId   String?
   inventoryAccountId  String?
+  isPurchasable       Boolean              @default(true)
+  isSellable          Boolean              @default(true)
+  isInventoryItem     Boolean              @default(true)
+  isTaxable           Boolean              @default(true)
+  isTrackStock        Boolean              @default(true)
+  isTrackBatch        Boolean              @default(false)
+  isTrackSerial       Boolean              @default(false)
+  isManufactured      Boolean              @default(false)
+  isService           Boolean              @default(false)
+  isDigital           Boolean              @default(false)
+  isAsset             Boolean              @default(false)
+  isExpense           Boolean              @default(false)
   isActive            Boolean              @default(true)
   imageUrl            String?
   deletedAt           DateTime?
@@ -591,6 +605,8 @@ model Product {
   invoiceItems        InvoiceItem[]
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taxGroup            TaxGroup?            @relation(fields: [taxGroupId], references: [id])
+  category            ProductCategory?     @relation(fields: [categoryId], references: [id])
+  brand               Brand?               @relation(fields: [brandId], references: [id])
   purchaseItems       PurchaseItem[]
   purchaseOrderItems  PurchaseOrderItem[]
   purchaseReturnItems PurchaseReturnItem[]
@@ -751,6 +767,11 @@ model RecurringInvoice {
   items             RecurringInvoiceItem[]
   businessPartner   BusinessPartner        @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
   company           Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  deletedAt         DateTime?
+  createdBy         String?
+  updatedBy         String?
 
   @@index([companyId])
   @@index([businessPartnerId])
@@ -764,6 +785,8 @@ model RecurringInvoiceItem {
   qty                Decimal          @db.Decimal(15, 3)
   rate               Decimal          @db.Decimal(15, 2)
   recurringInvoice   RecurringInvoice @relation(fields: [recurringInvoiceId], references: [id], onDelete: Cascade)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@map("recurring_invoice_items")
 }
@@ -790,7 +813,11 @@ model Quotation {
   totalTaxAmount     Decimal           @default(0) @db.Decimal(15, 2)
   grandTotal         Decimal           @default(0) @db.Decimal(15, 2)
   gstBreakup         Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
   deletedAt          DateTime?
+  createdBy          String?
+  updatedBy          String?
   commissionRecordId String?
   commissionRecord   CommissionRecord? @relation(fields: [commissionRecordId], references: [id])
   items              QuotationItem[]
@@ -821,6 +848,8 @@ model QuotationItem {
   total       Decimal     @db.Decimal(15, 2)
   product     Product?    @relation(fields: [productId], references: [id])
   quotation   Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@map("quotation_items")
 }
@@ -2830,4 +2859,59 @@ model CommissionRecord {
   salesOrders SalesOrder[]
 
   @@map("commission_records")
+}
+
+model Brand {
+  id          String    @id @default(cuid())
+  companyId   String
+  brandName   String
+  brandCode   String
+  description String?
+  logoUrl     String?
+  website     String?
+  email       String?
+  phone       String?
+  status      String    @default("ACTIVE")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
+
+  products Product[]
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, brandCode])
+  @@unique([companyId, brandName])
+  @@index([companyId])
+  @@index([companyId, deletedAt])
+  @@map("brands")
+}
+
+model ProductCategory {
+  id           String    @id @default(cuid())
+  companyId    String
+  categoryName String
+  categoryCode String?
+  description  String?
+  parentId     String?
+  status       String    @default("ACTIVE")
+  color        String?
+  icon         String?
+  displayOrder Int       @default(0)
+  imageUrl     String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  parent   ProductCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children ProductCategory[] @relation("CategoryHierarchy")
+  products Product[]
+  company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, categoryName])
+  @@index([companyId])
+  @@index([companyId, deletedAt])
+  @@map("product_categories")
 }

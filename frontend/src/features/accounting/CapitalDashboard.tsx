@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import notification from '@/services/NotificationService';
-import api from '../../services/api';
+import { Card, CardContent, CardHeader, CardTitle } from '../../shared/components/ui/Card';
+import { Button } from '../../shared/components/ui/Button';
+import { Input } from '../../shared/components/ui/Input';
+import notification from '@/core/services/NotificationService';
+import { apiClient as api } from '../../core/api/apiClient';
 import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;

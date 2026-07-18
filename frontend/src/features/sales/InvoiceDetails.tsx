@@ -6,16 +6,16 @@ import {
   Mail, CreditCard, Ban, Calendar, Clock, DollarSign,
   CheckCircle2, Sparkles, AlertTriangle
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { PageContainer } from '@/components/ui/LayoutComponents';
-import { ConfirmDialog, JournalImpactView } from '@/components/ui';
-import apiClient from '@/services/api';
-import notification from '@/services/NotificationService';
-import { useDynamicTitle } from '@/hooks/useDynamicTitle';
-import { PdfDownloadButton } from '@/components/pdf/PdfDownloadButton';
-import { PdfDocumentProps } from '@/components/pdf/StandardPdfDocument';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { PageContainer } from '@/shared/components/ui/LayoutComponents';
+import { ConfirmDialog, JournalImpactView } from '@/shared/components/ui';
+import apiClient from '@/core/api';
+import notification from '@/core/services/NotificationService';
+import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
+import { PdfDownloadButton } from '@/shared/components/pdf/PdfDownloadButton';
+import { PdfDocumentProps } from '@/shared/components/pdf/StandardPdfDocument';
 
 const formatIndianCurrency = (amount: number) => {
   const rounded = Math.abs(amount) < 0.005 ? 0 : amount;

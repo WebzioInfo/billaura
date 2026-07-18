@@ -1,4 +1,4 @@
-import { apiClient } from '../../../services/api/apiClient';
+import { apiClient } from '../../../core/api/apiClient';
 
 export interface SalarySlip {
   id: string;

@@ -3,16 +3,16 @@ import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { Search, Plus, Trash2, Edit2, Download, AlertCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '@/services/api';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { DeleteDialog, AsyncSelect } from '@/components/ui';
-import { PageHeader } from '@/components/ui/PageHeader';
+import apiClient from '@/core/api';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { DeleteDialog, AsyncSelect } from '@/shared/components/ui';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ExpenseReceiptPdf } from './components/ExpenseReceiptPdf';
-import { useTaxEngine } from '@/hooks/useTaxEngine';
+import { useTaxEngine } from '@/features/taxes/hooks/useTaxEngine';
 
 const expenseSchema = z.object({
   categoryId: z.string().min(1, 'Select a category'),

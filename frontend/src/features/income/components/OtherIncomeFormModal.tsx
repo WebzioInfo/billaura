@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import notification from '@/services/NotificationService';
-import { Modal } from '../../../components/ui/Modal';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
-import api from '../../../services/api';
+import notification from '@/core/services/NotificationService';
+import { Modal } from '../../../shared/components/ui/Modal';
+import { Button } from '../../../shared/components/ui/Button';
+import { Input } from '../../../shared/components/ui/Input';
+import { apiClient as api } from '../../../core/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;

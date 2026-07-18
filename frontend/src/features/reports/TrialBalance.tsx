@@ -1,10 +1,10 @@
 import React from 'react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { PageContainer, EmptyState, LoadingState, AmountText } from '@/components/ui';
-import apiClient from '@/services/api';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { PageContainer, EmptyState, LoadingState, AmountText } from '@/shared/components/ui';
+import apiClient from '@/core/api';
 import { Download, BarChart2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 

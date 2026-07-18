@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import notification from '@/services/NotificationService';
+import notification from '@/core/services/NotificationService';
 import { Shield, Plus, Edit2, Trash2, Search, Loader2, Check, Copy } from 'lucide-react';
-import apiClient from '../../services/api';
+import { apiClient } from '../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DeleteDialog } from '../../components/ui';
+import { DeleteDialog } from '../../shared/components/ui';
 
 const roleSchema = z.object({
   name: z.string().min(2, 'Role name must be at least 2 characters'),

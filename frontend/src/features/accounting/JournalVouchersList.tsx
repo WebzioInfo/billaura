@@ -1,13 +1,13 @@
 import React from 'react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { PageHeader } from '../../components/ui/PageHeader';
-import { PageContainer, EmptyState, LoadingState } from '../../components/ui/LayoutComponents';
+import { Card } from '../../shared/components/ui/Card';
+import { Button } from '../../shared/components/ui/Button';
+import { PageHeader } from '../../shared/components/ui/PageHeader';
+import { PageContainer, EmptyState, LoadingState } from '../../shared/components/ui/LayoutComponents';
 import { Plus, ArrowRight, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import api from '../../services/api';
-import { DataTable, DataTableColumnHeader } from '../../components/ui/data-table';
+import { apiClient as api } from '../../core/api/apiClient';
+import { DataTable, DataTableColumnHeader } from '../../shared/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 
 export const JournalVouchersList = () => {

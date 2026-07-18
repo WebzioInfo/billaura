@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import api from '../../../services/api';
+import { apiClient as api } from '../../../core/api/apiClient';
 import { BarChart3, Mail, ArrowLeft, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
 
 const forgotSchema = z.object({

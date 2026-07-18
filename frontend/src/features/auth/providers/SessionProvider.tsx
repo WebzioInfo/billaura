@@ -1,8 +1,8 @@
 import { PropsWithChildren, useEffect, useState } from "react";
-import { apiClient } from "@/services/api/apiClient";
+import { apiClient } from "@/core/api/apiClient";
 import { useSessionStore } from "../stores/sessionStore";
-import { LoadingScreen } from "@/components/feedback/LoadingScreen";
-import { TokenService } from "../../../services/auth/TokenService";
+import { LoadingScreen } from "@/shared/components/feedback/LoadingScreen";
+import { TokenService } from "../../../core/auth/TokenService";
 
 export function SessionProvider({ children }: PropsWithChildren) {
   const clearSession = useSessionStore((state) => state.clearSession);

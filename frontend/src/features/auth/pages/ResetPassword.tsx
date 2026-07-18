@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import api from '../../../services/api';
+import { apiClient as api } from '../../../core/api/apiClient';
 import { BarChart3, Lock, ArrowLeft, AlertCircle, Loader2, CheckCircle2, RotateCw } from 'lucide-react';
 
 const resetSchema = z.object({

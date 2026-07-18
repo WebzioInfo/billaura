@@ -124,10 +124,15 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload);
+    const accessTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     return {
-      access_token: accessToken,
-      refresh_token: refreshToken,
+      success: true,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
       user: {
         id: user.id,
         email: user.email,
@@ -137,7 +142,9 @@ export class AuthService {
         role: companyRole,
         globalRole: user.globalRole,
         onboardingStep: payload.onboardingStep,
-      }
+      },
+      tenant: companyId ? { id: companyId } : null,
+      permissions: []
     };
   }
 
@@ -256,9 +263,16 @@ export class AuthService {
       onboardingStep,
     };
 
+    const accessToken = this.jwtService.sign(payload);
+    const accessTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
     return {
-      access_token: this.jwtService.sign(payload),
-      refresh_token: refreshToken,
+      success: true,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
       user: {
         id: user.id,
         email: user.email,
@@ -268,7 +282,9 @@ export class AuthService {
         role: companyRole,
         globalRole: user.globalRole,
         onboardingStep,
-      }
+      },
+      tenant: companyId ? { id: companyId } : null,
+      permissions: []
     };
   }
 
@@ -300,9 +316,16 @@ export class AuthService {
       onboardingStep,
     };
 
+    const accessToken = this.jwtService.sign(payload);
+    const accessTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
     return {
-      access_token: this.jwtService.sign(payload),
-      refresh_token: newRefreshToken, // rotated
+      success: true,
+      accessToken: accessToken,
+      refreshToken: newRefreshToken, // rotated
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
       user: {
         id: user.id,
         email: user.email,
@@ -312,7 +335,9 @@ export class AuthService {
         role: companyRole,
         globalRole: user.globalRole,
         onboardingStep,
-      }
+      },
+      tenant: activeCompanyId ? { id: activeCompanyId } : null,
+      permissions: []
     };
   }
 

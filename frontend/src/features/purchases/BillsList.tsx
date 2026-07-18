@@ -4,14 +4,14 @@ import {
   Trash2, X, Download, FileText, Calendar, Building, ListFilter,
   CheckCircle, AlertTriangle, ShieldAlert, Sparkles, Send, Briefcase, Printer, ArrowRight
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, PageContainer, LoadingState, TableLoader, SummaryCardLoader } from '@/components/ui';
-import apiClient from '@/services/api';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, PageContainer, LoadingState, TableLoader, SummaryCardLoader } from '@/shared/components/ui';
+import apiClient from '@/core/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import notification from '@/services/NotificationService';
-import { DeleteDialog, ConfirmDialog } from '@/components/ui';
-import { PdfDownloadButton } from '../../components/pdf/PdfDownloadButton';
+import notification from '@/core/services/NotificationService';
+import { DeleteDialog, ConfirmDialog } from '@/shared/components/ui';
+import { PdfDownloadButton } from '../../shared/components/pdf/PdfDownloadButton';
 
 interface Vendor {
   id: string;

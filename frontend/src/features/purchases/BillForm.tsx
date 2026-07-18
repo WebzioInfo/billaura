@@ -5,13 +5,13 @@ import {
   ArrowLeft, Plus, Trash2, Copy, Save, AlertCircle, ShoppingCart, 
   Building, Calendar, FileText, Landmark, FileCheck, HelpCircle
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { PageContainer, LoadingState } from '@/components/ui/LayoutComponents';
-import { Card } from '@/components/ui/Card';
-import { Button, Input, Select, FormErrorDisplay } from '@/components/ui';
-import apiClient from '@/services/api';
-import notification from '@/services/NotificationService';
-import { useAsyncForm } from '@/hooks/useAsyncForm';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageContainer, LoadingState } from '@/shared/components/ui/LayoutComponents';
+import { Card } from '@/shared/components/ui/Card';
+import { Button, Input, Select, FormErrorDisplay } from '@/shared/components/ui';
+import apiClient from '@/core/api';
+import notification from '@/core/services/NotificationService';
+import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
