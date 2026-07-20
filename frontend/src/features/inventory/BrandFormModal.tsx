@@ -78,7 +78,16 @@ export const BrandFormModal = ({ isOpen, onClose, brand }: BrandFormModalProps) 
       onClose();
     },
     onError: (err: any) => {
-      setErrors({ form: err.response?.data?.message || err.message || 'Failed to save brand' });
+      const data = err.response?.data;
+      if (data?.errors) {
+        const formattedErrors: Record<string, string> = {};
+        for (const [key, msgs] of Object.entries(data.errors)) {
+          formattedErrors[key] = Array.isArray(msgs) ? msgs[0] : msgs as string;
+        }
+        setErrors(formattedErrors);
+      } else {
+        setErrors({ form: data?.message || err.message || 'Failed to save brand' });
+      }
     }
   });
 

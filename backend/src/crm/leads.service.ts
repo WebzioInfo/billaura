@@ -6,10 +6,11 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
+import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
 export class LeadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly sequenceService: SequenceService) {}
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -80,7 +81,7 @@ export class LeadsService {
         ...dto,
         status: dto.status as any,
         bpType: 'LEAD',
-        bpCode: 'LEAD-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
+        bpCode: await this.sequenceService.generateNextSequence(companyId, 'LEAD'),
         companyId,
       },
     });

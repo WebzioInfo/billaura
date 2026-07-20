@@ -32,6 +32,8 @@ const bpSchema = z.object({
   notes: z.string().optional(),
   status: z.string().optional(),
   openingBalance: z.string().optional().or(z.number().transform(String)),
+  customerSegmentId: z.string().optional(),
+  customerDepartmentId: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.customerType === 'REGISTERED' && !data.gstin) {
     ctx.addIssue({
@@ -65,6 +67,24 @@ export const BusinessPartnerForm = () => {
     enabled: isEditMode,
   });
 
+  const { data: segments } = useQuery({
+    queryKey: ['customer-segments'],
+    queryFn: async () => {
+      const res = await apiClient.get('/customer-segments');
+      return res.data?.data || res.data || [];
+    },
+    enabled: !isVendor,
+  });
+
+  const { data: departments } = useQuery({
+    queryKey: ['customer-departments'],
+    queryFn: async () => {
+      const res = await apiClient.get('/customer-departments');
+      return res.data?.data || res.data || [];
+    },
+    enabled: !isVendor,
+  });
+
   const form = useAsyncForm<BusinessPartnerFormValues>(
     {
       resolver: zodResolver(bpSchema as any) as any,
@@ -87,6 +107,8 @@ export const BusinessPartnerForm = () => {
         notes: '',
         status: 'ACTIVE',
         openingBalance: '',
+        customerSegmentId: '',
+        customerDepartmentId: '',
       }
     },
     customer,
@@ -112,6 +134,8 @@ export const BusinessPartnerForm = () => {
         notes: data.notes || '',
         status: data.status || 'ACTIVE',
         openingBalance: data.receivableBalance ? String(data.receivableBalance) : '',
+        customerSegmentId: data.customerSegmentId || '',
+        customerDepartmentId: data.customerDepartmentId || '',
       };
     }
   );
@@ -130,6 +154,8 @@ export const BusinessPartnerForm = () => {
         submitData.vendorType = data.customerType;
       } else {
         submitData.type = 'CUSTOMER';
+        submitData.customerSegmentId = data.customerSegmentId;
+        submitData.customerDepartmentId = data.customerDepartmentId;
       }
       if (!b2bMode) {
         submitData.customerType = 'UNREGISTERED';
@@ -203,6 +229,10 @@ export const BusinessPartnerForm = () => {
               setValue('panNumber', '');
               setValue('tradeName', '');
               setValue('creditLimit', '');
+              if (!isEditMode && segments) {
+                const defaultB2c = segments.find((s: any) => s.segmentType === 'B2C' && s.isDefault);
+                if (defaultB2c) setValue('customerSegmentId', defaultB2c.id);
+              }
             }}
             className={`px-6 py-2 text-sm font-medium rounded-md transition-colors ${!b2bMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
           >
@@ -210,7 +240,13 @@ export const BusinessPartnerForm = () => {
           </button>
           <button
             type="button"
-            onClick={() => setB2bMode(true)}
+            onClick={() => {
+              setB2bMode(true);
+              if (!isEditMode && segments) {
+                const defaultB2b = segments.find((s: any) => s.segmentType === 'B2B' && s.isDefault);
+                if (defaultB2b) setValue('customerSegmentId', defaultB2b.id);
+              }
+            }}
             className={`px-6 py-2 text-sm font-medium rounded-md transition-colors ${b2bMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
           >
             B2B Customer (Business)
@@ -238,6 +274,42 @@ export const BusinessPartnerForm = () => {
                     placeholder="Auto-generated if left empty"
                   />
               </div>
+              {!isVendor && (
+                <div>
+                  <Select
+                    label="Customer Segment"
+                    {...register('customerSegmentId')}
+                    options={[
+                      { value: '', label: 'Select Segment...' },
+                      ...(segments || [])
+                        .filter((s: any) => s.isActive && (s.segmentType === 'BOTH' || (b2bMode ? s.segmentType === 'B2B' : s.segmentType === 'B2C')))
+                        .map((s: any) => ({
+                          value: s.id,
+                          label: s.name
+                        }))
+                    ]}
+                  />
+                  <FormErrorDisplay error={errors.customerSegmentId} />
+                </div>
+              )}
+              {!isVendor && (
+                <div>
+                  <Select
+                    label="Customer Department"
+                    {...register('customerDepartmentId')}
+                    options={[
+                      { value: '', label: 'Select Department...' },
+                      ...(departments || [])
+                        .filter((d: any) => d.isActive && (d.customerType === 'BOTH' || (b2bMode ? d.customerType === 'B2B' : d.customerType === 'B2C')))
+                        .map((d: any) => ({
+                          value: d.id,
+                          label: d.name
+                        }))
+                    ]}
+                  />
+                  <FormErrorDisplay error={errors.customerDepartmentId} />
+                </div>
+              )}
               {b2bMode && (
                 <>
                   <div>

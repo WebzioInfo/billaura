@@ -197,6 +197,17 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     }
   }, [watchedTaxGroupId, taxGroupsData, setValue]);
 
+  useEffect(() => {
+    if (!isTaxable) {
+      setValue('hsnCode', '', { shouldValidate: true, shouldDirty: true });
+      setValue('eInvoiceHsn', '', { shouldValidate: true, shouldDirty: true });
+      setValue('taxGroupId', '', { shouldValidate: true, shouldDirty: true });
+      setValue('gstRate', 0, { shouldValidate: true, shouldDirty: true });
+      setValue('taxRate', 0, { shouldValidate: true, shouldDirty: true });
+      setValue('taxCategory', 'NON_GST', { shouldValidate: true, shouldDirty: true });
+    }
+  }, [isTaxable, setValue]);
+
   const handleItemTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setValue('itemType', val);
@@ -539,8 +550,9 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                     </div>
                     <Select label="Tax Preference" {...register('taxCategory')} error={errors.taxCategory?.message as string} options={[
                       { label: 'Taxable', value: 'TAXABLE' },
-                      { label: 'Non-Taxable', value: 'NON_TAXABLE' },
-                      { label: 'Nil Rated', value: 'NIL_RATED' }
+                      { label: 'Exempt', value: 'EXEMPT' },
+                      { label: 'Nil Rated', value: 'NIL_RATED' },
+                      { label: 'Non GST', value: 'NON_GST' }
                     ]} />
                   </div>
                 </div>

@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsBoolean,
   IsEnum,
+  ValidateIf,
 } from "class-validator";
 import { ItemType, TaxCategory, UnitType } from "@prisma/client";
 
@@ -26,7 +27,8 @@ export class CreateProductDto {
   unit?: UnitType;
 
   @IsString()
-  @IsOptional()
+  @ValidateIf((o) => o.isTaxable === true)
+  @IsNotEmpty({ message: 'Tax Group is required for taxable items' })
   taxGroupId?: string;
 
   @IsString()
@@ -42,7 +44,8 @@ export class CreateProductDto {
   barcode?: string;
 
   @IsString()
-  @IsOptional()
+  @ValidateIf((o) => o.isTaxable === true)
+  @IsNotEmpty({ message: 'HSN/SAC Code is required for taxable items' })
   hsnCode?: string;
 
   @IsString()

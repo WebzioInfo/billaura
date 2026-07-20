@@ -20,10 +20,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
-    const message =
-      exception instanceof HttpException
-        ? exception.message
-        : "Internal server error";
+    const exceptionResponse = exception instanceof HttpException ? exception.getResponse() : null;
+    let message = exception instanceof HttpException ? exception.message : "Internal server error";
+    let errors = undefined;
+
+    if (exceptionResponse && typeof exceptionResponse === 'object') {
+       if ('message' in exceptionResponse) {
+           message = (exceptionResponse as any).message as string;
+       }
+       if ('errors' in exceptionResponse) {
+           errors = (exceptionResponse as any).errors;
+       }
+    }
     const requestId = response.getHeader("x-request-id")?.toString();
 
     if (status >= 500) {
@@ -36,7 +44,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     response.status(status).json({
       success: false,
-      error: message,
+      message,
+      ...(errors ? { errors } : {}),
       statusCode: status,
       path: request.url,
       requestId,

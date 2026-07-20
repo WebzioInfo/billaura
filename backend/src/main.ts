@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { ValidationPipe } from "@nestjs/common";
+import { ValidationPipe, ValidationError, BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
@@ -48,6 +48,16 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
+      exceptionFactory: (validationErrors: ValidationError[] = []) => {
+        const errors: Record<string, string[]> = {};
+        validationErrors.forEach((error) => {
+          errors[error.property] = Object.values(error.constraints || {});
+        });
+        return new BadRequestException({
+          message: 'Validation failed',
+          errors,
+        });
+      },
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter(logger));
@@ -70,8 +80,8 @@ async function bootstrap() {
   SwaggerModule.setup("docs", app, document);
 
   const port = config.get<number>("PORT", 4000);
-  await app.listen(port);
-  logger.log(`Backend foundation listening on port ${port}`, "Bootstrap");
+  await app.listen(port, "0.0.0.0");
+  logger.log(`Backend foundation listening on port ${port} (IPv4)`, "Bootstrap");
 }
 
 void bootstrap();

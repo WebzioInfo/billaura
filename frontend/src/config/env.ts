@@ -8,10 +8,11 @@ export const env = {
   API_URL: import.meta.env.VITE_API_URL ?? 'http://localhost:4000',
   API_BASE_URL: (() => {
     const rawUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
-    if (rawUrl.startsWith('http') && !rawUrl.endsWith('/api') && !rawUrl.includes('/api/')) {
-      return `${rawUrl.replace(/\/$/, '')}/api`;
+    if (rawUrl.startsWith('http')) {
+      return rawUrl;
     }
-    return rawUrl;
+    const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+    return `${apiUrl.replace(/\/$/, '')}${rawUrl}`;
   })(),
 
   // App Meta

@@ -1,8 +1,8 @@
-import { PropsWithChildren, useEffect, useState } from "react";
-import { apiClient } from "@/core/api/apiClient";
-import { useSessionStore } from "../stores/sessionStore";
-import { LoadingScreen } from "@/shared/components/feedback/LoadingScreen";
-import { TokenService } from "../../../core/auth/TokenService";
+import { PropsWithChildren, useEffect, useState } from 'react';
+import { apiClient } from '@/core/api/apiClient';
+import { useSessionStore } from '../stores/sessionStore';
+import { LoadingScreen } from '@/shared/components/feedback/LoadingScreen';
+import { TokenService } from '../../../core/auth/TokenService';
 
 export function SessionProvider({ children }: PropsWithChildren) {
   const clearSession = useSessionStore((state) => state.clearSession);
@@ -14,22 +14,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
     const initSession = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'X-CSRF-Token': TokenService.getCsrfToken() ?? '' },
-        });
-        
-        if (!res.ok) {
-          throw new Error('Refresh failed');
+        const storedRefreshToken = TokenService.getRefreshToken();
+        if (!storedRefreshToken) {
+          setInitFinished(true);
+          return;
         }
-
-        const data = await res.json();
-        const payload = data?.data || data;
+        const payload = await apiClient.post('/auth/refresh', { refreshToken: storedRefreshToken });
         
-        if (payload && payload.access_token && payload.user) {
-          TokenService.setAccessToken(payload.access_token);
-          setSession(payload.user, payload.access_token);
+        const token = payload.accessToken || payload.access_token;
+        if (payload && token && payload.user) {
+          TokenService.setTokens(token, payload.refreshToken || payload.refresh_token);
+          setSession(payload.user, token);
         } else {
           TokenService.clearTokens();
           clearSession();
@@ -37,16 +32,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
       } catch {
         TokenService.clearTokens();
         clearSession();
+      } finally {
+        setInitFinished(true);
       }
-      setInitFinished(true);
     };
 
     initSession();
   }, [clearSession, setSession]);
 
   if (!initFinished) {
-    return <LoadingScreen />;
+    return <LoadingScreen text="Starting session..." />;
   }
 
-  return children;
+  return <>{children}</>;
 }

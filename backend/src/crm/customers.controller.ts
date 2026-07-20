@@ -15,11 +15,12 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 import { PrismaService } from "../database/prisma.service";
 import { CompanyContext } from "../common/context/company-context";
+import { SequenceService } from "../shared/sequence/sequence.service";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller("customers")
 export class CustomersController {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private sequenceService: SequenceService) {}
 
   @Get()
   async findAll(@Query("search") search: string) {
@@ -30,7 +31,11 @@ export class CustomersController {
     }
     const items = await this.prisma.businessPartner.findMany({ 
       where,
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      include: {
+        customerSegment: true,
+        customerDepartment: true
+      }
     });
     return { success: true, data: { items } };
   }
@@ -48,7 +53,9 @@ export class CustomersController {
         transactionPayments: {
           orderBy: { createdAt: 'desc' },
           take: 5
-        }
+        },
+        customerSegment: true,
+        customerDepartment: true
       }
     });
 
@@ -161,6 +168,8 @@ export class CustomersController {
       stateCode,
       placeOfSupply,
       creditLimit,
+      customerSegmentId,
+      customerDepartmentId,
     } = data;
     const finalGstin = gstin || gstNumber;
     if (finalGstin) {
@@ -177,7 +186,7 @@ export class CustomersController {
       });
       if (existingCode) throw new BadRequestException("Customer Code already exists");
     } else {
-      finalBpCode = "CUST-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+      finalBpCode = await this.sequenceService.generateNextSequence(companyId, "CUSTOMER");
     }
 
     const item = await this.prisma.businessPartner.create({
@@ -198,6 +207,8 @@ export class CustomersController {
         stateCode,
         placeOfSupply,
         creditLimit: creditLimit ? Number(creditLimit) : 0,
+        customerSegmentId,
+        customerDepartmentId,
         companyId,
       },
     });
@@ -224,6 +235,8 @@ export class CustomersController {
       stateCode,
       placeOfSupply,
       creditLimit,
+      customerSegmentId,
+      customerDepartmentId,
     } = data;
     const existing = await this.prisma.businessPartner.findFirst({
       where: { id, companyId, deletedAt: null, bpType: "CUSTOMER" }
@@ -268,6 +281,8 @@ export class CustomersController {
     if (stateCode !== undefined) updateData.stateCode = stateCode;
     if (placeOfSupply !== undefined) updateData.placeOfSupply = placeOfSupply;
     if (creditLimit !== undefined) updateData.creditLimit = Number(creditLimit);
+    if (customerSegmentId !== undefined) updateData.customerSegmentId = customerSegmentId;
+    if (customerDepartmentId !== undefined) updateData.customerDepartmentId = customerDepartmentId;
 
     if (Object.keys(updateData).length > 0) {
       const item = await this.prisma.businessPartner.update({

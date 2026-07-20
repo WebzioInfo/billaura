@@ -115,6 +115,8 @@ model Company {
   commissionRecords   CommissionRecord[]
   brands              Brand[]
   productCategories   ProductCategory[]
+  customerSegments    CustomerSegment[]
+  customerDepartments CustomerDepartment[]
 
   @@index([status])
   @@index([createdAt])
@@ -414,6 +416,47 @@ model ActivityFeed {
   @@map("activity_feeds")
 }
 
+model CustomerSegment {
+  id          String            @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  segmentType String            @default("B2B")
+  color       String?
+  icon        String?
+  isDefault   Boolean           @default(false)
+  isActive    Boolean           @default(true)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  createdBy   String?
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customers   BusinessPartner[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("customer_segments")
+}
+
+model CustomerDepartment {
+  id          String            @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  customerType String           @default("B2B")
+  isActive    Boolean           @default(true)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  createdBy   String?
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customers   BusinessPartner[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("customer_departments")
+}
+
 model BusinessPartner {
   id                  String               @id @default(cuid())
   companyId           String
@@ -444,7 +487,11 @@ model BusinessPartner {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
+  customerSegmentId   String?
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerSegment     CustomerSegment?     @relation(fields: [customerSegmentId], references: [id])
+  customerDepartmentId String?
+  customerDepartment  CustomerDepartment?  @relation(fields: [customerDepartmentId], references: [id])
   contacts            Contact[]
   crmActivities       CrmActivity[]
   statements          CustomerStatement[]
@@ -564,10 +611,10 @@ model Product {
   itemType            ItemType             @default(FINISHED_GOOD)
   weight              Decimal?             @db.Decimal(10, 3)
   weightType          String?
-  taxRate             Decimal              @default(0) @db.Decimal(5, 2)
-  gstRate             Decimal              @default(0) @db.Decimal(5, 2)
+  taxRate             Decimal?             @db.Decimal(5, 2)
+  gstRate             Decimal?             @db.Decimal(5, 2)
   taxType             String?
-  taxCategory         TaxCategory          @default(TAXABLE)
+  taxCategory         TaxCategory?
   isExempt            Boolean              @default(false)
   isNilRated          Boolean              @default(false)
   isNonGst            Boolean              @default(false)

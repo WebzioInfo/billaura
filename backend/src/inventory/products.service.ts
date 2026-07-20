@@ -5,7 +5,7 @@ import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, TaxCategory } from '@prisma/client';
 
 @Injectable()
 export class ProductsService {
@@ -95,16 +95,19 @@ export class ProductsService {
       }
     }
 
-    let finalGstRate = gstRate;
+    let finalGstRate: number | undefined = gstRate;
     let finalHsnCode = dto.hsnCode || null;
-    let finalTaxCategory = dto.taxCategory || 'TAXABLE';
+    let finalTaxCategory: TaxCategory | undefined = dto.taxCategory || 'TAXABLE';
     let finalTaxGroupId = dto.taxGroupId || null;
 
+    let finalTaxType = dto.taxType || null;
+
     if (dto.isTaxable === false) {
-      finalGstRate = 0;
+      finalGstRate = undefined;
       finalHsnCode = null;
-      finalTaxCategory = null as any;
+      finalTaxCategory = undefined;
       finalTaxGroupId = null;
+      finalTaxType = null;
     }
 
     let finalMinStock = dto.minStock || 0;
@@ -138,7 +141,7 @@ export class ProductsService {
           weightType: dto.weightType || null,
           taxRate: finalGstRate,
           gstRate: finalGstRate,
-          taxType: dto.taxType || null,
+          taxType: finalTaxType,
           taxCategory: finalTaxCategory,
           isExempt: dto.isExempt || false,
           isNilRated: dto.isNilRated || false,
@@ -225,18 +228,21 @@ export class ProductsService {
       }
     }
 
-    let finalGstRate = gstRate;
+    let finalGstRate: typeof gstRate | undefined = gstRate;
     let finalHsnCode = dto.hsnCode !== undefined ? dto.hsnCode : product.hsnCode;
-    let finalTaxCategory = dto.taxCategory !== undefined ? dto.taxCategory : product.taxCategory;
+    let finalTaxCategory: TaxCategory | undefined | null = dto.taxCategory !== undefined ? dto.taxCategory : product.taxCategory;
     let finalTaxGroupId = dto.taxGroupId !== undefined ? dto.taxGroupId : product.taxGroupId;
 
     let isTaxable = dto.isTaxable !== undefined ? dto.isTaxable : product.isTaxable;
 
+    let finalTaxType = dto.taxType !== undefined ? dto.taxType : product.taxType;
+
     if (isTaxable === false) {
-      finalGstRate = 0;
+      finalGstRate = undefined;
       finalHsnCode = null;
-      finalTaxCategory = null as any;
+      finalTaxCategory = undefined;
       finalTaxGroupId = null;
+      finalTaxType = null;
     }
 
     let finalMinStock = dto.minStock !== undefined ? dto.minStock : product.minStock;
@@ -262,6 +268,7 @@ export class ProductsService {
       hsnCode: finalHsnCode,
       taxCategory: finalTaxCategory,
       taxGroupId: finalTaxGroupId,
+      taxType: finalTaxType,
       minStock: finalMinStock,
       maxStock: finalMaxStock,
       reorderLevel: finalReorderLevel,

@@ -15,6 +15,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 import { PrismaService } from "../database/prisma.service";
 import { CompanyContext } from "../common/context/company-context";
+import { SequenceService } from "../shared/sequence/sequence.service";
 
 /**
  * Map frontend customerType labels to valid Prisma CustomerType enum values.
@@ -36,7 +37,7 @@ function toCustomerType(value?: string): string {
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller("vendors")
 export class VendorsController {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private sequenceService: SequenceService) {}
 
   @Get()
   async findAll(
@@ -147,7 +148,7 @@ export class VendorsController {
 
     const bpCode =
       vendorCode?.trim()?.toUpperCase() ||
-      "VEND-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+      (await this.sequenceService.generateNextSequence(companyId, "VENDOR"));
 
     const item = await this.prisma.businessPartner.create({
       data: {

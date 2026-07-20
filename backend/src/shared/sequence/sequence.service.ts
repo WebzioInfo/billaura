@@ -6,8 +6,13 @@ export class SequenceService {
   constructor(private prisma: PrismaService) {}
 
   async generateNextSequence(companyId: string, documentType: string, tx?: any): Promise<string> {
+    if (!companyId || !documentType) {
+      throw new Error(`[SequenceService] Missing required arguments: companyId=${companyId}, documentType=${documentType}`);
+    }
     const db = tx || this.prisma;
-    const seq = await db.documentSequence.findUnique({
+    const now = new Date();
+
+    let seq = await db.documentSequence.findUnique({
       where: {
         companyId_documentType: {
           companyId,
@@ -16,24 +21,34 @@ export class SequenceService {
       }
     });
 
-    const now = new Date();
-
     if (!seq) {
-      // Default fallback if no sequence config exists
-      const newSeq = await db.documentSequence.create({
-        data: {
-          companyId,
-          documentType,
-          currentNumber: 1,
-          prefix: documentType.substring(0, 3).toUpperCase() + '-',
-          sequenceType: 'SEQUENTIAL',
-          padding: 6,
+      try {
+        seq = await db.documentSequence.create({
+          data: {
+            companyId,
+            documentType,
+            currentNumber: 1,
+            prefix: documentType.substring(0, 3).toUpperCase() + '-',
+            sequenceType: 'SEQUENTIAL',
+            padding: 6,
+          }
+        });
+        return this.formatSequence(seq.currentNumber, seq.prefix, seq.suffix, seq.padding, seq.sequenceType);
+      } catch (err: any) {
+        if (err.code === 'P2002') {
+          seq = await db.documentSequence.findUnique({
+            where: { companyId_documentType: { companyId, documentType } }
+          });
+        } else {
+          throw err;
         }
-      });
-      return this.formatSequence(newSeq.currentNumber, newSeq.prefix, newSeq.suffix, newSeq.padding, newSeq.sequenceType);
+      }
     }
 
-    // Check reset logic
+    if (!seq) {
+      throw new Error('Failed to generate sequence');
+    }
+
     let shouldReset = false;
     if (seq.resetLogic === 'YEARLY' && seq.lastGeneratedAt) {
       const seqYear = new Date(seq.lastGeneratedAt).getFullYear();
@@ -47,13 +62,10 @@ export class SequenceService {
       }
     }
 
-    const nextNumber = shouldReset ? 1 : seq.currentNumber + 1;
-
-    // Update and get next
     const updated = await db.documentSequence.update({
       where: { id: seq.id },
       data: {
-        currentNumber: nextNumber,
+        currentNumber: shouldReset ? 1 : { increment: 1 },
         lastGeneratedAt: now
       }
     });

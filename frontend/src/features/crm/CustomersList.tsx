@@ -90,9 +90,21 @@ export const CustomersList = () => {
                     >
                       {c.name}
                     </button>
-                    {c.customerType && (
-                      <span className="block text-[10px] uppercase text-muted-foreground mt-0.5">{c.customerType}</span>
-                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      {c.customerType && (
+                        <span className="block text-[10px] uppercase text-muted-foreground">{c.customerType}</span>
+                      )}
+                      {c.customerSegment && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium text-white ${c.customerSegment.color || 'bg-gray-500'}`}>
+                          {c.customerSegment.name}
+                        </span>
+                      )}
+                      {c.customerDepartment && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium text-primary bg-primary/10 border border-primary/20">
+                          {c.customerDepartment.name}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-foreground">{c.tradeName || '-'}</div>

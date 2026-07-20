@@ -8,8 +8,12 @@ import { CrmActivitiesController } from "./crm-activities.controller";
 import { CustomersController } from "./customers.controller";
 import { DatabaseModule } from "../database/database.module";
 
+import { CustomerSegmentsModule } from "./customer-segments/customer-segments.module";
+import { CustomerDepartmentsModule } from "./customer-departments/customer-departments.module";
+import { SequenceModule } from "../shared/sequence/sequence.module";
+
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, CustomerSegmentsModule, CustomerDepartmentsModule, SequenceModule],
   controllers: [
     LeadsController,
     ContactsController,
@@ -17,6 +21,6 @@ import { DatabaseModule } from "../database/database.module";
     CustomersController,
   ],
   providers: [LeadsService, ContactsService, CrmActivitiesService],
-  exports: [LeadsService, ContactsService, CrmActivitiesService],
+  exports: [LeadsService, ContactsService, CrmActivitiesService, CustomerSegmentsModule],
 })
 export class CrmModule {}

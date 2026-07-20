@@ -43,6 +43,8 @@ const PayrollDashboard = lazy(() => import('../features/hr/pages/PayrollDashboar
 const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m => ({ default: m.CustomersList })));
 const CustomerProfile = lazy(() => import('../features/crm/CustomerProfile').then(m => ({ default: m.CustomerProfile })));
 const CustomerForm = lazy(() => import('../features/crm/BusinessPartnerForm').then(m => ({ default: m.BusinessPartnerForm })));
+const CustomerSegmentManager = lazy(() => import('../features/crm/CustomerSegmentManager').then(m => ({ default: m.CustomerSegmentManager })));
+const CustomerDepartmentManager = lazy(() => import('../features/crm/CustomerDepartmentManager').then(m => ({ default: m.CustomerDepartmentManager })));
 const VendorsList = lazy(() => import('../features/vendors/VendorsList').then(m => ({ default: m.VendorsList })));
 const VendorProfile = lazy(() => import('../features/vendors/VendorProfile').then(m => ({ default: m.VendorProfile })));
 
@@ -236,6 +238,8 @@ export const router = createBrowserRouter([
       { path: 'customers/new', element: <CustomerForm /> },
       { path: 'customers/:id', element: <CustomerProfile /> },
       { path: 'customers/:id/edit', element: <CustomerForm /> },
+      { path: 'customer-segments', element: <CustomerSegmentManager /> },
+      { path: 'customer-departments', element: <CustomerDepartmentManager /> },
       { path: 'vendors', element: <VendorsList /> },
       { path: 'vendors/new', element: <CustomerForm /> },
       { path: 'vendors/:id', element: <VendorProfile /> },

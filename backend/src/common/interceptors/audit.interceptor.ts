@@ -32,10 +32,17 @@ export class AuditInterceptor implements NestInterceptor {
       return next.handle().pipe(
         tap(async (data) => {
           try {
+            const finalCompanyId = companyId || data?.tenant?.id || data?.user?.companyId || null;
+            const finalUserId = user?.userId || user?.id || data?.user?.id || null;
+
+            if (!finalCompanyId || !finalUserId) {
+              return; // Skip audit log if we can't identify the user or company
+            }
+
             await this.prisma.auditLog.create({
               data: {
-                companyId: companyId || null,
-                userId: user?.userId || user?.id || null,
+                companyId: finalCompanyId,
+                userId: finalUserId,
                 action,
                 tableName,
                 oldValues: method !== 'POST' ? undefined : undefined,

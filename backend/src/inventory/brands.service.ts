@@ -4,19 +4,51 @@ import { CompanyContext } from '../common/context/company-context';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import type { Prisma } from '@prisma/client';
+import { IsString, IsNotEmpty, IsOptional, MaxLength, IsEnum, Matches } from 'class-validator';
+import { PartialType } from '@nestjs/mapped-types';
 
 export class CreateBrandDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Brand Name is required' })
+  @MaxLength(100)
   name: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Brand Code is required' })
+  @MaxLength(50)
+  @Matches(/^[A-Z0-9_-]+$/, { message: 'Brand Code must contain only uppercase letters, numbers, hyphens, or underscores' })
   code: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
   description?: string;
+
+  @IsString()
+  @IsOptional()
   logoUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
   website?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
   email?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
   phone?: string;
+
+  @IsEnum(['ACTIVE', 'INACTIVE'])
+  @IsOptional()
   status?: string;
 }
 
-export class UpdateBrandDto extends CreateBrandDto {}
+export class UpdateBrandDto extends PartialType(CreateBrandDto) {}
 
 @Injectable()
 export class BrandsService {

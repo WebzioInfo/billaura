@@ -9,11 +9,15 @@ function readCookie(name: string): string | null {
 
 export class TokenService {
   static getAccessToken(): string | null {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (token === 'undefined' || token === 'null') return null;
+    return token;
   }
 
   static getRefreshToken(): string | null {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
+    const token = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (token === 'undefined' || token === 'null') return null;
+    return token;
   }
 
   static getCsrfToken(): string | null {
