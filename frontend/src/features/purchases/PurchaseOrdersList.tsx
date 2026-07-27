@@ -81,7 +81,7 @@ export const PurchaseOrdersList = () => {
 
   // Compute live KPI metrics from total queried list
   const kpis = useMemo(() => {
-    let totalCount = poList.length;
+    const totalCount = poList.length;
     let draft = 0;
     let sent = 0;
     let approved = 0;
@@ -90,8 +90,8 @@ export const PurchaseOrdersList = () => {
     let cancelled = 0;
     let totalValue = 0;
     let outstandingValue = 0;
-    let dueTodayCount = 0;
-    let overdueCount = 0;
+    const dueTodayCount = 0;
+    const overdueCount = 0;
 
     const todayStr = new Date().toISOString().split('T')[0];
 

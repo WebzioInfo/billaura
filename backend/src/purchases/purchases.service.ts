@@ -6,6 +6,7 @@ import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import type { Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
+import { GSTEngine } from '../common/utils/gst-engine.util';
 import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
@@ -97,8 +98,13 @@ export class PurchasesService {
       // 2. Fetch products and calculate totals
       let subTotal = 0;
       let taxTotal = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
       const itemsToCreate = [];
       const accountDebits: Record<string, number> = {};
+
+      const bpTaxPreference = vendor?.taxPreference || 'TAXABLE';
 
       for (const item of dto.items) {
         const product = await tx.product.findFirst({
@@ -115,11 +121,21 @@ export class PurchasesService {
         const discountAmt = item.discount ? (lineSubtotal * Number(item.discount)) / 100 : 0;
         const lineTotalAfterDiscount = lineSubtotal - discountAmt;
         
-        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.taxRate || product.gstRate || 18);
-        const taxAmount = (lineTotalAfterDiscount * taxRate) / 100;
+        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.gstRate || 18);
+        
+        const gstResult = GSTEngine.calculate({
+           taxableAmount: lineTotalAfterDiscount,
+           gstRate: taxRate,
+           taxPreference: bpTaxPreference as any,
+           companyStateCode: companyState,
+           customerStateCode: supplyState
+        });
 
-        subTotal += lineTotalAfterDiscount;
-        taxTotal += taxAmount;
+        subTotal += gstResult.taxableAmount;
+        taxTotal += gstResult.totalTax;
+        totalCgst += gstResult.cgstAmount;
+        totalSgst += gstResult.sgstAmount;
+        totalIgst += gstResult.igstAmount;
 
         itemsToCreate.push({
           productId: product.id,
@@ -130,11 +146,11 @@ export class PurchasesService {
           qty,
           rate,
           taxPercent: taxRate,
-          taxAmount,
-          total: lineTotalAfterDiscount + taxAmount,
-          cgstAmount: isInterState ? 0 : taxAmount / 2,
-          sgstAmount: isInterState ? 0 : taxAmount / 2,
-          igstAmount: isInterState ? taxAmount : 0,
+          taxAmount: gstResult.totalTax,
+          total: gstResult.grandTotal,
+          cgstAmount: gstResult.cgstAmount,
+          sgstAmount: gstResult.sgstAmount,
+          igstAmount: gstResult.igstAmount,
         });
 
         let debitAccountId = product.purchaseAccountId || product.inventoryAccountId;
@@ -167,9 +183,9 @@ export class PurchasesService {
           taxTotal,
           grandTotal,
           amountPaid: 0,
-          cgstAmount: isInterState ? 0 : taxTotal / 2,
-          sgstAmount: isInterState ? 0 : taxTotal / 2,
-          igstAmount: isInterState ? taxTotal : 0,
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
           reference: dto.reference || null,
@@ -291,9 +307,9 @@ export class PurchasesService {
       // Credit Accounts Payable
       journalLines.push({ accountId: apAccount.id, debit: 0, credit: grandTotal });
 
-      const cgstAmt = isInterState ? 0 : taxTotal / 2;
-      const sgstAmt = isInterState ? 0 : taxTotal / 2;
-      const igstAmt = isInterState ? taxTotal : 0;
+      const cgstAmt = totalCgst;
+      const sgstAmt = totalSgst;
+      const igstAmt = totalIgst;
 
       if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
         journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });
@@ -429,8 +445,13 @@ export class PurchasesService {
       // 3. Calculate new totals
       let subTotal = 0;
       let taxTotal = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
       const itemsToCreate = [];
       const accountDebits: Record<string, number> = {};
+
+      const bpTaxPreference = vendor?.taxPreference || 'TAXABLE';
 
       for (const item of dto.items) {
         const product = await tx.product.findFirst({
@@ -447,11 +468,21 @@ export class PurchasesService {
         const discountAmt = item.discount ? (lineSubtotal * Number(item.discount)) / 100 : 0;
         const lineTotalAfterDiscount = lineSubtotal - discountAmt;
         
-        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.taxRate || product.gstRate || 18);
-        const taxAmount = (lineTotalAfterDiscount * taxRate) / 100;
+        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.gstRate || 18);
+        
+        const gstResult = GSTEngine.calculate({
+           taxableAmount: lineTotalAfterDiscount,
+           gstRate: taxRate,
+           taxPreference: bpTaxPreference as any,
+           companyStateCode: companyState,
+           customerStateCode: supplyState
+        });
 
-        subTotal += lineTotalAfterDiscount;
-        taxTotal += taxAmount;
+        subTotal += gstResult.taxableAmount;
+        taxTotal += gstResult.totalTax;
+        totalCgst += gstResult.cgstAmount;
+        totalSgst += gstResult.sgstAmount;
+        totalIgst += gstResult.igstAmount;
 
         itemsToCreate.push({
           productId: product.id,
@@ -462,11 +493,11 @@ export class PurchasesService {
           qty,
           rate,
           taxPercent: taxRate,
-          taxAmount,
-          total: lineTotalAfterDiscount + taxAmount,
-          cgstAmount: isInterState ? 0 : taxAmount / 2,
-          sgstAmount: isInterState ? 0 : taxAmount / 2,
-          igstAmount: isInterState ? taxAmount : 0,
+          taxAmount: gstResult.totalTax,
+          total: gstResult.grandTotal,
+          cgstAmount: gstResult.cgstAmount,
+          sgstAmount: gstResult.sgstAmount,
+          igstAmount: gstResult.igstAmount,
         });
 
         let debitAccountId = product.purchaseAccountId || product.inventoryAccountId;
@@ -496,9 +527,9 @@ export class PurchasesService {
           subTotal,
           taxTotal,
           grandTotal,
-          cgstAmount: isInterState ? 0 : taxTotal / 2,
-          sgstAmount: isInterState ? 0 : taxTotal / 2,
-          igstAmount: isInterState ? taxTotal : 0,
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
           reference: dto.reference || null,
@@ -619,9 +650,9 @@ export class PurchasesService {
       // Credit Accounts Payable
       journalLines.push({ accountId: apAccount.id, debit: 0, credit: grandTotal });
 
-      const cgstAmt = isInterState ? 0 : taxTotal / 2;
-      const sgstAmt = isInterState ? 0 : taxTotal / 2;
-      const igstAmt = isInterState ? taxTotal : 0;
+        const cgstAmt = totalCgst;
+        const sgstAmt = totalSgst;
+        const igstAmt = totalIgst;
 
       if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
         journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });

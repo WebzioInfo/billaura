@@ -3,9 +3,10 @@ import { PlatformController } from "./platform.controller";
 import { DatabaseModule } from "../database/database.module";
 import { AiController } from "./ai.controller";
 import { AiInsightsService } from "./ai.service";
+import { TenantProvisioningModule } from "./provisioning/tenant-provisioning.module";
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, TenantProvisioningModule],
   controllers: [PlatformController, AiController],
   providers: [AiInsightsService],
 })

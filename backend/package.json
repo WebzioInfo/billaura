@@ -10,7 +10,11 @@
     "build": "npx prisma generate && npx nest build",
     "start": "node dist/main.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "seed:system": "ts-node prisma/seeds/runner.ts --type=system",
+    "seed:tenant": "ts-node prisma/seeds/runner.ts --type=tenant",
+    "seed:all": "ts-node prisma/seeds/runner.ts --type=all",
+    "seed:coa": "ts-node prisma/seeds/runner.ts --type=coa"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^3.1.3",

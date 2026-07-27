@@ -88,7 +88,7 @@ export class PurchasePaymentsService {
       throw new NotFoundException(`Vendor with ID ${dto.vendorId} not found`);
     }
 
-    let ledgerId = dto.bankAccountId?.trim() || undefined;
+    const ledgerId = dto.bankAccountId?.trim() || undefined;
     const isCashPayment = dto.method === 'CASH';
 
     if (!isCashPayment && !ledgerId) {

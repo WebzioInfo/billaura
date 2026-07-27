@@ -22,6 +22,12 @@ import { SequenceService } from "../shared/sequence/sequence.service";
  * Frontend can send REGULAR / OVERSEAS which don't exist in the enum.
  */
 function toCustomerType(value?: string): string {
+  const allowed = ['B2B', 'B2C', 'GOVERNMENT', 'EXPORT'];
+  if (value && allowed.includes(value.toUpperCase())) return value.toUpperCase();
+  return 'B2B';
+}
+
+function toGSTRegistrationStatus(value?: string): string {
   const map: Record<string, string> = {
     REGULAR: "REGISTERED",
     OVERSEAS: "EXPORT",
@@ -113,7 +119,9 @@ export class VendorsController {
       phone,
       gstin,
       panNumber,
+      gstRegistrationStatus,
       customerType,
+      taxPreference,
       address,
       state,
       pinCode,
@@ -160,7 +168,9 @@ export class VendorsController {
         phone: phone?.trim() || null,
         gstin: gstin?.trim()?.toUpperCase() || null,
         panNumber: panNumber?.trim()?.toUpperCase() || null,
+        gstRegistrationStatus: toGSTRegistrationStatus(gstRegistrationStatus || customerType) as any,
         customerType: toCustomerType(customerType) as any,
+        taxPreference: taxPreference || "TAXABLE",
         address: address?.trim() || null,
         state: state?.trim() || null,
         pinCode: pinCode?.trim() || null,
@@ -197,7 +207,9 @@ export class VendorsController {
       phone,
       gstin,
       panNumber,
+      gstRegistrationStatus,
       customerType,
+      taxPreference,
       address,
       state,
       pinCode,
@@ -237,8 +249,11 @@ export class VendorsController {
       updateData.gstin = gstin?.trim()?.toUpperCase() || null;
     if (panNumber !== undefined)
       updateData.panNumber = panNumber?.trim()?.toUpperCase() || null;
-    if (customerType !== undefined)
-      updateData.customerType = toCustomerType(customerType) as any;
+    if (gstRegistrationStatus !== undefined)
+      updateData.gstRegistrationStatus = toGSTRegistrationStatus(gstRegistrationStatus) as any;
+    if (customerType !== undefined) updateData.customerType = toCustomerType(customerType) as any;
+    if (taxPreference !== undefined)
+      updateData.taxPreference = taxPreference;
     if (address !== undefined) updateData.address = address?.trim() || null;
     if (state !== undefined) updateData.state = state?.trim() || null;
     if (pinCode !== undefined) updateData.pinCode = pinCode?.trim() || null;

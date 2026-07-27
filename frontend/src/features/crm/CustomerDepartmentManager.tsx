@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoa
 import { Plus, Edit, Trash2, Save, X } from 'lucide-react';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { dialog } from '@/core/services/DialogService';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -195,7 +196,15 @@ export const CustomerDepartmentManager = () => {
                       <Button variant="outline" size="sm" className="px-2" onClick={() => handleEdit(d)}>
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="outline" size="sm" className="px-2 text-destructive" onClick={() => { if(window.confirm('Delete department?')) deleteMutation.mutate(d.id); }}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="px-2 text-destructive" 
+                        onClick={async () => { 
+                          const confirmed = await dialog.confirmDelete('Delete Department?', 'Are you sure you want to delete this customer department?');
+                          if (confirmed) deleteMutation.mutate(d.id); 
+                        }}
+                      >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>

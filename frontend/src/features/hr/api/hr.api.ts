@@ -29,12 +29,15 @@ export interface PaySalarySlipDto {
 
 export const hrApi = {
   getSalarySlips: async (): Promise<SalarySlip[]> => {
-    return apiClient.get('/hr/salary-slips');
+    const res = await apiClient.get('/salary-slips');
+    return res.data || res;
   },
   generateSalarySlip: async (data: GenerateSalarySlipDto): Promise<SalarySlip> => {
-    return apiClient.post('/hr/salary-slips/generate', data);
+    const res = await apiClient.post('/salary-slips/generate', data);
+    return res.data || res;
   },
   paySalarySlip: async (id: string, data: PaySalarySlipDto): Promise<SalarySlip> => {
-    return apiClient.post(`/hr/salary-slips/${id}/pay`, data);
+    const res = await apiClient.post(`/salary-slips/${id}/pay`, data);
+    return res.data || res;
   },
 };

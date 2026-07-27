@@ -20,7 +20,34 @@ export class RecordAttendanceDto {
   @IsNotEmpty()
   type: AttendanceType;
 
+  @IsDateString()
+  @IsOptional()
+  checkIn?: string;
+
+  @IsDateString()
+  @IsOptional()
+  checkOut?: string;
+
+  @IsOptional()
+  workingHours?: number;
+
+  @IsOptional()
+  breakTime?: number;
+
+  @IsOptional()
+  overtime?: number;
+
+  @IsOptional()
+  lateBy?: number;
+
+  @IsOptional()
+  earlyExit?: number;
+
   @IsString()
   @IsOptional()
   notes?: string;
+}
+
+export class BulkRecordAttendanceDto {
+  records: RecordAttendanceDto[];
 }

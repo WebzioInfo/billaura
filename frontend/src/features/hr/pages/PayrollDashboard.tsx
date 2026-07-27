@@ -16,8 +16,9 @@ export const PayrollDashboard: React.FC = () => {
   const [employees, setEmployees] = useState<any[]>([]);
 
   const handleOpenGenerate = () => {
-    apiClient.get('/hr/employees').then((res) => {
-      setEmployees(res.data);
+    apiClient.get('/employees').then((res: any) => {
+      const list = res.data || res;
+      setEmployees(Array.isArray(list) ? list : (list?.data || []));
       setIsGenerateOpen(true);
     });
   };

@@ -104,46 +104,72 @@ export class PaymentsService {
           amount: dto.amount,
           method: dto.method,
           reference: dto.reference || null,
+          chequeNumber: dto.chequeNumber || null,
           notes: dto.notes || null,
         },
       });
 
       // 3. Outstanding payment allocation loop
       let remainingPayment = Number(dto.amount);
+      
       const invoices = await tx.invoice.findMany({
         where: {
           companyId,
           businessPartnerId: dto.customerId,
           NOT: { status: 'PAID' },
         },
-        orderBy: { date: 'asc' },
       });
 
-      for (const inv of invoices) {
+      const historicalInvoices = await tx.historicalInvoice.findMany({
+        where: {
+          companyId,
+          businessPartnerId: dto.customerId,
+          NOT: { status: 'PAID' },
+        },
+      });
+
+      // Combine and sort by date ascending
+      const allUnpaidInvoices = [
+        ...invoices.map((inv) => ({ ...inv, isHistorical: false })),
+        ...historicalInvoices.map((inv) => ({ ...inv, isHistorical: true })),
+      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      for (const inv of allUnpaidInvoices) {
         if (remainingPayment <= 0) break;
 
-        const unpaidAmount = Number(inv.grandTotal) - Number(inv.amountPaid);
+        const grandTotal = inv.isHistorical ? Number((inv as any).totalAmount) : Number((inv as any).grandTotal);
+        const unpaidAmount = grandTotal - Number(inv.amountPaid);
         const allocate = Math.min(remainingPayment, unpaidAmount);
 
         if (allocate > 0) {
           const newAmountPaid = Number(inv.amountPaid) + allocate;
-          const status = newAmountPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIAL';
+          const status = newAmountPaid >= grandTotal ? 'PAID' : 'PARTIAL';
 
-          await tx.invoice.update({
-            where: { id: inv.id },
-            data: {
-              amountPaid: newAmountPaid,
-              status,
-            },
-          });
-
-          await tx.paymentAllocation.create({
-            data: {
-              transactionPaymentId: payment.id,
-              invoiceId: inv.id,
-              amount: allocate,
-            },
-          });
+          if (inv.isHistorical) {
+            await tx.historicalInvoice.update({
+              where: { id: inv.id },
+              data: { amountPaid: newAmountPaid, status },
+            });
+            await tx.paymentAllocation.create({
+              data: {
+                transactionPaymentId: payment.id,
+                historicalInvoiceId: inv.id,
+                amount: allocate,
+              },
+            });
+          } else {
+            await tx.invoice.update({
+              where: { id: inv.id },
+              data: { amountPaid: newAmountPaid, status },
+            });
+            await tx.paymentAllocation.create({
+              data: {
+                transactionPaymentId: payment.id,
+                invoiceId: inv.id,
+                amount: allocate,
+              },
+            });
+          }
 
           remainingPayment -= allocate;
         }

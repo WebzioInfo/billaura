@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { 
-  Search, Plus, Bell, User, Building2, History, Star, ArrowRight, CornerDownLeft, X,
+  Search, Plus, Bell, User, Building2, History, Star, CornerDownLeft,
   LayoutDashboard, Users, Target, MessageSquare, FileSpreadsheet, 
   Truck, FileText, DollarSign, CreditCard, RefreshCw, Receipt, 
   BarChart3, Coins, Wrench, TrendingUp, Tag, Box, 
@@ -110,10 +110,9 @@ export function TopBar() {
 
   // Master Data Hooks
   useEffect(() => {
-    if ((user as any)?.companyName) setCompanyName((user as any).companyName);
-    if ((user as any)?.logoBase64) setLogoBase64((user as any).logoBase64);
-
     const fetchCompany = async () => {
+      if ((user as any)?.companyName) setCompanyName((user as any).companyName);
+      if ((user as any)?.logoBase64) setLogoBase64((user as any).logoBase64);
       try {
         const res = await apiClient.get<any>('/auth/me');
         if (res?.company?.companyName) {

@@ -68,4 +68,38 @@ export class ReportsController {
     const companyId = CompanyContext.getCompanyId();
     return this.reportsService.generateInventoryReport(companyId!);
   }
+
+  @Get("departmental")
+  async getDepartmentalReport() {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new BadRequestException("Company context is required");
+    }
+    return this.reportsService.generateDepartmentalReport(companyId);
+  }
+
+  @Get("customer-statement")
+  async getCustomerStatement(
+    @Query("customerId") customerId: string,
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new BadRequestException("Company context is required");
+    if (!customerId) throw new BadRequestException("customerId is required");
+
+    const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
+    const end = endDate ? new Date(endDate) : new Date();
+
+    return this.reportsService.generateCustomerStatement(companyId, customerId, start, end);
+  }
+
+  @Get("customer-ageing")
+  async getCustomerAgeing(@Query("asOfDate") asOfDate?: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new BadRequestException("Company context is required");
+
+    const asOf = asOfDate ? new Date(asOfDate) : new Date();
+    return this.reportsService.generateCustomerAgeing(companyId, asOf);
+  }
 }

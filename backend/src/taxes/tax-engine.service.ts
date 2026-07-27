@@ -33,9 +33,9 @@ export class TaxEngineService {
     companyState?: string,
     cessRate: number = 0,
   ): TaxCalculationResult {
-    let taxableAmount = 0;
-    let taxAmount = 0;
-    let totalAmount = 0;
+    let taxableAmount: number;
+    let taxAmount: number;
+    let totalAmount: number;
 
     const rate = Number(taxRate) || 0;
     const cess = Number(cessRate) || 0;
@@ -61,7 +61,7 @@ export class TaxEngineService {
     let cgstAmount = 0;
     let sgstAmount = 0;
     let igstAmount = 0;
-    let cessAmount = taxableAmount * (cess / 100);
+    const cessAmount = taxableAmount * (cess / 100);
     const gstAmount = taxableAmount * (rate / 100);
 
     if (taxType === 'IGST') {

@@ -224,7 +224,7 @@ export class GoodsReceiptsService {
     });
   }
 
-  async update(id: string, dto: UpdateGoodsReceiptDto, userId?: string) {
+  async update(id: string, dto: UpdateGoodsReceiptDto, _userId?: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context required');
     await this.findOne(id);
@@ -238,7 +238,7 @@ export class GoodsReceiptsService {
     });
   }
 
-  async remove(id: string, userId?: string) {
+  async remove(id: string, _userId?: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context required');
     await this.findOne(id);

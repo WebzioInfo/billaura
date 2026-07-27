@@ -67,6 +67,7 @@ const STATIC_PAGES: Omit<SearchItem, 'score'>[] = [
   { id: 'sales-returns', title: 'Sales Returns', category: 'Sales', breadcrumb: 'Sales > Returns', icon: 'RefreshCw', path: '/sales-returns', type: 'page' },
   { id: 'receipts', title: 'Receipts', category: 'Receipts', breadcrumb: 'Receipts > Receipts', icon: 'Receipt', path: '/receipts', type: 'page' },
   { id: 'customer-statements', title: 'Customer Statements', category: 'Sales', breadcrumb: 'Sales > Statements', icon: 'BarChart3', path: '/customer-statements', type: 'page' },
+  { id: 'customer-ageing', title: 'Customer Ageing Report', category: 'Sales', breadcrumb: 'Sales > Ageing', icon: 'Activity', path: '/reports/customer-ageing', type: 'page' },
 
   // Income Module
   { id: 'other-income', title: 'Other Income', category: 'Income', breadcrumb: 'Income > Other Income', icon: 'Coins', path: '/other-income?type=Other Income', type: 'page' },

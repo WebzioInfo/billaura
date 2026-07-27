@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
@@ -32,6 +33,11 @@ export class ProductsController {
     return this.productsService.findOne(id);
   }
 
+  @Get(":id/intelligence")
+  async getIntelligence(@Param("id") id: string) {
+    return this.productsService.getIntelligence(id);
+  }
+
   @Post()
   async create(@Body() dto: CreateProductDto) {
     return this.productsService.create(dto);
@@ -39,6 +45,11 @@ export class ProductsController {
 
   @Patch(":id")
   async update(@Param("id") id: string, @Body() dto: UpdateProductDto) {
+    return this.productsService.update(id, dto);
+  }
+
+  @Put(":id")
+  async putUpdate(@Param("id") id: string, @Body() dto: UpdateProductDto) {
     return this.productsService.update(id, dto);
   }
 

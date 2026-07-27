@@ -53,17 +53,34 @@ export class AuthController {
   private setSessionCookies(response: Response, refreshToken: string): void {
     const isProduction = this.configService.get<string>("NODE_ENV") === "production";
     const domain = this.configService.get<string>("COOKIE_DOMAIN") || undefined;
-    const path = `/${this.configService.getOrThrow<string>("API_PREFIX")}/auth`;
-    const options = { secure: isProduction, sameSite: "lax" as const, path, domain, maxAge: 30 * 24 * 60 * 60 * 1000 };
-    response.cookie("ba_refresh", refreshToken, { ...options, httpOnly: true });
-    response.cookie("ba_csrf", require("crypto").randomBytes(32).toString("hex"), { ...options, httpOnly: false });
+    const authPath = `/${this.configService.getOrThrow<string>("API_PREFIX")}/auth`;
+    
+    // Refresh token is locked to auth endpoint path for security
+    response.cookie("ba_refresh", refreshToken, {
+      secure: isProduction,
+      sameSite: "lax" as const,
+      path: authPath,
+      domain,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      httpOnly: true
+    });
+    
+    // CSRF token is set on root path so frontend JavaScript can read it
+    response.cookie("ba_csrf", require("crypto").randomBytes(32).toString("hex"), {
+      secure: isProduction,
+      sameSite: "lax" as const,
+      path: "/",
+      domain,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      httpOnly: false
+    });
   }
 
   private clearSessionCookies(response: Response): void {
     const domain = this.configService.get<string>("COOKIE_DOMAIN") || undefined;
-    const path = `/${this.configService.getOrThrow<string>("API_PREFIX")}/auth`;
-    response.clearCookie("ba_refresh", { path, domain });
-    response.clearCookie("ba_csrf", { path, domain });
+    const authPath = `/${this.configService.getOrThrow<string>("API_PREFIX")}/auth`;
+    response.clearCookie("ba_refresh", { path: authPath, domain });
+    response.clearCookie("ba_csrf", { path: "/", domain });
   }
 
   private assertCsrf(request: ExpressRequest): void {

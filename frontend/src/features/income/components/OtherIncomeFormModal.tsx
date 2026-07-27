@@ -32,6 +32,7 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
     paymentMethod: 'CASH',
     paymentStatus: 'PAID',
     bankAccountId: '',
+    departmentId: '',
   });
 
   const { data: categories = [] } = useQuery({
@@ -47,6 +48,15 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
     queryKey: ['bank-accounts'],
     queryFn: async () => {
       const { data } = await api.get('/bank-accounts');
+      return data || [];
+    },
+    enabled: isOpen
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments-list'],
+    queryFn: async () => {
+      const { data } = await api.get('/hr-masters/departments');
       return data || [];
     },
     enabled: isOpen
@@ -76,6 +86,7 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
         setFormData({
           ...incomeData,
           date: new Date(incomeData.date).toISOString().substring(0, 10),
+          departmentId: incomeData.departmentId || '',
         });
       } else if (!editingId) {
         let initialCategoryId = '';
@@ -101,6 +112,7 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
           paymentMethod: 'CASH',
           paymentStatus: 'PAID',
           bankAccountId: '',
+          departmentId: '',
         });
 
         if (initialCategoryId) {
@@ -202,6 +214,21 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
               placeholder="e.g. John Doe"
             />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Segment Department</Label>
+          <select 
+            required
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+            value={formData.departmentId}
+            onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+          >
+            <option value="">Select Department</option>
+            {departments.map((d: any) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-2">

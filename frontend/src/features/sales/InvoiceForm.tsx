@@ -30,7 +30,7 @@ import { PageContainer, LoadingState, FormSection } from '@/shared/components/ui
 import { DocumentSummarySidebar } from '@/shared/components/ui/DocumentSummarySidebar';
 import { Button } from '@/shared/components/ui/Button';
 import { Card } from '@/shared/components/ui/Card';
-import { FormErrorDisplay } from '@/shared/components/ui';
+import { FormErrorDisplay, Input, Select } from '@/shared/components/ui';
 import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
@@ -261,6 +261,10 @@ export const InvoiceForm = () => {
     }
   }, [duplicateId, customers, products, setValue]);
 
+  const selectedCustomer = useMemo(() => {
+    return customers.find((c: any) => c.id === customerId);
+  }, [customerId, customers]);
+
   // Perform tax breakdown & calculations (memoized to prevent render recalculation loops)
   const totals = useMemo(() => {
     let rawSubTotal = 0;
@@ -299,7 +303,13 @@ export const InvoiceForm = () => {
       const taxableValue = lineTotal - lineDiscount;
 
       let lineTax = 0;
-      if (invoiceType !== 'NO_TAX') {
+      const bpTaxPreference = selectedCustomer?.taxPreference || 'TAXABLE';
+      let activeTaxPref = bpTaxPreference;
+      if (['BILL_OF_SUPPLY', 'EXEMPT_SUPPLY', 'NIL_RATED_INVOICE', 'EXPORT_INVOICE', 'NO_TAX'].includes(invoiceType)) {
+        activeTaxPref = 'NON_GST';
+      }
+
+      if (!['EXEMPT', 'NIL_RATED', 'NON_GST'].includes(activeTaxPref)) {
         lineTax = (taxableValue * validTaxRate) / 100;
       }
 
@@ -312,7 +322,7 @@ export const InvoiceForm = () => {
         numItems += 1;
       }
 
-      if (invoiceType !== 'NO_TAX') {
+      if (!['EXEMPT', 'NIL_RATED', 'NON_GST'].includes(activeTaxPref)) {
         if (isInterState) {
           totalIgstAmount += lineTax;
         } else {
@@ -322,7 +332,7 @@ export const InvoiceForm = () => {
       }
 
       // Group totals for summary breakdown
-      if (validTaxRate > 0 && invoiceType !== 'NO_TAX') {
+      if (validTaxRate > 0 && !['EXEMPT', 'NIL_RATED', 'NON_GST'].includes(activeTaxPref)) {
         if (!taxSummaryMap[validTaxRate]) {
           taxSummaryMap[validTaxRate] = { taxableValue: 0, taxAmount: 0 };
         }
@@ -483,59 +493,71 @@ export const InvoiceForm = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice Type</label>
-                <select {...register('invoiceType')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                  <option value="B2B">B2B (Tax Invoice)</option>
-                  <option value="B2C">B2C (Retail Invoice)</option>
-                  <option value="NO_TAX">No Tax (Bill of Supply)</option>
-                </select>
+                <Select
+                  label="Invoice Type"
+                  {...register('invoiceType')}
+                  options={[
+                    { label: 'B2B (Tax Invoice)', value: 'B2B' },
+                    { label: 'B2C (Retail Invoice)', value: 'B2C' },
+                    { label: 'No Tax (Bill of Supply)', value: 'NO_TAX' }
+                  ]}
+                />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Customer *</label>
-                <select {...register('customerId')} disabled={custLoading} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50">
-                  <option value="">Select Customer...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name} {c.gstNumber ? `(${c.gstNumber})` : ''}</option>)}
-                </select>
+                <Select
+                  label="Customer"
+                  {...register('customerId')}
+                  disabled={custLoading}
+                  required
+                  options={[
+                    { label: 'Select Customer...', value: '' },
+                    ...customers.map(c => ({
+                      label: `${c.name} ${c.gstNumber ? `(${c.gstNumber})` : ''}`,
+                      value: c.id
+                    }))
+                  ]}
+                />
                 <FormErrorDisplay error={errors.customerId} />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice # *</label>
-                <input
+                <Input
+                  label="Invoice # *"
                   type="text"
                   {...register('invoiceNo')}
                   placeholder="INV-XXXXX"
                   disabled={nextNoLoading}
-                  className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50"
                 />
                 <FormErrorDisplay error={errors.invoiceNo} />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice Date *</label>
-                <input type="date" {...register('date')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                <Input label="Invoice Date *" type="date" {...register('date')} />
                 <FormErrorDisplay error={errors.date} />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Due Date</label>
-                <input type="date" {...register('dueDate')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent" />
+                <Input label="Due Date" type="date" {...register('dueDate')} />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Currency</label>
-                <select {...register('currency')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                  {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
-                </select>
+                <Select
+                  label="Currency"
+                  {...register('currency')}
+                  options={CURRENCIES.map(c => ({ label: c.label, value: c.code }))}
+                />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Place of Supply (GST Destination)</label>
-                <select {...register('placeOfSupply')} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                  <option value="">Select State...</option>
-                  {INDIAN_STATES.map(st => <option key={st} value={st}>{st}</option>)}
-                </select>
+                <Select
+                  label="Place of Supply (GST Destination)"
+                  {...register('placeOfSupply')}
+                  options={[
+                    { label: 'Select State...', value: '' },
+                    ...INDIAN_STATES.map(st => ({ label: st, value: st }))
+                  ]}
+                />
                 <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
                   <Info className="w-3 h-3 text-accent" />
                   Intra-state CGST/SGST applies if place of supply matches business location ({companyProfile?.state || 'Not set'}). Otherwise IGST applies.
@@ -574,7 +596,7 @@ export const InvoiceForm = () => {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {fields.map((field, index) => {
-                    // eslint-disable-next-line react-hooks/incompatible-library
+                     
                     const qty = Number(watch(`items.${index}.qty`)) || 0;
                     const rate = Number(watch(`items.${index}.rate`)) || 0;
                     const discountPercent = Number(watch(`items.${index}.discount`)) || 0;
@@ -589,18 +611,18 @@ export const InvoiceForm = () => {
                     return (
                       <tr key={field.id} className="hover:bg-muted/10 transition-colors">
                         <td className="py-3 pr-4">
-                          <select
+                          <Select
                             {...register(`items.${index}.productId`)}
                             disabled={prodLoading}
                             onChange={(e) => {
                               register(`items.${index}.productId`).onChange(e);
                               handleProductSelect(index, e.target.value);
                             }}
-                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-accent disabled:opacity-50"
-                          >
-                            <option value="">Select Item...</option>
-                            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
+                            options={[
+                              { label: 'Select Item...', value: '' },
+                              ...products.map(p => ({ label: p.name, value: p.id }))
+                            ]}
+                          />
                           {errors.items?.[index]?.productId && <p className="text-red-500 text-xs mt-1">{errors.items[index].productId?.message}</p>}
 
                           {(() => {
@@ -617,64 +639,64 @@ export const InvoiceForm = () => {
                             );
                           })()}
 
-                          <input
+                          <Input
                             type="text"
                             placeholder="Line description details..."
                             {...register(`items.${index}.description`)}
-                            className="w-full mt-1.5 px-3 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:border-accent text-muted-foreground"
+                            className="mt-1.5"
                           />
                         </td>
                         <td className="py-3 px-1">
-                          <input
+                          <Input
                             type="number"
                             {...register(`items.${index}.qty`)}
-                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent"
+                            className="text-right"
                           />
                         </td>
                         <td className="py-3 px-1">
-                          <select
+                          <Select
                             {...register(`items.${index}.unit`)}
-                            className="w-full px-2 py-2 bg-background border border-border rounded-lg text-xs focus:outline-none focus:border-accent"
-                          >
-                            <option value="Pcs">Pcs</option>
-                            <option value="Box">Box</option>
-                            <option value="Kgs">Kgs</option>
-                            <option value="Ltr">Ltr</option>
-                            <option value="Nos">Nos</option>
-                            {units.map(u => <option key={u.id} value={u.abbreviation || u.name}>{u.name}</option>)}
-                          </select>
+                            options={[
+                              { label: 'Pcs', value: 'Pcs' },
+                              { label: 'Box', value: 'Box' },
+                              { label: 'Kgs', value: 'Kgs' },
+                              { label: 'Ltr', value: 'Ltr' },
+                              { label: 'Nos', value: 'Nos' },
+                              ...units.map(u => ({ label: u.name, value: u.abbreviation || u.name }))
+                            ]}
+                          />
                         </td>
                         <td className="py-3 px-1">
                           <div className="relative">
-                            <span className="absolute left-2.5 top-2 text-xs text-muted-foreground">{currencySymbol}</span>
-                            <input
+                            <span className="absolute left-2.5 top-2 text-xs text-muted-foreground z-10">{currencySymbol}</span>
+                            <Input
                               type="number"
                               step="0.01"
                               {...register(`items.${index}.rate`)}
-                              className="w-full pl-6 pr-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent"
+                              className="pl-6 text-right"
                             />
                           </div>
                         </td>
                         <td className="py-3 px-1">
-                          <input
+                          <Input
                             type="number"
                             max="100"
                             {...register(`items.${index}.discount`)}
-                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent"
+                            className="text-right"
                           />
                         </td>
                         {invoiceType !== 'NO_TAX' && (
                           <td className="py-3 px-1">
-                            <select
+                            <Select
                               {...register(`items.${index}.taxPercent`)}
-                              className="w-full px-2 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent"
-                            >
-                              <option value="0">0%</option>
-                              <option value="5">5%</option>
-                              <option value="12">12%</option>
-                              <option value="18">18%</option>
-                              <option value="28">28%</option>
-                            </select>
+                              options={[
+                                { label: '0%', value: '0' },
+                                { label: '5%', value: '5' },
+                                { label: '12%', value: '12' },
+                                { label: '18%', value: '18' },
+                                { label: '28%', value: '28' }
+                              ]}
+                            />
                           </td>
                         )}
                         <td className="py-3 px-2 text-right font-medium text-muted-foreground">

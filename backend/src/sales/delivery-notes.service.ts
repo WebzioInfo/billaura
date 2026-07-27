@@ -76,7 +76,7 @@ export class DeliveryNotesService {
   }
 
   async update(id: string, dto: UpdateDeliveryNoteDto) {
-    const companyId = CompanyContext.getCompanyId();
+    const _companyId = CompanyContext.getCompanyId();
     await this.findOne(id); // verify exists
     
     return this.prisma.deliveryNote.update({

@@ -91,7 +91,7 @@ type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
 import { useQuery } from '@tanstack/react-query';
 
-export type SalesDocumentType = 'INVOICE' | 'PROFORMA' | 'QUOTATION' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'DELIVERY_CHALLAN';
+export type SalesDocumentType = 'INVOICE' | 'BILL_OF_SUPPLY' | 'EXEMPT_SUPPLY' | 'NIL_RATED_INVOICE' | 'EXPORT_INVOICE' | 'SEZ_INVOICE' | 'PROFORMA' | 'QUOTATION' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'DELIVERY_CHALLAN';
 
 interface SalesDocumentFormProps {
   initialDocType?: SalesDocumentType;
@@ -277,6 +277,10 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
     }
   }, [duplicateId, customers, products, setValue]);
 
+  const selectedCustomer = useMemo(() => {
+    return customers.find((c: any) => c.id === customerId);
+  }, [customerId, customers]);
+
   // Perform tax breakdown & calculations (memoized to prevent render recalculation loops)
   const totals = useMemo(() => {
     let rawSubTotal = 0;
@@ -314,8 +318,13 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       const lineDiscount = lineTotal * (validDiscount / 100);
       const taxableValue = lineTotal - lineDiscount;
 
+      const isNonGst = docType === 'BILL_OF_SUPPLY' || docType === 'EXEMPT_SUPPLY' || docType === 'NIL_RATED_INVOICE' || docType === 'EXPORT_INVOICE' || invoiceType === 'NO_TAX';
+      const bpTaxPreference = selectedCustomer?.taxPreference || 'TAXABLE';
+      let activeTaxPref = bpTaxPreference;
+      if (isNonGst) activeTaxPref = 'NON_GST';
+
       let lineTax = 0;
-      if (invoiceType !== 'NO_TAX') {
+      if (!['EXEMPT', 'NIL_RATED', 'NON_GST'].includes(activeTaxPref)) {
         lineTax = (taxableValue * validTaxRate) / 100;
       }
 
@@ -328,7 +337,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
         numItems += 1;
       }
 
-      if (invoiceType !== 'NO_TAX') {
+      if (!['EXEMPT', 'NIL_RATED', 'NON_GST'].includes(activeTaxPref)) {
         if (isInterState) {
           totalIgstAmount += lineTax;
         } else {
@@ -338,7 +347,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       }
 
       // Group totals for summary breakdown
-      if (validTaxRate > 0 && invoiceType !== 'NO_TAX') {
+      if (validTaxRate > 0 && !['EXEMPT', 'NIL_RATED', 'NON_GST'].includes(activeTaxPref)) {
         if (!taxSummaryMap[validTaxRate]) {
           taxSummaryMap[validTaxRate] = { taxableValue: 0, taxAmount: 0 };
         }
@@ -415,7 +424,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
               : item.description,
             qty: Number(item.qty),
             rate: finalTaxableRate,
-            taxPercent: data.invoiceType === 'NO_TAX' ? 0 : Number(item.taxPercent),
+            taxPercent: (data.invoiceType === 'NO_TAX' || docType === 'BILL_OF_SUPPLY' || docType === 'EXEMPT_SUPPLY' || docType === 'NIL_RATED_INVOICE' || docType === 'EXPORT_INVOICE') ? 0 : Number(item.taxPercent),
           };
         }),
         notes: data.notes,
@@ -427,6 +436,13 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       
       const actualPayload = { ...payload, documentType: docType };
       if (docType === 'PROFORMA') actualPayload.invoiceType = 'PROFORMA_INVOICE';
+      if (docType === 'BILL_OF_SUPPLY') actualPayload.invoiceType = 'BILL_OF_SUPPLY';
+      if (docType === 'EXEMPT_SUPPLY') actualPayload.invoiceType = 'EXEMPT_SUPPLY';
+      if (docType === 'NIL_RATED_INVOICE') actualPayload.invoiceType = 'NIL_RATED_INVOICE';
+      if (docType === 'EXPORT_INVOICE') actualPayload.invoiceType = 'EXPORT_INVOICE';
+      if (docType === 'SEZ_INVOICE') actualPayload.invoiceType = 'SEZ_INVOICE';
+      if (docType === 'DEBIT_NOTE') actualPayload.invoiceType = 'DEBIT_NOTE';
+      if (docType === 'CREDIT_NOTE') actualPayload.invoiceType = 'CREDIT_NOTE';
       
       await apiClient.post(endpoint, actualPayload);
       notification.success(
@@ -511,7 +527,12 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     onChange={(e) => setDocType(e.target.value as SalesDocumentType)}
                     className="w-full px-4 py-2.5 bg-accent/5 border border-accent/20 rounded-xl text-sm font-bold text-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
                   >
-                    <option value="INVOICE">Sales Invoice</option>
+                    <option value="INVOICE">Sales Invoice (GST)</option>
+                    <option value="BILL_OF_SUPPLY">Bill of Supply (Non-GST)</option>
+                    <option value="EXEMPT_SUPPLY">Exempt Supply</option>
+                    <option value="NIL_RATED_INVOICE">Nil Rated Invoice</option>
+                    <option value="EXPORT_INVOICE">Export Invoice</option>
+                    <option value="SEZ_INVOICE">SEZ Invoice</option>
                     <option value="PROFORMA">Proforma Invoice</option>
                     <option value="QUOTATION">Quotation</option>
                     <option value="CREDIT_NOTE">Credit Note</option>
@@ -605,7 +626,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     <th className="pb-3 font-semibold text-center w-24">Unit</th>
                     <th className="pb-3 font-semibold text-right w-28">Rate</th>
                     <th className="pb-3 font-semibold text-right w-24">Discount %</th>
-                    {invoiceType !== 'NO_TAX' && <th className="pb-3 font-semibold text-right w-24">GST %</th>}
+                    {(invoiceType !== 'NO_TAX' && docType !== 'BILL_OF_SUPPLY' && docType !== 'EXEMPT_SUPPLY' && docType !== 'NIL_RATED_INVOICE' && docType !== 'EXPORT_INVOICE') && <th className="pb-3 font-semibold text-right w-24">GST %</th>}
                     <th className="pb-3 font-semibold text-right w-28">Taxable Val</th>
                     <th className="pb-3 font-semibold text-right w-28">Total Amount</th>
                     <th className="pb-3 w-10"></th>
@@ -613,7 +634,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                 </thead>
                 <tbody className="divide-y divide-border">
                   {fields.map((field, index) => {
-                    // eslint-disable-next-line react-hooks/incompatible-library
+                     
                     const qty = Number(watch(`items.${index}.qty`)) || 0;
                     const rate = Number(watch(`items.${index}.rate`)) || 0;
                     const discountPercent = Number(watch(`items.${index}.discount`)) || 0;
@@ -622,7 +643,8 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     const originalLineTotal = qty * rate;
                     const lineDiscount = originalLineTotal * (discountPercent / 100);
                     const taxableValue = originalLineTotal - lineDiscount;
-                    const taxAmount = invoiceType === 'NO_TAX' ? 0 : (taxableValue * taxPercent) / 100;
+                    const isNonGst = invoiceType === 'NO_TAX' || docType === 'BILL_OF_SUPPLY' || docType === 'EXEMPT_SUPPLY' || docType === 'NIL_RATED_INVOICE' || docType === 'EXPORT_INVOICE';
+                    const taxAmount = isNonGst ? 0 : (taxableValue * taxPercent) / 100;
                     const rowTotal = taxableValue + taxAmount;
 
                     return (
@@ -702,7 +724,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                             className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent"
                           />
                         </td>
-                        {invoiceType !== 'NO_TAX' && (
+                        {(invoiceType !== 'NO_TAX' && docType !== 'BILL_OF_SUPPLY' && docType !== 'EXEMPT_SUPPLY' && docType !== 'NIL_RATED_INVOICE' && docType !== 'EXPORT_INVOICE') && (
                           <td className="py-3 px-1">
                             <select
                               {...register(`items.${index}.taxPercent`)}
@@ -771,6 +793,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
           <DocumentSummarySidebar
             totals={totals}
             invoiceType={invoiceType}
+            docType={docType}
             currencySymbol={currencySymbol}
           />
 
@@ -783,7 +806,10 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
             </div>
             <div className="p-4 space-y-3 text-sm">
               {totals.grandTotal > 0 ? (
-                <>
+                (() => {
+                  const isNonGst = docType === 'BILL_OF_SUPPLY' || docType === 'EXEMPT_SUPPLY' || docType === 'NIL_RATED_INVOICE' || docType === 'EXPORT_INVOICE' || invoiceType === 'NO_TAX';
+                  return (
+                    <>
                   <div className="flex justify-between items-center text-foreground font-medium">
                     <div className="flex flex-col">
                       <span>Accounts Receivable ({selectedCustomerName})</span>
@@ -800,7 +826,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     <span className="text-red-500 font-bold">{currencySymbol}{totals.subTotal.toFixed(2)}</span>
                   </div>
 
-                  {invoiceType !== 'NO_TAX' && !totals.isInterState && totals.cgstTotal > 0 && (
+                  {!isNonGst && !totals.isInterState && totals.cgstTotal > 0 && (
                     <div className="flex justify-between items-center text-foreground font-medium border-t border-border/50 pt-3">
                       <div className="flex flex-col pl-4">
                         <span>CGST Output</span>
@@ -810,7 +836,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     </div>
                   )}
 
-                  {invoiceType !== 'NO_TAX' && !totals.isInterState && totals.sgstTotal > 0 && (
+                  {!isNonGst && !totals.isInterState && totals.sgstTotal > 0 && (
                     <div className="flex justify-between items-center text-foreground font-medium border-t border-border/50 pt-3">
                       <div className="flex flex-col pl-4">
                         <span>SGST Output</span>
@@ -820,7 +846,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     </div>
                   )}
 
-                  {invoiceType !== 'NO_TAX' && totals.isInterState && totals.igstTotal > 0 && (
+                  {!isNonGst && totals.isInterState && totals.igstTotal > 0 && (
                     <div className="flex justify-between items-center text-foreground font-medium border-t border-border/50 pt-3">
                       <div className="flex flex-col pl-4">
                         <span>IGST Output</span>
@@ -840,8 +866,10 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     </div>
                   )}
                 </>
-              ) : (
-                <div className="text-xs text-muted-foreground text-center py-4 italic">
+              );
+            })()
+          ) : (
+            <div className="text-muted-foreground text-center py-6 text-xs italic">
                   Add items to see the accounting impact.
                 </div>
               )}

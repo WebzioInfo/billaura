@@ -8,7 +8,9 @@ import { useNavigate } from 'react-router-dom';
 import { PageContainer } from '../../shared/components/ui/LayoutComponents';
 import { PageHeader } from '../../shared/components/ui/PageHeader';
 import { Input, Select, FormErrorDisplay } from '../../shared/components/ui';
+import { SearchableSelect } from '../../shared/components/ui/SearchableSelect';
 import { useAsyncForm } from '../../shared/hooks/useAsyncForm';
+import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../core/api/apiClient';
 
 const userFormSchema = z.object({
@@ -72,6 +74,24 @@ export const UserForm = () => {
 
   const hasLoginAccess = watch('hasLoginAccess');
   const selectedRole = watch('role');
+
+  const { data: departments = [] } = useQuery({ 
+    queryKey: ['departments'], 
+    queryFn: async () => { 
+      const res = await apiClient.get('/hr-masters/departments'); 
+      return Array.isArray(res) ? res : res.data || []; 
+    }
+  });
+
+  const departmentId = watch('departmentId');
+  const { data: designations = [] } = useQuery({ 
+    queryKey: ['designations', departmentId], 
+    queryFn: async () => { 
+      const res = await apiClient.get(`/hr-masters/designations?departmentId=${departmentId}`); 
+      return Array.isArray(res) ? res : res.data || []; 
+    },
+    enabled: !!departmentId
+  });
 
   const onSubmit = async (values: UserFormValues) => {
     try {
@@ -147,11 +167,41 @@ export const UserForm = () => {
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <Input label="Department" {...register('departmentId')} placeholder="Search department..." />
+              <Controller
+                name="departmentId"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Department"
+                    placeholder="Search department..."
+                    value={field.value || ''}
+                    onChange={(val: string) => {
+                      field.onChange(val);
+                      form.setValue('designation', '');
+                    }}
+                    options={departments}
+                    mapOption={(d: any) => ({ label: d.name, value: d.id })}
+                  />
+                )}
+              />
               <FormErrorDisplay error={errors.departmentId} />
             </div>
             <div>
-              <Input label="Designation" {...register('designation')} />
+              <Controller
+                name="designation"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Designation"
+                    placeholder={departmentId ? "Search designation..." : "Select Department First"}
+                    disabled={!departmentId}
+                    value={field.value || ''}
+                    onChange={(val: string) => field.onChange(val)}
+                    options={designations}
+                    mapOption={(d: any) => ({ label: d.name, value: d.id })}
+                  />
+                )}
+              />
               <FormErrorDisplay error={errors.designation} />
             </div>
             <div>

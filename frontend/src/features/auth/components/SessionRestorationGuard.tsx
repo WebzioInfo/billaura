@@ -3,6 +3,7 @@ import { useSessionStore } from "../stores/sessionStore";
 import { TokenService } from "../../../core/auth/TokenService";
 import { apiClient } from "../../../core/api/apiClient";
 import { PageLoader } from "../../../shared/components/ui/LoadingSystem";
+import { isTokenValid } from "../../../core/auth/jwt";
 
 export const SessionRestorationGuard = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, clearSession } = useSessionStore();
@@ -13,6 +14,16 @@ export const SessionRestorationGuard = ({ children }: { children: React.ReactNod
     const restoreSession = async () => {
       if (restoreAttempted.current) {
         return; // Prevent duplicate attempts in React Strict Mode
+      }
+
+      const accessToken = TokenService.getAccessToken();
+      const user = useSessionStore.getState().user;
+
+      // If access token is still valid, restore session instantly without calling refresh endpoint
+      if (accessToken && isTokenValid(accessToken) && user) {
+        setIsRestoring(false);
+        restoreAttempted.current = true;
+        return;
       }
       
       const refreshToken = TokenService.getRefreshToken();

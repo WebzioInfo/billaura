@@ -3,6 +3,7 @@ import { useSessionStore } from "../../features/auth/stores/sessionStore";
 import { env } from "../../config/env";
 import { TokenService } from "../auth/TokenService";
 import { useNetworkStore } from "../../store/networkStore";
+import { logApiRequest, logApiResponse, logApiError } from "../utils/apiLogger";
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -31,6 +32,19 @@ export interface RequestOptions extends AxiosRequestConfig {
 export class ApiClient {
   private readonly instance: AxiosInstance;
   private refreshPromise: Promise<void> | null = null;
+  private isRefreshing = false;
+  private failedQueue: Array<{ resolve: (token: string | null) => void; reject: (err: any) => void }> = [];
+
+  private processQueue(error: any, token: string | null = null) {
+    this.failedQueue.forEach((prom) => {
+      if (error) {
+        prom.reject(error);
+      } else {
+        prom.resolve(token);
+      }
+    });
+    this.failedQueue = [];
+  }
 
   constructor(private readonly options: ApiClientOptions) {
     this.instance = axios.create({
@@ -48,6 +62,8 @@ export class ApiClient {
     // Request interceptor to inject Authorization and Company headers
     this.instance.interceptors.request.use(
       (config) => {
+        (config as any)._startTime = Date.now();
+
         const token = TokenService.getAccessToken();
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
@@ -63,15 +79,24 @@ export class ApiClient {
           config.headers['x-company-id'] = companyId;
           config.headers['x-tenant-id'] = companyId;
         }
+
+        // Log outgoing API Request
+        logApiRequest(config);
         
         return config;
       },
-      (error) => Promise.reject(error),
+      (error) => {
+        logApiError(error);
+        return Promise.reject(error);
+      },
     );
 
     // Response interceptor to handle token rotation on 401s and network failures
     this.instance.interceptors.response.use(
       (response) => {
+        // Log incoming API Response
+        logApiResponse(response as any);
+
         // Clear server unreachable state if a request succeeds
         const { isServerUnreachable, setServerUnreachable } = useNetworkStore.getState();
         if (isServerUnreachable) {
@@ -80,6 +105,9 @@ export class ApiClient {
         return response;
       },
       async (error: AxiosError) => {
+        // Log API Error
+        logApiError(error);
+
         const originalRequest = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
 
         // Offline / Network Error detection
@@ -105,15 +133,44 @@ export class ApiClient {
           return Promise.reject(error);
         }
 
-        originalRequest._retry = true;
-
-        try {
-          await this.refresh();
-          return this.instance.request(originalRequest);
-        } catch (refreshError) {
-          this.options.onUnauthorized?.();
-          return Promise.reject(refreshError);
+        if (this.isRefreshing) {
+          return new Promise((resolve, reject) => {
+            this.failedQueue.push({
+              resolve: (token: string | null) => {
+                if (originalRequest.headers) {
+                  originalRequest.headers.Authorization = `Bearer ${token}`;
+                }
+                resolve(this.instance.request(originalRequest));
+              },
+              reject: (err: any) => {
+                reject(err);
+              }
+            });
+          });
         }
+
+        originalRequest._retry = true;
+        this.isRefreshing = true;
+
+        return new Promise((resolve, reject) => {
+          this.refresh()
+            .then(() => {
+              const newToken = TokenService.getAccessToken();
+              if (newToken && originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              }
+              this.processQueue(null, newToken);
+              resolve(this.instance.request(originalRequest));
+            })
+            .catch((refreshError) => {
+              this.processQueue(refreshError, null);
+              this.options.onUnauthorized?.();
+              reject(refreshError);
+            })
+            .finally(() => {
+              this.isRefreshing = false;
+            });
+        });
       },
     );
   }
@@ -203,6 +260,9 @@ export const apiClient = new ApiClient({
   refreshSession: async () => {
     try {
       const storedRefreshToken = TokenService.getRefreshToken();
+      if (!storedRefreshToken) {
+        throw new Error("No refresh token available");
+      }
       const response = await axios.post(
         `${env.API_BASE_URL}/auth/refresh`,
         { refreshToken: storedRefreshToken }, // Send stored refresh token as well

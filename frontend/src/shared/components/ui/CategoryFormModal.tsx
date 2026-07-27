@@ -56,7 +56,8 @@ export const CategoryFormModal = ({ isOpen, onClose, onSuccess }: CategoryFormMo
       createCategory.mutate({
         ...formData,
         name: formData.name.trim(),
-        code: formData.code.trim()
+        code: formData.code.trim(),
+        parentId: (formData.parentId && formData.parentId.trim() !== '' ? formData.parentId.trim() : undefined) as any,
       });
     }
   };

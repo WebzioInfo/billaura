@@ -22,6 +22,11 @@ import { TenantGuard } from "../common/guards/tenant.guard";
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
 
+  @Get("tree")
+  async getTree() {
+    return this.accountsService.getTree();
+  }
+
   @Get("trial-balance")
   async getTrialBalance() {
     return this.accountsService.getTrialBalance();

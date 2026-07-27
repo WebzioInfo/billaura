@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsNumber,
   IsEmail,
+  IsDateString,
 } from "class-validator";
 
 export class CreateEmployeeDto {
@@ -25,13 +26,51 @@ export class CreateEmployeeDto {
 
   @IsString()
   @IsOptional()
-  department?: string;
+  departmentId?: string;
 
   @IsString()
   @IsOptional()
-  designation?: string;
+  designationId?: string;
+
+  @IsString()
+  @IsOptional()
+  shiftId?: string;
+
+  @IsString()
+  @IsOptional()
+  employmentTypeId?: string;
+
+  @IsString()
+  @IsOptional()
+  branchId?: string;
+
+  @IsString()
+  @IsOptional()
+  roleId?: string;
+
+  @IsString()
+  @IsOptional()
+  costCenterId?: string;
+
+  @IsString()
+  @IsOptional()
+  reportingManagerId?: string;
 
   @IsNumber()
   @IsOptional()
   basicSalary?: number;
+
+  @IsOptional()
+  allowances?: any;
+
+  @IsOptional()
+  bankDetails?: any;
+
+  @IsDateString()
+  @IsOptional()
+  joiningDate?: string;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
 }

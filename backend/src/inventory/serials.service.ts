@@ -40,7 +40,7 @@ export class SerialsService {
   }
 
   async update(id: string, data: any) {
-    const companyId = CompanyContext.getCompanyId();
+    const _companyId = CompanyContext.getCompanyId();
     const serial = await this.findOne(id);
     return this.prisma.inventorySerial.update({
       where: { id: serial.id },
@@ -49,7 +49,7 @@ export class SerialsService {
   }
 
   async remove(id: string) {
-    const companyId = CompanyContext.getCompanyId();
+    const _companyId = CompanyContext.getCompanyId();
     const serial = await this.findOne(id);
     return this.prisma.inventorySerial.delete({
       where: { id: serial.id },

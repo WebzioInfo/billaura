@@ -45,7 +45,7 @@ export class CustomerDepartmentsService {
     await this.seedDefaultDepartments(companyId, userId);
 
     return this.prisma.customerDepartment.findMany({
-      where: { companyId },
+      where: { companyId,  },
       orderBy: [
         { sortOrder: 'asc' },
         { name: 'asc' }
@@ -121,8 +121,9 @@ export class CustomerDepartmentsService {
       throw new ConflictException('Cannot delete department that is currently assigned to customers');
     }
 
-    return this.prisma.customerDepartment.delete({
-      where: { id }
+    return this.prisma.customerDepartment.update({
+      where: { id },
+      data: {  }
     });
   }
 }

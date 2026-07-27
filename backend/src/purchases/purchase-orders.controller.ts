@@ -17,7 +17,6 @@ import {
   CreatePurchaseOrderDto,
   UpdatePurchaseOrderDto,
 } from "./dto/purchase-order.dto";
-import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 

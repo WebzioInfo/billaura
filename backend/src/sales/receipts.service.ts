@@ -577,7 +577,7 @@ export class ReceiptsService {
     }, { timeout: 40000 });
   }
 
-  async createUnifiedPurchase(dto: any, userId: string) {
+  async createUnifiedPurchase(dto: any, _userId: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
@@ -670,8 +670,8 @@ export class ReceiptsService {
       throw new ConflictException('Company context is required');
     }
 
-    let docType = '';
-    let prefix = '';
+    let docType: string;
+    let prefix: string;
     if (type === 'SALES') {
       docType = 'INVOICE';
       prefix = 'INV';

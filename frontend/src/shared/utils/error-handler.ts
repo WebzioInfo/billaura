@@ -16,17 +16,29 @@ export const handleApiFormError = (err: any, setError?: UseFormSetError<any>) =>
     return;
   }
 
+  // Structured field errors dictionary: { errors: { fieldName: ["Message 1", "Message 2"] } }
+  if (data.errors && typeof data.errors === 'object' && setError) {
+    let boundCount = 0;
+    Object.entries(data.errors).forEach(([field, messages]) => {
+      const msgText = Array.isArray(messages) ? messages.join('. ') : String(messages);
+      setError(field, { type: 'server', message: msgText });
+      boundCount++;
+    });
+    if (boundCount > 0) {
+      notification.error('Please resolve the highlighted field errors.');
+      return;
+    }
+  }
+
   // NestJS ValidationPipe format (array of strings)
   if (Array.isArray(data.message) && setError) {
-    let unmappedErrors: string[] = [];
+    const unmappedErrors: string[] = [];
     
     data.message.forEach((msg: string) => {
-      // Typically, NestJS returns "fieldName must be a string"
       const parts = msg.split(' ');
       const field = parts[0];
       
       if (field) {
-        // Try to bind to the field
         setError(field, { type: 'server', message: msg });
       } else {
         unmappedErrors.push(msg);

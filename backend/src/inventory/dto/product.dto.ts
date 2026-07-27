@@ -7,11 +7,11 @@ import {
   IsEnum,
   ValidateIf,
 } from "class-validator";
-import { ItemType, TaxCategory, UnitType } from "@prisma/client";
+import { ItemType, TaxPreference } from "@prisma/client";
 
 export class CreateProductDto {
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Item Name is required' })
   name: string;
 
   @IsString()
@@ -22,14 +22,9 @@ export class CreateProductDto {
   @IsOptional()
   brandId?: string;
 
-  @IsEnum(UnitType)
-  @IsOptional()
-  unit?: UnitType;
-
   @IsString()
-  @ValidateIf((o) => o.isTaxable === true)
-  @IsNotEmpty({ message: 'Tax Group is required for taxable items' })
-  taxGroupId?: string;
+  @IsOptional()
+  unit?: string;
 
   @IsString()
   @IsOptional()
@@ -44,8 +39,7 @@ export class CreateProductDto {
   barcode?: string;
 
   @IsString()
-  @ValidateIf((o) => o.isTaxable === true)
-  @IsNotEmpty({ message: 'HSN/SAC Code is required for taxable items' })
+  @IsOptional()
   hsnCode?: string;
 
   @IsString()
@@ -70,31 +64,11 @@ export class CreateProductDto {
 
   @IsNumber()
   @IsOptional()
-  taxRate?: number;
-
-  @IsNumber()
-  @IsOptional()
   gstRate?: number;
 
-  @IsString()
+  @IsEnum(TaxPreference)
   @IsOptional()
-  taxType?: string;
-
-  @IsEnum(TaxCategory)
-  @IsOptional()
-  taxCategory?: TaxCategory;
-
-  @IsBoolean()
-  @IsOptional()
-  isExempt?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  isNilRated?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  isNonGst?: boolean;
+  taxPreference?: TaxPreference;
 
   @IsNumber()
   @IsOptional()
@@ -115,6 +89,8 @@ export class CreateProductDto {
   @IsNumber()
   @IsOptional()
   reorderLevel?: number;
+
+
 
   @IsString()
   @IsOptional()

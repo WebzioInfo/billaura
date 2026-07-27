@@ -9,6 +9,7 @@ export interface PostJournalParams {
   lines: {
     accountId: string;
     costCenterId?: string;
+    departmentId?: string;
     debit: number;
     credit: number;
   }[];
@@ -69,6 +70,7 @@ export class AccountingEngineService {
           create: params.lines.map(line => ({
             accountId: line.accountId,
             costCenterId: line.costCenterId,
+            departmentId: line.departmentId,
             debit: line.debit,
             credit: line.credit,
           }))
@@ -95,7 +97,7 @@ export class AccountingEngineService {
       // Liability / Equity / Revenue: -Debit, +Credit
       // Here we assume balance = debit - credit for all, making Liability balances negative.
       
-      let balanceChange = new Prisma.Decimal(line.debit - line.credit);
+      const balanceChange = new Prisma.Decimal(line.debit - line.credit);
 
       await tx.account.update({
         where: { id: line.accountId },

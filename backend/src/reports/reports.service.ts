@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -341,5 +341,221 @@ export class ReportsService {
       lowStockCount,
       inventory: items.sort((a, b) => b.valuation - a.valuation)
     };
+  }
+
+  async generateDepartmentalReport(companyId: string) {
+    const departments = await this.prisma.department.findMany({
+      where: { companyId, deletedAt: null },
+    });
+
+    const employees = await this.prisma.employee.findMany({
+      where: { companyId, deletedAt: null },
+      include: { department: true, designation: true },
+    });
+
+    const expenses = await this.prisma.expense.findMany({
+      where: { companyId, deletedAt: null },
+    });
+
+    const otherIncomes = await this.prisma.otherIncome.findMany({
+      where: { companyId, deletedAt: null },
+    });
+
+    const attendances = await this.prisma.attendance.findMany({
+      where: { companyId },
+      include: { employee: true },
+    });
+
+    const salarySlips = await this.prisma.salarySlip.findMany({
+      where: { companyId },
+      include: { employee: true },
+    });
+
+    // 1. Headcount & Designation counts
+    const headcountMap: Record<string, number> = {};
+    const designationMap: Record<string, number> = {};
+    
+    // Seed headcount maps
+    departments.forEach((d: any) => {
+      headcountMap[d.id] = 0;
+    });
+    
+    employees.forEach(emp => {
+      if ((emp as any).departmentId) {
+        headcountMap[(emp as any).departmentId] = (headcountMap[(emp as any).departmentId] || 0) + 1;
+      }
+      if ((emp as any).designationId && emp.designation) {
+        designationMap[(emp as any).designation?.name] = (designationMap[(emp as any).designation?.name] || 0) + 1;
+      }
+    });
+
+    // 2. Salary costs by Department
+    const salaryCostMap: Record<string, number> = {};
+    salarySlips.forEach(slip => {
+      if ((slip.employee as any).departmentId) {
+        salaryCostMap[(slip.employee as any).departmentId] = (salaryCostMap[(slip.employee as any).departmentId] || 0) + Number(slip.netSalary);
+      }
+    });
+
+    // 3. Expenses by Department
+    const expenseMap: Record<string, number> = {};
+    expenses.forEach(exp => {
+      if ((exp as any).departmentId) {
+        expenseMap[(exp as any).departmentId] = (expenseMap[(exp as any).departmentId] || 0) + Number(exp.totalAmount);
+      }
+    });
+
+    // 4. Incomes by Department
+    const incomeMap: Record<string, number> = {};
+    otherIncomes.forEach(inc => {
+      if ((inc as any).departmentId) {
+        incomeMap[(inc as any).departmentId] = (incomeMap[(inc as any).departmentId] || 0) + Number(inc.grandTotal);
+      }
+    });
+
+    // 5. Attendance statistics by Department
+    const attendanceMap: Record<string, { present: number; absent: number; leave: number }> = {};
+    departments.forEach((d: any) => {
+      attendanceMap[d.id] = { present: 0, absent: 0, leave: 0 };
+    });
+
+    attendances.forEach(att => {
+      const deptId = att.employee.departmentId;
+      if (deptId) {
+        if (!attendanceMap[deptId]) {
+          attendanceMap[deptId] = { present: 0, absent: 0, leave: 0 };
+        }
+        if (att.type === 'PRESENT') {
+          attendanceMap[deptId].present++;
+        } else if (att.type === 'ABSENT') {
+          attendanceMap[deptId].absent++;
+        } else if (att.type === 'LEAVE' || att.type === 'HALF_DAY') {
+          attendanceMap[deptId].leave++;
+        }
+      }
+    });
+
+    // Build final report items
+    const departmentReportItems = departments.map((d: any) => {
+      const headcount = headcountMap[d.id] || 0;
+      const salaryCost = salaryCostMap[d.id] || 0;
+      const expenseCost = expenseMap[d.id] || 0;
+      const incomeValue = incomeMap[d.id] || 0;
+      const attStats = attendanceMap[d.id] || { present: 0, absent: 0, leave: 0 };
+      const profitability = incomeValue - expenseCost - salaryCost;
+
+      return {
+        departmentId: d.id,
+        departmentCode: d.code,
+        departmentName: d.name,
+        headcount,
+        salaryCost,
+        expenseCost,
+        incomeValue,
+        profitability,
+        attendance: attStats,
+      };
+    });
+
+    return {
+      departmentalSummary: departmentReportItems,
+      designationSummary: Object.entries(designationMap).map(([name, count]) => ({ designationName: name, count })),
+    };
+  }
+
+  async generateCustomerStatement(companyId: string, customerId: string, startDate: Date, endDate: Date) {
+    const customer = await this.prisma.businessPartner.findUnique({
+      where: { id: customerId, companyId },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const historicalInvoices = await this.prisma.historicalInvoice.findMany({
+      where: { companyId, businessPartnerId: customerId, date: { gte: startDate, lte: endDate } },
+      orderBy: { date: 'asc' },
+    });
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: { companyId, businessPartnerId: customerId, date: { gte: startDate, lte: endDate }, status: { not: 'DRAFT' } },
+      orderBy: { date: 'asc' },
+    });
+
+    const payments = await this.prisma.transactionPayment.findMany({
+      where: { companyId, businessPartnerId: customerId, date: { gte: startDate, lte: endDate } },
+      orderBy: { date: 'asc' },
+    });
+
+    let runningBalance = 0;
+    const lines = [];
+
+    // Combine and sort chronologically
+    const allTransactions = [
+      ...historicalInvoices.map(inv => ({ date: inv.date, type: 'Historical Invoice', reference: inv.invoiceNo, debit: Number(inv.totalAmount), credit: 0 })),
+      ...invoices.map(inv => ({ date: inv.date, type: 'Invoice', reference: inv.invoiceNo, debit: Number(inv.grandTotal), credit: 0 })),
+      ...payments.map(pay => ({ date: pay.date, type: 'Payment Receipt', reference: pay.paymentNo, debit: 0, credit: Number(pay.amount) })),
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    for (const t of allTransactions) {
+      runningBalance += t.debit - t.credit;
+      lines.push({ ...t, balance: runningBalance });
+    }
+
+    return {
+      customer,
+      period: { startDate, endDate },
+      openingBalance: 0, // Simplified for this implementation
+      closingBalance: runningBalance,
+      lines,
+    };
+  }
+
+  async generateCustomerAgeing(companyId: string, asOfDate: Date) {
+    const historicalInvoices = await this.prisma.historicalInvoice.findMany({
+      where: { companyId, status: { not: 'PAID' }, date: { lte: asOfDate } },
+      include: { businessPartner: true },
+    });
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: { companyId, status: { notIn: ['PAID', 'DRAFT', 'CANCELLED'] }, date: { lte: asOfDate } },
+      include: { businessPartner: true },
+    });
+
+    const customerAgeingMap: Record<string, any> = {};
+
+    const processInvoice = (inv: any, bp: any, isHistorical: boolean) => {
+      if (!bp) return;
+      if (!customerAgeingMap[bp.id]) {
+        customerAgeingMap[bp.id] = {
+          customerId: bp.id,
+          customerName: bp.name,
+          current: 0,
+          days30: 0,
+          days60: 0,
+          days90: 0,
+          older: 0,
+          total: 0,
+        };
+      }
+
+      const totalAmount = isHistorical ? Number(inv.totalAmount) : Number(inv.grandTotal);
+      const balance = totalAmount - Number(inv.amountPaid);
+      if (balance <= 0) return;
+
+      const dueDate = new Date(inv.dueDate || inv.date);
+      const daysOverdue = Math.floor((asOfDate.getTime() - dueDate.getTime()) / (1000 * 3600 * 24));
+      
+      const bucket = customerAgeingMap[bp.id];
+      if (daysOverdue <= 0) bucket.current += balance;
+      else if (daysOverdue <= 30) bucket.days30 += balance;
+      else if (daysOverdue <= 60) bucket.days60 += balance;
+      else if (daysOverdue <= 90) bucket.days90 += balance;
+      else bucket.older += balance;
+      
+      bucket.total += balance;
+    };
+
+    historicalInvoices.forEach(inv => processInvoice(inv, inv.businessPartner, true));
+    invoices.forEach(inv => processInvoice(inv, inv.businessPartner, false));
+
+    return Object.values(customerAgeingMap).filter(c => c.total > 0);
   }
 }

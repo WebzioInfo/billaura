@@ -44,11 +44,7 @@ export function useAsyncForm<TFieldValues extends FieldValues = FieldValues, TCo
   const handleFormSubmit = (onSubmit: (data: TFieldValues) => any) => {
     return form.handleSubmit(
       async (data) => {
-        try {
-          await onSubmit(data);
-        } catch (error) {
-          throw error;
-        }
+        await onSubmit(data);
       },
       (errors) => {
         const firstErrorKey = Object.keys(errors)[0];

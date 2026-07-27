@@ -12,7 +12,6 @@ import {
 } from "@nestjs/common";
 import { InvoicesService } from "./invoices.service";
 import { CreateInvoiceDto, InvoiceQueryDto } from "./dto/invoice.dto";
-import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 

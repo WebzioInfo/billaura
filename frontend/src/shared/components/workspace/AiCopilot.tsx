@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, X, Activity, TrendingUp, AlertCircle, HelpCircle } from 'lucide-react';
+import { Sparkles, X, TrendingUp, AlertCircle, HelpCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/core/api';
 

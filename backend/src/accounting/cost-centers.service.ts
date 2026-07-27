@@ -10,7 +10,7 @@ import type { Prisma } from '@prisma/client';
 export class CostCentersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: PaginationQueryDto & { includeInactive?: string }) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
@@ -18,7 +18,13 @@ export class CostCentersService {
 
     const where: Prisma.CostCenterWhereInput = {
       companyId,
-      ...(query.search ? { name: { contains: query.search } } : {}),
+      ...(query.includeInactive === 'true' ? {} : { isActive: true }),
+      ...(query.search ? {
+        OR: [
+          { name: { contains: query.search, mode: 'insensitive' } },
+          { code: { contains: query.search, mode: 'insensitive' } },
+        ]
+      } : {}),
     };
 
     const [data, total] = await this.prisma.$transaction([
@@ -26,6 +32,9 @@ export class CostCentersService {
         where,
         skip,
         take,
+        include: {
+          departments: true,
+        },
         orderBy: { name: 'asc' },
       }),
       this.prisma.costCenter.count({ where }),
@@ -39,8 +48,8 @@ export class CostCentersService {
     if (!companyId) throw new ConflictException('Company context is required');
 
     const costCenter = await this.prisma.costCenter.findFirst({
-      where: { id },
-      include: { children: true },
+      where: { id, companyId },
+      include: { children: true, departments: true },
     });
 
     if (!costCenter) throw new NotFoundException(`CostCenter with ID ${id} not found`);
@@ -95,17 +104,50 @@ export class CostCentersService {
     });
   }
 
+  async checkDependencies(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const [expenses, departments] = await Promise.all([
+      this.prisma.journalLine.count({ where: { costCenterId: id } }),
+      this.prisma.department.count({ where: { costCenterId: id, deletedAt: null } }),
+    ]);
+
+    return {
+      expenses,
+      departments,
+      hasDependencies: expenses > 0 || departments > 0
+    };
+  }
+
   async remove(id: string) {
     await this.findOne(id);
+    const deps = await this.checkDependencies(id);
 
-    const inUse = await this.prisma.journalLine.findFirst({
-      where: { costCenterId: id },
-    });
-
-    if (inUse) throw new ConflictException('Cannot delete cost center with existing transactions');
+    if (deps.hasDependencies) {
+      throw new ConflictException({
+        message: `Cannot delete Cost Center in use. It is linked to ${deps.expenses} Expense Entries, and ${deps.departments} Departments.`,
+        dependencies: deps
+      });
+    }
 
     return this.prisma.costCenter.delete({
       where: { id },
+    });
+  }
+
+  async archive(id: string) {
+    await this.findOne(id);
+    return this.prisma.costCenter.update({
+      where: { id },
+      data: { isActive: false }
+    });
+  }
+
+  async restore(id: string) {
+    return this.prisma.costCenter.update({
+      where: { id },
+      data: { isActive: true }
     });
   }
 }

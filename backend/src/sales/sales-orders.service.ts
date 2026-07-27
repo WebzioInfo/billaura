@@ -90,7 +90,7 @@ export class SalesOrdersService {
   }
 
   async update(id: string, dto: UpdateSalesOrderDto) {
-    const companyId = CompanyContext.getCompanyId();
+    const _companyId = CompanyContext.getCompanyId();
     await this.findOne(id); // verify exists
     
     return this.prisma.salesOrder.update({

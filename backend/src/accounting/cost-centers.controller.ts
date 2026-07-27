@@ -26,8 +26,23 @@ export class CostCentersController {
   constructor(private readonly costCentersService: CostCentersService) {}
 
   @Get()
-  async findAll(@Query() query: PaginationQueryDto) {
+  async findAll(@Query() query: PaginationQueryDto & { includeDeleted?: string }) {
     return this.costCentersService.findAll(query);
+  }
+
+  @Get(":id/dependencies")
+  async getDependencies(@Param("id") id: string) {
+    return this.costCentersService.checkDependencies(id);
+  }
+
+  @Post(":id/archive")
+  async archive(@Param("id") id: string) {
+    return this.costCentersService.archive(id);
+  }
+
+  @Post(":id/restore")
+  async restore(@Param("id") id: string) {
+    return this.costCentersService.restore(id);
   }
 
   @Get(":id")

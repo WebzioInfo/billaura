@@ -4,6 +4,7 @@ import { CreateQuotationDto } from './dto/quotation.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
+import { GSTEngine } from '../common/utils/gst-engine.util';
 import type { Prisma } from '@prisma/client';
 import { SequenceService } from '../shared/sequence/sequence.service';
 
@@ -83,9 +84,19 @@ export class QuotationsService {
       // 1. Generate quotation number
       const quotationNo = await this.sequenceService.generateNextSequence(companyId, 'QUOTATION', tx);
 
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+      });
+      const companyState = company?.state?.trim().toLowerCase() || '';
+      const supplyState = customer.state?.trim().toLowerCase() || '';
+      const bpTaxPreference = customer.taxPreference || 'TAXABLE';
+
       // 2. Fetch items and calculate subtotal
       let subTotal = 0;
       let taxTotal = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
       const itemsToCreate = [];
 
       for (const item of dto.items) {
@@ -100,11 +111,22 @@ export class QuotationsService {
         const rate = Number(item.rate);
         const qty = Number(item.qty);
         const lineTotal = rate * qty;
-        const taxRate = Number(product.taxRate || product.gstRate || 18);
-        const taxAmount = (lineTotal * taxRate) / 100;
+        
+        const taxRate = (item as any).taxPercent !== undefined ? Number((item as any).taxPercent) : Number(product.gstRate || 18);
+        
+        const gstResult = GSTEngine.calculate({
+           taxableAmount: lineTotal,
+           gstRate: taxRate,
+           taxPreference: bpTaxPreference as any,
+           companyStateCode: companyState,
+           customerStateCode: supplyState
+        });
 
-        subTotal += lineTotal;
-        taxTotal += taxAmount;
+        subTotal += gstResult.taxableAmount;
+        taxTotal += gstResult.totalTax;
+        totalCgst += gstResult.cgstAmount;
+        totalSgst += gstResult.sgstAmount;
+        totalIgst += gstResult.igstAmount;
 
         itemsToCreate.push({
           productId: product.id,
@@ -112,11 +134,11 @@ export class QuotationsService {
           qty,
           rate,
           taxPercent: taxRate,
-          taxAmount,
-          total: lineTotal + taxAmount,
-          cgstAmount: taxAmount / 2,
-          sgstAmount: taxAmount / 2,
-          igstAmount: 0,
+          taxAmount: gstResult.totalTax,
+          total: gstResult.grandTotal,
+          cgstAmount: gstResult.cgstAmount,
+          sgstAmount: gstResult.sgstAmount,
+          igstAmount: gstResult.igstAmount,
         });
       }
 
@@ -132,9 +154,9 @@ export class QuotationsService {
           subTotal,
           taxTotal,
           grandTotal,
-          cgstAmount: taxTotal / 2,
-          sgstAmount: taxTotal / 2,
-          igstAmount: 0,
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
           items: {

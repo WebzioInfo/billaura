@@ -51,7 +51,7 @@ export class BomService {
   }
 
   async update(id: string, data: any) {
-    const companyId = CompanyContext.getCompanyId();
+    const _companyId = CompanyContext.getCompanyId();
     const bom = await this.findOne(id);
     
     return this.prisma.billOfMaterial.update({
@@ -64,7 +64,7 @@ export class BomService {
   }
 
   async remove(id: string) {
-    const companyId = CompanyContext.getCompanyId();
+    const _companyId = CompanyContext.getCompanyId();
     const bom = await this.findOne(id);
     return this.prisma.billOfMaterial.delete({
       where: { id: bom.id },

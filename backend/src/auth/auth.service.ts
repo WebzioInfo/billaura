@@ -416,7 +416,7 @@ export class AuthService {
     });
 
     // Create a Branch
-    const branch = await this.prisma.branch.upsert({
+    await this.prisma.branch.upsert({
       where: {
         companyId_name: {
           companyId: companyId,

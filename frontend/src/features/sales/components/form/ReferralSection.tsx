@@ -1,13 +1,13 @@
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { FormSection } from '@/shared/components/ui/LayoutComponents';
-import { Card } from '@/shared/components/ui/Card';
 import { Users, Building } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/core/api';
+import { Select } from '@/shared/components/ui/Select';
 
 export const ReferralSection = ({ form }: { form: UseFormReturn<any> }) => {
-  const { watch, register, setValue } = form;
+  const { watch, register } = form;
   const sourceType = watch('referralSourceType');
 
   // Fetch employees
@@ -32,68 +32,56 @@ export const ReferralSection = ({ form }: { form: UseFormReturn<any> }) => {
 
   return (
     <FormSection title="Referral & Commission">
-      <div className="text-sm text-slate-500 mb-4">
+      <div className="text-sm text-muted-foreground mb-4">
         Attach this document to an employee or external agent for commission processing.
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            Referral Source Type
-          </label>
-          <select
-            {...register('referralSourceType')}
-            className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-colors"
-          >
-            <option value="">No Referral</option>
-            <option value="EMPLOYEE">Internal Employee</option>
-            <option value="BUSINESS_PARTNER">External Partner / Agent</option>
-            <option value="WALK_IN">Walk In</option>
-            <option value="WEBSITE">Website</option>
-            <option value="OTHER">Other</option>
-          </select>
-        </div>
+        <Select
+          label="Referral Source Type"
+          {...register('referralSourceType')}
+          options={[
+            { label: 'No Referral', value: '' },
+            { label: 'Internal Employee', value: 'EMPLOYEE' },
+            { label: 'External Partner / Agent', value: 'BUSINESS_PARTNER' },
+            { label: 'Walk In', value: 'WALK_IN' },
+            { label: 'Website', value: 'WEBSITE' },
+            { label: 'Other', value: 'OTHER' },
+          ]}
+        />
 
         {sourceType === 'EMPLOYEE' && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Select Employee
-            </label>
-            <div className="relative">
-              <Users className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
-              <select
-                {...register('employeeId')}
-                className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-colors"
-              >
-                <option value="">Select an employee...</option>
-                {employees.map((emp: any) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="relative">
+            <Users className="absolute left-3 top-8 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Select
+              label="Select Employee"
+              {...register('employeeId')}
+              className="pl-9"
+              options={[
+                { label: 'Select an employee...', value: '' },
+                ...employees.map((emp: any) => ({
+                  label: `${emp.firstName} ${emp.lastName}`,
+                  value: emp.id
+                }))
+              ]}
+            />
           </div>
         )}
 
         {sourceType === 'BUSINESS_PARTNER' && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Select Partner / Agent
-            </label>
-            <div className="relative">
-              <Building className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
-              <select
-                {...register('referralPartnerId')}
-                className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-colors"
-              >
-                <option value="">Select a partner...</option>
-                {partners.map((partner: any) => (
-                  <option key={partner.id} value={partner.id}>
-                    {partner.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="relative">
+            <Building className="absolute left-3 top-8 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Select
+              label="Select Partner / Agent"
+              {...register('referralPartnerId')}
+              className="pl-9"
+              options={[
+                { label: 'Select a partner...', value: '' },
+                ...partners.map((partner: any) => ({
+                  label: partner.name,
+                  value: partner.id
+                }))
+              ]}
+            />
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ import { CreateInvoiceDto } from './dto/invoice.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
+import { GSTEngine } from '../common/utils/gst-engine.util';
 import type { Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
 import { CommissionsService } from '../commissions/commissions.service';
@@ -149,9 +150,15 @@ export class InvoicesService {
       const supplyState = dto.placeOfSupply?.trim().toLowerCase() || '';
       const isInterState = supplyState && companyState && supplyState !== companyState;
 
+      const customer = await tx.businessPartner.findUnique({ where: { id: dto.customerId } });
+      const bpTaxPreference = customer?.taxPreference || 'TAXABLE';
+
       // 2. Fetch products and calculate totals
       let subTotal = 0;
       let taxTotal = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
       let totalCogs = 0;
       const itemsToCreate = [];
 
@@ -168,23 +175,31 @@ export class InvoicesService {
         const qty = Number(item.qty);
         const lineTotal = rate * qty;
         
-        // Respect provided tax percent, fallback to product, or 0 if BILL_OF_SUPPLY
-        let taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.taxRate || product.gstRate || 18);
-        if (dto.invoiceType === 'BILL_OF_SUPPLY') {
-          taxRate = 0;
-        }
+        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.gstRate || 18);
+        const nonGstTypes = ['BILL_OF_SUPPLY', 'EXEMPT_SUPPLY', 'NIL_RATED_INVOICE', 'EXPORT_INVOICE'];
         
-        const taxAmount = (lineTotal * taxRate) / 100;
+        let activeTaxPref = bpTaxPreference;
+        if (nonGstTypes.includes(dto.invoiceType as string)) {
+          activeTaxPref = 'NON_GST';
+        }
 
-        subTotal += lineTotal;
-        taxTotal += taxAmount;
+        const gstResult = GSTEngine.calculate({
+           taxableAmount: lineTotal,
+           gstRate: taxRate,
+           taxPreference: activeTaxPref as any,
+           companyStateCode: companyState,
+           customerStateCode: supplyState
+        });
+
+        subTotal += gstResult.taxableAmount;
+        taxTotal += gstResult.totalTax;
+        totalCgst += gstResult.cgstAmount;
+        totalSgst += gstResult.sgstAmount;
+        totalIgst += gstResult.igstAmount;
+
         if (product.itemType === 'FINISHED_GOOD' || product.itemType === 'RAW_MATERIAL') {
           totalCogs += (Number(product.purchasePrice || 0) * qty);
         }
-
-        const lineCgst = isInterState ? 0 : taxAmount / 2;
-        const lineSgst = isInterState ? 0 : taxAmount / 2;
-        const lineIgst = isInterState ? taxAmount : 0;
 
         itemsToCreate.push({
           productId: product.id,
@@ -192,11 +207,11 @@ export class InvoicesService {
           qty,
           rate,
           taxPercent: taxRate,
-          taxAmount,
-          total: lineTotal + taxAmount,
-          cgstAmount: lineCgst,
-          sgstAmount: lineSgst,
-          igstAmount: lineIgst,
+          taxAmount: gstResult.totalTax,
+          total: gstResult.grandTotal,
+          cgstAmount: gstResult.cgstAmount,
+          sgstAmount: gstResult.sgstAmount,
+          igstAmount: gstResult.igstAmount,
         });
       }
 
@@ -238,9 +253,9 @@ export class InvoicesService {
           taxTotal,
           grandTotal,
           amountPaid: 0,
-          cgstAmount: isInterState ? 0 : taxTotal / 2,
-          sgstAmount: isInterState ? 0 : taxTotal / 2,
-          igstAmount: isInterState ? taxTotal : 0,
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
           gstBreakup: {
@@ -256,14 +271,16 @@ export class InvoicesService {
 
       // 4. Update customer outstanding balance
       if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
-        await tx.businessPartner.update({
-          where: { id: dto.customerId },
-          data: {
-            receivableBalance: {
-              increment: grandTotal,
+        if (customer) {
+          await tx.businessPartner.update({
+            where: { id: dto.customerId },
+            data: {
+              receivableBalance: {
+                increment: grandTotal,
+              },
             },
-          },
-        });
+          });
+        }
       }
 
       // Update commission record with actual invoice ID
@@ -285,7 +302,7 @@ export class InvoicesService {
             reference: invoiceNo,
             debit: grandTotal,
             credit: 0,
-            balance: Number(customer.receivableBalance) + grandTotal,
+            balance: Number(customer?.receivableBalance || 0) + grandTotal,
           },
         });
       }
@@ -384,9 +401,9 @@ export class InvoicesService {
           { accountId: salesAccount.id, debit: 0, credit: subTotal },
         ];
 
-        const cgstAmt = isInterState ? 0 : taxTotal / 2;
-        const sgstAmt = isInterState ? 0 : taxTotal / 2;
-        const igstAmt = isInterState ? taxTotal : 0;
+        const cgstAmt = totalCgst;
+        const sgstAmt = totalSgst;
+        const igstAmt = totalIgst;
 
         if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
           journalLines.push({ accountId: cgstAccount.id, debit: 0, credit: cgstAmt });
@@ -539,7 +556,7 @@ export class InvoicesService {
       docType = 'DELIVERY_CHALLAN';
     }
 
-    let sequence = await this.prisma.documentSequence.findFirst({
+    const sequence = await this.prisma.documentSequence.findFirst({
       where: { companyId, documentType: docType as any },
     });
 

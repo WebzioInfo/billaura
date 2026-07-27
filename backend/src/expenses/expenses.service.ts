@@ -110,6 +110,7 @@ export class ExpensesService {
           cashAccountId,
           employeeId,
           vendorId,
+          departmentId: dto.departmentId || null,
           paidFromType: dto.paidFromType || null,
           paidFromId: dto.paidFromId || null,
           expenseNo,
@@ -119,7 +120,8 @@ export class ExpensesService {
           taxAmount,
           totalAmount,
           taxApplicable: dto.taxApplicable || false,
-          taxGroupId: dto.taxGroupId || null,
+          gstRate: dto.gstRate || 0,
+          taxPreference: dto.taxPreference || 'TAXABLE',
           taxMode: dto.taxMode || null,
           taxType: dto.taxType || null,
           taxableAmount: dto.taxableAmount || dto.amount,
@@ -167,7 +169,8 @@ export class ExpensesService {
         amount: dto.amount !== undefined ? dto.amount : undefined,
         taxAmount: dto.taxAmount !== undefined ? dto.taxAmount : undefined,
         taxApplicable: dto.taxApplicable !== undefined ? dto.taxApplicable : undefined,
-        taxGroupId: dto.taxGroupId !== undefined ? dto.taxGroupId : undefined,
+        gstRate: dto.gstRate !== undefined ? dto.gstRate : undefined,
+        taxPreference: dto.taxPreference !== undefined ? dto.taxPreference : undefined,
         taxMode: dto.taxMode !== undefined ? dto.taxMode : undefined,
         taxType: dto.taxType !== undefined ? dto.taxType : undefined,
         taxableAmount: dto.taxableAmount !== undefined ? dto.taxableAmount : undefined,
@@ -180,6 +183,7 @@ export class ExpensesService {
         billNumber: dto.billNumber !== undefined ? dto.billNumber : undefined,
         description: dto.description !== undefined ? dto.description : undefined,
         notes: dto.notes !== undefined ? dto.notes : undefined,
+        departmentId: dto.departmentId !== undefined ? dto.departmentId : undefined,
       }
     });
   }
@@ -249,22 +253,22 @@ export class ExpensesService {
         }
 
         const lines = [
-          { accountId: expenseAccountId, debit: Number(expense.taxableAmount || expense.amount), credit: 0 },
-          { accountId: creditAccountId, debit: 0, credit: totalAmount },
+          { accountId: expenseAccountId, debit: Number(expense.taxableAmount || expense.amount), credit: 0, departmentId: expense.departmentId || undefined },
+          { accountId: creditAccountId, debit: 0, credit: totalAmount, departmentId: expense.departmentId || undefined },
         ];
 
         if (expense.taxApplicable) {
           if (expense.taxType === 'IGST' && Number(expense.igstAmount) > 0) {
             if (!inputIgstAccountId) throw new ConflictException('Input IGST ledger is not configured in settings.');
-            lines.push({ accountId: inputIgstAccountId, debit: Number(expense.igstAmount), credit: 0 });
+            lines.push({ accountId: inputIgstAccountId, debit: Number(expense.igstAmount), credit: 0, departmentId: expense.departmentId || undefined });
           } else {
             if (Number(expense.cgstAmount) > 0) {
               if (!inputCgstAccountId) throw new ConflictException('Input CGST ledger is not configured in settings.');
-              lines.push({ accountId: inputCgstAccountId, debit: Number(expense.cgstAmount), credit: 0 });
+              lines.push({ accountId: inputCgstAccountId, debit: Number(expense.cgstAmount), credit: 0, departmentId: expense.departmentId || undefined });
             }
             if (Number(expense.sgstAmount) > 0) {
               if (!inputSgstAccountId) throw new ConflictException('Input SGST ledger is not configured in settings.');
-              lines.push({ accountId: inputSgstAccountId, debit: Number(expense.sgstAmount), credit: 0 });
+              lines.push({ accountId: inputSgstAccountId, debit: Number(expense.sgstAmount), credit: 0, departmentId: expense.departmentId || undefined });
             }
           }
         }
@@ -348,7 +352,8 @@ export class ExpensesService {
         description: dto.description || null,
         accountId: dto.accountId || null,
         defaultTaxApplicable: (dto as any).defaultTaxApplicable || false,
-        defaultTaxGroupId: (dto as any).defaultTaxGroupId || null,
+        defaultGstRate: (dto as any).defaultGstRate || 0,
+        defaultTaxPreference: (dto as any).defaultTaxPreference || 'TAXABLE',
         defaultTaxMode: (dto as any).defaultTaxMode || null,
         defaultInputTaxAccountId: (dto as any).defaultInputTaxAccountId || null,
         type: 'CUSTOM'
@@ -376,7 +381,8 @@ export class ExpensesService {
         description: dto.description !== undefined ? dto.description : undefined,
         accountId: dto.accountId !== undefined ? dto.accountId : undefined,
         defaultTaxApplicable: (dto as any).defaultTaxApplicable !== undefined ? (dto as any).defaultTaxApplicable : undefined,
-        defaultTaxGroupId: (dto as any).defaultTaxGroupId !== undefined ? (dto as any).defaultTaxGroupId : undefined,
+        defaultGstRate: (dto as any).defaultGstRate !== undefined ? (dto as any).defaultGstRate : undefined,
+        defaultTaxPreference: (dto as any).defaultTaxPreference !== undefined ? (dto as any).defaultTaxPreference : undefined,
         defaultTaxMode: (dto as any).defaultTaxMode !== undefined ? (dto as any).defaultTaxMode : undefined,
         defaultInputTaxAccountId: (dto as any).defaultInputTaxAccountId !== undefined ? (dto as any).defaultInputTaxAccountId : undefined,
         isActive: dto.isActive !== undefined ? dto.isActive : undefined

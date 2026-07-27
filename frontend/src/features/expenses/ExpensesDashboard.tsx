@@ -26,7 +26,8 @@ const expenseSchema = z.object({
   description: z.string().optional(),
   notes: z.string().optional(),
   taxApplicable: z.boolean().optional(),
-  taxGroupId: z.string().optional(),
+  gstRate: z.number().optional(),
+  taxPreference: z.string().optional(),
   taxMode: z.string().optional(),
   taxType: z.string().optional(),
   taxableAmount: z.number().optional(),
@@ -34,6 +35,7 @@ const expenseSchema = z.object({
   sgstAmount: z.number().optional(),
   igstAmount: z.number().optional(),
   cessAmount: z.number().optional(),
+  departmentId: z.string().min(1, 'Select a department'),
 });
 
 type ExpenseFormValues = z.infer<typeof expenseSchema>;
@@ -43,7 +45,8 @@ const categorySchema = z.object({
   description: z.string().optional(),
   accountId: z.string().min(1, 'General Ledger Mapping is required'),
   defaultTaxApplicable: z.boolean().optional(),
-  defaultTaxGroupId: z.string().optional(),
+  defaultGstRate: z.number().optional(),
+  defaultTaxPreference: z.string().optional(),
   defaultTaxMode: z.string().optional(),
   defaultInputTaxAccountId: z.string().optional(),
 });
@@ -80,7 +83,8 @@ export const ExpensesDashboard = () => {
       description: '',
       notes: '',
       taxApplicable: false,
-      taxGroupId: '',
+      gstRate: 0,
+      taxPreference: 'TAXABLE',
       taxMode: 'EXCLUDING_TAX',
       taxType: 'CGST_SGST',
       taxableAmount: 0,
@@ -88,6 +92,7 @@ export const ExpensesDashboard = () => {
       sgstAmount: 0,
       igstAmount: 0,
       cessAmount: 0,
+      departmentId: '',
     }
   });
 
@@ -98,7 +103,8 @@ export const ExpensesDashboard = () => {
       description: '',
       accountId: '',
       defaultTaxApplicable: false,
-      defaultTaxGroupId: '',
+      defaultGstRate: 0,
+      defaultTaxPreference: 'TAXABLE',
       defaultTaxMode: 'EXCLUDING_TAX',
       defaultInputTaxAccountId: '',
     }
@@ -143,6 +149,16 @@ export const ExpensesDashboard = () => {
   });
   const bankAccounts = Array.isArray(bankAccountsData) ? bankAccountsData : [];
 
+  const { data: departmentsData } = useQuery({
+    queryKey: ['departments-list'],
+    queryFn: async () => {
+      const res = await apiClient.get('/hr-masters/departments');
+      const list = res.data || res;
+      return Array.isArray(list) ? list : (list?.data || []);
+    }
+  });
+  const departments = Array.isArray(departmentsData) ? departmentsData : [];
+
   const { data: accountsData } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => {
@@ -153,23 +169,14 @@ export const ExpensesDashboard = () => {
   const accounts = Array.isArray(accountsData) ? accountsData : [];
   const expenseAccounts = accounts.filter((a: any) => a.category === 'EXPENSE');
 
-  const { data: taxGroupsData } = useQuery({
-    queryKey: ['tax-groups'],
-    queryFn: async () => {
-      const res = await apiClient.get('/tax-groups');
-      return res.data || [];
-    }
-  });
-  const taxGroups = Array.isArray(taxGroupsData) ? taxGroupsData : [];
-
   const taxApplicable = form.watch('taxApplicable');
   const amount = form.watch('amount');
-  const taxGroupId = form.watch('taxGroupId');
+  const gstRate = form.watch('gstRate');
+  const taxPreference = form.watch('taxPreference');
   const taxMode = form.watch('taxMode') as 'EXCLUDING_TAX' | 'INCLUDING_TAX';
   const categoryId = form.watch('categoryId');
 
-  const selectedTaxGroup = taxGroups.find(t => t.id === taxGroupId);
-  const taxRate = selectedTaxGroup?.totalRate || 0;
+  const taxRate = gstRate || 0;
 
   const taxEngineResult = useTaxEngine(
     amount,
@@ -197,7 +204,8 @@ export const ExpensesDashboard = () => {
       const cat = categories.find(c => c.id === categoryId);
       if (cat && cat.defaultTaxApplicable !== undefined) {
         form.setValue('taxApplicable', cat.defaultTaxApplicable);
-        if (cat.defaultTaxGroupId) form.setValue('taxGroupId', cat.defaultTaxGroupId);
+        if (cat.defaultGstRate !== undefined) form.setValue('gstRate', cat.defaultGstRate);
+        if (cat.defaultTaxPreference) form.setValue('taxPreference', cat.defaultTaxPreference);
         if (cat.defaultTaxMode) form.setValue('taxMode', cat.defaultTaxMode);
       }
     }
@@ -253,7 +261,8 @@ export const ExpensesDashboard = () => {
         description: values.description || undefined,
         accountId: values.accountId || undefined,
         defaultTaxApplicable: values.defaultTaxApplicable,
-        defaultTaxGroupId: values.defaultTaxGroupId || undefined,
+        defaultGstRate: values.defaultGstRate !== undefined ? values.defaultGstRate : undefined,
+        defaultTaxPreference: values.defaultTaxPreference || undefined,
         defaultTaxMode: values.defaultTaxMode || undefined,
         defaultInputTaxAccountId: values.defaultInputTaxAccountId || undefined,
       };
@@ -292,7 +301,8 @@ export const ExpensesDashboard = () => {
       description: cat.description || '',
       accountId: cat.accountId || '',
       defaultTaxApplicable: cat.defaultTaxApplicable || false,
-      defaultTaxGroupId: cat.defaultTaxGroupId || '',
+      defaultGstRate: cat.defaultGstRate != null ? Number(cat.defaultGstRate) : 0,
+      defaultTaxPreference: cat.defaultTaxPreference || 'TAXABLE',
       defaultTaxMode: cat.defaultTaxMode || 'EXCLUDING_TAX',
       defaultInputTaxAccountId: cat.defaultInputTaxAccountId || '',
     });
@@ -316,7 +326,8 @@ export const ExpensesDashboard = () => {
       description: exp.description || '',
       notes: exp.notes || '',
       taxApplicable: exp.taxApplicable || false,
-      taxGroupId: exp.taxGroupId || '',
+      gstRate: exp.gstRate != null ? Number(exp.gstRate) : 0,
+      taxPreference: exp.taxPreference || 'TAXABLE',
       taxMode: exp.taxMode || 'EXCLUDING_TAX',
       taxType: exp.taxType || 'CGST_SGST',
       taxableAmount: Number(exp.taxableAmount || 0),
@@ -324,6 +335,7 @@ export const ExpensesDashboard = () => {
       sgstAmount: Number(exp.sgstAmount || 0),
       igstAmount: Number(exp.igstAmount || 0),
       cessAmount: Number(exp.cessAmount || 0),
+      departmentId: exp.departmentId || '',
     });
     prevPaymentMethodRef.current = exp.paymentMethod || 'BANK_TRANSFER';
     setIsModalOpen(true);
@@ -548,6 +560,15 @@ export const ExpensesDashboard = () => {
                       ))}
                     </select>
                   </div>
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Department *</label>
+                    <select required {...form.register('departmentId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                      <option value="">Select Department</option>
+                      {departments.map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Posting Date *</label>
                     <input type="date" {...form.register('date')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
@@ -576,12 +597,23 @@ export const ExpensesDashboard = () => {
                     {taxApplicable && (
                       <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
                         <div>
-                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Tax Group *</label>
-                          <select {...form.register('taxGroupId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                            <option value="">Select Tax Rate</option>
-                            {taxGroups.map((t: any) => (
-                              <option key={t.id} value={t.id}>{t.name} ({t.totalRate}%)</option>
-                            ))}
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">GST Rate *</label>
+                          <select {...form.register('gstRate', { valueAsNumber: true })} disabled={form.watch('taxPreference') === 'EXEMPT' || form.watch('taxPreference') === 'NIL_RATED' || form.watch('taxPreference') === 'NON_GST'} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                            <option value="0">0%</option>
+                            <option value="3">3%</option>
+                            <option value="5">5%</option>
+                            <option value="12">12%</option>
+                            <option value="18">18%</option>
+                            <option value="28">28%</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Tax Preference *</label>
+                          <select {...form.register('taxPreference')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                            <option value="TAXABLE">Taxable</option>
+                            <option value="EXEMPT">Exempt</option>
+                            <option value="NIL_RATED">Nil Rated</option>
+                            <option value="NON_GST">Non GST</option>
                           </select>
                         </div>
                         <div>
@@ -697,12 +729,23 @@ export const ExpensesDashboard = () => {
                     {categoryForm.watch('defaultTaxApplicable') && (
                       <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
                         <div>
-                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Default Tax Group</label>
-                          <select {...categoryForm.register('defaultTaxGroupId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                            <option value="">Select Tax Rate</option>
-                            {taxGroups.map((t: any) => (
-                              <option key={t.id} value={t.id}>{t.name} ({t.totalRate}%)</option>
-                            ))}
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Default GST Rate</label>
+                          <select {...categoryForm.register('defaultGstRate', { valueAsNumber: true })} disabled={categoryForm.watch('defaultTaxPreference') === 'EXEMPT' || categoryForm.watch('defaultTaxPreference') === 'NIL_RATED' || categoryForm.watch('defaultTaxPreference') === 'NON_GST'} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                            <option value="0">0%</option>
+                            <option value="3">3%</option>
+                            <option value="5">5%</option>
+                            <option value="12">12%</option>
+                            <option value="18">18%</option>
+                            <option value="28">28%</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Default Tax Preference</label>
+                          <select {...categoryForm.register('defaultTaxPreference')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
+                            <option value="TAXABLE">Taxable</option>
+                            <option value="EXEMPT">Exempt</option>
+                            <option value="NIL_RATED">Nil Rated</option>
+                            <option value="NON_GST">Non GST</option>
                           </select>
                         </div>
                         <div>

@@ -50,13 +50,13 @@ export const VerifyEmail = () => {
     setError(null);
     setResendMessage(null);
     try {
-      const response = await api.post('/auth/verify-email', {
+      const response = await api.post<any>('/auth/verify-email', {
         email,
         otp: data.otp,
       });
 
-      TokenService.setAccessToken(response.data.access_token);
-      setSession(response.data.user, response.data.access_token);
+      TokenService.setAccessToken(response.accessToken);
+      setSession(response.user, response.accessToken);
       
       setSuccess(true);
       setTimeout(() => {

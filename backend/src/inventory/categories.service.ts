@@ -4,21 +4,9 @@ import { CompanyContext } from '../common/context/company-context';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import type { Prisma } from '@prisma/client';
+import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
 
-export class CreateCategoryDto {
-  name: string;
-  code?: string;
-  description?: string;
-  parentId?: string;
-  status?: string;
-  color?: string;
-  icon?: string;
-  displayOrder?: number;
-  imageUrl?: string;
-  notes?: string;
-}
 
-export class UpdateCategoryDto extends CreateCategoryDto {}
 
 @Injectable()
 export class CategoriesService {
@@ -99,19 +87,29 @@ export class CategoriesService {
     });
     if (existingName) throw new ConflictException('Category name already exists');
 
+    const parentId = dto.parentId && dto.parentId.trim() !== '' ? dto.parentId.trim() : null;
+    if (parentId) {
+      const parentCategory = await this.prisma.productCategory.findFirst({
+        where: { id: parentId, companyId, deletedAt: null }
+      });
+      if (!parentCategory) {
+        throw new NotFoundException('Parent category not found');
+      }
+    }
+
     return this.prisma.productCategory.create({
       data: {
         companyId,
         categoryName: dto.name,
-        categoryCode: dto.code,
-        description: dto.description,
-        parentId: dto.parentId,
+        categoryCode: dto.code || null,
+        description: dto.description || null,
+        parentId,
         status: dto.status || 'ACTIVE',
-        color: dto.color,
-        icon: dto.icon,
+        color: dto.color || null,
+        icon: dto.icon || null,
         displayOrder: dto.displayOrder || 0,
-        imageUrl: dto.imageUrl,
-        notes: dto.notes
+        imageUrl: dto.imageUrl || null,
+        notes: dto.notes || null,
       }
     });
   }
@@ -129,23 +127,35 @@ export class CategoriesService {
       if (existingName) throw new ConflictException('Category name already exists');
     }
 
-    if (dto.parentId === id) {
-      throw new ConflictException('Category cannot be its own parent');
+    let parentId: string | null | undefined = undefined;
+    if (dto.parentId !== undefined) {
+      parentId = dto.parentId && dto.parentId.trim() !== '' ? dto.parentId.trim() : null;
+      if (parentId) {
+        if (parentId === id) {
+          throw new ConflictException('Category cannot be its own parent');
+        }
+        const parentCategory = await this.prisma.productCategory.findFirst({
+          where: { id: parentId, companyId, deletedAt: null }
+        });
+        if (!parentCategory) {
+          throw new NotFoundException('Parent category not found');
+        }
+      }
     }
 
     return this.prisma.productCategory.update({
       where: { id },
       data: {
-        categoryName: dto.name,
-        categoryCode: dto.code,
-        description: dto.description,
-        parentId: dto.parentId,
-        status: dto.status,
-        color: dto.color,
-        icon: dto.icon,
-        displayOrder: dto.displayOrder,
-        imageUrl: dto.imageUrl,
-        notes: dto.notes
+        ...(dto.name !== undefined && { categoryName: dto.name }),
+        ...(dto.code !== undefined && { categoryCode: dto.code || null }),
+        ...(dto.description !== undefined && { description: dto.description || null }),
+        ...(parentId !== undefined && { parentId }),
+        ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.color !== undefined && { color: dto.color || null }),
+        ...(dto.icon !== undefined && { icon: dto.icon || null }),
+        ...(dto.displayOrder !== undefined && { displayOrder: dto.displayOrder }),
+        ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl || null }),
+        ...(dto.notes !== undefined && { notes: dto.notes || null }),
       }
     });
   }

@@ -5,6 +5,7 @@ import { queryClient } from "@/core/query/queryClient";
 import { SessionProvider } from "@/features/auth/providers/SessionProvider";
 import { ThemeProvider } from "@/features/theme/ThemeProvider";
 import { NetworkProvider } from "@/providers/NetworkProvider";
+import { GlobalDialog } from "@/core/services/DialogService";
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
@@ -13,6 +14,7 @@ export function AppProviders({ children }: PropsWithChildren) {
         <NetworkProvider>
           <SessionProvider>
             {children}
+            <GlobalDialog />
             <Toaster
               position="top-right"
               toastOptions={{

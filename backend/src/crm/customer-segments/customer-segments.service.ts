@@ -54,7 +54,7 @@ export class CustomerSegmentsService {
     await this.seedDefaultSegments(companyId, userId);
 
     return this.prisma.customerSegment.findMany({
-      where: { companyId },
+      where: { companyId,  },
       orderBy: [
         { sortOrder: 'asc' },
         { name: 'asc' }
@@ -131,8 +131,9 @@ export class CustomerSegmentsService {
       throw new ConflictException('Cannot delete segment that is currently assigned to customers');
     }
 
-    return this.prisma.customerSegment.delete({
-      where: { id }
+    return this.prisma.customerSegment.update({
+      where: { id },
+      data: {  }
     });
   }
 }

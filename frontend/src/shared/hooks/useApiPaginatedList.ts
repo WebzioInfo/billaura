@@ -28,7 +28,7 @@ export function useApiPaginatedList<T>(
       const res: any = await api.get(url, { params });
       
       const rawData = ensureArray<T>(res);
-      let data: T[] = rawData;
+      const data: T[] = rawData;
       
       let meta: PaginationMeta = {
         page: params?.page || 1,

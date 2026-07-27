@@ -1,22 +1,11 @@
 import React, { useEffect } from 'react';
-import { Outlet, Navigate, useLocation } from 'react-router-dom';
-import { useSessionStore } from '../features/auth/stores/sessionStore';
+import { Outlet } from 'react-router-dom';
 
 export default function AuthLayout() {
-  const { isAuthenticated, user } = useSessionStore();
-  const location = useLocation();
-
   useEffect(() => {
     // Force light mode on authentication screens
     document.documentElement.classList.remove('dark');
   }, []);
-
-  if (isAuthenticated && user) {
-    // Determine the dashboard based on role
-    const defaultDashboard = user.globalRole === 'SUPER_ADMIN' ? '/platform/dashboard' : '/dashboard';
-    const from = location.state?.from?.pathname || defaultDashboard;
-    return <Navigate to={from} replace />;
-  }
 
   // Lightweight inline SVG pattern for the repeating "WEBZIO" watermark
   // Renders a rotated "WEBZIO" text at 22 degrees with ~2.5% opacity

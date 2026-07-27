@@ -5,6 +5,7 @@ import { Plus, Edit, Trash2 } from 'lucide-react';
 import { IncomeCategoryFormModal } from './IncomeCategoryFormModal';
 import { apiClient as api } from '../../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { dialog } from '@/core/services/DialogService';
 
 export function IncomeCategoriesList() {
   const queryClient = useQueryClient();
@@ -29,7 +30,11 @@ export function IncomeCategoriesList() {
   });
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this category?')) {
+    const confirmed = await dialog.confirmDelete(
+      'Delete Category?',
+      'Are you sure you want to delete this category?'
+    );
+    if (confirmed) {
       deleteMutation.mutate(id);
     }
   };

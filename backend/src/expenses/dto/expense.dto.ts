@@ -7,7 +7,7 @@ import {
   IsEnum,
   IsBoolean,
 } from "class-validator";
-import { PaymentMethod, PaidFromType, ApprovalStatus } from "@prisma/client";
+import { PaymentMethod, PaidFromType, ApprovalStatus, TaxPreference } from "@prisma/client";
 
 export class CreateExpenseDto {
   @IsString()
@@ -78,9 +78,13 @@ export class CreateExpenseDto {
   @IsOptional()
   taxApplicable?: boolean;
 
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  taxGroupId?: string;
+  gstRate?: number;
+
+  @IsEnum(TaxPreference)
+  @IsOptional()
+  taxPreference?: TaxPreference;
 
   @IsString()
   @IsOptional()
@@ -109,6 +113,10 @@ export class CreateExpenseDto {
   @IsNumber()
   @IsOptional()
   cessAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  departmentId?: string;
 }
 
 export class UpdateExpenseApprovalDto {
@@ -162,9 +170,13 @@ export class UpdateExpenseDto {
   @IsOptional()
   taxApplicable?: boolean;
 
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  taxGroupId?: string;
+  gstRate?: number;
+
+  @IsEnum(TaxPreference)
+  @IsOptional()
+  taxPreference?: TaxPreference;
 
   @IsString()
   @IsOptional()
@@ -193,6 +205,10 @@ export class UpdateExpenseDto {
   @IsNumber()
   @IsOptional()
   cessAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  departmentId?: string;
 }
 
 export class CreateExpenseCategoryDto {
@@ -212,9 +228,13 @@ export class CreateExpenseCategoryDto {
   @IsOptional()
   defaultTaxApplicable?: boolean;
 
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  defaultTaxGroupId?: string;
+  defaultGstRate?: number;
+
+  @IsEnum(TaxPreference)
+  @IsOptional()
+  defaultTaxPreference?: TaxPreference;
 
   @IsString()
   @IsOptional()
@@ -242,9 +262,13 @@ export class UpdateExpenseCategoryDto {
   @IsOptional()
   defaultTaxApplicable?: boolean;
 
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  defaultTaxGroupId?: string;
+  defaultGstRate?: number;
+
+  @IsEnum(TaxPreference)
+  @IsOptional()
+  defaultTaxPreference?: TaxPreference;
 
   @IsString()
   @IsOptional()

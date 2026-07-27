@@ -12,7 +12,7 @@ export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sequenceService: SequenceService
-  ) {}
+  ) { }
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -26,12 +26,12 @@ export class ProductsService {
       companyId,
       ...(query.search
         ? {
-            OR: [
-              { name: { contains: query.search } },
-              { sku: { contains: query.search } },
-              { barcode: { contains: query.search } },
-            ],
-          }
+          OR: [
+            { name: { contains: query.search } },
+            { sku: { contains: query.search } },
+            { barcode: { contains: query.search } },
+          ],
+        }
         : {}),
     };
 
@@ -56,7 +56,7 @@ export class ProductsService {
     }
 
     const product = await this.prisma.product.findFirst({
-      where: { id },
+      where: { id, companyId, deletedAt: null },
       include: { stocks: true, category: true, brand: true },
     });
 
@@ -75,9 +75,9 @@ export class ProductsService {
 
     // Check SKU uniqueness
     let finalSku = dto.sku;
-    if (finalSku) {
+    if (finalSku && finalSku.trim() !== '') {
       const existing = await this.prisma.product.findFirst({
-        where: { companyId, sku: finalSku },
+        where: { companyId, sku: finalSku, deletedAt: null },
       });
       if (existing) {
         throw new ConflictException(`Product with SKU '${finalSku}' already exists`);
@@ -86,28 +86,13 @@ export class ProductsService {
       finalSku = await this.sequenceService.generateNextSequence(companyId, 'SKU');
     }
 
-    // Determine GST Rate from TaxGroup if provided
-    let gstRate = dto.gstRate || 0;
-    if (dto.taxGroupId) {
-      const taxGroup = await this.prisma.taxGroup.findUnique({ where: { id: dto.taxGroupId } });
-      if (taxGroup) {
-        gstRate = Number(taxGroup.totalRate);
-      }
-    }
-
-    let finalGstRate: number | undefined = gstRate;
+    let finalGstRate = dto.gstRate || 0;
     let finalHsnCode = dto.hsnCode || null;
-    let finalTaxCategory: TaxCategory | undefined = dto.taxCategory || 'TAXABLE';
-    let finalTaxGroupId = dto.taxGroupId || null;
+    let finalTaxPreference = dto.taxPreference || 'TAXABLE';
 
-    let finalTaxType = dto.taxType || null;
-
-    if (dto.isTaxable === false) {
-      finalGstRate = undefined;
-      finalHsnCode = null;
-      finalTaxCategory = undefined;
-      finalTaxGroupId = null;
-      finalTaxType = null;
+    if (dto.isTaxable === false || finalTaxPreference !== 'TAXABLE') {
+      finalGstRate = 0;
+      if (dto.isTaxable === false) finalTaxPreference = 'NON_GST';
     }
 
     let finalMinStock = dto.minStock || 0;
@@ -128,8 +113,7 @@ export class ProductsService {
           name: dto.name,
           categoryId: dto.categoryId || null,
           brandId: dto.brandId || null,
-          unit: dto.unit || 'PCS',
-          taxGroupId: finalTaxGroupId,
+          unit: dto.unit || 'NOS',
           sku: finalSku,
           alias: dto.alias || null,
           barcode: dto.barcode || null,
@@ -139,13 +123,8 @@ export class ProductsService {
           itemType: dto.itemType || 'FINISHED_GOOD',
           weight: dto.weight || null,
           weightType: dto.weightType || null,
-          taxRate: finalGstRate,
           gstRate: finalGstRate,
-          taxType: finalTaxType,
-          taxCategory: finalTaxCategory,
-          isExempt: dto.isExempt || false,
-          isNilRated: dto.isNilRated || false,
-          isNonGst: dto.isNonGst || false,
+          taxPreference: finalTaxPreference,
           purchasePrice: dto.purchasePrice || 0,
           sellingPrice: dto.sellingPrice || 0,
           minStock: finalMinStock,
@@ -202,56 +181,47 @@ export class ProductsService {
     }
 
     const product = await this.prisma.product.findFirst({
-      where: { id },
+      where: { id, companyId, deletedAt: null },
     });
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    let finalSku = dto.sku;
-    if (finalSku && finalSku !== product.sku) {
-      const existing = await this.prisma.product.findFirst({
-        where: { companyId, sku: finalSku, NOT: { id } },
-      });
-      if (existing) {
-        throw new ConflictException(`Product with SKU '${finalSku}' already exists`);
-      }
-    } else if (!finalSku) {
-       finalSku = await this.sequenceService.generateNextSequence(companyId, 'SKU');
-    }
-
-    let gstRate = dto.gstRate !== undefined ? dto.gstRate : product.gstRate;
-    if (dto.taxGroupId) {
-      const taxGroup = await this.prisma.taxGroup.findUnique({ where: { id: dto.taxGroupId } });
-      if (taxGroup) {
-        gstRate = Number(taxGroup.totalRate);
+    // Preserve existing SKU unless explicitly updated
+    let finalSku = product.sku;
+    if (dto.sku !== undefined) {
+      if (dto.sku && dto.sku.trim() !== '') {
+        const trimmedSku = dto.sku.trim();
+        if (trimmedSku !== product.sku) {
+          const existing = await this.prisma.product.findFirst({
+            where: { companyId, sku: trimmedSku, NOT: { id }, deletedAt: null },
+          });
+          if (existing) {
+            throw new ConflictException(`Product with SKU '${trimmedSku}' already exists`);
+          }
+          finalSku = trimmedSku;
+        }
       }
     }
 
-    let finalGstRate: typeof gstRate | undefined = gstRate;
-    let finalHsnCode = dto.hsnCode !== undefined ? dto.hsnCode : product.hsnCode;
-    let finalTaxCategory: TaxCategory | undefined | null = dto.taxCategory !== undefined ? dto.taxCategory : product.taxCategory;
-    let finalTaxGroupId = dto.taxGroupId !== undefined ? dto.taxGroupId : product.taxGroupId;
+    let finalGstRate = dto.gstRate !== undefined ? dto.gstRate : Number(product.gstRate || 0);
+    let finalHsnCode = dto.hsnCode !== undefined ? (dto.hsnCode || null) : product.hsnCode;
+    let finalTaxPreference = dto.taxPreference !== undefined ? dto.taxPreference : product.taxPreference;
 
-    let isTaxable = dto.isTaxable !== undefined ? dto.isTaxable : product.isTaxable;
+    const isTaxable = dto.isTaxable !== undefined ? dto.isTaxable : product.isTaxable;
 
-    let finalTaxType = dto.taxType !== undefined ? dto.taxType : product.taxType;
-
-    if (isTaxable === false) {
-      finalGstRate = undefined;
-      finalHsnCode = null;
-      finalTaxCategory = undefined;
-      finalTaxGroupId = null;
-      finalTaxType = null;
+    if (isTaxable === false || finalTaxPreference !== 'TAXABLE') {
+      finalGstRate = 0;
+      if (isTaxable === false) finalTaxPreference = 'NON_GST';
     }
 
-    let finalMinStock = dto.minStock !== undefined ? dto.minStock : product.minStock;
-    let finalMaxStock = dto.maxStock !== undefined ? dto.maxStock : product.maxStock;
-    let finalReorderLevel = dto.reorderLevel !== undefined ? dto.reorderLevel : product.reorderLevel;
+    let finalMinStock = dto.minStock !== undefined ? dto.minStock : Number(product.minStock || 0);
+    let finalMaxStock = dto.maxStock !== undefined ? dto.maxStock : Number(product.maxStock || 0);
+    let finalReorderLevel = dto.reorderLevel !== undefined ? dto.reorderLevel : Number(product.reorderLevel || 0);
     let finalValuationMethod = dto.valuationMethod !== undefined ? dto.valuationMethod : product.valuationMethod;
 
-    let isService = dto.isService !== undefined ? dto.isService : product.isService;
-    let isInventoryItem = dto.isInventoryItem !== undefined ? dto.isInventoryItem : product.isInventoryItem;
+    const isService = dto.isService !== undefined ? dto.isService : product.isService;
+    const isInventoryItem = dto.isInventoryItem !== undefined ? dto.isInventoryItem : product.isInventoryItem;
 
     if (isService === true || isInventoryItem === false) {
       finalMinStock = 0;
@@ -260,15 +230,44 @@ export class ProductsService {
       finalValuationMethod = 'NONE';
     }
 
-    const dataToUpdate = {
-      ...dto,
+    const dataToUpdate: Prisma.ProductUncheckedUpdateInput = {
+      ...(dto.name !== undefined && { name: dto.name }),
+      ...(dto.alias !== undefined && { alias: dto.alias || null }),
+      ...(dto.unit !== undefined && { unit: dto.unit }),
+      ...(dto.barcode !== undefined && { barcode: dto.barcode || null }),
+      ...(dto.eInvoiceHsn !== undefined && { eInvoiceHsn: dto.eInvoiceHsn || null }),
+      ...(dto.scheduleNo !== undefined && { scheduleNo: dto.scheduleNo || null }),
+      ...(dto.itemType !== undefined && { itemType: dto.itemType }),
+      ...(dto.weight !== undefined && { weight: dto.weight || null }),
+      ...(dto.weightType !== undefined && { weightType: dto.weightType || null }),
+      ...(dto.purchasePrice !== undefined && { purchasePrice: dto.purchasePrice }),
+      ...(dto.sellingPrice !== undefined && { sellingPrice: dto.sellingPrice }),
+      ...(dto.pluNo !== undefined && { pluNo: dto.pluNo || null }),
+      ...(dto.salesAccountId !== undefined && { salesAccountId: dto.salesAccountId || null }),
+      ...(dto.purchaseAccountId !== undefined && { purchaseAccountId: dto.purchaseAccountId || null }),
+      ...(dto.inventoryAccountId !== undefined && { inventoryAccountId: dto.inventoryAccountId || null }),
+      ...(dto.isPurchasable !== undefined && { isPurchasable: dto.isPurchasable }),
+      ...(dto.isSellable !== undefined && { isSellable: dto.isSellable }),
+      ...(dto.isInventoryItem !== undefined && { isInventoryItem: dto.isInventoryItem }),
+      ...(dto.isTaxable !== undefined && { isTaxable: dto.isTaxable }),
+      ...(dto.isTrackStock !== undefined && { isTrackStock: dto.isTrackStock }),
+      ...(dto.isTrackBatch !== undefined && { isTrackBatch: dto.isTrackBatch }),
+      ...(dto.isTrackSerial !== undefined && { isTrackSerial: dto.isTrackSerial }),
+      ...(dto.isManufactured !== undefined && { isManufactured: dto.isManufactured }),
+      ...(dto.isService !== undefined && { isService: dto.isService }),
+      ...(dto.isDigital !== undefined && { isDigital: dto.isDigital }),
+      ...(dto.isAsset !== undefined && { isAsset: dto.isAsset }),
+      ...(dto.isExpense !== undefined && { isExpense: dto.isExpense }),
+      ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl || null }),
+
+      ...(dto.categoryId !== undefined && { categoryId: dto.categoryId || null }),
+      ...(dto.brandId !== undefined && { brandId: dto.brandId || null }),
+
       sku: finalSku,
       gstRate: finalGstRate,
-      taxRate: finalGstRate,
       hsnCode: finalHsnCode,
-      taxCategory: finalTaxCategory,
-      taxGroupId: finalTaxGroupId,
-      taxType: finalTaxType,
+      taxPreference: finalTaxPreference,
       minStock: finalMinStock,
       maxStock: finalMaxStock,
       reorderLevel: finalReorderLevel,
@@ -277,7 +276,8 @@ export class ProductsService {
 
     return this.prisma.product.update({
       where: { id },
-      data: dataToUpdate as any,
+      data: dataToUpdate,
+      include: { category: true, brand: true, stocks: true },
     });
   }
 
@@ -287,5 +287,61 @@ export class ProductsService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+  }
+
+  async getIntelligence(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const product = await this.prisma.product.findFirst({
+      where: { id, companyId, deletedAt: null },
+      include: {
+        category: true,
+        brand: true,
+        stocks: true,
+        stockLedgers: {
+          take: 20,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    const sellingPrice = Number(product.sellingPrice || 0);
+    const purchasePrice = Number(product.purchasePrice || 0);
+    const grossProfit = sellingPrice - purchasePrice;
+    const marginPercentage = sellingPrice > 0 ? ((grossProfit / sellingPrice) * 100).toFixed(2) : '0.00';
+
+    const totalStock = product.stocks.reduce((acc, curr) => acc + Number(curr.quantity || 0), 0);
+    const availableStock = product.stocks.reduce((acc, curr) => acc + Number(curr.availableQuantity || 0), 0);
+    const reservedStock = product.stocks.reduce((acc, curr) => acc + Number(curr.reservedQuantity || 0), 0);
+
+    const reorderLevel = Number(product.reorderLevel || 0);
+    let stockStatus = 'IN_STOCK';
+    if (totalStock === 0) stockStatus = 'OUT_OF_STOCK';
+    else if (totalStock <= reorderLevel) stockStatus = 'LOW_STOCK';
+
+    return {
+      product,
+      metrics: {
+        sellingPrice,
+        purchasePrice,
+        grossProfit,
+        marginPercentage: Number(marginPercentage),
+        totalStock,
+        availableStock,
+        reservedStock,
+        reorderLevel,
+        stockStatus,
+        stockValuation: totalStock * purchasePrice,
+      },
+      warehouseStock: product.stocks,
+      recentMovements: product.stockLedgers,
+    };
   }
 }

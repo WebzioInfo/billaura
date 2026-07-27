@@ -11,9 +11,10 @@ import { DatabaseModule } from "../database/database.module";
 import { CustomerSegmentsModule } from "./customer-segments/customer-segments.module";
 import { CustomerDepartmentsModule } from "./customer-departments/customer-departments.module";
 import { SequenceModule } from "../shared/sequence/sequence.module";
+import { AccountingModule } from "../accounting/accounting.module";
 
 @Module({
-  imports: [DatabaseModule, CustomerSegmentsModule, CustomerDepartmentsModule, SequenceModule],
+  imports: [DatabaseModule, CustomerSegmentsModule, CustomerDepartmentsModule, SequenceModule, AccountingModule],
   controllers: [
     LeadsController,
     ContactsController,

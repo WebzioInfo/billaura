@@ -6,7 +6,7 @@ export const auditExtension = Prisma.defineExtension((client) => {
     name: 'audit-extension',
     query: {
       $allModels: {
-        async delete({ model, operation, args, query }) {
+        async delete({ model, operation: _operation, args, query }) {
           const companyId = CompanyContext.getCompanyId();
           const userId = CompanyContext.getUserId();
           
@@ -46,7 +46,7 @@ export const auditExtension = Prisma.defineExtension((client) => {
 
           return result;
         },
-        async deleteMany({ model, operation, args, query }) {
+        async deleteMany({ model, operation: _operation, args, query }) {
           const companyId = CompanyContext.getCompanyId();
           const userId = CompanyContext.getUserId();
           

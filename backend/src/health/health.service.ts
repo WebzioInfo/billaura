@@ -40,29 +40,31 @@ export class HealthService {
     const memUsage = process.memoryUsage();
     
     // Check Storage
-    let storageStatus = "down";
+    let storageStatus: string;
     try {
       // Just check if the bucket/local dir is configured, no need to actually write a file every ping
       // The storageService itself does this on init, but we can verify fileExists on a dummy file
       await this.storage.fileExists('health-check-dummy.tmp');
       storageStatus = "up";
-    } catch (e) {
+    } catch {
       // fileExists might throw if it can't reach S3 or if directory doesn't exist
       storageStatus = "down";
     }
 
     // Check Scheduler
-    let schedulerStatus = "down";
+    let schedulerStatus: string;
     try {
       const crons = this.schedulerRegistry.getCronJobs();
       schedulerStatus = crons.size > 0 ? "up" : "idle";
-    } catch (e) {
+    } catch {
       // getCronJobs throws if no jobs are registered
       schedulerStatus = "idle";
     }
 
     return {
       status: "up",
+      storage: storageStatus,
+      scheduler: schedulerStatus,
       environment: this.config.get("NODE_ENV") || "development",
       uptimeSeconds: Math.round(process.uptime()),
       nodeVersion: process.version,
@@ -71,8 +73,6 @@ export class HealthService {
         heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
         heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
       },
-      storage: storageStatus,
-      scheduler: schedulerStatus,
     };
   }
 

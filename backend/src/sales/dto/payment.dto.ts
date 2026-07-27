@@ -36,4 +36,20 @@ export class CreatePaymentDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  chequeNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  upiReference?: string;
+
+  @IsString()
+  @IsOptional()
+  utrNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  attachmentUrl?: string;
 }

@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ReceiptsService } from "./receipts.service";
-import { CreateReceiptDto, UpdateReceiptDto, ReceiptQueryDto } from "./dto/receipt.dto";
+import { UpdateReceiptDto, ReceiptQueryDto } from "./dto/receipt.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 

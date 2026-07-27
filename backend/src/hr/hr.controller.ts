@@ -2,17 +2,18 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
   UseGuards,
   HttpStatus,
   HttpCode,
+  Query,
 } from "@nestjs/common";
 import { HrService } from "./hr.service";
-// Removed department and designation DTOs
 import { CreateEmployeeDto } from "./dto/employee.dto";
-import { RecordAttendanceDto } from "./dto/attendance.dto";
+import { RecordAttendanceDto, BulkRecordAttendanceDto } from "./dto/attendance.dto";
 import { GenerateSalarySlipDto, PaySalarySlipDto } from "./dto/payroll.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
@@ -33,6 +34,11 @@ export class HrController {
     return this.hrService.createEmployee(dto);
   }
 
+  @Put("employees/:id")
+  async updateEmployee(@Param("id") id: string, @Body() dto: CreateEmployeeDto) {
+    return this.hrService.updateEmployee(id, dto);
+  }
+
   @Delete("employees/:id")
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeEmployee(@Param("id") id: string) {
@@ -41,8 +47,28 @@ export class HrController {
 
   // --- ATTENDANCES ---
   @Get("attendances")
-  async findAttendances() {
-    return this.hrService.findAttendances();
+  async findAttendances(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('employeeId') employeeId?: string,
+    @Query('departmentId') departmentId?: string,
+    @Query('designationId') designationId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.hrService.findAttendances({
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+      employeeId,
+      departmentId,
+      designationId,
+      startDate,
+      endDate,
+      status,
+      search,
+    });
   }
 
   @Post("attendances")
@@ -50,10 +76,26 @@ export class HrController {
     return this.hrService.recordAttendance(dto);
   }
 
-  // --- PAYROLL ---
+  @Post("attendances/bulk")
+  async bulkRecordAttendance(@Body() dto: BulkRecordAttendanceDto) {
+    return this.hrService.bulkRecordAttendance(dto);
+  }
+
   @Get('salary-slips')
-  async getSalarySlips() {
-    return this.hrService.getSalarySlips();
+  async getSalarySlips(
+    @Query('departmentId') departmentId?: string,
+    @Query('designationId') designationId?: string,
+    @Query('branchId') branchId?: string,
+    @Query('shiftId') shiftId?: string,
+    @Query('employmentTypeId') employmentTypeId?: string,
+  ) {
+    return this.hrService.getSalarySlips({
+      departmentId,
+      designationId,
+      branchId,
+      shiftId,
+      employmentTypeId,
+    });
   }
 
   @Post('salary-slips/generate')

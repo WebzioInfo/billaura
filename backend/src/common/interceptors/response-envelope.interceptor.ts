@@ -30,7 +30,7 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
             data: data.data,
             meta: {
               ...data.meta,
-              requestId: response.getHeader("x-request-id"),
+              correlationId: response.getHeader("x-request-id") || null,
             },
           };
         }
@@ -40,7 +40,7 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
           success: true,
           data,
           meta: {
-            requestId: response.getHeader("x-request-id"),
+            correlationId: response.getHeader("x-request-id") || null,
           },
         };
       }),

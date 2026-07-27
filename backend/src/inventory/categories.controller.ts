@@ -11,7 +11,8 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
-import { CategoriesService, CreateCategoryDto, UpdateCategoryDto } from "./categories.service";
+import { CategoriesService } from "./categories.service";
+import { CreateCategoryDto, UpdateCategoryDto } from "./dto/category.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 import { PaginationQueryDto } from "../common/dto/pagination-query.dto";

@@ -34,7 +34,7 @@ export class UpdateCompanyDto {
   @IsOptional()
   @MaxLength(20)
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @Matches(/^[A-Za-z0-9\s\-]{3,20}$/, { message: 'Invalid ZIP/PIN code format' })
+  @Matches(/^[A-Za-z0-9\s-]{3,20}$/, { message: 'Invalid ZIP/PIN code format' })
   pinCode?: string;
 
   @IsString()

@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoa
 import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { dialog } from '@/core/services/DialogService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/shared/components/ui';
 
@@ -33,14 +34,22 @@ export const CategoriesList = () => {
     }
   });
 
-  const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete ${name}?`)) {
+  const handleDelete = async (id: string, name: string) => {
+    const confirmed = await dialog.confirmDelete(
+      'Delete Category?',
+      `Are you sure you want to delete category "${name}"?`
+    );
+    if (confirmed) {
       deleteMutation.mutate(id);
     }
   };
 
   const handleCreate = async () => {
-    const name = window.prompt('Enter category name:');
+    const name = await dialog.prompt(
+      'New Category',
+      '',
+      'Enter category name'
+    );
     if (!name) return;
     try {
       await apiClient.post('/inventory/categories', { name });
@@ -52,7 +61,11 @@ export const CategoriesList = () => {
   };
 
   const handleEdit = async (category: any) => {
-    const name = window.prompt('Edit category name:', category.name);
+    const name = await dialog.prompt(
+      'Edit Category',
+      category.name,
+      'Enter category name'
+    );
     if (!name || name === category.name) return;
     try {
       await apiClient.patch(`/inventory/categories/${category.id}`, { name });

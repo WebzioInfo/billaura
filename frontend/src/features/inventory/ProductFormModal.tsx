@@ -16,6 +16,7 @@ import { SearchableSelect } from '../../shared/components/ui/SearchableSelect';
 import { SearchableMasterDropdown } from '../../shared/components/ui/SearchableMasterDropdown';
 import { CategoryFormModal } from '../../shared/components/ui/CategoryFormModal';
 import { BrandFormModal } from './BrandFormModal';
+import { isValidHsnOrSac } from '../../shared/utils/business-rules';
 
 const PRODUCT_TYPE_CONFIG: Record<string, any> = {
   INVENTORY: { isInventoryItem: true, isService: false, isAsset: false, isExpense: false, isDigital: false, isTrackStock: true, isPurchasable: true, isSellable: true },
@@ -38,18 +39,13 @@ const productSchema = z.object({
   categoryId: z.string().optional(),
   brandId: z.string().optional(),
   unit: z.string().min(1, 'Unit of Measure is required'),
-  taxGroupId: z.string().optional(),
   scheduleNo: z.string().optional(),
   weight: z.coerce.number().optional(),
   weightType: z.string().default('kg'),
-  taxRate: z.coerce.number().optional(),
   gstRate: z.coerce.number().optional(),
-  taxCategory: z.string().default('TAXABLE'),
-  isExempt: z.boolean().default(false),
-  isNilRated: z.boolean().default(false),
-  isNonGst: z.boolean().default(false),
-  purchasePrice: z.coerce.number().min(0, 'Purchase Price cannot be negative'),
-  sellingPrice: z.coerce.number().min(0, 'Selling Price cannot be negative'),
+  taxPreference: z.string().default('TAXABLE'),
+  purchasePrice: z.coerce.number().optional().default(0),
+  sellingPrice: z.coerce.number().optional().default(0),
   minStock: z.coerce.number().optional(),
   maxStock: z.coerce.number().optional(),
   reorderLevel: z.coerce.number().optional(),
@@ -72,18 +68,43 @@ const productSchema = z.object({
   isExpense: z.boolean().default(false),
   isActive: z.boolean().default(true),
 }).superRefine((data, ctx) => {
-  if (data.isTaxable) {
-    if (!data.taxGroupId && (!data.gstRate || data.gstRate === 0)) {
+  if (!data.categoryId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Category is required',
+      path: ['categoryId'],
+    });
+  }
+
+  if (!data.unit) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Please select a valid Base Unit',
+      path: ['unit'],
+    });
+  }
+
+  if (data.isSellable && (data.sellingPrice === undefined || data.sellingPrice < 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Selling Price is required',
+      path: ['sellingPrice'],
+    });
+  }
+
+  if (data.isPurchasable && (data.purchasePrice === undefined || data.purchasePrice < 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Purchase Price is required',
+      path: ['purchasePrice'],
+    });
+  }
+
+  if (data.isTaxable && data.taxPreference === 'TAXABLE') {
+    if (data.hsnCode && !isValidHsnOrSac(data.hsnCode, data.isService)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Tax Group is required for taxable items',
-        path: ['taxGroupId'],
-      });
-    }
-    if (!data.hsnCode) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: data.isService ? 'SAC Code is required' : 'HSN Code is required',
+        message: data.isService ? 'Invalid SAC Code format (e.g. 998311)' : 'Invalid HSN Code format (e.g. 847130)',
         path: ['hsnCode'],
       });
     }
@@ -120,93 +141,123 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     queryFn: () => api.get('/units').then(res => res.data || []),
   });
 
-  const { data: taxGroupsData = [] } = useQuery<any[]>({
-    queryKey: ['tax-groups'],
-    queryFn: () => api.get('/tax-groups').then(res => res.data || []),
-  });
+
 
   const form = useAsyncForm<ProductFormValues>(
     {
       resolver: zodResolver(productSchema) as any,
       defaultValues: {
-        name: '',
-        sku: '',
-        alias: '',
-        hsnCode: '',
-        eInvoiceHsn: '',
-        barcode: '',
+        name: product?.name || '',
+        sku: product?.sku || '',
+        alias: product?.alias || '',
+        hsnCode: product?.hsnCode || '',
+        eInvoiceHsn: product?.eInvoiceHsn || '',
+        barcode: product?.barcode || '',
         itemType: product?.itemType || 'FINISHED_GOOD',
         categoryId: product?.categoryId || product?.category?.id || '',
         brandId: product?.brandId || product?.brand?.id || '',
         unit: product?.unit || 'PCS',
-        taxGroupId: '',
-        scheduleNo: '',
-        weight: 0,
-        weightType: 'kg',
-        taxRate: 0,
-        gstRate: 0,
-        taxCategory: 'TAXABLE',
-        isExempt: false,
-        isNilRated: false,
-        isNonGst: false,
-        purchasePrice: 0,
-        sellingPrice: 0,
-        minStock: 0,
-        maxStock: 0,
-        reorderLevel: 0,
-        pluNo: '',
-        valuationMethod: 'AVERAGE',
+        scheduleNo: product?.scheduleNo || '',
+        weight: product?.weight != null ? Number(product.weight) : 0,
+        weightType: product?.weightType || 'kg',
+        gstRate: product?.gstRate != null ? Number(product.gstRate) : 0,
+        taxPreference: product?.taxPreference || 'TAXABLE',
+        purchasePrice: product?.purchasePrice != null ? Number(product.purchasePrice) : 0,
+        sellingPrice: product?.sellingPrice != null ? Number(product.sellingPrice) : 0,
+        minStock: product?.minStock != null ? Number(product.minStock) : 0,
+        maxStock: product?.maxStock != null ? Number(product.maxStock) : 0,
+        reorderLevel: product?.reorderLevel != null ? Number(product.reorderLevel) : 0,
+        pluNo: product?.pluNo || '',
+        valuationMethod: product?.valuationMethod || 'AVERAGE',
+        salesAccountId: product?.salesAccountId || '',
+        purchaseAccountId: product?.purchaseAccountId || '',
+        inventoryAccountId: product?.inventoryAccountId || '',
         isPurchasable: product?.isPurchasable ?? true,
         isSellable: product?.isSellable ?? true,
         isInventoryItem: product?.isInventoryItem ?? true,
         isTaxable: product?.isTaxable ?? true,
         isTrackStock: product?.isTrackStock ?? true,
-        isTrackBatch: product?.isTrackBatch ?? false,
-        isTrackSerial: product?.isTrackSerial ?? false,
-        isManufactured: product?.isManufactured ?? false,
-        isService: product?.isService ?? false,
-        isDigital: product?.isDigital ?? false,
-        isAsset: product?.isAsset ?? false,
-        isExpense: product?.isExpense ?? false,
+        isTrackBatch: Boolean(product?.isTrackBatch),
+        isTrackSerial: Boolean(product?.isTrackSerial),
+        isManufactured: Boolean(product?.isManufactured),
+        isService: Boolean(product?.isService),
+        isDigital: Boolean(product?.isDigital),
+        isAsset: Boolean(product?.isAsset),
+        isExpense: Boolean(product?.isExpense),
         isActive: product?.isActive ?? true,
       }
     },
     product,
     (data: any) => ({
-      ...data
+      name: data?.name || '',
+      sku: data?.sku || '',
+      alias: data?.alias || '',
+      hsnCode: data?.hsnCode || '',
+      eInvoiceHsn: data?.eInvoiceHsn || '',
+      barcode: data?.barcode || '',
+      itemType: data?.itemType || 'FINISHED_GOOD',
+      categoryId: data?.categoryId || data?.category?.id || '',
+      brandId: data?.brandId || data?.brand?.id || '',
+      unit: data?.unit || 'PCS',
+      scheduleNo: data?.scheduleNo || '',
+      weight: data?.weight != null ? Number(data.weight) : 0,
+      weightType: data?.weightType || 'kg',
+      gstRate: data?.gstRate != null ? Number(data.gstRate) : 0,
+      taxPreference: data?.taxPreference || 'TAXABLE',
+      purchasePrice: data?.purchasePrice != null ? Number(data.purchasePrice) : 0,
+      sellingPrice: data?.sellingPrice != null ? Number(data.sellingPrice) : 0,
+      minStock: data?.minStock != null ? Number(data.minStock) : 0,
+      maxStock: data?.maxStock != null ? Number(data.maxStock) : 0,
+      reorderLevel: data?.reorderLevel != null ? Number(data.reorderLevel) : 0,
+      pluNo: data?.pluNo || '',
+      valuationMethod: data?.valuationMethod || 'AVERAGE',
+      salesAccountId: data?.salesAccountId || '',
+      purchaseAccountId: data?.purchaseAccountId || '',
+      inventoryAccountId: data?.inventoryAccountId || '',
+      isPurchasable: data?.isPurchasable ?? true,
+      isSellable: data?.isSellable ?? true,
+      isInventoryItem: data?.isInventoryItem ?? true,
+      isTaxable: data?.isTaxable ?? true,
+      isTrackStock: data?.isTrackStock ?? true,
+      isTrackBatch: Boolean(data?.isTrackBatch),
+      isTrackSerial: Boolean(data?.isTrackSerial),
+      isManufactured: Boolean(data?.isManufactured),
+      isService: Boolean(data?.isService),
+      isDigital: Boolean(data?.isDigital),
+      isAsset: Boolean(data?.isAsset),
+      isExpense: Boolean(data?.isExpense),
+      isActive: data?.isActive ?? true,
     })
   );
 
   const { register, handleFormSubmit, setValue, setError, formState: { errors }, watch, control } = form;
 
-  const watchedTaxGroupId = watch('taxGroupId');
+  const isPurchasable = watch('isPurchasable');
+  const isSellable = watch('isSellable');
   const isInventoryItem = watch('isInventoryItem');
+  const isTrackStock = watch('isTrackStock');
   const isTaxable = watch('isTaxable');
   const isService = watch('isService');
+  const itemType = watch('itemType');
+  const taxPreference = watch('taxPreference');
 
   const purchasePrice = watch('purchasePrice') || 0;
   const sellingPrice = watch('sellingPrice') || 0;
 
   useEffect(() => {
-    if (watchedTaxGroupId && taxGroupsData.length > 0) {
-      const selectedTaxGroup = taxGroupsData.find(t => t.id === watchedTaxGroupId);
-      if (selectedTaxGroup && setValue) {
-        setValue('gstRate', selectedTaxGroup.totalRate, { shouldValidate: true, shouldDirty: true });
-        setValue('taxRate', selectedTaxGroup.totalRate, { shouldValidate: true, shouldDirty: true });
-      }
-    }
-  }, [watchedTaxGroupId, taxGroupsData, setValue]);
-
-  useEffect(() => {
     if (!isTaxable) {
       setValue('hsnCode', '', { shouldValidate: true, shouldDirty: true });
       setValue('eInvoiceHsn', '', { shouldValidate: true, shouldDirty: true });
-      setValue('taxGroupId', '', { shouldValidate: true, shouldDirty: true });
       setValue('gstRate', 0, { shouldValidate: true, shouldDirty: true });
-      setValue('taxRate', 0, { shouldValidate: true, shouldDirty: true });
-      setValue('taxCategory', 'NON_GST', { shouldValidate: true, shouldDirty: true });
+      setValue('taxPreference', 'NON_GST', { shouldValidate: true, shouldDirty: true });
     }
   }, [isTaxable, setValue]);
+
+  useEffect(() => {
+    if (taxPreference === 'EXEMPT' || taxPreference === 'NIL_RATED' || taxPreference === 'NON_GST') {
+      setValue('gstRate', 0, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [taxPreference, setValue]);
 
   const handleItemTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -223,17 +274,17 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
       const firstError = Object.keys(errors)[0];
-      const generalFields = ['name', 'sku', 'alias', 'barcode', 'itemType', 'category', 'brand', 'unit'];
+      const generalFields = ['name', 'sku', 'alias', 'barcode', 'itemType', 'categoryId', 'brandId', 'unit'];
       const inventoryFields = ['minStock', 'maxStock', 'reorderLevel', 'valuationMethod', 'salesAccountId', 'purchaseAccountId', 'inventoryAccountId'];
       const ratesFields = ['sellingPrice', 'purchasePrice'];
-      const complianceFields = ['hsnCode', 'eInvoiceHsn', 'taxGroupId', 'gstRate', 'taxCategory'];
+      const complianceFields = ['hsnCode', 'eInvoiceHsn', 'gstRate', 'taxPreference'];
 
       if (generalFields.includes(firstError)) setActiveTab('general');
-      else if (inventoryFields.includes(firstError) && isInventoryItem) setActiveTab('inventory');
+      else if (inventoryFields.includes(firstError)) setActiveTab('inventory');
       else if (ratesFields.includes(firstError)) setActiveTab('rates');
-      else if (complianceFields.includes(firstError) && isTaxable) setActiveTab('compliance');
+      else if (complianceFields.includes(firstError)) setActiveTab('compliance');
     }
-  }, [errors, isInventoryItem, isTaxable]);
+  }, [errors]);
 
   const onSubmit = async (data: ProductFormValues) => {
     setIsLoading(true);
@@ -243,7 +294,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
       };
 
       if (product?.id) {
-        await api.put(`/products/${product.id}`, payload);
+        await api.patch(`/products/${product.id}`, payload);
         notification.success('Product updated successfully');
       } else {
         await api.post('/products', payload);
@@ -295,8 +346,8 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
           ))}
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-          <form id="productForm" onSubmit={handleFormSubmit(onSubmit)} noValidate className="space-y-8">
+        <form id="productForm" onSubmit={handleFormSubmit(onSubmit)} noValidate className="flex flex-col flex-1 overflow-hidden">
+          <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-8">
             
             <div className={activeTab === 'general' ? 'block' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -378,7 +429,14 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                             onChange={(val) => field.onChange(val)}
                             error={errors.unit?.message as string}
                             options={units}
-                            mapOption={(u) => ({ label: `${u.name} (${u.code})`, value: u.code })}
+                            mapOption={(u: any) => {
+                              const symbol = u.abbreviation || u.symbol || u.code || u.id;
+                              const label = symbol && symbol !== u.name ? `${u.name} (${symbol})` : u.name;
+                              return {
+                                label: u.category ? `[${u.category}] ${label}` : label,
+                                value: u.code || u.id || u.name,
+                              };
+                            }}
                             placeholder="Select Unit..."
                           />
                         )}
@@ -386,26 +444,116 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                     </div>
                   </div>
 
-                  <div className="bg-muted/30 p-5 rounded-2xl border border-border">
-                    <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-purple-500" /> Configuration</h3>
-                    <div className="grid grid-cols-2 gap-3 opacity-70 pointer-events-none">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={watch('isPurchasable')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Purchasable
+                  {/* Configuration Section */}
+                  <div className="bg-muted/30 p-5 rounded-2xl border border-border space-y-3">
+                    <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-purple-500" /> Configuration
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className="flex flex-col p-3 bg-card hover:bg-muted/50 border border-border rounded-xl cursor-pointer transition-all">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!isPurchasable}
+                            onChange={(e) => setValue('isPurchasable', e.target.checked)}
+                            className="w-4 h-4 text-accent border-border rounded focus:ring-accent"
+                          />
+                          <span className="text-xs font-bold text-foreground">Purchasable</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground mt-1 ml-6">
+                          This product can be purchased from suppliers.
+                        </span>
                       </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={watch('isSellable')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Sellable
+
+                      <label className="flex flex-col p-3 bg-card hover:bg-muted/50 border border-border rounded-xl cursor-pointer transition-all">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!isSellable}
+                            onChange={(e) => setValue('isSellable', e.target.checked)}
+                            className="w-4 h-4 text-accent border-border rounded focus:ring-accent"
+                          />
+                          <span className="text-xs font-bold text-foreground">Sellable</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground mt-1 ml-6">
+                          This product can be sold to customers.
+                        </span>
                       </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={watch('isInventoryItem')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Inventory Item
+
+                      <label className="flex flex-col p-3 bg-card hover:bg-muted/50 border border-border rounded-xl cursor-pointer transition-all">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!isInventoryItem}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setValue('isInventoryItem', checked);
+                              if (!checked) {
+                                setValue('isTrackStock', false);
+                              }
+                            }}
+                            disabled={isService}
+                            className="w-4 h-4 text-accent border-border rounded focus:ring-accent disabled:opacity-50"
+                          />
+                          <span className="text-xs font-bold text-foreground">Inventory Item</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground mt-1 ml-6">
+                          This product is physically stocked.
+                        </span>
                       </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" {...register('isTaxable')} className="w-4 h-4 text-accent border-border rounded focus:ring-accent pointer-events-auto" /> Taxable
+
+                      <label className={`flex flex-col p-3 bg-card hover:bg-muted/50 border border-border rounded-xl cursor-pointer transition-all ${!isInventoryItem ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!isTrackStock && !!isInventoryItem}
+                            disabled={!isInventoryItem}
+                            onChange={(e) => setValue('isTrackStock', e.target.checked)}
+                            className="w-4 h-4 text-accent border-border rounded focus:ring-accent"
+                          />
+                          <span className="text-xs font-bold text-foreground">Track Stock</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground mt-1 ml-6">
+                          Maintain inventory quantity and valuation.
+                        </span>
                       </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={watch('isTrackStock')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Track Stock
+
+                      <label className="flex flex-col p-3 bg-card hover:bg-muted/50 border border-border rounded-xl cursor-pointer transition-all">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!isTaxable}
+                            onChange={(e) => setValue('isTaxable', e.target.checked)}
+                            className="w-4 h-4 text-accent border-border rounded focus:ring-accent"
+                          />
+                          <span className="text-xs font-bold text-foreground">Taxable</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground mt-1 ml-6">
+                          GST / VAT applies to this item.
+                        </span>
                       </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={watch('isService')} readOnly className="w-4 h-4 text-accent border-border rounded focus:ring-accent" /> Service
+
+                      <label className="flex flex-col p-3 bg-card hover:bg-muted/50 border border-border rounded-xl cursor-pointer transition-all">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!isService}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setValue('isService', checked);
+                              if (checked) {
+                                setValue('isInventoryItem', false);
+                                setValue('isTrackStock', false);
+                              }
+                            }}
+                            className="w-4 h-4 text-accent border-border rounded focus:ring-accent"
+                          />
+                          <span className="text-xs font-bold text-foreground">Service / Non-Stock</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground mt-1 ml-6">
+                          Non-stock service item (Testing, Consulting, Course).
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -413,6 +561,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
               </div>
             </div>
 
+            {/* Inventory Tab */}
             <div className={activeTab === 'inventory' ? 'block' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
@@ -478,14 +627,132 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
               </div>
             </div>
 
+            {/* Rates & Pricing Engine Tab */}
             <div className={activeTab === 'rates' ? 'block' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Dynamic Pricing Inputs based on Item Type & Configuration */}
                 <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><IndianRupee className="w-4 h-4 text-green-500" /> Pricing</h3>
-                  <Input type="number" step="0.01" label="Purchase Rate / Cost Price" {...register('purchasePrice')} error={errors.purchasePrice?.message as string} />
-                  <Input type="number" step="0.01" label="Sales Rate / Selling Price" {...register('sellingPrice')} error={errors.sellingPrice?.message as string} />
+                  <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
+                    <IndianRupee className="w-4 h-4 text-green-500" /> 
+                    {isService || itemType === 'SERVICE'
+                      ? 'Service Pricing'
+                      : itemType === 'WATER_TESTING'
+                      ? 'Water Testing Charges'
+                      : itemType === 'COURSE'
+                      ? 'Course Fee Structure'
+                      : itemType === 'DIGITAL'
+                      ? 'Digital License Pricing'
+                      : !isSellable && isPurchasable
+                      ? 'Purchase & Supplier Costing'
+                      : 'Product Pricing'}
+                  </h3>
+
+                  {/* Physical Trading Product / General Product */}
+                  {(!isService && itemType !== 'SERVICE' && itemType !== 'WATER_TESTING' && itemType !== 'COURSE' && itemType !== 'DIGITAL') && (
+                    <>
+                      {isPurchasable && (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          label="Purchase Rate / Cost Price (₹)"
+                          {...register('purchasePrice')}
+                          error={errors.purchasePrice?.message as string}
+                        />
+                      )}
+                      {isSellable && (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          label="Sales Rate / Selling Price (₹)"
+                          {...register('sellingPrice')}
+                          error={errors.sellingPrice?.message as string}
+                        />
+                      )}
+                    </>
+                  )}
+
+                  {/* Service Item */}
+                  {(isService || itemType === 'SERVICE') && (
+                    <>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        label="Service Fee / Rate (₹)"
+                        {...register('sellingPrice')}
+                        error={errors.sellingPrice?.message as string}
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        label="Estimated Operational Cost (₹)"
+                        {...register('purchasePrice')}
+                        error={errors.purchasePrice?.message as string}
+                      />
+                    </>
+                  )}
+
+                  {/* Water Testing */}
+                  {itemType === 'WATER_TESTING' && (
+                    <>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        label="Water Sample Test Charge (₹)"
+                        {...register('sellingPrice')}
+                        error={errors.sellingPrice?.message as string}
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        label="Lab Processing Cost (₹)"
+                        {...register('purchasePrice')}
+                        error={errors.purchasePrice?.message as string}
+                      />
+                    </>
+                  )}
+
+                  {/* Course / Education */}
+                  {itemType === 'COURSE' && (
+                    <>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        label="Course Fee / Tuition Fee (₹)"
+                        {...register('sellingPrice')}
+                        error={errors.sellingPrice?.message as string}
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        label="Instructor & Material Cost (₹)"
+                        {...register('purchasePrice')}
+                        error={errors.purchasePrice?.message as string}
+                      />
+                    </>
+                  )}
+
+                  {/* Digital Product */}
+                  {itemType === 'DIGITAL' && (
+                    <>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        label="License / Subscription Price (₹)"
+                        {...register('sellingPrice')}
+                        error={errors.sellingPrice?.message as string}
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        label="Hosting / Licensing Cost (₹)"
+                        {...register('purchasePrice')}
+                        error={errors.purchasePrice?.message as string}
+                      />
+                    </>
+                  )}
                 </div>
                 
+                {/* Live Margin & Profitability Display */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">Margin & Profitability</h3>
                   <div className="bg-muted/30 p-6 rounded-2xl border border-border grid grid-cols-2 gap-4">
@@ -520,35 +787,22 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                     <Input label={isService ? "SAC Code" : "HSN Code"} {...register('hsnCode')} error={errors.hsnCode?.message as string} />
                     <Input label="E-Invoice HSN" {...register('eInvoiceHsn')} error={errors.eInvoiceHsn?.message as string} />
                   </div>
-                  <Controller
-                    control={control}
-                    name="taxGroupId"
-                    render={({ field }) => (
-                      <SearchableSelect
-                        label="Tax Group (%)"
-                        value={field.value || ''}
-                        onChange={(val) => field.onChange(val)}
-                        error={errors.taxGroupId?.message as string}
-                        options={taxGroupsData}
-                        mapOption={(t) => ({ label: `${t.name} (${t.totalRate}%)`, value: t.id })}
-                        placeholder="Select Tax Group..."
-                      />
-                    )}
-                  />
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        label="GST Rate (%)" 
-                        {...register('gstRate')} 
-                        readOnly 
-                        className="bg-muted cursor-not-allowed opacity-70"
-                        error={errors.gstRate?.message as string} 
-                      />
-                      <p className="text-[10px] text-muted-foreground mt-1">Automatically derived from Tax Group</p>
-                    </div>
-                    <Select label="Tax Preference" {...register('taxCategory')} error={errors.taxCategory?.message as string} options={[
+                    <Select 
+                      label="GST Rate (%)" 
+                      {...register('gstRate')} 
+                      error={errors.gstRate?.message as string} 
+                      disabled={taxPreference === 'EXEMPT' || taxPreference === 'NIL_RATED' || taxPreference === 'NON_GST'}
+                      options={[
+                        { label: '0%', value: 0 },
+                        { label: '3%', value: 3 },
+                        { label: '5%', value: 5 },
+                        { label: '12%', value: 12 },
+                        { label: '18%', value: 18 },
+                        { label: '28%', value: 28 },
+                      ]} 
+                    />
+                    <Select label="Tax Preference" {...register('taxPreference')} error={errors.taxPreference?.message as string} options={[
                       { label: 'Taxable', value: 'TAXABLE' },
                       { label: 'Exempt', value: 'EXEMPT' },
                       { label: 'Nil Rated', value: 'NIL_RATED' },
@@ -558,25 +812,24 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                 </div>
               </div>
             </div>
-
-          </form>
-        </div>
-
-        <div className="p-6 border-t border-border bg-muted/10 flex justify-between items-center">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" {...register('isActive')} className="w-4 h-4 text-accent border-border rounded focus:ring-accent" />
-            <span className="text-sm font-semibold text-foreground">Active Item</span>
-          </label>
-          <div className="flex gap-3">
-            <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-border text-foreground font-semibold hover:bg-muted transition-colors cursor-pointer">
-              Cancel
-            </button>
-            <button form="productForm" type="submit" disabled={isLoading} className="px-6 py-2.5 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 cursor-pointer disabled:opacity-50">
-              {isLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
-              {product ? 'Update Product' : 'Save Product'}
-            </button>
           </div>
-        </div>
+
+          <div className="p-6 border-t border-border bg-muted/10 flex justify-between items-center">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" {...register('isActive')} className="w-4 h-4 text-accent border-border rounded focus:ring-accent" />
+              <span className="text-sm font-semibold text-foreground">Active Item</span>
+            </label>
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl border border-border text-foreground font-semibold hover:bg-muted transition-colors cursor-pointer">
+                Cancel
+              </button>
+              <button type="submit" disabled={isLoading} className="px-6 py-2.5 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 cursor-pointer disabled:opacity-50">
+                {isLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
+                {product ? 'Update Product' : 'Save Product'}
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
 
       <CategoryFormModal 

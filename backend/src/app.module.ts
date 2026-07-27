@@ -31,8 +31,9 @@ import { StorageModule } from "./storage/storage.module";
 import { FinanceModule } from "./finance/finance.module";
 import { UsersModule } from "./users/users.module";
 
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { ApiLoggerInterceptor } from './logging/api-logger.interceptor';
 
 import { DocumentTemplatesModule } from "./settings/document-templates/document-templates.module";
 import { CommissionsModule } from './commissions/commissions.module';
@@ -81,6 +82,10 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ApiLoggerInterceptor,
     },
   ],
 })

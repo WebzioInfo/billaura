@@ -853,4 +853,39 @@ export class AccountsService {
       netCashFlow: (operatingInflow - operatingOutflow) + (investingInflow - investingOutflow) + (financingInflow - financingOutflow),
     };
   }
+
+  async getTree() {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+    await this.ensureDefaultChartOfAccounts(companyId);
+
+    const accounts = await this.prisma.account.findMany({
+      where: { companyId },
+      orderBy: { name: 'asc' },
+    });
+
+    const accountMap = new Map<string, any>();
+    accounts.forEach(acc => {
+      accountMap.set(acc.id, { ...acc, children: [] });
+    });
+
+    const tree: any[] = [];
+    accounts.forEach(acc => {
+      const mapped = accountMap.get(acc.id);
+      if (acc.parentId) {
+        const parent = accountMap.get(acc.parentId);
+        if (parent) {
+          parent.children.push(mapped);
+        } else {
+          tree.push(mapped);
+        }
+      } else {
+        tree.push(mapped);
+      }
+    });
+
+    return tree;
+  }
 }

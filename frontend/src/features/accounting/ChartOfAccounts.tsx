@@ -132,7 +132,19 @@ export const ChartOfAccounts = () => {
     {
       accessorKey: 'name',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Account Name" />,
-      cell: ({ row }) => <span className="font-medium text-foreground">{row.getValue('name')}</span>,
+      cell: ({ row }) => {
+        const depth = (row.original as any).depth || 0;
+        const isGroup = (row.original as any).isGroup;
+        return (
+          <span 
+            className={`${isGroup ? 'font-bold text-foreground' : 'font-medium text-muted-foreground/90'} flex items-center gap-1.5`}
+            style={{ paddingLeft: `${depth * 16}px` }}
+          >
+            <span className="text-xs opacity-75">{isGroup ? '📁' : '📄'}</span>
+            {row.getValue('name')}
+          </span>
+        );
+      },
     },
     {
       accessorKey: 'category',
@@ -199,20 +211,40 @@ export const ChartOfAccounts = () => {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 });
   const [globalFilter, setGlobalFilter] = useState('');
 
-  const { data: accountsData, meta: accountsMeta, isLoading: isLoadingAccounts } = useApiList<Account>(
-    ['accounts', String(pagination.pageIndex), String(pagination.pageSize), globalFilter],
-    '/accounts',
-    { 
-      page: pagination.pageIndex + 1, 
-      limit: pagination.pageSize,
-      search: globalFilter || undefined
+  const flattenTree = (nodes: any[], depth = 0): any[] => {
+    const list: any[] = [];
+    nodes.forEach(node => {
+      list.push({ ...node, depth });
+      if (node.children && node.children.length > 0) {
+        list.push(...flattenTree(node.children, depth + 1));
+      }
+    });
+    return list;
+  };
+
+  const { data: treeData, isLoading: isLoadingAccounts, refetch: refetchTree } = useQuery({
+    queryKey: ['accounts-tree', globalFilter],
+    queryFn: async () => {
+      const res = await api.get<any>('/accounts/tree');
+      const data = res.data || res || [];
+      return flattenTree(data);
     },
-    { enabled: activeTab === 'coa' || activeTab === 'journal' }
-  );
-  
+    enabled: activeTab === 'coa' || activeTab === 'journal'
+  });
+
   useEffect(() => {
-    if (accountsData) setAccounts(accountsData);
-  }, [accountsData]);
+    if (treeData) {
+      if (globalFilter) {
+        setAccounts(
+          treeData.filter((acc: any) =>
+            acc.name.toLowerCase().includes(globalFilter.toLowerCase())
+          )
+        );
+      } else {
+        setAccounts(treeData);
+      }
+    }
+  }, [treeData, globalFilter]);
 
   const { data: journalEntriesData, isLoading: isLoadingJournal } = useQuery({
     queryKey: ['journal-entries'],
@@ -473,13 +505,6 @@ export const ChartOfAccounts = () => {
               columns={accountColumns} 
               data={accounts} 
               exportFilename="chart_of_accounts" 
-              manualPagination
-              manualFiltering
-              pageCount={accountsMeta?.totalPages || 0}
-              pagination={pagination}
-              onPaginationChange={setPagination}
-              globalFilter={globalFilter}
-              onGlobalFilterChange={setGlobalFilter}
             />
           </div>
         </div>

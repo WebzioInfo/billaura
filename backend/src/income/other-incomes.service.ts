@@ -16,6 +16,7 @@ export class OtherIncomesService {
         bankAccount: true,
         branch: true,
         employee: true,
+        department: true,
       },
       orderBy: { date: 'desc' },
     });
@@ -32,6 +33,7 @@ export class OtherIncomesService {
         bankAccount: true,
         branch: true,
         employee: true,
+        department: true,
       },
     });
     if (!income) {
@@ -136,21 +138,22 @@ export class OtherIncomesService {
         accountId: income.category.accountId,
         credit: revenueCredit,
         debit: 0,
+        departmentId: income.departmentId || undefined,
       }
     ];
 
     // 2. Credit the Output GST accounts (taxTotal)
     if (Number(income.cgstAmount) > 0) {
       const cgstAccount = await this.getSystemAccount(tx, income.companyId, 'Output CGST');
-      lines.push({ accountId: cgstAccount.id, credit: Number(income.cgstAmount), debit: 0 });
+      lines.push({ accountId: cgstAccount.id, credit: Number(income.cgstAmount), debit: 0, departmentId: income.departmentId || undefined });
     }
     if (Number(income.sgstAmount) > 0) {
       const sgstAccount = await this.getSystemAccount(tx, income.companyId, 'Output SGST');
-      lines.push({ accountId: sgstAccount.id, credit: Number(income.sgstAmount), debit: 0 });
+      lines.push({ accountId: sgstAccount.id, credit: Number(income.sgstAmount), debit: 0, departmentId: income.departmentId || undefined });
     }
     if (Number(income.igstAmount) > 0) {
       const igstAccount = await this.getSystemAccount(tx, income.companyId, 'Output IGST');
-      lines.push({ accountId: igstAccount.id, credit: Number(income.igstAmount), debit: 0 });
+      lines.push({ accountId: igstAccount.id, credit: Number(income.igstAmount), debit: 0, departmentId: income.departmentId || undefined });
     }
 
     // 3. Debit the Bank/Cash account (grandTotal)
@@ -160,8 +163,6 @@ export class OtherIncomesService {
       assetAccountId = cashAccount.id;
     } else {
       if (!income.bankAccountId) throw new BadRequestException('Bank account is required for bank payments');
-      // We need to find the GL account mapped to this bank account.
-      // Usually, Billaura BankAccount has a name which matches an Account. Let's find it.
       const bankAccount = await tx.account.findFirst({
         where: { companyId: income.companyId, name: income.bankAccount.name }
       });
@@ -173,6 +174,7 @@ export class OtherIncomesService {
       accountId: assetAccountId,
       debit: Number(income.grandTotal),
       credit: 0,
+      departmentId: income.departmentId || undefined,
     });
 
     // 4. Create the Journal Entry

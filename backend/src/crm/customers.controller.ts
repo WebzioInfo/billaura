@@ -16,11 +16,16 @@ import { TenantGuard } from "../common/guards/tenant.guard";
 import { PrismaService } from "../database/prisma.service";
 import { CompanyContext } from "../common/context/company-context";
 import { SequenceService } from "../shared/sequence/sequence.service";
+import { AccountingEngineService } from "../accounting/accounting-engine.service";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller("customers")
 export class CustomersController {
-  constructor(private prisma: PrismaService, private sequenceService: SequenceService) {}
+  constructor(
+    private prisma: PrismaService, 
+    private sequenceService: SequenceService,
+    private accountingEngine: AccountingEngineService
+  ) {}
 
   @Get()
   async findAll(@Query("search") search: string) {
@@ -160,7 +165,9 @@ export class CustomersController {
       gstin,
       gstNumber,
       panNumber,
+      gstRegistrationStatus,
       customerType,
+      taxPreference,
       tradeName,
       address,
       pinCode,
@@ -170,6 +177,15 @@ export class CustomersController {
       creditLimit,
       customerSegmentId,
       customerDepartmentId,
+      openingBalanceType,
+      openingBalanceAmount,
+      openingBalanceDate,
+      migrationReferenceNo,
+      migrationNotes,
+      previousSoftware,
+      previousLedgerCode,
+      isMigrated,
+      historicalInvoices,
     } = data;
     const finalGstin = gstin || gstNumber;
     if (finalGstin) {
@@ -199,7 +215,9 @@ export class CustomersController {
         email,
         gstin: gstin || gstNumber,
         panNumber,
-        customerType: customerType || "UNREGISTERED",
+        gstRegistrationStatus: gstRegistrationStatus || (['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT'].includes(customerType) ? customerType : "UNREGISTERED"),
+        customerType: ['B2B', 'B2C', 'GOVERNMENT', 'EXPORT'].includes(customerType) ? customerType : "B2B",
+        taxPreference: taxPreference || "TAXABLE",
         tradeName,
         address,
         pinCode,
@@ -210,8 +228,72 @@ export class CustomersController {
         customerSegmentId,
         customerDepartmentId,
         companyId,
+        openingBalanceType: openingBalanceType || 'NONE',
+        openingBalanceAmount: openingBalanceAmount ? Number(openingBalanceAmount) : 0,
+        openingBalanceDate: openingBalanceDate ? new Date(openingBalanceDate) : null,
+        migrationReferenceNo,
+        migrationNotes,
+        previousSoftware,
+        previousLedgerCode,
+        isMigrated: isMigrated === true,
       },
     });
+
+    if (item.openingBalanceType !== 'NONE' && Number(item.openingBalanceAmount) > 0) {
+      await this.prisma.$transaction(async (tx) => {
+        let arAccount = await tx.account.findFirst({ where: { companyId, name: 'Accounts Receivable' } });
+        if (!arAccount) {
+          arAccount = await tx.account.create({ data: { companyId, name: 'Accounts Receivable', category: 'ASSET', balance: 0 } });
+        }
+        let obAccount = await tx.account.findFirst({ where: { companyId, name: 'Opening Balance Equity' } });
+        if (!obAccount) {
+          obAccount = await tx.account.create({ data: { companyId, name: 'Opening Balance Equity', category: 'EQUITY', balance: 0 } });
+        }
+
+        let debit = 0;
+        let credit = 0;
+        const amount = Number(item.openingBalanceAmount);
+
+        if (item.openingBalanceType === 'RECEIVABLE' || item.openingBalanceType === 'DEBIT_BALANCE') {
+          debit = amount;
+        } else if (item.openingBalanceType === 'ADVANCE_RECEIVED' || item.openingBalanceType === 'CREDIT_BALANCE') {
+          credit = amount;
+        } else if (item.openingBalanceType === 'ON_ACCOUNT') {
+          debit = amount; // Assuming default to debit for customers
+        }
+
+        if (debit > 0 || credit > 0) {
+          await this.accountingEngine.postTransaction({
+            companyId,
+            date: item.openingBalanceDate || new Date(),
+            reference: item.migrationReferenceNo || `OB-${item.bpCode}`,
+            description: `Opening Balance for ${item.name}`,
+            lines: [
+              { accountId: arAccount.id, debit: debit > 0 ? debit : 0, credit: credit > 0 ? credit : 0 },
+              { accountId: obAccount.id, debit: credit > 0 ? credit : 0, credit: debit > 0 ? debit : 0 },
+            ]
+          }, tx);
+        }
+      });
+    }
+
+    if (historicalInvoices && Array.isArray(historicalInvoices) && historicalInvoices.length > 0) {
+      await this.prisma.historicalInvoice.createMany({
+        data: historicalInvoices.map((inv: any) => ({
+          companyId,
+          businessPartnerId: item.id,
+          invoiceNo: inv.invoiceNo,
+          date: new Date(inv.date),
+          dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+          totalAmount: Number(inv.totalAmount),
+          amountPaid: Number(inv.amountPaid || 0),
+          status: inv.status || 'UNPAID',
+          reference: inv.reference,
+          remarks: inv.remarks,
+        }))
+      });
+    }
+
     return { success: true, data: item, id: item.id };
   }
 
@@ -227,7 +309,9 @@ export class CustomersController {
       gstin,
       gstNumber,
       panNumber,
+      gstRegistrationStatus,
       customerType,
+      taxPreference,
       tradeName,
       address,
       pinCode,
@@ -273,7 +357,15 @@ export class CustomersController {
     }
 
     if (panNumber !== undefined) updateData.panNumber = panNumber;
-    if (customerType !== undefined) updateData.customerType = customerType;
+    if (gstRegistrationStatus !== undefined) updateData.gstRegistrationStatus = gstRegistrationStatus;
+    if (customerType !== undefined) {
+      if (['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT'].includes(customerType)) {
+        updateData.gstRegistrationStatus = customerType;
+      } else if (['B2B', 'B2C', 'GOVERNMENT', 'EXPORT'].includes(customerType)) {
+        updateData.customerType = customerType;
+      }
+    }
+    if (taxPreference !== undefined) updateData.taxPreference = taxPreference;
     if (tradeName !== undefined) updateData.tradeName = tradeName;
     if (address !== undefined) updateData.address = address;
     if (pinCode !== undefined) updateData.pinCode = pinCode;

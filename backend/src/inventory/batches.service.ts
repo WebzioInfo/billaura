@@ -40,7 +40,7 @@ export class BatchesService {
   }
 
   async update(id: string, data: any) {
-    const companyId = CompanyContext.getCompanyId();
+    const _companyId = CompanyContext.getCompanyId();
     const batch = await this.findOne(id);
     return this.prisma.inventoryBatch.update({
       where: { id: batch.id },
@@ -49,7 +49,7 @@ export class BatchesService {
   }
 
   async remove(id: string) {
-    const companyId = CompanyContext.getCompanyId();
+    const _companyId = CompanyContext.getCompanyId();
     const batch = await this.findOne(id);
     return this.prisma.inventoryBatch.delete({
       where: { id: batch.id },

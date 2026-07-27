@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, History, Calendar, User, Activity, FileText } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import apiClient from '@/core/api';
+import { dialog } from '@/core/services/DialogService';
 
 export const AuditLogsSettings = () => {
   const [page, setPage] = useState(1);
@@ -106,7 +107,7 @@ export const AuditLogsSettings = () => {
                     </td>
                     <td className="px-4 py-3">
                       <button 
-                        onClick={() => alert(JSON.stringify({before: row.oldValues, after: row.newValues}, null, 2))}
+                        onClick={() => dialog.alert('Audit Log Payload Details', JSON.stringify({before: row.oldValues, after: row.newValues}, null, 2))}
                         className="text-xs font-semibold text-accent hover:underline cursor-pointer bg-accent/10 px-2 py-1 rounded"
                       >
                         View

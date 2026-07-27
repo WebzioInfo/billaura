@@ -38,7 +38,7 @@ export class BackupService {
       try {
         await this.prisma.$queryRaw`SELECT 1`;
         this.consecutiveFailures = 0; // Reset counter on successful ping
-      } catch (dbError) {
+      } catch {
         this.consecutiveFailures++;
         if (this.consecutiveFailures <= 1 || this.consecutiveFailures % 30 === 0) {
           this.logger.warn(`Database unreachable. Pausing backup scheduler. (Failures: ${this.consecutiveFailures})`);

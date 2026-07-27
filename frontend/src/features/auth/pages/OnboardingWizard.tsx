@@ -42,7 +42,17 @@ export const OnboardingWizard = () => {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentStep(user.onboardingStep as Step);
     }
-  }, [user]);
+
+    // Redirect to dashboard if manually accessed when already completed
+    if (user?.onboardingStep === 'COMPLETED') {
+      const timer = setTimeout(() => {
+        navigate('/dashboard');
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+
+    return undefined;
+  }, [user, navigate]);
 
   // Form hooks
   const businessForm = useForm({ resolver: zodResolver(businessSchema) });
@@ -50,7 +60,7 @@ export const OnboardingWizard = () => {
   const branchForm = useForm({
     resolver: zodResolver(branchSchema),
     defaultValues: {
-      currency: 'USD',
+      currency: 'INR',
       fiscalYearStart: '2026-04-01',
       fiscalYearEnd: '2027-03-31',
       branchName: 'Headquarters',
@@ -151,7 +161,7 @@ export const OnboardingWizard = () => {
           return (
             <div key={s.step} className="flex items-center gap-2">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${isDone ? 'bg-indigo-600 text-white' :
-                  isActive ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-400'
+                isActive ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-400'
                 }`}>
                 {isDone ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
               </div>

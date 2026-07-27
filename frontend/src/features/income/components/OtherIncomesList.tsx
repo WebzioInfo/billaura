@@ -6,6 +6,7 @@ import { OtherIncomeFormModal } from './OtherIncomeFormModal';
 import { apiClient as api } from '../../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
+import { dialog } from '@/core/services/DialogService';
 
 interface OtherIncomesListProps {
   selectedIncomeType?: string;
@@ -34,7 +35,11 @@ export function OtherIncomesList({ selectedIncomeType = 'Other Income' }: OtherI
   });
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this income record? Associated journal entries will be removed.')) {
+    const confirmed = await dialog.confirmDelete(
+      'Delete Income Record?',
+      'Are you sure you want to delete this income record? Associated journal entries will be removed.'
+    );
+    if (confirmed) {
       deleteMutation.mutate(id);
     }
   };

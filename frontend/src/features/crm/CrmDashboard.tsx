@@ -23,7 +23,8 @@ const customerSchema = z.object({
   email: z.string().email('Invalid email address').optional().or(z.string().length(0)),
   gstin: z.string().optional(),
   panNumber: z.string().optional(),
-  customerType: z.enum(['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT']),
+  customerType: z.string().optional(),
+  gstRegistrationStatus: z.enum(['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT']),
   tradeName: z.string().optional(),
   address: z.string().optional(),
   pinCode: z.string().optional(),
@@ -75,7 +76,8 @@ interface Customer {
   name: string;
   email?: string;
   mobile?: string;
-  customerType: 'REGISTERED' | 'UNREGISTERED' | 'COMPOSITION' | 'SEZ' | 'EXPORT';
+  customerType?: 'B2B' | 'B2C' | 'GOVERNMENT' | 'EXPORT';
+  gstRegistrationStatus: 'REGISTERED' | 'UNREGISTERED' | 'COMPOSITION' | 'SEZ' | 'EXPORT';
   outstandingAmount?: number;
   tradeName?: string;
   gstin?: string;
@@ -152,7 +154,7 @@ export const CrmDashboard = () => {
   // Forms hooks
   const customerForm = useForm<CustomerFormValues>({
     resolver: zodResolver(customerSchema),
-    defaultValues: { customerCode: '', name: '', mobile: '', whatsapp: '', email: '', gstin: '', panNumber: '', customerType: 'UNREGISTERED', tradeName: '', address: '', pinCode: '', state: '', stateCode: '', placeOfSupply: '', creditLimit: 0 }
+    defaultValues: { customerCode: '', name: '', mobile: '', whatsapp: '', email: '', gstin: '', panNumber: '', customerType: 'B2B', gstRegistrationStatus: 'UNREGISTERED', tradeName: '', address: '', pinCode: '', state: '', stateCode: '', placeOfSupply: '', creditLimit: 0 }
   });
 
   const leadForm = useForm<LeadFormValues>({
@@ -196,7 +198,8 @@ export const CrmDashboard = () => {
         email: item.email || '',
         gstin: item.gstin || '',
         panNumber: item.panNumber || '',
-        customerType: item.customerType || 'UNREGISTERED',
+        customerType: item.customerType || 'B2B',
+        gstRegistrationStatus: item.gstRegistrationStatus || 'UNREGISTERED',
         tradeName: item.tradeName || '',
         address: item.address || '',
         pinCode: item.pinCode || '',
@@ -526,9 +529,9 @@ export const CrmDashboard = () => {
                     </td>
                     <td className="py-4 px-6">
                       <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full ${
-                        c.customerType === 'REGISTERED' ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'
+                        c.gstRegistrationStatus === 'REGISTERED' ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'
                       }`}>
-                        {c.customerType}
+                        {c.gstRegistrationStatus}
                       </span>
                     </td>
                     <td className="py-4 px-6 text-xs space-y-0.5">
@@ -723,6 +726,15 @@ export const CrmDashboard = () => {
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Customer Type</label>
                     <select {...customerForm.register('customerType')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
+                      <option value="B2B">B2B</option>
+                      <option value="B2C">B2C</option>
+                      <option value="GOVERNMENT">Government</option>
+                      <option value="EXPORT">Export</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Registration Status</label>
+                    <select {...customerForm.register('gstRegistrationStatus')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
                       <option value="UNREGISTERED">Unregistered / Consumer</option>
                       <option value="REGISTERED">Regular / Registered</option>
                       <option value="COMPOSITION">Composition Dealer</option>

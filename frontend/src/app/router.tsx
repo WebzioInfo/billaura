@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ProtectedRoute } from '../features/auth/components/ProtectedRoute';
 import { GuestGuard } from '../features/auth/components/GuestGuard';
@@ -30,6 +30,7 @@ const CategoriesList = lazy(() => import('../features/inventory/CategoriesList')
 const BomList = lazy(() => import('../features/inventory/BomList').then(m => ({ default: m.BomList })));
 const ProductsList = lazy(() => import('../features/inventory/ProductsList').then(m => ({ default: m.ProductsList })));
 const BrandsList = lazy(() => import('../features/inventory/BrandsList').then(m => ({ default: m.BrandsList })));
+const UnitsMasterPage = lazy(() => import('../features/inventory/UnitsMasterPage').then(m => ({ default: m.UnitsMasterPage })));
 
 const BankingDashboard = lazy(() => import('../features/banking/BankingDashboard').then(m => ({ default: m.BankingDashboard })));
 const BankTransactionsList = lazy(() => import('../features/banking/BankTransactionsList').then(m => ({ default: m.BankTransactionsList })));
@@ -70,6 +71,7 @@ const BalanceSheet = lazy(() => import('../features/reports/BalanceSheet').then(
 const GeneralLedger = lazy(() => import('../features/reports/GeneralLedger').then(m => ({ default: m.GeneralLedger })));
 const DayBook = lazy(() => import('../features/reports/DayBook').then(m => ({ default: m.DayBook })));
 const FinancialReports = lazy(() => import('../features/reports/FinancialReports').then(m => ({ default: m.FinancialReports })));
+const DepartmentalReport = lazy(() => import('../features/reports/DepartmentalReport').then(m => ({ default: m.DepartmentalReport })));
 const CashFlowDashboard = lazy(() => import('../features/reports/CashFlowDashboard').then(m => ({ default: m.CashFlowDashboard })));
 const ReportView = lazy(() => import('../features/reports/ReportView').then(m => ({ default: m.ReportView })));
 const AttendanceList = lazy(() => import('../features/hr/AttendanceList').then(m => ({ default: m.AttendanceList })));
@@ -108,7 +110,14 @@ const WorkspaceLayout = lazy(() => import('../layouts/WorkspaceLayout').then(m =
 const PlatformLayout = lazy(() => import('../layouts/PlatformLayout').then(m => ({ default: m.default })));
 
 const PlatformDashboard = lazy(() => import('../features/dashboard/PlatformDashboard').then(m => ({ default: m.PlatformDashboard })));
+const CompaniesList = lazy(() => import('../features/platform/companies/CompaniesList').then(m => ({ default: m.CompaniesList })));
+const CreateCompany = lazy(() => import('../features/platform/companies/CreateCompany').then(m => ({ default: m.CreateCompany })));
+const CompanyDetails = lazy(() => import('../features/platform/companies/CompanyDetails').then(m => ({ default: m.CompanyDetails })));
 import { PageLoader } from '../shared/components/ui/LoadingSystem';
+import { ComingSoon } from '../shared/components/ui/ComingSoon';
+
+const CustomerStatement = lazy(() => import('../features/reports/CustomerStatement'));
+const CustomerAgeing = lazy(() => import('../features/reports/CustomerAgeing'));
 
 const LoadingFallback = () => (
   <div className="h-screen w-screen flex flex-col items-center justify-center bg-white text-slate-800 space-y-6 select-none relative overflow-hidden">
@@ -174,15 +183,31 @@ export const router = createBrowserRouter([
   // Auth & Onboarding Flow
   {
     path: '/',
-    element: <Suspense fallback={<LoadingFallback />}><ErrorBoundary><GuestGuard><AuthLayout /></GuestGuard></ErrorBoundary></Suspense>,
+    element: <Suspense fallback={<LoadingFallback />}><ErrorBoundary><AuthLayout /></ErrorBoundary></Suspense>,
     errorElement: <ErrorBoundary />,
     children: [
-      { path: 'login', element: <Login /> },
-      { path: 'register', element: <Register /> },
+      // Guest-only routes
+      {
+        path: '',
+        element: <GuestGuard><Outlet /></GuestGuard>,
+        children: [
+          { path: 'login', element: <Login /> },
+          { path: 'register', element: <Register /> },
+          { path: 'forgot-password', element: <ForgotPassword /> },
+          { path: 'reset-password', element: <ResetPassword /> },
+        ]
+      },
+      // Routes accessible during onboarding (unauthenticated or authenticated)
       { path: 'verify-email', element: <VerifyEmail /> },
-      { path: 'forgot-password', element: <ForgotPassword /> },
-      { path: 'reset-password', element: <ResetPassword /> },
-      { path: 'onboard', element: <OnboardingWizard /> },
+      // Onboarding step (requires authentication)
+      { 
+        path: 'onboard', 
+        element: (
+          <ProtectedRoute enabled>
+            <OnboardingWizard />
+          </ProtectedRoute>
+        ) 
+      },
     ],
   },
   // Platform Super Admin Routes
@@ -196,7 +221,9 @@ export const router = createBrowserRouter([
     errorElement: <ErrorBoundary />,
     children: [
       { path: 'dashboard', element: <PlatformDashboard /> },
-      { path: 'companies', element: <PlatformDashboard /> },
+      { path: 'companies', element: <CompaniesList /> },
+      { path: 'companies/new', element: <CreateCompany /> },
+      { path: 'companies/:id', element: <CompanyDetails /> },
       { path: 'subscriptions', element: <PlatformDashboard /> },
       { path: 'plans', element: <PlatformDashboard /> },
       { path: 'users', element: <PlatformDashboard /> },
@@ -248,6 +275,7 @@ export const router = createBrowserRouter([
       { path: 'services', element: <ProductsList /> },
       { path: 'categories', element: <CategoriesList /> },
       { path: 'brands', element: <BrandsList /> },
+      { path: 'units', element: <UnitsMasterPage /> },
       { path: 'inventory', element: <InventoryDashboard /> },
       { path: 'warehouses', element: <WarehousesList /> },
       { path: 'batches', element: <BatchesList /> },
@@ -284,7 +312,10 @@ export const router = createBrowserRouter([
       { path: 'vendor-payments', element: <PurchasesDashboard /> },
       { path: 'expenses', element: <ExpensesDashboard /> },
       { path: 'other-income', element: <IncomeDashboard /> },
-      { path: 'banking', element: <ChartOfAccounts /> },
+      { path: 'banking', element: <BankingDashboard /> },
+      { path: 'bank-transactions', element: <BankTransactionsList /> },
+      { path: 'reconciliation', element: <ReconciliationCenter /> },
+      { path: 'bank-reconciliation', element: <Navigate to="/reconciliation" replace /> },
       { path: 'chart-of-accounts', element: <ChartOfAccounts /> },
       { path: 'accounting', element: <ChartOfAccounts /> },
       { path: 'accounting/ledger', element: <LedgerInquiry /> },
@@ -303,6 +334,7 @@ export const router = createBrowserRouter([
       { path: 'taxes', element: <TaxesDashboard /> },
       { path: 'reports', element: <FinancialReports /> },
       { path: 'reports/financial', element: <FinancialReports /> },
+      { path: 'reports/departmental', element: <DepartmentalReport /> },
       { path: 'reports/sales', element: <ReportView title="Sales Report" /> },
       { path: 'reports/purchases', element: <ReportView title="Purchases Report" /> },
       { path: 'reports/gst', element: <TaxesDashboard /> },
@@ -311,6 +343,9 @@ export const router = createBrowserRouter([
       { path: 'hr', element: <PayrollDashboard /> },
       { path: 'employees', element: <EmployeesList /> },
       { path: 'departments', element: <DepartmentsList /> },
+      { path: 'cost-centres', element: <Navigate to="/departments?tab=masters&sub=cost-centres" replace /> },
+      { path: 'cost-centers', element: <Navigate to="/departments?tab=masters&sub=cost-centres" replace /> },
+      { path: 'master-config', element: <Navigate to="/departments?tab=masters" replace /> },
       { path: 'attendance', element: <AttendanceList /> },
       { path: 'payroll', element: <PayrollDashboard /> },
       { path: 'fixed-assets', element: <FixedAssetsList /> },
@@ -331,7 +366,26 @@ export const router = createBrowserRouter([
       { path: 'help', element: <HelpCenterPortal /> },
       { path: 'notifications', element: <NotificationsCenter /> },
       { path: 'search', element: <GlobalSearch /> },
-      { path: 'crm', element: <CrmDashboard /> }
+      { path: 'crm', element: <CrmDashboard /> },
+      
+      // Reports
+      { path: 'customer-statements', element: <CustomerStatement /> },
+      { path: 'reports/customer-ageing', element: <CustomerAgeing /> },
+      
+      // Placeholders for unimplemented features
+      { path: 'budgets', element: <ComingSoon title="Budgets" /> },
+      { path: 'credit-notes', element: <ComingSoon title="Credit Notes" /> },
+      { path: 'debit-notes', element: <ComingSoon title="Debit Notes" /> },
+      { path: 'gstr-1', element: <ComingSoon title="GSTR-1 Filing" /> },
+      { path: 'gstr-2b', element: <ComingSoon title="GSTR-2B Input Credit" /> },
+      { path: 'gstr-3b', element: <ComingSoon title="GSTR-3B Monthly Return" /> },
+      { path: 'leads', element: <ComingSoon title="Leads Management" /> },
+      { path: 'leaves', element: <ComingSoon title="Leave Applications" /> },
+      { path: 'purchase-returns', element: <ComingSoon title="Purchase Returns" /> },
+      { path: 'salary-slips', element: <ComingSoon title="Salary Slips" /> },
+      { path: 'sales-returns', element: <ComingSoon title="Sales Returns" /> },
+      { path: 'sequences', element: <ComingSoon title="Document Sequences" /> },
+      { path: 'vendor-statements', element: <ComingSoon title="Vendor Statements" /> }
     ],
   },
   // Legacy URL Redirects

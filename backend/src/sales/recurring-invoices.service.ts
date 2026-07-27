@@ -56,7 +56,7 @@ export class RecurringInvoicesService {
 
     return this.prisma.$transaction(async (tx) => {
       let subTotal = 0;
-      let taxTotal = 0;
+      const taxTotal = 0;
       const itemsToCreate = [];
 
       for (const item of dto.items) {
@@ -96,8 +96,8 @@ export class RecurringInvoicesService {
   }
 
   async update(id: string, dto: any) {
-    const companyId = CompanyContext.getCompanyId();
-    const existing = await this.findOne(id);
+    const _companyId = CompanyContext.getCompanyId();
+    const _existing = await this.findOne(id);
 
     return this.prisma.$transaction(async (tx) => {
       // Delete existing items
@@ -106,7 +106,7 @@ export class RecurringInvoicesService {
       });
 
       let subTotal = 0;
-      let taxTotal = 0;
+      const taxTotal = 0;
       const itemsToCreate = [];
 
       for (const item of dto.items) {
@@ -142,8 +142,8 @@ export class RecurringInvoicesService {
   }
 
   async remove(id: string) {
-    const companyId = CompanyContext.getCompanyId();
-    const existing = await this.findOne(id);
+    const _companyId = CompanyContext.getCompanyId();
+    const _existing = await this.findOne(id);
 
     return this.prisma.recurringInvoice.update({
       where: { id },

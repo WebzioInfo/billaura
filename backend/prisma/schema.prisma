@@ -10,6 +10,13 @@ datasource db {
 }
 
 model Company {
+  units               Unit[]
+  historicalInvoices  HistoricalInvoice[]
+  tenantCode          String?                  @unique
+  employmentTypes     EmploymentType[]
+  leaveTypes          LeaveType[]
+  salaryComponents    SalaryComponent[]
+  holidayCalendars    HolidayCalendar[]
   id                  String                   @id @default(cuid())
   companyName         String
   legalName           String?
@@ -106,7 +113,6 @@ model Company {
   stocks              Stock[]
   subscriptions       Subscription[]
   supportTickets      SupportTicket[]
-  taxGroups           TaxGroup[]
   taxOverrideLogs     TaxOverrideLog[]
   transactionPayments TransactionPayment[]
   warehouses          Warehouse[]
@@ -117,6 +123,9 @@ model Company {
   productCategories   ProductCategory[]
   customerSegments    CustomerSegment[]
   customerDepartments CustomerDepartment[]
+  departments         Department[]
+  designations        Designation[]
+  unitConversions     UnitConversion[]
 
   @@index([status])
   @@index([createdAt])
@@ -139,6 +148,7 @@ model Branch {
   deletedAt    DateTime?
   company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   otherIncomes OtherIncome[]
+  employees    Employee[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -195,7 +205,8 @@ model User {
   globalRole          UserRole              @default(ACCOUNTANT)
   isActive            Boolean               @default(true)
   phone               String?
-  department          String?
+  departmentId        String?
+  department          Department?           @relation(fields: [departmentId], references: [id])
   createdBy           String?
   lastLogin           DateTime?
   emailVerified       Boolean               @default(false)
@@ -292,6 +303,7 @@ model Role {
   users       CompanyUser[]
   permissions RolePermission[]
   company     Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees   Employee[]
 
   @@unique([companyId, name])
   @@map("roles")
@@ -439,18 +451,18 @@ model CustomerSegment {
 }
 
 model CustomerDepartment {
-  id          String            @id @default(cuid())
-  companyId   String
-  name        String
-  description String?
-  customerType String           @default("B2B")
-  isActive    Boolean           @default(true)
-  sortOrder   Int               @default(0)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  createdBy   String?
-  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customers   BusinessPartner[]
+  id           String            @id @default(cuid())
+  companyId    String
+  name         String
+  description  String?
+  customerType String            @default("B2B")
+  isActive     Boolean           @default(true)
+  sortOrder    Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  createdBy    String?
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customers    BusinessPartner[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -458,59 +470,70 @@ model CustomerDepartment {
 }
 
 model BusinessPartner {
-  id                  String               @id @default(cuid())
-  companyId           String
-  bpType              BusinessPartnerType
-  bpCode              String
-  name                String
-  tradeName           String?
-  email               String?
-  phone               String?
-  whatsapp            String?
-  gstin               String?
-  panNumber           String?
-  customerType        CustomerType?        @default(UNREGISTERED)
-  address             String?
-  pinCode             String?
-  state               String?
-  stateCode           String?
-  placeOfSupply       String?
-  creditLimit         Decimal              @default(0) @db.Decimal(15, 2)
-  receivableBalance   Decimal              @default(0) @db.Decimal(15, 2)
-  payableBalance      Decimal              @default(0) @db.Decimal(15, 2)
-  status              LeadStatus?
-  source              String?
-  leadValue           Decimal?             @db.Decimal(15, 2)
-  notes               String?
-  portalAccessToken   String?              @unique
-  tokenExpiresAt      DateTime?
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  deletedAt           DateTime?
-  customerSegmentId   String?
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customerSegment     CustomerSegment?     @relation(fields: [customerSegmentId], references: [id])
-  customerDepartmentId String?
-  customerDepartment  CustomerDepartment?  @relation(fields: [customerDepartmentId], references: [id])
-  contacts            Contact[]
-  crmActivities       CrmActivity[]
-  statements          CustomerStatement[]
-  deliveryNotes       DeliveryNote[]
-  expenses            Expense[]
-  goodsReceipts       GoodsReceipt[]
-  invoices            Invoice[]
-  otherIncomes        OtherIncome[]
-  projects            Project[]
-  purchaseOrders      PurchaseOrder[]
-  purchaseReturns     PurchaseReturn[]
-  purchases           Purchase[]
-  quotations          Quotation[]
-  receipts            Receipt[]
-  recurringInvoices   RecurringInvoice[]
-  salesOrders         SalesOrder[]
-  salesReturns        SalesReturn[]
-  transactionPayments TransactionPayment[]
-  commissionRecords   CommissionRecord[]
+  openingBalanceType    String                 @default("NONE")
+  openingBalanceAmount  Decimal                @default(0) @db.Decimal(15, 2)
+  openingBalanceDate    DateTime?
+  migrationReferenceNo  String?
+  migrationNotes        String?
+  previousSoftware      String?
+  previousLedgerCode    String?
+  isMigrated            Boolean                @default(false)
+  customerDepartmentId  String?
+  id                    String                 @id @default(cuid())
+  companyId             String
+  bpType                BusinessPartnerType
+  bpCode                String
+  name                  String
+  tradeName             String?
+  email                 String?
+  phone                 String?
+  whatsapp              String?
+  gstin                 String?
+  panNumber             String?
+  gstRegistrationStatus GSTRegistrationStatus? @default(UNREGISTERED)
+  customerType          CustomerCategory?      @default(B2B)
+  taxPreference         TaxPreference?         @default(TAXABLE)
+  address               String?
+  pinCode               String?
+  state                 String?
+  stateCode             String?
+  placeOfSupply         String?
+  creditLimit           Decimal                @default(0) @db.Decimal(15, 2)
+  receivableBalance     Decimal                @default(0) @db.Decimal(15, 2)
+  payableBalance        Decimal                @default(0) @db.Decimal(15, 2)
+  status                LeadStatus?
+  source                String?
+  leadValue             Decimal?               @db.Decimal(15, 2)
+  notes                 String?
+  portalAccessToken     String?                @unique
+  tokenExpiresAt        DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+  customerSegmentId     String?
+  company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerSegment       CustomerSegment?       @relation(fields: [customerSegmentId], references: [id])
+  customerDepartment    CustomerDepartment?    @relation(fields: [customerDepartmentId], references: [id])
+  contacts              Contact[]
+  crmActivities         CrmActivity[]
+  statements            CustomerStatement[]
+  deliveryNotes         DeliveryNote[]
+  expenses              Expense[]
+  goodsReceipts         GoodsReceipt[]
+  invoices              Invoice[]
+  otherIncomes          OtherIncome[]
+  projects              Project[]
+  purchaseOrders        PurchaseOrder[]
+  purchaseReturns       PurchaseReturn[]
+  purchases             Purchase[]
+  quotations            Quotation[]
+  receipts              Receipt[]
+  recurringInvoices     RecurringInvoice[]
+  salesOrders           SalesOrder[]
+  salesReturns          SalesReturn[]
+  transactionPayments   TransactionPayment[]
+  commissionRecords     CommissionRecord[]
+  historicalInvoices    HistoricalInvoice[]
 
   @@index([companyId])
   @@index([bpType])
@@ -543,7 +566,8 @@ model Contact {
   lastName          String
   email             String?
   phone             String?
-  designation       String?
+  designationId     String?
+  designation       Designation?    @relation(fields: [designationId], references: [id])
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   deletedAt         DateTime?
@@ -570,28 +594,17 @@ model CrmActivity {
   businessPartner   BusinessPartner @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
   company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  @@index([companyId])
   @@index([businessPartnerId])
   @@map("crm_activities")
 }
 
-model TaxGroup {
-  id                String            @id @default(cuid())
-  companyId         String
-  name              String
-  totalRate         Decimal           @db.Decimal(5, 2)
-  cgstRate          Decimal           @default(0) @db.Decimal(5, 2)
-  sgstRate          Decimal           @default(0) @db.Decimal(5, 2)
-  igstRate          Decimal           @default(0) @db.Decimal(5, 2)
-  cessRate          Decimal           @default(0) @db.Decimal(5, 2)
-  createdAt         DateTime          @default(now())
-  products          Product[]
-  expenseCategories ExpenseCategory[]
-  expenses          Expense[]
-  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@unique([companyId, name])
-  @@map("tax_groups")
+enum TaxPreference {
+  TAXABLE
+  EXEMPT
+  NIL_RATED
+  NON_GST
+  COMPOSITION
+  REVERSE_CHARGE
 }
 
 model Product {
@@ -599,8 +612,7 @@ model Product {
   companyId           String
   categoryId          String?
   brandId             String?
-  unit                UnitType             @default(PCS)
-  taxGroupId          String?
+  unit                String               @default("PCS")
   sku                 String?
   alias               String?
   barcode             String?
@@ -611,13 +623,8 @@ model Product {
   itemType            ItemType             @default(FINISHED_GOOD)
   weight              Decimal?             @db.Decimal(10, 3)
   weightType          String?
-  taxRate             Decimal?             @db.Decimal(5, 2)
-  gstRate             Decimal?             @db.Decimal(5, 2)
-  taxType             String?
-  taxCategory         TaxCategory?
-  isExempt            Boolean              @default(false)
-  isNilRated          Boolean              @default(false)
-  isNonGst            Boolean              @default(false)
+  gstRate             Decimal              @default(0) @db.Decimal(5, 2)
+  taxPreference       TaxPreference        @default(TAXABLE)
   purchasePrice       Decimal              @default(0) @db.Decimal(15, 2)
   sellingPrice        Decimal              @default(0) @db.Decimal(15, 2)
   minStock            Decimal              @default(0) @db.Decimal(15, 3)
@@ -651,7 +658,6 @@ model Product {
   serials             InventorySerial[]
   invoiceItems        InvoiceItem[]
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  taxGroup            TaxGroup?            @relation(fields: [taxGroupId], references: [id])
   category            ProductCategory?     @relation(fields: [categoryId], references: [id])
   brand               Brand?               @relation(fields: [brandId], references: [id])
   purchaseItems       PurchaseItem[]
@@ -1083,6 +1089,7 @@ model GoodsReceiptItem {
 }
 
 model TransactionPayment {
+  chequeNumber      String?
   id                String              @id @default(cuid())
   companyId         String
   businessPartnerId String
@@ -1109,6 +1116,8 @@ model TransactionPayment {
 }
 
 model PaymentAllocation {
+  historicalInvoiceId  String?
+  historicalInvoice    HistoricalInvoice? @relation(fields: [historicalInvoiceId], references: [id])
   id                   String             @id @default(cuid())
   transactionPaymentId String
   invoiceId            String?
@@ -1136,12 +1145,12 @@ model ExpenseCategory {
   company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   expenses    Expense[]
 
-  defaultTaxApplicable     Boolean   @default(false)
-  defaultTaxGroupId        String?
-  defaultTaxGroup          TaxGroup? @relation(fields: [defaultTaxGroupId], references: [id])
+  defaultTaxApplicable     Boolean       @default(false)
+  defaultGstRate           Decimal       @default(0) @db.Decimal(5, 2)
+  defaultTaxPreference     TaxPreference @default(TAXABLE)
   defaultTaxMode           String?
   defaultInputTaxAccountId String?
-  defaultInputTaxAccount   Account?  @relation("ExpenseCategoryDefaultInputTaxAccount", fields: [defaultInputTaxAccountId], references: [id])
+  defaultInputTaxAccount   Account?      @relation("ExpenseCategoryDefaultInputTaxAccount", fields: [defaultInputTaxAccountId], references: [id])
 
   @@unique([companyId, name])
   @@map("expense_categories")
@@ -1161,8 +1170,8 @@ model Expense {
   amount              Decimal             @db.Decimal(15, 2)
   taxAmount           Decimal             @default(0) @db.Decimal(15, 2)
   taxApplicable       Boolean             @default(false)
-  taxGroupId          String?
-  taxGroup            TaxGroup?           @relation(fields: [taxGroupId], references: [id])
+  gstRate             Decimal             @default(0) @db.Decimal(5, 2)
+  taxPreference       TaxPreference       @default(TAXABLE)
   taxMode             String?
   taxType             String?
   taxableAmount       Decimal             @default(0) @db.Decimal(15, 2)
@@ -1196,6 +1205,8 @@ model Expense {
   company             Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee            Employee?           @relation(fields: [employeeId], references: [id])
   vendor              BusinessPartner?    @relation(fields: [vendorId], references: [id])
+  department          Department?         @relation(fields: [departmentId], references: [id])
+  departmentId        String?
 
   @@unique([companyId, expenseNo])
   @@index([approvedById])
@@ -1399,6 +1410,8 @@ model InternalTransfer {
 }
 
 model Account {
+  nature                    AccountNature       @default(DEBIT)
+  balanceType               AccountBalanceType  @default(DEBIT)
   id                        String              @id @default(cuid())
   companyId                 String
   name                      String
@@ -1436,6 +1449,7 @@ model CostCenter {
   parent       CostCenter?   @relation("CostCenterHierarchy", fields: [parentId], references: [id])
   children     CostCenter[]  @relation("CostCenterHierarchy")
   journalLines JournalLine[]
+  departments  Department[]
 
   @@unique([companyId, name])
   @@map("cost_centers")
@@ -1456,19 +1470,21 @@ model JournalEntry {
 }
 
 model JournalLine {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   journalEntryId String
   accountId      String
   costCenterId   String?
-  debit          Decimal      @default(0) @db.Decimal(15, 2)
-  credit         Decimal      @default(0) @db.Decimal(15, 2)
-  account        Account      @relation(fields: [accountId], references: [id])
-  costCenter     CostCenter?  @relation(fields: [costCenterId], references: [id])
-  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  departmentId   String?
+  debit          Decimal  @default(0) @db.Decimal(15, 2)
+  credit         Decimal  @default(0) @db.Decimal(15, 2)
+  description    String?
+  createdAt      DateTime @default(now())
 
-  @@index([journalEntryId])
-  @@index([accountId])
-  @@index([costCenterId])
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      Account      @relation(fields: [accountId], references: [id])
+  costCenter   CostCenter?  @relation(fields: [costCenterId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
+
   @@map("journal_lines")
 }
 
@@ -1690,7 +1706,7 @@ model ScheduledTask {
 }
 
 model Employee {
-  id                 String             @id @default(cuid())
+  id                 String     @id @default(cuid())
   companyId          String
   employeeCode       String
   name               String
@@ -1701,34 +1717,45 @@ model Employee {
   dateOfBirth        DateTime?
   gender             String?
   joiningDate        DateTime?
-  department         String?
-  designation        String?
+  departmentId       String?
+  designationId      String?
   shiftId            String?
-  employeeType       String             @default("PERMANENT")
-  salaryType         SalaryType         @default(MONTHLY)
-  basicSalary        Decimal            @default(0) @db.Decimal(15, 2)
+  employmentTypeId   String?
+  employeeType       String     @default("PERMANENT")
+  salaryType         SalaryType @default(MONTHLY)
+  basicSalary        Decimal    @default(0) @db.Decimal(15, 2)
   allowances         Json?
   bankDetails        Json?
   aadhaarNumber      String?
   panNumber          String?
-  status             String             @default("ACTIVE")
+  status             String     @default("ACTIVE")
   reportingManagerId String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
   deletedAt          DateTime?
-  attendances        Attendance[]
-  employeeAdvances   EmployeeAdvance[]
-  loans              EmployeeLoan[]
-  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  reportingManager   Employee?          @relation("ReportingManager", fields: [reportingManagerId], references: [id])
-  reportees          Employee[]         @relation("ReportingManager")
-  shift              Shift?             @relation(fields: [shiftId], references: [id])
-  expenses           Expense[]
-  leaveApplications  LeaveApplication[]
-  otherIncomes       OtherIncome[]
-  salarySlips        SalarySlip[]
-  advances           StaffAdvance[]
-  commissionRecords  CommissionRecord[]
+
+  branchId           String?
+  roleId             String?
+  branch             Branch?         @relation(fields: [branchId], references: [id])
+  role               Role?           @relation(fields: [roleId], references: [id])
+  department         Department?     @relation(fields: [departmentId], references: [id])
+  managedDepartments Department[]    @relation("DepartmentManager")
+  designation        Designation?    @relation(fields: [designationId], references: [id])
+  employmentType     EmploymentType? @relation(fields: [employmentTypeId], references: [id])
+
+  attendances       Attendance[]
+  employeeAdvances  EmployeeAdvance[]
+  loans             EmployeeLoan[]
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reportingManager  Employee?          @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+  reportees         Employee[]         @relation("ReportingManager")
+  shift             Shift?             @relation(fields: [shiftId], references: [id])
+  expenses          Expense[]
+  leaveApplications LeaveApplication[]
+  otherIncomes      OtherIncome[]
+  salarySlips       SalarySlip[]
+  advances          StaffAdvance[]
+  commissionRecords CommissionRecord[]
 
   @@unique([companyId, employeeCode])
   @@index([companyId, deletedAt])
@@ -1736,20 +1763,28 @@ model Employee {
 }
 
 model Attendance {
-  id         String         @id @default(cuid())
-  companyId  String
-  employeeId String
-  date       DateTime
-  type       AttendanceType
-  notes      String?
-  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee   Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id           String         @id @default(cuid())
+  companyId    String
+  employeeId   String
+  date         DateTime
+  type         AttendanceType
+  checkIn      DateTime?
+  checkOut     DateTime?
+  workingHours Float? // in hours
+  breakTime    Float? // in hours
+  overtime     Float? // in hours
+  lateBy       Float? // in minutes
+  earlyExit    Float? // in minutes
+  notes        String?
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, date])
   @@map("attendances")
 }
 
 model LeaveApplication {
+  leaveTypes LeaveType[]
   id         String      @id @default(cuid())
   companyId  String
   employeeId String
@@ -2074,7 +2109,8 @@ model OtherIncome {
   categoryId        String
   businessPartnerId String?
   branchId          String?
-  department        String?
+  departmentId      String?
+  department        Department?      @relation(fields: [departmentId], references: [id])
   employeeId        String?
   incomeNo          String
   date              DateTime
@@ -2497,6 +2533,8 @@ enum AttendanceType {
   HALF_DAY
   LEAVE
   HOLIDAY
+  REMOTE
+  WORK_FROM_HOME
 }
 
 enum LeaveStatus {
@@ -2557,6 +2595,16 @@ enum RefundMethod {
   BANK_TRANSFER
   UPI
   FUTURE_ADJUSTMENT
+}
+
+enum AccountNature {
+  DEBIT
+  CREDIT
+}
+
+enum AccountBalanceType {
+  DEBIT
+  CREDIT
 }
 
 enum AccountCategory {
@@ -2635,11 +2683,18 @@ enum TaskStatus {
   FAILED
 }
 
-enum CustomerType {
+enum GSTRegistrationStatus {
   REGISTERED
   UNREGISTERED
   COMPOSITION
   SEZ
+  EXPORT
+}
+
+enum CustomerCategory {
+  B2B
+  B2C
+  GOVERNMENT
   EXPORT
 }
 
@@ -2961,4 +3016,189 @@ model ProductCategory {
   @@index([companyId])
   @@index([companyId, deletedAt])
   @@map("product_categories")
+}
+
+model Department {
+  costCenterId String?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
+  id           String      @id @default(cuid())
+  companyId    String
+  name         String
+  code         String?
+  managerId    String?
+  description  String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  manager      Employee?     @relation("DepartmentManager", fields: [managerId], references: [id])
+  employees    Employee[]
+  otherIncomes OtherIncome[]
+  journalLines JournalLine[]
+  expenses     Expense[]
+  users        User[]
+  designations Designation[]
+
+  @@unique([companyId, name])
+  @@map("departments")
+}
+
+model Designation {
+  id           String    @id @default(cuid())
+  companyId    String
+  name         String
+  code         String?
+  description  String?
+  departmentId String
+  level        String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  department Department @relation(fields: [departmentId], references: [id])
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees  Employee[]
+  contacts   Contact[]
+
+  @@unique([companyId, name])
+  @@map("designations")
+}
+
+model EmploymentType {
+  id          String    @id @default(cuid())
+  companyId   String
+  code        String
+  name        String
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees Employee[]
+
+  @@unique([companyId, code])
+  @@map("employment_types")
+}
+
+model LeaveType {
+  id          String    @id @default(cuid())
+  companyId   String
+  code        String
+  name        String
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications LeaveApplication[]
+
+  @@unique([companyId, code])
+  @@map("leave_types")
+}
+
+model SalaryComponent {
+  id          String    @id @default(cuid())
+  companyId   String
+  code        String
+  name        String
+  type        String
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, code])
+  @@map("salary_components")
+}
+
+model HolidayCalendar {
+  id          String    @id @default(cuid())
+  companyId   String
+  name        String
+  date        DateTime
+  isRecurring Boolean   @default(false)
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date, name])
+  @@map("holiday_calendars")
+}
+
+model Unit {
+  id              String           @id @default(cuid())
+  companyId       String?
+  name            String
+  code            String
+  abbreviation    String?
+  symbol          String?
+  category        String           @default("Count")
+  decimals        Int              @default(2)
+  isSystem        Boolean          @default(false)
+  keywords        String?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromConversions UnitConversion[] @relation("FromUnit")
+  toConversions   UnitConversion[] @relation("ToUnit")
+
+  @@unique([companyId, code])
+  @@map("units")
+}
+
+model UnitConversion {
+  id          String   @id @default(cuid())
+  companyId   String
+  fromUnitId  String
+  toUnitId    String
+  multiplier  Float
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company  Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromUnit Unit    @relation("FromUnit", fields: [fromUnitId], references: [id], onDelete: Cascade)
+  toUnit   Unit    @relation("ToUnit", fields: [toUnitId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, fromUnitId, toUnitId])
+  @@map("unit_conversions")
+}
+
+model HistoricalInvoice {
+  id                String    @id @default(cuid())
+  companyId         String
+  businessPartnerId String
+  invoiceNo         String
+  date              DateTime
+  dueDate           DateTime?
+  totalAmount       Decimal   @db.Decimal(15, 2)
+  amountPaid        Decimal   @default(0) @db.Decimal(15, 2)
+  status            String    @default("UNPAID")
+  reference         String?
+  remarks           String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessPartner BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
+  allocations     PaymentAllocation[]
+
+  @@unique([companyId, invoiceNo])
+  @@index([companyId, businessPartnerId])
+  @@map("historical_invoices")
 }

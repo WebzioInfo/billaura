@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoa
 import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { dialog } from '@/core/services/DialogService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/shared/components/ui';
 
@@ -34,8 +35,12 @@ export const CustomersList = () => {
     }
   });
 
-  const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete ${name}?`)) {
+  const handleDelete = async (id: string, name: string) => {
+    const confirmed = await dialog.confirmDelete(
+      'Delete Customer?',
+      `Are you sure you want to delete customer "${name}"? This action cannot be undone.`
+    );
+    if (confirmed) {
       deleteMutation.mutate(id);
     }
   };

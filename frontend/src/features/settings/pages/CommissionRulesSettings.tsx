@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Edit2, Loader2, Save, X } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card';
-import { Button } from '@/shared/components/ui/Button';
+import { Button, Input, Select } from '@/shared/components/ui';
 import { DataTable } from '@/shared/components/ui/data-table/DataTable';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';

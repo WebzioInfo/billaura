@@ -24,7 +24,8 @@ const vendorSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
   gstin: z.string().optional(),
   contactDetails: z.string().optional(),
-  customerType: z.enum(['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT']),
+  customerType: z.string().optional(),
+  gstRegistrationStatus: z.enum(['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT']),
   creditLimit: z.number().optional(),
 });
 
@@ -72,7 +73,8 @@ interface Vendor {
   gstin?: string;
   contactDetails?: string;
   payableBalance: number;
-  customerType?: 'REGISTERED' | 'UNREGISTERED' | 'COMPOSITION' | 'SEZ' | 'EXPORT';
+  customerType?: 'B2B' | 'B2C' | 'GOVERNMENT' | 'EXPORT';
+  gstRegistrationStatus?: 'REGISTERED' | 'UNREGISTERED' | 'COMPOSITION' | 'SEZ' | 'EXPORT';
   creditLimit?: number;
 }
 
@@ -391,7 +393,7 @@ export const PurchasesDashboard = () => {
   // Forms hooks
   const vendorForm = useForm<VendorFormValues>({
     resolver: zodResolver(vendorSchema),
-    defaultValues: { vendorCode: '', name: '', gstin: '', contactDetails: '', customerType: 'UNREGISTERED', creditLimit: 0 }
+    defaultValues: { vendorCode: '', name: '', gstin: '', contactDetails: '', customerType: 'B2B', gstRegistrationStatus: 'UNREGISTERED', creditLimit: 0 }
   });
 
   const purchaseForm = useForm<PurchaseFormValues>({
@@ -449,7 +451,8 @@ export const PurchasesDashboard = () => {
       name: item.name,
       gstin: item.gstin || '',
       contactDetails: item.contactDetails || '',
-      customerType: item.customerType || 'UNREGISTERED',
+      customerType: item.customerType || 'B2B',
+      gstRegistrationStatus: item.gstRegistrationStatus || 'UNREGISTERED',
       creditLimit: Number(item.creditLimit || 0),
     });
     setIsVendorModalOpen(true);
@@ -1055,6 +1058,15 @@ export const PurchasesDashboard = () => {
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Vendor Type</label>
                       <select {...vendorForm.register('customerType')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
+                      <option value="B2B">B2B</option>
+                      <option value="B2C">B2C</option>
+                      <option value="GOVERNMENT">Government</option>
+                      <option value="EXPORT">Export</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Registration Status</label>
+                    <select {...vendorForm.register('gstRegistrationStatus')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
                         <option value="UNREGISTERED">Unregistered / Consumer</option>
                         <option value="REGISTERED">Regular / Registered</option>
                         <option value="COMPOSITION">Composition Dealer</option>

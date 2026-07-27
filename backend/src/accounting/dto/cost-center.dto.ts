@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from "class-validator";
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsNumber } from "class-validator";
 
 export class CreateCostCenterDto {
   @IsString()
@@ -20,6 +20,18 @@ export class CreateCostCenterDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  managerId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  monthlyBudget?: number;
+
+  @IsNumber()
+  @IsOptional()
+  annualBudget?: number;
 }
 
 export class UpdateCostCenterDto {
@@ -42,4 +54,16 @@ export class UpdateCostCenterDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  managerId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  monthlyBudget?: number;
+
+  @IsNumber()
+  @IsOptional()
+  annualBudget?: number;
 }

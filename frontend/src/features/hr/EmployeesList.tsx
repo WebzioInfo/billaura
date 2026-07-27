@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import { Card } from '@/shared/components/ui/Card';
@@ -7,8 +7,11 @@ import { PageContainer, EmptyState, LoadingState } from '@/shared/components/ui/
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Users } from 'lucide-react';
+import { EmployeeModal } from './components/EmployeeModal';
 
 export const EmployeesList = () => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
@@ -25,7 +28,7 @@ export const EmployeesList = () => {
         description="Manage your workforce, salaries, and HR lifecycle"
         primaryAction={
           <Button 
-            onClick={() => {}}
+            onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 font-bold px-5"
             variant="primary"
           >
@@ -41,7 +44,7 @@ export const EmployeesList = () => {
           title="No employees found"
           description="Add your first employee to track personnel and payroll profiles."
           actionLabel="Add Employee"
-          onActionClick={() => {}}
+          onActionClick={() => setIsModalOpen(true)}
         />
       ) : (
         <Card>
@@ -71,6 +74,7 @@ export const EmployeesList = () => {
           </Table>
         </Card>
       )}
+      <EmployeeModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </PageContainer>
   );
 };

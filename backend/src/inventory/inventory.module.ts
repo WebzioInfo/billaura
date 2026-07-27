@@ -6,8 +6,6 @@ import { ProductsController } from "./products.controller";
 import { InventoryService } from "./inventory.service";
 import { InventoryController } from "./inventory.controller";
 import { DatabaseModule } from "../database/database.module";
-import { TaxGroupsService } from "./tax-groups.service";
-import { TaxGroupsController } from "./tax-groups.controller";
 import { CategoriesService } from "./categories.service";
 import { CategoriesController } from "./categories.controller";
 import { BrandsService } from "./brands.service";
@@ -29,7 +27,6 @@ import { SharedModule } from "../shared/shared.module";
     WarehousesController,
     ProductsController,
     InventoryController,
-    TaxGroupsController,
     CategoriesController,
     BrandsController,
     UnitsController,
@@ -41,7 +38,6 @@ import { SharedModule } from "../shared/shared.module";
     WarehousesService,
     ProductsService,
     InventoryService,
-    TaxGroupsService,
     CategoriesService,
     BrandsService,
     UnitsService,

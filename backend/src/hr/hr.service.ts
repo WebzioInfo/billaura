@@ -18,6 +18,13 @@ export class HrService {
     }
     return this.prisma.employee.findMany({
       where: { companyId, deletedAt: null },
+      include: {
+        department: true,
+        designation: true,
+        shift: true,
+        employmentType: true,
+        reportingManager: true,
+      },
       orderBy: { name: 'asc' },
     });
   }
@@ -42,11 +49,58 @@ export class HrService {
         name: dto.name,
         mobile: dto.mobile || null,
         email: dto.email || null,
-        department: dto.department || null,
-        designation: dto.designation || null,
+        departmentId: dto.departmentId || null,
+        designationId: dto.designationId || null,
+        shiftId: dto.shiftId || null,
+        employmentTypeId: dto.employmentTypeId || null,
+        reportingManagerId: dto.reportingManagerId || null,
         basicSalary: dto.basicSalary || 0,
         salaryType: 'MONTHLY',
-        status: 'ACTIVE',
+        allowances: dto.allowances || null,
+        bankDetails: dto.bankDetails || null,
+        joiningDate: dto.joiningDate ? new Date(dto.joiningDate) : null,
+        status: dto.status || 'ACTIVE',
+      },
+    });
+  }
+
+  async updateEmployee(id: string, dto: CreateEmployeeDto) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const employee = await this.prisma.employee.findFirst({
+      where: { id, companyId, deletedAt: null }
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    if (dto.employeeCode !== employee.employeeCode) {
+      const codeExists = await this.prisma.employee.findFirst({
+        where: { companyId, employeeCode: dto.employeeCode, NOT: { id } },
+      });
+      if (codeExists) {
+        throw new ConflictException(`Employee code '${dto.employeeCode}' already exists`);
+      }
+    }
+
+    return this.prisma.employee.update({
+      where: { id },
+      data: {
+        employeeCode: dto.employeeCode,
+        name: dto.name,
+        mobile: dto.mobile || null,
+        email: dto.email || null,
+        departmentId: dto.departmentId || null,
+        designationId: dto.designationId || null,
+        shiftId: dto.shiftId || null,
+        employmentTypeId: dto.employmentTypeId || null,
+        reportingManagerId: dto.reportingManagerId || null,
+        basicSalary: dto.basicSalary || 0,
+        allowances: dto.allowances || null,
+        bankDetails: dto.bankDetails || null,
+        joiningDate: dto.joiningDate ? new Date(dto.joiningDate) : undefined,
+        status: dto.status || undefined,
       },
     });
   }
@@ -57,7 +111,6 @@ export class HrService {
       throw new ConflictException('Company context is required');
     }
 
-    // Verify employee belongs to company
     const employee = await this.prisma.employee.findFirst({
       where: { id, companyId }
     });
@@ -71,19 +124,72 @@ export class HrService {
 
   // --- ATTENDANCES ---
 
-  async findAttendances() {
+  async findAttendances(filters: any = {}) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
-    return this.prisma.attendance.findMany({
-      where: { companyId },
-      include: { employee: true },
-      orderBy: { date: 'desc' },
-    });
+
+    const where: any = { companyId };
+    
+    if (filters.employeeId) where.employeeId = filters.employeeId;
+    if (filters.startDate || filters.endDate) {
+      where.date = {};
+      if (filters.startDate) where.date.gte = new Date(filters.startDate);
+      if (filters.endDate) where.date.lte = new Date(filters.endDate);
+    }
+    if (filters.status) where.type = filters.status;
+    
+    if (filters.departmentId || filters.designationId || filters.search) {
+      where.employee = {};
+      if (filters.departmentId) where.employee.departmentId = filters.departmentId;
+      if (filters.designationId) where.employee.designationId = filters.designationId;
+      if (filters.search) {
+        where.employee.user = {
+          OR: [
+            { firstName: { contains: filters.search, mode: 'insensitive' } },
+            { lastName: { contains: filters.search, mode: 'insensitive' } }
+          ]
+        };
+      }
+    }
+
+    const page = filters.page || 1;
+    const limit = filters.limit || 50;
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.attendance.findMany({
+        where,
+        include: { 
+          employee: {
+            include: {
+
+              department: true,
+              designation: true,
+              shift: true
+            }
+          }
+        },
+        orderBy: { date: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.attendance.count({ where })
+    ]);
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
   }
 
-  async recordAttendance(dto: RecordAttendanceDto) {
+  async recordAttendance(dto: any) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -109,6 +215,13 @@ export class HrService {
       update: {
         type: dto.type,
         notes: dto.notes || null,
+        checkIn: dto.checkIn ? new Date(dto.checkIn) : undefined,
+        checkOut: dto.checkOut ? new Date(dto.checkOut) : undefined,
+        workingHours: dto.workingHours,
+        breakTime: dto.breakTime,
+        overtime: dto.overtime,
+        lateBy: dto.lateBy,
+        earlyExit: dto.earlyExit,
       },
       create: {
         companyId,
@@ -116,18 +229,75 @@ export class HrService {
         date: dateVal,
         type: dto.type,
         notes: dto.notes || null,
+        checkIn: dto.checkIn ? new Date(dto.checkIn) : null,
+        checkOut: dto.checkOut ? new Date(dto.checkOut) : null,
+        workingHours: dto.workingHours,
+        breakTime: dto.breakTime,
+        overtime: dto.overtime,
+        lateBy: dto.lateBy,
+        earlyExit: dto.earlyExit,
       },
     });
   }
 
+  async bulkRecordAttendance(dto: any) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const results = [];
+    for (const record of dto.records) {
+      try {
+        const res = await this.recordAttendance(record);
+        results.push({ success: true, employeeId: record.employeeId, data: res });
+      } catch (err: any) {
+        results.push({ success: false, employeeId: record.employeeId, error: err.message });
+      }
+    }
+    return results;
+  }
+
   // --- PAYROLL ---
 
-  async getSalarySlips() {
+  async getSalarySlips(filters?: {
+    departmentId?: string;
+    designationId?: string;
+    branchId?: string;
+    shiftId?: string;
+    employmentTypeId?: string;
+  }) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
+
+    const where: any = { companyId };
+    
+    if (filters) {
+      const employeeFilter: any = {};
+      if (filters.departmentId) employeeFilter.departmentId = filters.departmentId;
+      if (filters.designationId) employeeFilter.designationId = filters.designationId;
+      if (filters.branchId) employeeFilter.branchId = filters.branchId;
+      if (filters.shiftId) employeeFilter.shiftId = filters.shiftId;
+      if (filters.employmentTypeId) employeeFilter.employmentTypeId = filters.employmentTypeId;
+
+      if (Object.keys(employeeFilter).length > 0) {
+        where.employee = employeeFilter;
+      }
+    }
+
     return this.prisma.salarySlip.findMany({
-      where: { companyId },
-      include: { employee: true },
+      where,
+      include: {
+        employee: {
+          include: {
+            department: true,
+            designation: true,
+            
+            shift: true,
+            employmentType: true,
+          }
+        }
+      },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
   }
@@ -222,8 +392,8 @@ export class HrService {
           description: `Salary Payment for ${slip.employee.name} (${slip.month}/${slip.year})`,
           lines: {
             create: [
-              { accountId: payrollAccount.id, debit: netSalary, credit: 0 },
-              { accountId: bankGlAccount.id, debit: 0, credit: netSalary },
+              { accountId: payrollAccount.id, debit: netSalary, credit: 0, departmentId: slip.employee.departmentId || null },
+              { accountId: bankGlAccount.id, debit: 0, credit: netSalary, departmentId: slip.employee.departmentId || null },
             ],
           },
         },

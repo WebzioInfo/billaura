@@ -32,6 +32,7 @@ export interface DocumentTotals {
 interface DocumentSummarySidebarProps {
   totals: DocumentTotals;
   invoiceType: string;
+  docType?: string;
   currencySymbol: string;
   title?: string;
   className?: string;
@@ -40,10 +41,13 @@ interface DocumentSummarySidebarProps {
 export const DocumentSummarySidebar: React.FC<DocumentSummarySidebarProps> = ({
   totals,
   invoiceType,
+  docType,
   currencySymbol,
   title = 'Document Summary',
   className = '',
 }) => {
+  const isNonGst = docType === 'BILL_OF_SUPPLY' || docType === 'EXEMPT_SUPPLY' || docType === 'NIL_RATED_INVOICE' || docType === 'EXPORT_INVOICE' || invoiceType === 'NO_TAX';
+
   return (
     <div className={`w-full space-y-4 bg-muted/20 border border-border/60 rounded-2xl p-6 ${className}`}>
       <div className="text-sm font-semibold text-foreground border-b border-border/50 pb-2 mb-3">{title}</div>
@@ -69,7 +73,7 @@ export const DocumentSummarySidebar: React.FC<DocumentSummarySidebarProps> = ({
           <span>{currencySymbol}{formatIndianCurrency(totals.subTotal)}</span>
         </div>
         
-        {invoiceType !== 'NO_TAX' && (
+        {!isNonGst && (
           <>
             {totals.isInterState ? (
               <div className="flex justify-between text-xs">
@@ -105,7 +109,7 @@ export const DocumentSummarySidebar: React.FC<DocumentSummarySidebarProps> = ({
       </div>
 
       {/* Grouped Tax Summary matrix */}
-      {totals.taxSummary && totals.taxSummary.length > 0 && invoiceType !== 'NO_TAX' && (
+      {totals.taxSummary && totals.taxSummary.length > 0 && !isNonGst && (
         <div className="mt-4 pt-3 border-t border-dashed border-border/50 text-[10px] space-y-1">
           <div className="font-semibold text-muted-foreground uppercase tracking-wider mb-1">GST Breakdown matrix</div>
           {totals.taxSummary.map((sm) => (

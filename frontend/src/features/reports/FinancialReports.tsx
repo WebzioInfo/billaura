@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../shared/components/ui/Card';
 import { Button } from '../../shared/components/ui/Button';
-import { FileText, BookOpen, Activity, Landmark, LineChart } from 'lucide-react';
+import { FileText, BookOpen, Activity, Landmark, LineChart, Building } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const FinancialReports = () => {
@@ -12,7 +12,8 @@ export const FinancialReports = () => {
     { title: 'Balance Sheet', icon: Landmark, path: '/balance-sheet', desc: 'View assets, liabilities, and equity' },
     { title: 'Trial Balance', icon: BookOpen, path: '/trial-balance', desc: 'Verify that debits equal credits' },
     { title: 'General Ledger', icon: FileText, path: '/general-ledger', desc: 'Detailed transactions by account' },
-    { title: 'Day Book', icon: LineChart, path: '/day-book', desc: 'Daily transaction summary' }
+    { title: 'Day Book', icon: LineChart, path: '/day-book', desc: 'Daily transaction summary' },
+    { title: 'Departmental Performance', icon: Building, path: '/reports/departmental', desc: 'Inspect department headcount, payroll cost, and profitability' }
   ];
 
   return (
