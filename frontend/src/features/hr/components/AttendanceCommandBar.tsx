@@ -50,8 +50,11 @@ export const AttendanceCommandBar: React.FC<AttendanceCommandBarProps> = ({
           <Button variant="outline" onClick={onExport} className="h-10 flex gap-2">
             <Download className="w-4 h-4" /> Export CSV
           </Button>
+          <Button variant="outline" className="h-10 flex gap-2">
+            Import CSV
+          </Button>
           <Button variant="primary" onClick={onBulkMark} className="h-10 flex gap-2">
-            <Users className="w-4 h-4" /> Bulk Attendance
+            <Users className="w-4 h-4" /> Bulk Actions
           </Button>
         </div>
       </div>
@@ -90,10 +93,13 @@ export const AttendanceCommandBar: React.FC<AttendanceCommandBarProps> = ({
           <option value="PRESENT">Present</option>
           <option value="ABSENT">Absent</option>
           <option value="HALF_DAY">Half Day</option>
-          <option value="LEAVE">Leave</option>
-          <option value="REMOTE">Remote</option>
-          <option value="WORK_FROM_HOME">Work from Home</option>
+          <option value="PAID_LEAVE">Paid Leave</option>
+          <option value="UNPAID_LEAVE">Unpaid Leave</option>
           <option value="HOLIDAY">Holiday</option>
+          <option value="WEEK_OFF">Week Off</option>
+          <option value="REMOTE">Remote</option>
+          <option value="ON_DUTY">On Duty</option>
+          <option value="TRAINING">Training</option>
         </select>
         <Button variant="ghost" className="h-10 text-muted-foreground hover:text-foreground" onClick={() => setFilters({})}>
           Clear Filters

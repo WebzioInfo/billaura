@@ -45,7 +45,23 @@ export class HrController {
     await this.hrService.removeEmployee(id);
   }
 
-  // --- ATTENDANCES ---
+  @Get("attendances/sheet")
+  async getAttendanceSheet(
+    @Query('date') date?: string,
+    @Query('departmentId') departmentId?: string,
+    @Query('designationId') designationId?: string,
+    @Query('branchId') branchId?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.hrService.getAttendanceSheet({
+      date,
+      departmentId,
+      designationId,
+      branchId,
+      search,
+    });
+  }
+
   @Get("attendances")
   async findAttendances(
     @Query('page') page?: string,
@@ -77,8 +93,18 @@ export class HrController {
   }
 
   @Post("attendances/bulk")
-  async bulkRecordAttendance(@Body() dto: BulkRecordAttendanceDto) {
+  async bulkRecordAttendance(@Body() dto: any) {
     return this.hrService.bulkRecordAttendance(dto);
+  }
+
+  @Post("attendances/status")
+  async updateAttendanceStatus(@Body() dto: { date: string; status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'LOCKED' }) {
+    return this.hrService.updateAttendanceStatus(dto);
+  }
+
+  @Post("attendances/correction")
+  async requestAttendanceCorrection(@Body() dto: { attendanceId: string; employeeId: string; reason: string; requestedBy: string }) {
+    return this.hrService.requestAttendanceCorrection(dto);
   }
 
   @Get('salary-slips')
@@ -99,8 +125,8 @@ export class HrController {
   }
 
   @Post('salary-slips/generate')
-  async generateSalarySlip(@Body() dto: GenerateSalarySlipDto) {
-    return this.hrService.generateSalarySlip(dto);
+  async generatePayroll(@Body() dto: { month: number; year: number; departmentId?: string; branchId?: string }) {
+    return this.hrService.generatePayroll(dto);
   }
 
   @Post('salary-slips/:id/pay')

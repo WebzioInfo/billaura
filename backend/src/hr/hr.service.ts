@@ -112,9 +112,35 @@ export class HrService {
     }
 
     const employee = await this.prisma.employee.findFirst({
-      where: { id, companyId }
+      where: { id, companyId },
+      include: {
+        attendances: { select: { id: true }, take: 1 },
+        leaveApplications: { select: { id: true }, take: 1 },
+        salarySlips: { select: { id: true }, take: 1 },
+        advances: { select: { id: true }, take: 1 },
+        loans: { select: { id: true }, take: 1 },
+        expenses: { select: { id: true }, take: 1 },
+        otherIncomes: { select: { id: true }, take: 1 },
+        commissionRecords: { select: { id: true }, take: 1 },
+        reportees: { select: { id: true }, take: 1 },
+      }
     });
     if (!employee) throw new NotFoundException('Employee not found');
+
+    const linkedModules: string[] = [];
+    if (employee.attendances?.length > 0) linkedModules.push('Attendance');
+    if (employee.leaveApplications?.length > 0) linkedModules.push('Leave');
+    if (employee.salarySlips?.length > 0) linkedModules.push('Salary');
+    if (employee.advances?.length > 0) linkedModules.push('Advances');
+    if (employee.loans?.length > 0) linkedModules.push('Loans');
+    if (employee.expenses?.length > 0) linkedModules.push('Expenses');
+    if (employee.otherIncomes?.length > 0) linkedModules.push('Other Income');
+    if (employee.commissionRecords?.length > 0) linkedModules.push('Commissions');
+    if (employee.reportees?.length > 0) linkedModules.push('Reporting Manager');
+
+    if (linkedModules.length > 0) {
+      throw new ConflictException(`Cannot delete employee. Linked records found in: ${linkedModules.join(', ')}.`);
+    }
 
     return this.prisma.employee.update({
       where: { id },
@@ -124,6 +150,112 @@ export class HrService {
 
   // --- ATTENDANCES ---
 
+  async getAttendanceSheet(filters: any = {}) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const targetDate = filters.date ? new Date(filters.date) : new Date();
+    targetDate.setUTCHours(0, 0, 0, 0);
+
+    const employeeWhere: any = { companyId, deletedAt: null, status: 'ACTIVE' };
+    
+    if (filters.departmentId) employeeWhere.departmentId = filters.departmentId;
+    if (filters.designationId) employeeWhere.designationId = filters.designationId;
+    if (filters.branchId) employeeWhere.branchId = filters.branchId;
+    
+    if (filters.search) {
+      employeeWhere.name = { contains: filters.search, mode: 'insensitive' };
+    }
+
+    const employees = await this.prisma.employee.findMany({
+      where: employeeWhere,
+      include: {
+        department: true,
+        designation: true,
+        shift: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const attendances = await this.prisma.attendance.findMany({
+      where: {
+        companyId,
+        date: targetDate,
+        employeeId: { in: employees.map(e => e.id) },
+      }
+    });
+
+    const attendanceMap = new Map();
+    for (const record of attendances) {
+      attendanceMap.set(record.employeeId, record);
+    }
+
+    const sheet = employees.map(emp => {
+      const record = attendanceMap.get(emp.id);
+      return {
+        employee: emp,
+        attendance: record || {
+          id: null,
+          employeeId: emp.id,
+          date: targetDate,
+          type: 'NOT_MARKED',
+          checkIn: null,
+          checkOut: null,
+          workingHours: 0,
+          remarks: ''
+        }
+      };
+    });
+
+    return sheet;
+  }
+
+  async updateAttendanceStatus(dto: { date: string; status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'LOCKED' }) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const targetDate = new Date(dto.date);
+    targetDate.setUTCHours(0, 0, 0, 0);
+
+    const updateData: any = { status: dto.status };
+    
+    // In a real scenario, you'd get the user ID from the request context
+    // For now we'll just set the timestamps
+    if (dto.status === 'APPROVED') {
+      updateData.approvedAt = new Date();
+    } else if (dto.status === 'LOCKED') {
+      updateData.lockedAt = new Date();
+    }
+
+    const updated = await this.prisma.attendance.updateMany({
+      where: {
+        companyId,
+        date: targetDate,
+      },
+      data: updateData,
+    });
+
+    return { success: true, count: updated.count };
+  }
+
+  async requestAttendanceCorrection(dto: { attendanceId: string; employeeId: string; reason: string; requestedBy: string }) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    return this.prisma.attendanceCorrection.create({
+      data: {
+        attendanceId: dto.attendanceId,
+        employeeId: dto.employeeId,
+        requestedBy: dto.requestedBy,
+        reason: dto.reason,
+        status: 'PENDING'
+      }
+    });
+  }
   async findAttendances(filters: any = {}) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
@@ -204,6 +336,12 @@ export class HrService {
 
     const dateVal = new Date(dto.date);
     dateVal.setUTCHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setUTCHours(23, 59, 59, 999);
+    if (dateVal > today) {
+      throw new ConflictException(`Cannot mark attendance for a future date: ${dto.date}`);
+    }
 
     return this.prisma.attendance.upsert({
       where: {
@@ -302,44 +440,116 @@ export class HrService {
     });
   }
 
-  async generateSalarySlip(dto: GenerateSalarySlipDto) {
+  async generatePayroll(dto: { month: number; year: number; departmentId?: string; branchId?: string }) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
-    const employee = await this.prisma.employee.findFirst({
-      where: { id: dto.employeeId, companyId },
-    });
-    if (!employee) throw new NotFoundException('Employee not found');
+    const employeeWhere: any = { companyId, deletedAt: null, status: 'ACTIVE' };
+    if (dto.departmentId) employeeWhere.departmentId = dto.departmentId;
+    if (dto.branchId) employeeWhere.branchId = dto.branchId;
 
-    const basicSalary = Number(employee.basicSalary);
-    let allowancesAmount = 0;
-    
-    // Sum allowances if any
-    const allowancesArr = employee.allowances as any[];
-    if (allowancesArr && Array.isArray(allowancesArr)) {
-      allowancesAmount = allowancesArr.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+    const employees = await this.prisma.employee.findMany({ where: employeeWhere });
+    if (!employees.length) throw new NotFoundException('No active employees found for the given filters');
+
+    const startDate = new Date(Date.UTC(dto.year, dto.month - 1, 1));
+    const endDate = new Date(Date.UTC(dto.year, dto.month, 0, 23, 59, 59, 999));
+    const daysInMonth = endDate.getUTCDate();
+
+    const attendances = await this.prisma.attendance.findMany({
+      where: {
+        companyId,
+        date: { gte: startDate, lte: endDate },
+        employeeId: { in: employees.map(e => e.id) },
+      }
+    });
+
+    const results = [];
+    for (const emp of employees) {
+      const empAtt = attendances.filter(a => a.employeeId === emp.id);
+      const present = empAtt.filter(a => a.type === 'PRESENT').length;
+      const absent = empAtt.filter(a => a.type === 'ABSENT' || a.type === 'UNPAID_LEAVE').length;
+      const halfDay = empAtt.filter(a => a.type === 'HALF_DAY').length;
+      const leave = empAtt.filter(a => a.type === 'LEAVE' || a.type === 'PAID_LEAVE').length;
+      const holiday = empAtt.filter(a => a.type === 'HOLIDAY' || a.type === 'WEEK_OFF').length;
+      const remote = empAtt.filter(a => a.type === 'REMOTE' || a.type === 'WORK_FROM_HOME' || a.type === 'TRAINING' || a.type === 'ON_DUTY').length;
+      
+      const totalPaidDays = present + leave + holiday + remote + (halfDay * 0.5);
+      const basic = Number(emp.basicSalary) || 0;
+      
+      const hra = basic * 0.40;
+      const standardAllowance = basic * 0.10;
+      const totalAllowances = hra + standardAllowance;
+      
+      const pf = basic * 0.12;
+      const pt = 200;
+      // Loss of pay for full absent days + half days
+      const lossOfPay = (basic / daysInMonth) * (absent + (halfDay * 0.5));
+      const totalDeductions = pf + pt + lossOfPay;
+      
+      const netSalary = (basic + totalAllowances) - totalDeductions;
+      
+      const earningsBreakdown = {
+        basicPay: basic,
+        hra,
+        standardAllowance
+      };
+      
+      const deductionsBreakdown = {
+        pf,
+        professionalTax: pt,
+        lossOfPay
+      };
+      
+      const attendanceSummary = {
+        present,
+        absent,
+        halfDay,
+        leave,
+        holiday,
+        remote,
+        totalPaidDays,
+        daysInMonth
+      };
+
+      const slip = await this.prisma.salarySlip.upsert({
+        where: {
+          employeeId_month_year: {
+            employeeId: emp.id,
+            month: dto.month,
+            year: dto.year,
+          }
+        },
+        update: {
+          basicSalary: basic,
+          allowances: totalAllowances,
+          deductions: totalDeductions,
+          netSalary,
+          paidDays: totalPaidDays,
+          absentDays: absent,
+          earningsBreakdown,
+          deductionsBreakdown,
+          attendanceSummary,
+        },
+        create: {
+          companyId,
+          employeeId: emp.id,
+          month: dto.month,
+          year: dto.year,
+          basicSalary: basic,
+          allowances: totalAllowances,
+          deductions: totalDeductions,
+          netSalary,
+          paidDays: totalPaidDays,
+          absentDays: absent,
+          earningsBreakdown,
+          deductionsBreakdown,
+          attendanceSummary,
+        }
+      });
+      results.push(slip);
     }
 
-    const bonus = dto.bonus || 0;
-    const deductions = dto.deductions || 0;
-    
-    // Net Salary = Basic + Allowances + Bonus - Deductions
-    const netSalary = basicSalary + allowancesAmount + bonus - deductions;
-
-    return this.prisma.salarySlip.create({
-      data: {
-        companyId,
-        employeeId: employee.id,
-        month: dto.month,
-        year: dto.year,
-        basicSalary,
-        allowances: allowancesAmount,
-        bonus,
-        deductions,
-        netSalary,
-        status: 'GENERATED',
-      },
-    });
+    return { success: true, generated: results.length };
   }
 
   async paySalarySlip(id: string, dto: PaySalarySlipDto) {

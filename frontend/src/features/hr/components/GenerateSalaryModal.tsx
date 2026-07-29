@@ -1,54 +1,51 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useGenerateSalarySlip } from '../hooks/useHr';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Button } from '@/shared/components/ui/Button';
+import notification from '@/core/services/NotificationService';
+import apiClient from '@/core/api';
+import { Modal } from '@/shared/components/ui/Modal';
+import { SearchableSelect } from '@/shared/components/ui/SearchableSelect';
 
 interface Props {
   onClose: () => void;
-  employees: any[];
 }
 
-export const GenerateSalaryModal: React.FC<Props> = ({ onClose, employees }) => {
-  const { register, handleSubmit, setError } = useForm();
-  const generateSlip = useGenerateSalarySlip(setError);
+export const GenerateSalaryModal: React.FC<Props> = ({ onClose }) => {
+  const { register, handleSubmit } = useForm();
+  const queryClient = useQueryClient();
+  const [departmentId, setDepartmentId] = useState('');
+  const [branchId, setBranchId] = useState('');
+
+  const { data: departments = [] } = useQuery({ queryKey: ['departments'], queryFn: async () => { const res = await apiClient.get('/hr-masters/departments'); return Array.isArray(res) ? res : res.data || []; }});
+  const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: async () => { const res = await apiClient.get('/branches'); return Array.isArray(res) ? res : res.data || []; }});
+
+  const generateMutation = useMutation({
+    mutationFn: (data: any) => apiClient.post('/salary-slips/generate', data),
+    onSuccess: (res: any) => {
+      notification.success(`Successfully generated payroll for ${res.data?.generated || 'employees'}`);
+      queryClient.invalidateQueries({ queryKey: ['salarySlips'] });
+      onClose();
+    },
+    onError: (err: any) => notification.error(err.response?.data?.message || 'Generation failed')
+  });
 
   const onSubmit = (data: any) => {
-    generateSlip.mutate(
-      {
-        employeeId: data.employeeId,
-        month: parseInt(data.month),
-        year: parseInt(data.year),
-        bonus: data.bonus ? parseFloat(data.bonus) : 0,
-        deductions: data.deductions ? parseFloat(data.deductions) : 0,
-      },
-      {
-        onSuccess: () => {
-          onClose();
-        },
-      }
-    );
+    generateMutation.mutate({
+      month: parseInt(data.month),
+      year: parseInt(data.year),
+      ...(departmentId ? { departmentId } : {}),
+      ...(branchId ? { branchId } : {}),
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-md bg-surface p-6">
-        <h2 className="mb-4 text-xl font-semibold">Generate Salary Slip</h2>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium">Employee</label>
-            <select
-              {...register('employeeId', { required: true })}
-              className="mt-1 block w-full rounded-md border-border bg-background p-2"
-            >
-              <option value="">Select Employee</option>
-              {employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.name} ({emp.employeeCode})
-                </option>
-              ))}
-            </select>
-          </div>
-
+    <Modal isOpen={true} onClose={onClose} title="Generate Payroll" maxWidth="md">
+      <div className="flex flex-col space-y-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          This will calculate salaries for all active employees for the selected month, taking into account their attendance, basic salary, and standard components.
+        </p>
+        <form id="generate-payroll-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="flex space-x-4">
             <div className="flex-1">
               <label className="block text-sm font-medium">Month (1-12)</label>
@@ -56,6 +53,7 @@ export const GenerateSalaryModal: React.FC<Props> = ({ onClose, employees }) => 
                 type="number"
                 min="1"
                 max="12"
+                defaultValue={new Date().getMonth() + 1}
                 {...register('month', { required: true })}
                 className="mt-1 block w-full rounded-md border-border bg-background p-2"
               />
@@ -65,42 +63,41 @@ export const GenerateSalaryModal: React.FC<Props> = ({ onClose, employees }) => 
               <input
                 type="number"
                 min="2000"
+                defaultValue={new Date().getFullYear()}
                 {...register('year', { required: true })}
                 className="mt-1 block w-full rounded-md border-border bg-background p-2"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium">Bonus (Optional)</label>
-            <input
-              type="number"
-              step="0.01"
-              {...register('bonus')}
-              className="mt-1 block w-full rounded-md border-border bg-background p-2"
-            />
-          </div>
+          <SearchableSelect 
+            label="Department Filter (Optional)" 
+            value={departmentId} 
+            onChange={(val) => setDepartmentId(val)} 
+            placeholder="All Departments"
+            options={departments} 
+            mapOption={(d: any) => ({ label: d.name, value: d.id })}
+          />
 
-          <div>
-            <label className="block text-sm font-medium">Deductions (Optional)</label>
-            <input
-              type="number"
-              step="0.01"
-              {...register('deductions')}
-              className="mt-1 block w-full rounded-md border-border bg-background p-2"
-            />
-          </div>
+          <SearchableSelect 
+            label="Branch Filter (Optional)" 
+            value={branchId} 
+            onChange={(val) => setBranchId(val)} 
+            placeholder="All Branches"
+            options={branches} 
+            mapOption={(b: any) => ({ label: b.name, value: b.id })}
+          />
 
-          <div className="flex justify-end space-x-2 pt-4">
+          <div className="flex justify-end space-x-2 pt-4 border-t border-border mt-6">
             <Button variant="outline" type="button" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={generateSlip.isPending}>
-              {generateSlip.isPending ? 'Generating...' : 'Generate'}
+            <Button type="submit" variant="primary" isLoading={generateMutation.isPending}>
+              Generate Payroll
             </Button>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

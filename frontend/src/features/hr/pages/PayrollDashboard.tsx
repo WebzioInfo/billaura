@@ -6,21 +6,19 @@ import { Badge } from '../../../shared/components/ui/Badge';
 import { Button } from '../../../shared/components/ui/Button';
 import { GenerateSalaryModal } from '../components/GenerateSalaryModal';
 import { PaySalaryModal } from '../components/PaySalaryModal';
+import { Payslip } from '../components/Payslip';
 import { apiClient } from '../../../core/api/apiClient';
-import { Plus } from 'lucide-react';
+import { Plus, Eye } from 'lucide-react';
+import { Dialog } from '@headlessui/react';
 
 export const PayrollDashboard: React.FC = () => {
   const { data: salarySlips = [], isLoading } = useSalarySlips();
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [paySlipId, setPaySlipId] = useState<string | null>(null);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [viewingSlip, setViewingSlip] = useState<any | null>(null);
 
   const handleOpenGenerate = () => {
-    apiClient.get('/employees').then((res: any) => {
-      const list = res.data || res;
-      setEmployees(Array.isArray(list) ? list : (list?.data || []));
-      setIsGenerateOpen(true);
-    });
+    setIsGenerateOpen(true);
   };
 
   const formatCurrency = (val: number) => {
@@ -58,14 +56,18 @@ export const PayrollDashboard: React.FC = () => {
       header: 'Actions',
       cell: (info: any) => {
         const row = info.row.original;
-        if (row.status === 'GENERATED') {
-          return (
-            <Button size="sm" onClick={() => setPaySlipId(row.id)}>
-              Pay Now
+        return (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setViewingSlip(row)}>
+              <Eye className="w-4 h-4 mr-1" /> View
             </Button>
-          );
-        }
-        return null;
+            {row.status === 'GENERATED' && (
+              <Button size="sm" onClick={() => setPaySlipId(row.id)}>
+                Pay Now
+              </Button>
+            )}
+          </div>
+        );
       },
     },
   ];
@@ -95,7 +97,6 @@ export const PayrollDashboard: React.FC = () => {
 
       {isGenerateOpen && (
         <GenerateSalaryModal
-          employees={employees}
           onClose={() => setIsGenerateOpen(false)}
         />
       )}
@@ -105,6 +106,20 @@ export const PayrollDashboard: React.FC = () => {
           salarySlipId={paySlipId}
           onClose={() => setPaySlipId(null)}
         />
+      )}
+
+      {viewingSlip && (
+        <Dialog open={true} onClose={() => setViewingSlip(null)} className="relative z-50">
+          <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Dialog.Panel className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-xl">
+              <div className="flex justify-end p-2 sticky top-0 bg-white border-b z-10">
+                <Button variant="ghost" onClick={() => setViewingSlip(null)}>Close</Button>
+              </div>
+              <Payslip salarySlip={viewingSlip} company={viewingSlip.company} />
+            </Dialog.Panel>
+          </div>
+        </Dialog>
       )}
     </div>
   );

@@ -39,7 +39,7 @@ export const AttendanceList = () => {
     }
   });
 
-  const { data: attendanceData, isLoading: attendanceLoading, refetch } = useQuery({
+  const { data: attendanceData = [], isLoading: attendanceLoading, refetch } = useQuery({
     queryKey: ['attendances-advanced', filters, searchTerm],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -47,16 +47,25 @@ export const AttendanceList = () => {
       if (filters.departmentId) params.append('departmentId', filters.departmentId);
       if (filters.designationId) params.append('designationId', filters.designationId);
       if (filters.date) {
-        params.append('startDate', filters.date);
-        params.append('endDate', filters.date);
+        params.append('date', filters.date);
       }
-      if (filters.status) params.append('status', filters.status);
-      params.append('limit', '100');
-
-      const res = await apiClient.get(`/attendances?${params.toString()}`);
-      return res.data;
+      const res = await apiClient.get(`/attendances/sheet?${params.toString()}`);
+      return Array.isArray(res.data) ? res.data : [];
     }
   });
+
+  const [localAttendances, setLocalAttendances] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (attendanceData && Array.isArray(attendanceData)) {
+      setLocalAttendances(
+        attendanceData.map((row: any) => ({
+          ...row.attendance,
+          employee: row.employee
+        }))
+      );
+    }
+  }, [attendanceData]);
 
   const bulkMarkMutation = useMutation({
     mutationFn: async (payload: { records: any[] }) => {
@@ -64,25 +73,51 @@ export const AttendanceList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendances-advanced'] });
-      notification.success(`Successfully marked attendance for ${selectedIds.length} employees`);
+      notification.success(`Successfully saved attendance.`);
       setSelectedIds([]);
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to bulk mark attendance');
+      notification.error(err.response?.data?.message || 'Failed to save attendance');
     }
   });
+
+  const handleSaveAll = () => {
+    const records = localAttendances.map(a => ({
+      employeeId: a.employeeId || a.employee.id,
+      date: filters.date || new Date().toISOString().split('T')[0],
+      type: a.type,
+      checkIn: a.checkIn,
+      checkOut: a.checkOut,
+      notes: a.notes,
+      workingHours: a.workingHours
+    }));
+    bulkMarkMutation.mutate({ records });
+  };
+
+  const handleRowChange = (employeeId: string, field: string, value: any) => {
+    setLocalAttendances(prev => 
+      prev.map(row => {
+        if ((row.employeeId || row.employee.id) === employeeId) {
+          return { ...row, [field]: value };
+        }
+        return row;
+      })
+    );
+  };
 
   const handleBulkMark = (status: string) => {
     if (selectedIds.length === 0) {
       notification.error('Please select at least one employee');
       return;
     }
-    const records = selectedIds.map(empId => ({
-      employeeId: empId,
-      date: filters.date || new Date().toISOString().split('T')[0],
-      type: status
-    }));
-    bulkMarkMutation.mutate({ records });
+    setLocalAttendances(prev => 
+      prev.map(row => {
+        if (selectedIds.includes(row.employeeId || row.employee.id)) {
+          return { ...row, type: status };
+        }
+        return row;
+      })
+    );
   };
 
   const handleSelectToggle = (id: string) => {
@@ -93,14 +128,13 @@ export const AttendanceList = () => {
     if (!checked) {
       setSelectedIds([]);
     } else {
-      const allIds = attendanceData?.items?.map((a: any) => a.employeeId) || [];
+      const allIds = localAttendances.map((row: any) => row.employeeId || row.employee.id);
       setSelectedIds(allIds);
     }
   };
 
-  const attendances = attendanceData?.items || [];
-  
-  // Calculate KPI stats
+  const attendances = localAttendances;
+
   const stats = {
     present: attendances.filter((a: any) => a.type === 'PRESENT').length,
     absent: attendances.filter((a: any) => a.type === 'ABSENT').length,
@@ -171,6 +205,16 @@ export const AttendanceList = () => {
         <Button size="sm" variant={viewMode === 'calendar' ? 'primary' : 'outline'} onClick={() => setViewMode('calendar')}>Calendar View</Button>
       </div>
 
+      {/* Header Actions */}
+      <div className="flex justify-between items-center mt-6">
+        <h1 className="text-2xl font-bold">Attendance Register</h1>
+        <div className="flex gap-2">
+          <Button variant="primary" className="flex items-center gap-2" onClick={handleSaveAll} isLoading={bulkMarkMutation.isPending}>
+            <CheckSquare className="w-4 h-4" /> Save Sheet
+          </Button>
+        </div>
+      </div>
+
       <div className="mt-2">
         {attendanceLoading ? (
           <TableLoader cols={8} rows={8} className="border border-border/80 bg-surface rounded-2xl" />
@@ -194,7 +238,7 @@ export const AttendanceList = () => {
             selectedIds={selectedIds}
             onSelectToggle={handleSelectToggle}
             onSelectAll={handleSelectAll}
-            onRowClick={(record) => setSelectedEmployee(record.employee)}
+            onRowChange={handleRowChange}
           />
         )}
       </div>

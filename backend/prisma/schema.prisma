@@ -223,7 +223,12 @@ model User {
   backupLogs          BackupLog[]
   backupSchedules     BackupSchedule[]
   companies           CompanyUser[]
-  approvedAdvances    EmployeeAdvance[]     @relation("AdvanceApprover")
+  approvedAttendances  Attendance[]          @relation("AttendanceApprovedBy")
+  lockedAttendances    Attendance[]          @relation("AttendanceLockedBy")
+  attendanceAuditLogs  AttendanceAuditLog[]
+  requestedCorrections AttendanceCorrection[] @relation("CorrectionRequester")
+  approvedCorrections  AttendanceCorrection[] @relation("CorrectionApprover")
+  approvedAdvances     EmployeeAdvance[]     @relation("AdvanceApprover")
   uploadedAttachments ExpenseAttachment[]   @relation("ExpenseUploader")
   expenseComments     ExpenseComment[]
   expenseHistories    ExpenseHistory[]
@@ -1744,6 +1749,7 @@ model Employee {
   employmentType     EmploymentType? @relation(fields: [employmentTypeId], references: [id])
 
   attendances       Attendance[]
+  corrections       AttendanceCorrection[]
   employeeAdvances  EmployeeAdvance[]
   loans             EmployeeLoan[]
   company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -1763,11 +1769,12 @@ model Employee {
 }
 
 model Attendance {
-  id           String         @id @default(cuid())
+  id           String           @id @default(cuid())
   companyId    String
   employeeId   String
   date         DateTime
   type         AttendanceType
+  status       AttendanceStatus @default(DRAFT)
   checkIn      DateTime?
   checkOut     DateTime?
   workingHours Float? // in hours
@@ -1776,11 +1783,58 @@ model Attendance {
   lateBy       Float? // in minutes
   earlyExit    Float? // in minutes
   notes        String?
+  
+  approvedById String?
+  lockedById   String?
+  approvedAt   DateTime?
+  lockedAt     DateTime?
+
   company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  approvedBy   User?          @relation("AttendanceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  lockedBy     User?          @relation("AttendanceLockedBy", fields: [lockedById], references: [id], onDelete: SetNull)
+  
+  auditLogs    AttendanceAuditLog[]
+  corrections  AttendanceCorrection[]
 
   @@unique([employeeId, date])
   @@map("attendances")
+}
+
+model AttendanceAuditLog {
+  id           String     @id @default(cuid())
+  attendanceId String
+  userId       String?
+  changedField String
+  oldValue     String?
+  newValue     String?
+  reason       String?
+  ipAddress    String?
+  createdAt    DateTime   @default(now())
+
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("attendance_audit_logs")
+}
+
+model AttendanceCorrection {
+  id           String     @id @default(cuid())
+  attendanceId String
+  employeeId   String
+  requestedBy  String
+  approvedBy   String?
+  status       LeaveStatus @default(PENDING)
+  reason       String
+  requestedAt  DateTime   @default(now())
+  resolvedAt   DateTime?
+
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  employee     Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requester    User       @relation("CorrectionRequester", fields: [requestedBy], references: [id])
+  approver     User?      @relation("CorrectionApprover", fields: [approvedBy], references: [id])
+
+  @@map("attendance_corrections")
 }
 
 model LeaveApplication {
@@ -1803,22 +1857,27 @@ model LeaveApplication {
 }
 
 model SalarySlip {
-  id          String   @id @default(cuid())
-  companyId   String
-  employeeId  String
-  month       Int
-  year        Int
-  basicSalary Decimal  @db.Decimal(15, 2)
-  allowances  Decimal  @db.Decimal(15, 2)
-  bonus       Decimal  @default(0) @db.Decimal(15, 2)
-  incentives  Decimal  @default(0) @db.Decimal(15, 2)
-  advances    Decimal  @default(0) @db.Decimal(15, 2)
-  deductions  Decimal  @default(0) @db.Decimal(15, 2)
-  netSalary   Decimal  @db.Decimal(15, 2)
-  status      String   @default("GENERATED")
-  generatedAt DateTime @default(now())
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(cuid())
+  companyId           String
+  employeeId          String
+  month               Int
+  year                Int
+  basicSalary         Decimal  @db.Decimal(15, 2)
+  allowances          Decimal  @db.Decimal(15, 2)
+  bonus               Decimal  @default(0) @db.Decimal(15, 2)
+  incentives          Decimal  @default(0) @db.Decimal(15, 2)
+  advances            Decimal  @default(0) @db.Decimal(15, 2)
+  deductions          Decimal  @default(0) @db.Decimal(15, 2)
+  netSalary           Decimal  @db.Decimal(15, 2)
+  status              String   @default("GENERATED")
+  paidDays            Float    @default(0)
+  absentDays          Float    @default(0)
+  earningsBreakdown   Json?
+  deductionsBreakdown Json?
+  attendanceSummary   Json?
+  generatedAt         DateTime @default(now())
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee            Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, month, year])
   @@map("salary_slips")
@@ -2527,6 +2586,13 @@ enum SalaryType {
   HOURLY
 }
 
+enum AttendanceStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  LOCKED
+}
+
 enum AttendanceType {
   PRESENT
   ABSENT
@@ -2535,6 +2601,11 @@ enum AttendanceType {
   HOLIDAY
   REMOTE
   WORK_FROM_HOME
+  PAID_LEAVE
+  UNPAID_LEAVE
+  WEEK_OFF
+  TRAINING
+  ON_DUTY
 }
 
 enum LeaveStatus {

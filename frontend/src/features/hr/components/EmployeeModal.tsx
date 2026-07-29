@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
@@ -11,9 +11,10 @@ import { SearchableSelect } from '@/shared/components/ui/SearchableSelect';
 interface EmployeeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialData?: any;
 }
 
-export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose }) => {
+export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, initialData }) => {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     employeeCode: '',
@@ -32,6 +33,48 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose })
     status: 'ACTIVE',
   });
 
+  useEffect(() => {
+    if (initialData && isOpen) {
+      const names = initialData.name ? initialData.name.split(' ') : ['', ''];
+      const firstName = names[0] || '';
+      const lastName = names.slice(1).join(' ') || '';
+
+      setFormData({
+        employeeCode: initialData.employeeCode || '',
+        firstName,
+        lastName,
+        email: initialData.email || '',
+        mobile: initialData.mobile || '',
+        departmentId: initialData.departmentId || '',
+        designationId: initialData.designationId || '',
+        costCenterId: initialData.costCenterId || '',
+        employmentTypeId: initialData.employmentTypeId || '',
+        shiftId: initialData.shiftId || '',
+        branchId: initialData.branchId || '',
+        joiningDate: initialData.joiningDate ? new Date(initialData.joiningDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        basicSalary: initialData.basicSalary || 0,
+        status: initialData.status || 'ACTIVE',
+      });
+    } else if (isOpen && !initialData) {
+      setFormData({
+        employeeCode: '',
+        firstName: '',
+        lastName: '',
+        email: '',
+        mobile: '',
+        departmentId: '',
+        designationId: '',
+        costCenterId: '',
+        employmentTypeId: '',
+        shiftId: '',
+        branchId: '',
+        joiningDate: new Date().toISOString().split('T')[0],
+        basicSalary: 0,
+        status: 'ACTIVE',
+      });
+    }
+  }, [initialData, isOpen]);
+
   const { data: departments = [], isLoading: depsLoading } = useQuery({ queryKey: ['departments'], queryFn: async () => { const res = await apiClient.get('/hr-masters/departments'); return Array.isArray(res) ? res : res.data || []; }});
   
   const { data: designations = [], isLoading: desgsLoading } = useQuery({ 
@@ -47,14 +90,19 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose })
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: async () => { const res = await apiClient.get('/branches'); return Array.isArray(res) ? res : res.data || []; }});
   const { data: costCenters = [] } = useQuery({ queryKey: ['cost-centers'], queryFn: async () => { const res = await apiClient.get('/cost-centers'); return Array.isArray(res.data?.items || res.items || res.data || res) ? (res.data?.items || res.items || res.data || res) : []; }});
 
-  const createMutation = useMutation({
-    mutationFn: (data: any) => apiClient.post('/employees', data),
+  const saveMutation = useMutation({
+    mutationFn: (data: any) => {
+      if (initialData?.id) {
+        return apiClient.put(`/employees/${initialData.id}`, data);
+      }
+      return apiClient.post('/employees', data);
+    },
     onSuccess: () => {
-      notification.success('Employee created successfully');
+      notification.success(`Employee ${initialData ? 'updated' : 'created'} successfully`);
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       onClose();
     },
-    onError: (err: any) => notification.error(err.response?.data?.message || 'Creation failed')
+    onError: (err: any) => notification.error(err.response?.data?.message || 'Operation failed')
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -79,7 +127,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose })
       ...(branchId ? { branchId } : {}),
     };
 
-    createMutation.mutate(payload);
+    saveMutation.mutate(payload);
   };
 
   const handleChange = (field: string, value: any) => {
@@ -91,7 +139,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose })
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Employee" maxWidth="2xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={initialData ? "Edit Employee" : "Add Employee"} maxWidth="2xl">
       <div className="flex flex-col space-y-4">
         <form id="employee-form" onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -162,7 +210,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose })
         </form>
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border">
           <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" type="submit" form="employee-form" isLoading={createMutation.isPending}>Save Employee</Button>
+          <Button variant="primary" type="submit" form="employee-form" isLoading={saveMutation.isPending}>{initialData ? "Update Employee" : "Save Employee"}</Button>
         </div>
       </div>
     </Modal>
