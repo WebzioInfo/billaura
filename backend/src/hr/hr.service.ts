@@ -2,7 +2,8 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../database/prisma.service';
 import { CreateEmployeeDto } from './dto/employee.dto';
 import { RecordAttendanceDto } from './dto/attendance.dto';
-import { GenerateSalarySlipDto, PaySalarySlipDto } from './dto/payroll.dto';
+import { AttendanceEngine } from './attendance-engine';
+import { GenerateSalarySlipDto, PaySalarySlipDto, UpdateSalarySlipDto } from './dto/payroll.dto';
 import { CompanyContext } from '../common/context/company-context';
 
 @Injectable()
@@ -11,13 +12,27 @@ export class HrService {
 
 // Removed Departments & Designations
 
-  async findEmployees() {
+  async findEmployees(query?: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
+
+    const where: any = { companyId, deletedAt: null };
+    if (query && query.trim()) {
+      const q = query.trim();
+      where.OR = [
+        { name: { contains: q } },
+        { employeeCode: { contains: q } },
+        { email: { contains: q } },
+        { mobile: { contains: q } },
+        { panNumber: { contains: q } },
+        { aadhaarNumber: { contains: q } },
+      ];
+    }
+
     return this.prisma.employee.findMany({
-      where: { companyId, deletedAt: null },
+      where,
       include: {
         department: true,
         designation: true,
@@ -27,6 +42,53 @@ export class HrService {
       },
       orderBy: { name: 'asc' },
     });
+  }
+
+  async getEmployeeById(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const employee = await this.prisma.employee.findFirst({
+      where: { id, companyId, deletedAt: null },
+      include: {
+        department: true,
+        designation: true,
+        branch: true,
+        shift: true,
+        employmentType: true,
+        reportingManager: true,
+        attendances: {
+          orderBy: { date: 'desc' },
+          take: 30
+        },
+        salaryRevisions: {
+          orderBy: { effectiveDate: 'desc' },
+          include: {
+            components: {
+              include: { component: true }
+            }
+          }
+        },
+        salarySlips: {
+          orderBy: { startDate: 'desc' },
+          take: 12
+        },
+        leaveApplications: {
+          orderBy: { createdAt: 'desc' },
+          take: 10
+        },
+        advances: true,
+        loans: true
+      }
+    });
+
+    if (!employee) {
+      throw new NotFoundException(`Employee with ID ${id} not found`);
+    }
+
+    return employee;
   }
 
   async createEmployee(dto: CreateEmployeeDto) {
@@ -209,7 +271,37 @@ export class HrService {
       };
     });
 
-    return sheet;
+    // Detect Holiday or Weekly Off
+    let holidayInfo: { isHoliday: boolean; type?: 'PUBLIC_HOLIDAY' | 'WEEKLY_OFF'; name?: string } = { isHoliday: false };
+    
+    // Check Weekly Off (Default Sunday = 0)
+    const companySettings = await this.prisma.companySettings.findUnique({
+      where: { companyId },
+      select: { hrSettings: true }
+    });
+    const hrSettings = (companySettings?.hrSettings as any) || {};
+    const weeklyOffDays: number[] = hrSettings.weeklyOffDays ?? [0]; // default Sunday
+    
+    if (weeklyOffDays.includes(targetDate.getDay())) {
+      holidayInfo = { isHoliday: true, type: 'WEEKLY_OFF', name: 'Weekly Off' };
+    }
+
+    // Check Company Holiday Calendar
+    if (!holidayInfo.isHoliday) {
+      const holiday = await this.prisma.holidayCalendar.findFirst({
+        where: {
+          companyId,
+          isActive: true,
+          deletedAt: null,
+          date: targetDate
+        }
+      });
+      if (holiday) {
+        holidayInfo = { isHoliday: true, type: 'PUBLIC_HOLIDAY', name: holiday.name };
+      }
+    }
+
+    return { sheet, holidayInfo };
   }
 
   async updateAttendanceStatus(dto: { date: string; status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'LOCKED' }) {
@@ -256,6 +348,136 @@ export class HrService {
       }
     });
   }
+  async getEmployeeAttendanceAnalytics(employeeId: string, year: number, month: number) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    // 1. Fetch Yearly Attendances & Company Holiday Master
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+    
+    const [yearlyAttendancesData, companyHolidays] = await Promise.all([
+      this.prisma.attendance.findMany({
+        where: {
+          companyId,
+          employeeId,
+          date: { gte: yearStart, lte: yearEnd }
+        },
+        orderBy: { date: 'asc' }
+      }),
+      this.prisma.holidayCalendar.findMany({
+        where: {
+          companyId,
+          deletedAt: null,
+          isActive: true,
+          date: { gte: yearStart, lte: yearEnd }
+        }
+      })
+    ]);
+
+    const holidayMap = new Map<string, string>();
+    companyHolidays.forEach(h => {
+      const dateStr = h.date.toISOString().split('T')[0];
+      holidayMap.set(dateStr, h.name);
+    });
+
+    const attendanceMap = new Map<string, any>();
+    yearlyAttendancesData.forEach(a => {
+      const dateStr = a.date.toISOString().split('T')[0];
+      attendanceMap.set(dateStr, a);
+    });
+
+    // Generate complete calendar entries for the requested month
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const calendarRecords: any[] = [];
+
+    // Convert DB attendances to standard format
+    const dbAttendanceList = yearlyAttendancesData.map(a => {
+      let lateMinutes = 0;
+      let overtimeMinutes = 0;
+      let workingMinutes = 0;
+
+      if (a.checkIn && a.checkOut) {
+        const ci = new Date(a.checkIn);
+        const co = new Date(a.checkOut);
+        workingMinutes = Math.floor((co.getTime() - ci.getTime()) / 60000);
+
+        const shiftStart = new Date(ci);
+        shiftStart.setHours(9, 0, 0, 0);
+        if (ci > shiftStart) {
+          lateMinutes = Math.floor((ci.getTime() - shiftStart.getTime()) / 60000);
+        }
+        if (workingMinutes > 480) {
+          overtimeMinutes = workingMinutes - 480;
+        }
+      }
+
+      return {
+        id: a.id,
+        date: a.date.toISOString().split('T')[0],
+        status: a.type,
+        checkIn: a.checkIn?.toISOString() || null,
+        checkOut: a.checkOut?.toISOString() || null,
+        workingMinutes,
+        lateMinutes,
+        overtimeMinutes,
+        remarks: a.notes,
+        isDatabaseRecord: true
+      };
+    });
+
+    // Merge exact holiday calendar dates
+    const holidayList = companyHolidays
+      .filter(h => !attendanceMap.has(h.date.toISOString().split('T')[0]))
+      .map(h => ({
+        date: h.date.toISOString().split('T')[0],
+        status: 'HOLIDAY',
+        remarks: h.name,
+        workingMinutes: 0,
+        overtimeMinutes: 0,
+        lateMinutes: 0,
+        isDatabaseRecord: true
+      }));
+
+    const attendances = [...dbAttendanceList, ...holidayList];
+
+    // 3. Compute Monthly KPI Summaries via AttendanceEngine
+    const monthlyAttendances = attendances.filter(a => {
+      const [y, m] = a.date.split('-');
+      return parseInt(y, 10) === year && parseInt(m, 10) === month;
+    });
+
+    const metrics = AttendanceEngine.computeMetrics(
+      monthlyAttendances.map(a => ({
+        employeeId,
+        date: a.date,
+        type: a.status,
+        workingMinutes: a.workingMinutes,
+        overtimeMinutes: a.overtimeMinutes,
+        lateMinutes: a.lateMinutes
+      })),
+      daysInMonth
+    );
+
+    return {
+      summary: {
+        present: metrics.present,
+        absent: metrics.absent,
+        halfDay: metrics.halfDay,
+        leave: metrics.leave,
+        holiday: metrics.holiday,
+        weeklyOff: metrics.weekOff,
+        lateCount: metrics.lateCount,
+        totalWorkingHours: metrics.totalWorkingHours,
+        totalOvertimeHours: +(metrics.totalOvertimeMinutes / 60).toFixed(1),
+        attendancePercentage: metrics.attendancePercentage,
+        totalPaidDays: metrics.totalPaidDays,
+        lossOfPayDays: metrics.lossOfPayDays
+      },
+      attendances
+    };
+  }
+
   async findAttendances(filters: any = {}) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
@@ -384,6 +606,10 @@ export class HrService {
       throw new ConflictException('Company context is required');
     }
 
+    if (!dto.records || dto.records.length === 0) {
+      return { success: true, message: "No changes detected.", recordsProcessed: 0 };
+    }
+
     const results = [];
     for (const record of dto.records) {
       try {
@@ -436,11 +662,11 @@ export class HrService {
           }
         }
       },
-      orderBy: [{ year: 'desc' }, { month: 'desc' }],
+      orderBy: [{ startDate: 'desc' }],
     });
   }
 
-  async generatePayroll(dto: { month: number; year: number; departmentId?: string; branchId?: string }) {
+  async generatePayroll(dto: { startDate: string | Date; endDate: string | Date; departmentId?: string; branchId?: string }) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
@@ -448,12 +674,27 @@ export class HrService {
     if (dto.departmentId) employeeWhere.departmentId = dto.departmentId;
     if (dto.branchId) employeeWhere.branchId = dto.branchId;
 
-    const employees = await this.prisma.employee.findMany({ where: employeeWhere });
+    const employees = await this.prisma.employee.findMany({ 
+      where: employeeWhere,
+      include: {
+        salaryRevisions: {
+          where: { status: 'ACTIVE' },
+          include: {
+            components: {
+              include: { component: true }
+            }
+          }
+        }
+      }
+    });
     if (!employees.length) throw new NotFoundException('No active employees found for the given filters');
 
-    const startDate = new Date(Date.UTC(dto.year, dto.month - 1, 1));
-    const endDate = new Date(Date.UTC(dto.year, dto.month, 0, 23, 59, 59, 999));
-    const daysInMonth = endDate.getUTCDate();
+    const startDate = new Date(dto.startDate);
+    const endDate = new Date(dto.endDate);
+    
+    // Calculate days between start and end (inclusive)
+    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+    const daysInMonth = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
     const attendances = await this.prisma.attendance.findMany({
       where: {
@@ -465,67 +706,102 @@ export class HrService {
 
     const results = [];
     for (const emp of employees) {
-      const empAtt = attendances.filter(a => a.employeeId === emp.id);
-      const present = empAtt.filter(a => a.type === 'PRESENT').length;
-      const absent = empAtt.filter(a => a.type === 'ABSENT' || a.type === 'UNPAID_LEAVE').length;
-      const halfDay = empAtt.filter(a => a.type === 'HALF_DAY').length;
-      const leave = empAtt.filter(a => a.type === 'LEAVE' || a.type === 'PAID_LEAVE').length;
-      const holiday = empAtt.filter(a => a.type === 'HOLIDAY' || a.type === 'WEEK_OFF').length;
-      const remote = empAtt.filter(a => a.type === 'REMOTE' || a.type === 'WORK_FROM_HOME' || a.type === 'TRAINING' || a.type === 'ON_DUTY').length;
+      // 1. Calculate Eligible Date Range for Mid-Month Joining & Resignation
+      let empPeriodStart = new Date(startDate);
+      let empPeriodEnd = new Date(endDate);
+
+      if (emp.joiningDate && new Date(emp.joiningDate) > empPeriodStart) {
+        empPeriodStart = new Date(emp.joiningDate);
+      }
+
+      const relievingDateVal = (emp as any).relievingDate;
+      if (relievingDateVal && new Date(relievingDateVal) < empPeriodEnd) {
+        empPeriodEnd = new Date(relievingDateVal);
+      }
+
+      // If employee joined after the payroll period end or resigned before start, skip or set 0
+      const isEligible = empPeriodStart <= endDate && empPeriodEnd >= startDate;
+      const eligibleDays = isEligible 
+        ? Math.max(0, Math.ceil((empPeriodEnd.getTime() - empPeriodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+        : 0;
+
+      const activeRevision = emp.salaryRevisions?.[0];
+      const monthlyBasic = activeRevision ? Number(activeRevision.basicSalary) : (Number(emp.basicSalary) || 0);
+
+      // Prorate base salary if employee joined mid-month or resigned mid-month
+      const proratedBasic = (monthlyBasic / daysInMonth) * eligibleDays;
+
+      const empAtt = attendances.filter(a => a.employeeId === emp.id && new Date(a.date) >= empPeriodStart && new Date(a.date) <= empPeriodEnd);
+      const metrics = AttendanceEngine.computeMetrics(
+        empAtt.map(a => ({
+          employeeId: emp.id,
+          date: a.date,
+          type: a.type
+        })),
+        eligibleDays
+      );
+
+      const totalPaidDays = metrics.totalPaidDays;
+      const lossOfPayDays = eligibleDays - totalPaidDays;
+      const dailyWage = proratedBasic / (eligibleDays || 1);
+      const lossOfPay = dailyWage * lossOfPayDays;
       
-      const totalPaidDays = present + leave + holiday + remote + (halfDay * 0.5);
-      const basic = Number(emp.basicSalary) || 0;
+      let totalAllowances = 0;
+      let totalDeductions = lossOfPay;
       
-      const hra = basic * 0.40;
-      const standardAllowance = basic * 0.10;
-      const totalAllowances = hra + standardAllowance;
-      
-      const pf = basic * 0.12;
-      const pt = 200;
-      // Loss of pay for full absent days + half days
-      const lossOfPay = (basic / daysInMonth) * (absent + (halfDay * 0.5));
-      const totalDeductions = pf + pt + lossOfPay;
-      
-      const netSalary = (basic + totalAllowances) - totalDeductions;
-      
-      const earningsBreakdown = {
-        basicPay: basic,
-        hra,
-        standardAllowance
+      const earningsBreakdown: Record<string, any> = {
+        "Basic Salary": { amount: proratedBasic, formula: `(₹${monthlyBasic.toFixed(2)} / ${daysInMonth}) × ${eligibleDays} eligible days` }
       };
-      
-      const deductionsBreakdown = {
-        pf,
-        professionalTax: pt,
-        lossOfPay
+      const deductionsBreakdown: Record<string, any> = {
+        "Loss of Pay": { amount: lossOfPay, formula: `(₹${proratedBasic.toFixed(2)} / ${eligibleDays || 1}) × ${lossOfPayDays} days` }
       };
+
+      if (activeRevision?.components) {
+        for (const empComp of activeRevision.components) {
+          const rawAmt = Number(empComp.amount);
+          const amt = (rawAmt / daysInMonth) * eligibleDays; // Prorate allowances & deductions
+          if (empComp.component.type === 'EARNING') {
+            totalAllowances += amt;
+            earningsBreakdown[empComp.component.name] = { amount: amt, formula: `${empComp.formula || "Flat Amount"} (Prorated for ${eligibleDays} days)` };
+          } else if (empComp.component.type === 'DEDUCTION') {
+            totalDeductions += amt;
+            deductionsBreakdown[empComp.component.name] = { amount: amt, formula: `${empComp.formula || "Flat Amount"} (Prorated for ${eligibleDays} days)` };
+          }
+        }
+      }
+      
+      const netSalary = Math.max(0, (proratedBasic + totalAllowances) - totalDeductions);
       
       const attendanceSummary = {
-        present,
-        absent,
-        halfDay,
-        leave,
-        holiday,
-        remote,
+        present: metrics.present,
+        absent: metrics.absent,
+        halfDay: metrics.halfDay,
+        leave: metrics.paidLeave,
+        unpaidLeave: metrics.unpaidLeave,
+        holiday: metrics.holiday,
+        weeklyOff: metrics.weekOff,
+        remote: metrics.workFromHome,
         totalPaidDays,
-        daysInMonth
+        lossOfPayDays,
+        daysInMonth,
+        formula: `Unified Attendance Engine: ${totalPaidDays} Paid Days / ${daysInMonth} Days`
       };
 
       const slip = await this.prisma.salarySlip.upsert({
         where: {
-          employeeId_month_year: {
+          employeeId_startDate_endDate: {
             employeeId: emp.id,
-            month: dto.month,
-            year: dto.year,
+            startDate,
+            endDate,
           }
         },
         update: {
-          basicSalary: basic,
+          basicSalary: proratedBasic,
           allowances: totalAllowances,
           deductions: totalDeductions,
           netSalary,
           paidDays: totalPaidDays,
-          absentDays: absent,
+          absentDays: lossOfPayDays,
           earningsBreakdown,
           deductionsBreakdown,
           attendanceSummary,
@@ -533,17 +809,18 @@ export class HrService {
         create: {
           companyId,
           employeeId: emp.id,
-          month: dto.month,
-          year: dto.year,
-          basicSalary: basic,
+          startDate,
+          endDate,
+          basicSalary: proratedBasic,
           allowances: totalAllowances,
           deductions: totalDeductions,
           netSalary,
           paidDays: totalPaidDays,
-          absentDays: absent,
+          absentDays: lossOfPayDays,
           earningsBreakdown,
           deductionsBreakdown,
           attendanceSummary,
+          status: 'DRAFT'
         }
       });
       results.push(slip);
@@ -598,8 +875,8 @@ export class HrService {
         data: {
           companyId,
           date: new Date(),
-          reference: `SAL-${slip.year}-${slip.month}-${slip.employee.employeeCode}`,
-          description: `Salary Payment for ${slip.employee.name} (${slip.month}/${slip.year})`,
+          reference: `SAL-${slip.startDate.getFullYear()}-${slip.startDate.getMonth() + 1}-${slip.employee.employeeCode}`,
+          description: `Salary Payment for ${slip.employee.name} (${slip.startDate.toLocaleDateString()} - ${slip.endDate.toLocaleDateString()})`,
           lines: {
             create: [
               { accountId: payrollAccount.id, debit: netSalary, credit: 0, departmentId: slip.employee.departmentId || null },
@@ -630,6 +907,243 @@ export class HrService {
         where: { id },
         data: { status: 'PAID' },
       });
+    });
+  }
+
+  async approveSalarySlip(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const slip = await this.prisma.salarySlip.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!slip) throw new NotFoundException('Salary slip not found');
+    if (slip.status !== 'GENERATED' && slip.status !== 'DRAFT') {
+      throw new ConflictException(`Cannot approve salary slip in ${slip.status} state`);
+    }
+
+    return this.prisma.salarySlip.update({
+      where: { id },
+      data: { 
+        status: 'APPROVED',
+        auditLogs: {
+          create: {
+            action: 'APPROVED',
+            userId: CompanyContext.getUserId(),
+          }
+        }
+      },
+    });
+  }
+
+  async updateSalarySlip(id: string, dto: UpdateSalarySlipDto) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const slip = await this.prisma.salarySlip.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!slip) throw new NotFoundException('Salary slip not found');
+    if (slip.status === 'LOCKED' || slip.status === 'PAID') {
+      throw new ConflictException(`Salary slip in ${slip.status} status is locked and cannot be directly modified`);
+    }
+
+    const basicSalary = dto.basicSalary !== undefined ? dto.basicSalary : Number(slip.basicSalary);
+    const allowances = dto.allowances !== undefined ? dto.allowances : Number(slip.allowances);
+    const bonus = dto.bonus !== undefined ? dto.bonus : Number(slip.bonus);
+    const incentives = dto.incentives !== undefined ? dto.incentives : Number(slip.incentives);
+    const advances = dto.advances !== undefined ? dto.advances : Number(slip.advances);
+    const deductions = dto.deductions !== undefined ? dto.deductions : Number(slip.deductions);
+
+    const grossSalary = basicSalary + allowances + bonus + incentives;
+    const totalDeductions = deductions + advances;
+    const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+    return this.prisma.salarySlip.update({
+      where: { id },
+      data: {
+        basicSalary,
+        allowances,
+        bonus,
+        incentives,
+        advances,
+        deductions: totalDeductions,
+        netSalary,
+        paidDays: dto.paidDays !== undefined ? dto.paidDays : slip.paidDays,
+        absentDays: dto.absentDays !== undefined ? dto.absentDays : slip.absentDays,
+        earningsBreakdown: dto.earningsBreakdown || (slip.earningsBreakdown as any),
+        deductionsBreakdown: dto.deductionsBreakdown || (slip.deductionsBreakdown as any),
+        auditLogs: {
+          create: {
+            action: 'REVISED',
+            reason: dto.reason || 'Payroll revision and recalculation',
+            userId: CompanyContext.getUserId(),
+          }
+        }
+      },
+      include: {
+        employee: true,
+        auditLogs: true
+      }
+    });
+  }
+
+  async lockSalarySlip(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const slip = await this.prisma.salarySlip.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!slip) throw new NotFoundException('Salary slip not found');
+
+    return this.prisma.salarySlip.update({
+      where: { id },
+      data: {
+        status: 'LOCKED',
+        auditLogs: {
+          create: {
+            action: 'LOCKED',
+            reason: 'Locked after final review',
+            userId: CompanyContext.getUserId(),
+          }
+        }
+      }
+    });
+  }
+
+  async deleteSalarySlip(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const slip = await this.prisma.salarySlip.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!slip) throw new NotFoundException('Salary slip not found');
+    if (slip.status !== 'DRAFT' && slip.status !== 'GENERATED') {
+      throw new ConflictException(`Cannot delete a salary slip in ${slip.status} state. Only DRAFT or GENERATED slips can be deleted.`);
+    }
+
+    return this.prisma.salarySlip.delete({
+      where: { id },
+    });
+  }
+
+  async voidSalarySlip(id: string, reason: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const slip = await this.prisma.salarySlip.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!slip) throw new NotFoundException('Salary slip not found');
+    if (slip.status !== 'PAID' && slip.status !== 'LOCKED') {
+      throw new ConflictException(`Can only void PAID or LOCKED salary slips. Current state: ${slip.status}`);
+    }
+
+    return this.prisma.salarySlip.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        auditLogs: {
+          create: {
+            action: 'VOIDED',
+            reason: reason || 'Voided by Administrator',
+            userId: CompanyContext.getUserId(),
+          }
+        }
+      }
+    });
+  }
+
+  async getAttendanceReport(startDateStr: string, endDateStr: string, departmentId?: string, employeeId?: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+
+    const employeeWhere: any = { companyId, deletedAt: null };
+    if (departmentId) employeeWhere.departmentId = departmentId;
+    if (employeeId) employeeWhere.id = employeeId;
+
+    const employees = await this.prisma.employee.findMany({
+      where: employeeWhere,
+      include: {
+        department: true,
+        designation: true,
+        branch: true,
+        shift: true,
+      }
+    });
+
+    const attendances = await this.prisma.attendance.findMany({
+      where: {
+        companyId,
+        date: { gte: startDate, lte: endDate },
+        employeeId: { in: employees.map(e => e.id) },
+      }
+    });
+
+    const dayDiff = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+    return employees.map(emp => {
+      const empAtt = attendances.filter(a => a.employeeId === emp.id);
+      const metrics = AttendanceEngine.computeMetrics(
+        empAtt.map(a => {
+          let workingMinutes = 0;
+          let overtimeMinutes = 0;
+          let lateMinutes = 0;
+
+          if (a.checkIn && a.checkOut) {
+            const ci = new Date(a.checkIn);
+            const co = new Date(a.checkOut);
+            workingMinutes = Math.floor((co.getTime() - ci.getTime()) / 60000);
+            if (workingMinutes > 480) {
+              overtimeMinutes = workingMinutes - 480;
+            }
+            const shiftStart = new Date(ci);
+            shiftStart.setHours(9, 0, 0, 0);
+            if (ci > shiftStart) {
+              lateMinutes = Math.floor((ci.getTime() - shiftStart.getTime()) / 60000);
+            }
+          }
+
+          return {
+            employeeId: emp.id,
+            date: a.date,
+            type: a.status || a.type,
+            workingMinutes,
+            overtimeMinutes,
+            lateMinutes
+          };
+        }),
+        dayDiff
+      );
+      
+      return {
+        employee: emp,
+        summary: {
+          present: metrics.present,
+          absent: metrics.absent,
+          halfDay: metrics.halfDay,
+          leave: metrics.leave,
+          holiday: metrics.holiday,
+          weeklyOff: metrics.weekOff,
+          overtimeHours: +(metrics.totalOvertimeMinutes / 60).toFixed(1),
+          lateCount: metrics.lateCount,
+          totalWorkingDays: dayDiff,
+          attendancePercentage: metrics.attendancePercentage,
+          totalPaidDays: metrics.totalPaidDays,
+          lossOfPayDays: metrics.lossOfPayDays,
+        },
+        dailyTimeline: empAtt.sort((a, b) => a.date.getTime() - b.date.getTime())
+      };
     });
   }
 }

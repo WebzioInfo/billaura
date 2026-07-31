@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
@@ -50,7 +50,7 @@ export const BomList = () => {
                 <TableCell className="font-medium">{bom.name}</TableCell>
                 <TableCell>{bom.product?.name || 'N/A'}</TableCell>
                 <TableCell>{bom.items?.length || 0}</TableCell>
-                <TableCell>${Number(bom.totalCost || 0).toFixed(2)}</TableCell>
+                <TableCell>₹${Number(bom.totalCost || 0).toFixed(2)}</TableCell>
               </TableRow>
             ))
           )}
@@ -59,3 +59,5 @@ export const BomList = () => {
     </div>
   );
 };
+
+

@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { User, Calendar, DollarSign, CheckCircle2, XCircle, Coffee } from 'lucide-react';
 
 interface AttendanceGridProps {
   attendances: any[];
@@ -7,6 +8,7 @@ interface AttendanceGridProps {
   onSelectToggle: (id: string) => void;
   onSelectAll: (checked: boolean) => void;
   onRowChange: (employeeId: string, field: string, value: any) => void;
+  onRowClick?: (employee: any) => void;
 }
 
 export const AttendanceGrid: React.FC<AttendanceGridProps> = ({
@@ -14,9 +16,33 @@ export const AttendanceGrid: React.FC<AttendanceGridProps> = ({
   selectedIds,
   onSelectToggle,
   onSelectAll,
-  onRowChange
+  onRowChange,
+  onRowClick
 }) => {
   const allSelected = attendances.length > 0 && selectedIds.length === attendances.length;
+  
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    employee: any;
+  }>({ visible: false, x: 0, y: 0, employee: null });
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu({ ...contextMenu, visible: false });
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [contextMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent, employee: any) => {
+    e.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      employee
+    });
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent, index: number, field: string) => {
     // Basic implementation for Arrow Up/Down to navigate rows
@@ -60,7 +86,13 @@ export const AttendanceGrid: React.FC<AttendanceGridProps> = ({
             return (
               <TableRow 
                 key={employee.id} 
-                className={`hover:bg-muted/50 transition-colors ${isSelected ? 'bg-accent/5' : ''}`}
+                className={`hover:bg-muted/50 transition-colors cursor-pointer ${isSelected ? 'bg-accent/5' : ''}`}
+                onContextMenu={(e) => handleContextMenu(e, employee)}
+                onClick={(e) => {
+                  // Prevent drawer if clicking input or select or checkbox
+                  if (['INPUT', 'SELECT', 'OPTION'].includes((e.target as HTMLElement).tagName)) return;
+                  onRowClick?.(employee);
+                }}
               >
                 <TableCell className="text-center sticky left-0 bg-surface z-10 group-hover:bg-muted/50">
                   <input 
@@ -140,6 +172,58 @@ export const AttendanceGrid: React.FC<AttendanceGridProps> = ({
           })}
         </TableBody>
       </Table>
+      
+      {/* Context Menu Overlay */}
+      {contextMenu.visible && contextMenu.employee && (
+        <div 
+          className="fixed z-50 bg-surface border border-border shadow-xl rounded-lg w-56 overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 border-b border-border bg-muted/20">
+            <p className="text-xs font-semibold text-foreground truncate">
+              {contextMenu.employee.name}
+            </p>
+            <p className="text-[10px] text-muted-foreground">{contextMenu.employee.employeeCode}</p>
+          </div>
+          
+          <div className="py-1">
+            <button 
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted/50 text-left transition-colors"
+              onClick={() => { onRowClick?.(contextMenu.employee); setContextMenu({ ...contextMenu, visible: false }); }}
+            >
+              <User className="w-4 h-4 text-muted-foreground" /> View Profile
+            </button>
+            <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted/50 text-left transition-colors">
+              <Calendar className="w-4 h-4 text-muted-foreground" /> Attendance History
+            </button>
+            <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted/50 text-left transition-colors">
+              <DollarSign className="w-4 h-4 text-muted-foreground" /> Payroll
+            </button>
+            
+            <div className="my-1 border-t border-border"></div>
+            
+            <button 
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-green-500/10 hover:text-green-600 text-left transition-colors"
+              onClick={() => { onRowChange(contextMenu.employee.id, 'type', 'PRESENT'); setContextMenu({ ...contextMenu, visible: false }); }}
+            >
+              <CheckCircle2 className="w-4 h-4" /> Mark Present
+            </button>
+            <button 
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-red-500/10 hover:text-red-600 text-left transition-colors"
+              onClick={() => { onRowChange(contextMenu.employee.id, 'type', 'ABSENT'); setContextMenu({ ...contextMenu, visible: false }); }}
+            >
+              <XCircle className="w-4 h-4" /> Mark Absent
+            </button>
+            <button 
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-purple-500/10 hover:text-purple-600 text-left transition-colors"
+              onClick={() => { onRowChange(contextMenu.employee.id, 'type', 'PAID_LEAVE'); setContextMenu({ ...contextMenu, visible: false }); }}
+            >
+              <Coffee className="w-4 h-4" /> Mark Leave
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import apiClient from '@/core/api';
@@ -49,8 +49,8 @@ export const FixedAssetsList = () => {
                   <TableCell className="font-medium">{asset.name}</TableCell>
                   <TableCell>{asset.assetType}</TableCell>
                   <TableCell>{new Date(asset.purchaseDate).toLocaleDateString()}</TableCell>
-                  <TableCell>${Number(asset.purchasePrice).toFixed(2)}</TableCell>
-                  <TableCell className="font-semibold">${Number(asset.currentValue).toFixed(2)}</TableCell>
+                  <TableCell>₹${Number(asset.purchasePrice).toFixed(2)}</TableCell>
+                  <TableCell className="font-semibold">₹${Number(asset.currentValue).toFixed(2)}</TableCell>
                   <TableCell>
                     <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">{asset.status}</span>
                   </TableCell>
@@ -63,3 +63,5 @@ export const FixedAssetsList = () => {
     </div>
   );
 };
+
+

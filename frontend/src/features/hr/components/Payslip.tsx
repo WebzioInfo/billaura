@@ -2,6 +2,7 @@ import React from 'react';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { Download, Printer, CheckCircle } from 'lucide-react';
+import { formatCurrency } from '@/shared/utils/formatters';
 
 interface PayslipProps {
   salarySlip: any;
@@ -21,8 +22,9 @@ export const Payslip: React.FC<PayslipProps> = ({ salarySlip, company }) => {
       {/* Header */}
       <div className="flex justify-between items-start border-b border-slate-200 pb-6 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{company?.name || 'Company Name'}</h1>
-          <p className="text-slate-500 mt-1 text-sm">{company?.address || '123 Business Road, Enterprise City'}</p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{company?.name || ''}</h1>
+          <p className="text-slate-500 mt-1 text-sm">{company?.address || ''}</p>
+          {company?.email && <p className="text-slate-500 mt-0.5 text-sm">{company.email}</p>}
         </div>
         <div className="text-right">
           <h2 className="text-xl font-semibold text-accent uppercase tracking-wider">Payslip</h2>
@@ -58,6 +60,11 @@ export const Payslip: React.FC<PayslipProps> = ({ salarySlip, company }) => {
             <span className="text-slate-500">Leaves:</span>
             <span className="font-medium">{attendance.leave || 0}</span>
           </div>
+          {attendance.formula && (
+            <div className="mt-3 p-2 bg-slate-50 rounded border border-slate-100 text-xs text-slate-500 font-mono">
+              Calculation: {attendance.formula}
+            </div>
+          )}
         </div>
       </div>
 
@@ -71,46 +78,42 @@ export const Payslip: React.FC<PayslipProps> = ({ salarySlip, company }) => {
         <div className="grid grid-cols-2">
           {/* Earnings Column */}
           <div className="p-4 space-y-3 border-r border-slate-200">
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Basic Pay</span>
-              <span className="font-medium">${Number(earnings.basicPay || 0).toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-600">House Rent Allowance</span>
-              <span className="font-medium">${Number(earnings.hra || 0).toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Standard Allowance</span>
-              <span className="font-medium">${Number(earnings.standardAllowance || 0).toFixed(2)}</span>
-            </div>
+            {Object.entries(earnings).map(([name, data]: any, idx) => (
+              <div key={idx} className="flex justify-between text-sm group">
+                <div className="flex flex-col">
+                  <span className="text-slate-700">{name}</span>
+                  {data.formula && data.formula !== "Base Component" && data.formula !== "Flat Amount" && (
+                    <span className="text-[10px] text-slate-400 font-mono mt-0.5">{data.formula}</span>
+                  )}
+                </div>
+                <span className="font-medium text-slate-800">{formatCurrency(data.amount)}</span>
+              </div>
+            ))}
             {Number(salarySlip.bonus) > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Bonus</span>
-                <span className="font-medium">${Number(salarySlip.bonus).toFixed(2)}</span>
+                <span className="text-slate-700">Bonus</span>
+                <span className="font-medium text-slate-800">{formatCurrency(salarySlip.bonus)}</span>
               </div>
             )}
           </div>
           
           {/* Deductions Column */}
           <div className="p-4 space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Provident Fund (PF)</span>
-              <span className="font-medium">${Number(deductions.pf || 0).toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Professional Tax</span>
-              <span className="font-medium">${Number(deductions.professionalTax || 0).toFixed(2)}</span>
-            </div>
-            {Number(deductions.lossOfPay) > 0 && (
-              <div className="flex justify-between text-sm text-red-500">
-                <span>Loss of Pay</span>
-                <span className="font-medium">-${Number(deductions.lossOfPay).toFixed(2)}</span>
+            {Object.entries(deductions).map(([name, data]: any, idx) => (
+              <div key={idx} className="flex justify-between text-sm group">
+                <div className="flex flex-col">
+                  <span className="text-slate-700">{name}</span>
+                  {data.formula && data.formula !== "Flat Amount" && (
+                    <span className="text-[10px] text-slate-400 font-mono mt-0.5">{data.formula}</span>
+                  )}
+                </div>
+                <span className="font-medium text-red-600">-{formatCurrency(data.amount)}</span>
               </div>
-            )}
+            ))}
             {Number(salarySlip.advances) > 0 && (
-              <div className="flex justify-between text-sm text-red-500">
-                <span>Advance Repayment</span>
-                <span className="font-medium">-${Number(salarySlip.advances).toFixed(2)}</span>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-700">Advance Repayment</span>
+                <span className="font-medium text-red-600">-{formatCurrency(salarySlip.advances)}</span>
               </div>
             )}
           </div>
@@ -120,11 +123,11 @@ export const Payslip: React.FC<PayslipProps> = ({ salarySlip, company }) => {
         <div className="grid grid-cols-2 bg-slate-50 border-t border-slate-200 font-bold">
           <div className="p-3 flex justify-between border-r border-slate-200">
             <span>Gross Earnings</span>
-            <span>${(Number(salarySlip.basicSalary) + Number(salarySlip.allowances) + Number(salarySlip.bonus)).toFixed(2)}</span>
+            <span className="text-slate-800">{formatCurrency(Number(salarySlip.basicSalary) + Number(salarySlip.allowances) + Number(salarySlip.bonus))}</span>
           </div>
           <div className="p-3 flex justify-between">
             <span>Total Deductions</span>
-            <span>${Number(salarySlip.deductions).toFixed(2)}</span>
+            <span className="text-red-600">{formatCurrency(Number(salarySlip.deductions))}</span>
           </div>
         </div>
       </div>
@@ -136,7 +139,7 @@ export const Payslip: React.FC<PayslipProps> = ({ salarySlip, company }) => {
           <p className="text-sm text-slate-500">Amount transferred to bank account</p>
         </div>
         <div className="text-3xl font-black text-accent">
-          ${Number(salarySlip.netSalary).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {formatCurrency(salarySlip.netSalary)}
         </div>
       </div>
 
@@ -163,3 +166,5 @@ export const Payslip: React.FC<PayslipProps> = ({ salarySlip, company }) => {
     </Card>
   );
 };
+
+

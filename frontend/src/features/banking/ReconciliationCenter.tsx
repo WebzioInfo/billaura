@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import apiClient from '@/core/api';
@@ -115,7 +115,7 @@ export const ReconciliationCenter = () => {
                     <TableRow key={line.id}>
                       <TableCell>{new Date(line.date).toLocaleDateString()}</TableCell>
                       <TableCell>{line.description}</TableCell>
-                      <TableCell className="font-semibold">${Number(line.amount).toFixed(2)}</TableCell>
+                      <TableCell className="font-semibold">₹${Number(line.amount).toFixed(2)}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 text-xs rounded-full ${
                           line.status === 'MATCHED' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -134,3 +134,5 @@ export const ReconciliationCenter = () => {
     </div>
   );
 };
+
+

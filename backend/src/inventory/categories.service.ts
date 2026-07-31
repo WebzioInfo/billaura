@@ -3,27 +3,32 @@ import { PrismaService } from '../database/prisma.service';
 import { CompanyContext } from '../common/context/company-context';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, ProductCategory } from '@prisma/client';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
-
-
 
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private mapCategory(c: ProductCategory & { _count?: any, parent?: any, children?: any }) {
+    if (!c) return c;
+    const { categoryName, categoryCode, ...rest } = c;
+    return { ...rest, name: categoryName, code: categoryCode };
+  }
 
   async findAll(query?: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
     if (!query) {
-       return this.prisma.productCategory.findMany({
+       const results = await this.prisma.productCategory.findMany({
          where: { companyId, deletedAt: null },
          orderBy: { categoryName: 'asc' },
          include: {
            parent: true
          }
        });
+       return results.map(c => this.mapCategory(c));
     }
 
     const { skip, take } = getPagination(query);
@@ -34,9 +39,9 @@ export class CategoriesService {
       ...(query.search
         ? {
             OR: [
-              { categoryName: { contains: query.search } },
-              { categoryCode: { contains: query.search } },
-              { description: { contains: query.search } },
+              { categoryName: { contains: query.search, mode: 'insensitive' } },
+              { categoryCode: { contains: query.search, mode: 'insensitive' } },
+              { description: { contains: query.search, mode: 'insensitive' } },
             ],
           }
         : {}),
@@ -58,7 +63,8 @@ export class CategoriesService {
       this.prisma.productCategory.count({ where }),
     ]);
 
-    return toPaginatedResult(data, total, query);
+    const mappedData = data.map(c => this.mapCategory(c));
+    return toPaginatedResult(mappedData, total, query);
   }
 
   async findOne(id: string) {
@@ -75,15 +81,26 @@ export class CategoriesService {
     });
 
     if (!category) throw new NotFoundException('Category not found');
-    return category;
+    return this.mapCategory(category);
   }
 
   async create(dto: CreateCategoryDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
+    if (!dto.name || dto.name.trim() === '') {
+      throw new ConflictException('Category name cannot be empty');
+    }
+
+    const nameToSave = dto.name.trim();
+
+    // Check case-insensitive duplicate
     const existingName = await this.prisma.productCategory.findFirst({
-      where: { companyId, categoryName: dto.name, deletedAt: null }
+      where: { 
+        companyId, 
+        categoryName: { equals: nameToSave, mode: 'insensitive' }, 
+        deletedAt: null 
+      }
     });
     if (existingName) throw new ConflictException('Category name already exists');
 
@@ -97,10 +114,10 @@ export class CategoriesService {
       }
     }
 
-    return this.prisma.productCategory.create({
+    const created = await this.prisma.productCategory.create({
       data: {
         companyId,
-        categoryName: dto.name,
+        categoryName: nameToSave,
         categoryCode: dto.code || null,
         description: dto.description || null,
         parentId,
@@ -112,6 +129,7 @@ export class CategoriesService {
         notes: dto.notes || null,
       }
     });
+    return this.mapCategory(created);
   }
 
   async update(id: string, dto: UpdateCategoryDto) {
@@ -120,9 +138,19 @@ export class CategoriesService {
     
     await this.findOne(id); // Check existence
 
-    if (dto.name) {
+    let nameToSave = undefined;
+    if (dto.name !== undefined) {
+      if (dto.name.trim() === '') {
+        throw new ConflictException('Category name cannot be empty');
+      }
+      nameToSave = dto.name.trim();
       const existingName = await this.prisma.productCategory.findFirst({
-        where: { companyId, categoryName: dto.name, id: { not: id }, deletedAt: null }
+        where: { 
+          companyId, 
+          categoryName: { equals: nameToSave, mode: 'insensitive' }, 
+          id: { not: id }, 
+          deletedAt: null 
+        }
       });
       if (existingName) throw new ConflictException('Category name already exists');
     }
@@ -143,10 +171,10 @@ export class CategoriesService {
       }
     }
 
-    return this.prisma.productCategory.update({
+    const updated = await this.prisma.productCategory.update({
       where: { id },
       data: {
-        ...(dto.name !== undefined && { categoryName: dto.name }),
+        ...(nameToSave !== undefined && { categoryName: nameToSave }),
         ...(dto.code !== undefined && { categoryCode: dto.code || null }),
         ...(dto.description !== undefined && { description: dto.description || null }),
         ...(parentId !== undefined && { parentId }),
@@ -158,26 +186,45 @@ export class CategoriesService {
         ...(dto.notes !== undefined && { notes: dto.notes || null }),
       }
     });
+    return this.mapCategory(updated);
   }
 
   async remove(id: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
     
-    await this.findOne(id);
-    return this.prisma.productCategory.update({
+    const category = await this.prisma.productCategory.findFirst({
+      where: { id, companyId, deletedAt: null },
+      include: {
+        _count: { select: { products: true, children: true } }
+      }
+    });
+
+    if (!category) throw new NotFoundException('Category not found');
+
+    if (category._count.products > 0) {
+      throw new ConflictException(`Cannot delete category "${category.categoryName}" as it is linked to ${category._count.products} product(s). Please reassign or delete the products first.`);
+    }
+
+    if (category._count.children > 0) {
+      throw new ConflictException(`Cannot delete category "${category.categoryName}" as it has ${category._count.children} sub-category(ies).`);
+    }
+
+    const deleted = await this.prisma.productCategory.update({
       where: { id },
       data: { deletedAt: new Date() }
     });
+    return this.mapCategory(deleted);
   }
 
   async restore(id: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
     
-    return this.prisma.productCategory.update({
+    const restored = await this.prisma.productCategory.update({
       where: { id, companyId },
       data: { deletedAt: null }
     });
+    return this.mapCategory(restored);
   }
 }

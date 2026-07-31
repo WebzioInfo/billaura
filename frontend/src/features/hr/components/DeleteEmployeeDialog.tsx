@@ -47,7 +47,7 @@ export const DeleteEmployeeDialog: React.FC<DeleteEmployeeDialogProps> = ({
           Cancel
         </Button>
         <Button 
-          variant="destructive" 
+          variant="danger"
           onClick={onConfirm} 
           isLoading={isLoading}
           className="bg-red-600 hover:bg-red-700 text-white"

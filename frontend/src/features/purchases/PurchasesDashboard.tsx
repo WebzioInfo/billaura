@@ -272,7 +272,7 @@ export const PurchasesDashboard = () => {
               className="p-1.5"
               filename={`Bill-${p.purchaseNo}.pdf`}
               data={{
-                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
+                company: { name: companyProfile.name || '', address: companyProfile.address || '', email: companyProfile.email || '' },
                 customer: { name: p.vendor?.name || 'Unknown', address: 'N/A' },
                 document: { title: 'Purchase Bill', documentNo: p.purchaseNo, date: p.date, status: p.status },
                 items: p.items?.map(i => ({
@@ -367,7 +367,7 @@ export const PurchasesDashboard = () => {
               className="p-1 text-muted-foreground hover:text-foreground hover:bg-background border border-border/40 rounded transition-colors"
               filename={`Payment-${pay.paymentNo}.pdf`}
               data={{
-                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
+                company: { name: companyProfile.name || '', address: companyProfile.address || '', email: companyProfile.email || '' },
                 customer: { name: pay.vendor?.name || 'Unknown', address: 'N/A' },
                 document: { title: 'Payment Voucher', documentNo: pay.paymentNo, date: pay.date, status: 'PAID' },
                 items: [{

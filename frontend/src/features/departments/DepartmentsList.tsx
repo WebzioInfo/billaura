@@ -108,7 +108,7 @@ export const DepartmentsList = () => {
     queryKey: ['hr-administrative-hub', activeTab],
     queryFn: async () => {
       const [empRes, deptRes, shiftRes, typeRes, branchRes, roleRes, ccRes, bankRes] = await Promise.all([
-        api.get<any>('/employees'),
+        api.get<any>('/hr/employees'),
         api.get<any>('/hr-masters/departments'),
         api.get<any>('/hr-masters/shifts'),
         api.get<any>('/hr-masters/employment-types'),
@@ -121,11 +121,11 @@ export const DepartmentsList = () => {
       let attendances: any[] = [];
       let salarySlips: any[] = [];
       if (activeTab === 'attendance') {
-        const attRes = await api.get<any>('/attendances');
+        const attRes = await api.get<any>('/hr/attendances');
         attendances = Array.isArray(attRes) ? attRes : (attRes?.data || []);
       }
       if (activeTab === 'payroll') {
-        const slipRes = await api.get<any>('/salary-slips');
+        const slipRes = await api.get<any>('/hr/salary-slips');
         salarySlips = Array.isArray(slipRes) ? slipRes : (slipRes?.data || []);
       }
 
@@ -157,7 +157,7 @@ export const DepartmentsList = () => {
 
   // Mutations
   const createEmployeeMutation = useMutation({
-    mutationFn: (values: EmployeeFormValues) => api.post('/employees', values),
+    mutationFn: (values: EmployeeFormValues) => api.post('/hr/employees', values),
     onSuccess: () => {
       notification.success('Employee registered successfully');
       setIsModalOpen(false);
@@ -169,7 +169,7 @@ export const DepartmentsList = () => {
   });
 
   const updateEmployeeMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: EmployeeFormValues }) => api.put(`/employees/${id}`, values),
+    mutationFn: ({ id, values }: { id: string; values: EmployeeFormValues }) => api.put(`/hr/employees/${id}`, values),
     onSuccess: () => {
       notification.success('Employee profile updated successfully');
       setIsModalOpen(false);
@@ -182,7 +182,7 @@ export const DepartmentsList = () => {
   });
 
   const deleteEmployeeMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/employees/${id}`),
+    mutationFn: (id: string) => api.delete(`/hr/employees/${id}`),
     onSuccess: () => {
       notification.success('Employee record archived');
       queryClient.invalidateQueries({ queryKey: ['hr-administrative-hub'] });
@@ -193,7 +193,7 @@ export const DepartmentsList = () => {
   });
 
   const recordAttendanceMutation = useMutation({
-    mutationFn: (values: AttendanceFormValues) => api.post('/attendances', values),
+    mutationFn: (values: AttendanceFormValues) => api.post('/hr/attendances', values),
     onSuccess: () => {
       notification.success('Attendance log saved');
       setIsModalOpen(false);
@@ -207,14 +207,14 @@ export const DepartmentsList = () => {
   const runPayrollMutation = useMutation({
     mutationFn: ({ employeeId, bankAccountId }: { employeeId: string; bankAccountId: string }) => {
       // 1. Generate salary slip
-      return api.post('/salary-slips/generate', {
+      return api.post('/hr/salary-slips/generate', {
         employeeId,
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
       }).then((res: any) => {
         // 2. Pay it immediately using the selected bank account
         const slip = res.data || res;
-        return api.post(`/salary-slips/${slip.id}/pay`, { bankAccountId });
+        return api.post(`/hr/salary-slips/${slip.id}/pay`, { bankAccountId });
       });
     },
     onSuccess: () => {

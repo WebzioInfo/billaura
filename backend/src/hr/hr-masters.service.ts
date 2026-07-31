@@ -4,6 +4,7 @@ import { CompanyContext } from "../common/context/company-context";
 import {
   CreateDepartmentDto,
   CreateDesignationDto,
+  UpdateDesignationDto,
   CreateShiftDto,
   CreateEmploymentTypeDto,
   CreateLeaveTypeDto,
@@ -291,7 +292,7 @@ export class HrMastersService {
     });
   }
 
-  async updateDesignation(id: string, dto: CreateDesignationDto) {
+  async updateDesignation(id: string, dto: UpdateDesignationDto) {
     const companyId = this.getCompanyId();
     const desg = await this.prisma.designation.findFirst({ where: { id, companyId, deletedAt: null } });
     if (!desg) throw new NotFoundException("Designation not found");

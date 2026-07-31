@@ -36,13 +36,8 @@ export const CustomerProfile = () => {
   const { data: analytics, isLoading: analyticsLoading } = useQuery({
     queryKey: ['customer', id, 'analytics'],
     queryFn: async () => {
-      // Mock if real endpoint fails
-      try {
-        const res = await apiClient.get(`/customers/${id}/analytics`);
-        return res.data?.data;
-      } catch {
-        return { totalRevenue: 125000, invoiceCount: 15, averageCollectionDays: 24 };
-      }
+      const res = await apiClient.get(`/customers/${id}/analytics`);
+      return res.data?.data;
     }
   });
 

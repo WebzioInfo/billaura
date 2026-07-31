@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import apiClient from '@/core/api';
@@ -51,7 +51,7 @@ export const BankTransactionsList = () => {
                   <TableCell>{txn.bankAccount?.name || 'Unknown'}</TableCell>
                   <TableCell>{txn.type}</TableCell>
                   <TableCell>{txn.description || txn.reference || '-'}</TableCell>
-                  <TableCell className="font-semibold">${Number(txn.amount).toFixed(2)}</TableCell>
+                  <TableCell className="font-semibold">₹${Number(txn.amount).toFixed(2)}</TableCell>
                   <TableCell>
                     {txn.isReconciled ? (
                       <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Yes</span>
@@ -68,3 +68,5 @@ export const BankTransactionsList = () => {
     </div>
   );
 };
+
+

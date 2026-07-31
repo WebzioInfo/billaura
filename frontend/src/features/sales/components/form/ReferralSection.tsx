@@ -15,7 +15,7 @@ export const ReferralSection = ({ form }: { form: UseFormReturn<any> }) => {
     queryKey: ['employees'],
     queryFn: async () => {
       // Stub: in reality, should hit the employees API
-      const res = await apiClient.get('/employees');
+      const res = await apiClient.get('/hr/employees');
       return res.data?.data || [];
     },
   });

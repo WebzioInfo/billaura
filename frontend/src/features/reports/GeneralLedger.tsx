@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import apiClient from '@/core/api';
@@ -47,8 +47,8 @@ export const GeneralLedger = () => {
                 <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
                 <TableCell className="font-medium">{item.accountName}</TableCell>
                 <TableCell>{item.description}</TableCell>
-                <TableCell className="text-right text-green-600">${item.debit}</TableCell>
-                <TableCell className="text-right text-red-600">${item.credit}</TableCell>
+                <TableCell className="text-right text-green-600">₹${item.debit}</TableCell>
+                <TableCell className="text-right text-red-600">₹${item.credit}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -57,3 +57,5 @@ export const GeneralLedger = () => {
     </div>
   );
 };
+
+

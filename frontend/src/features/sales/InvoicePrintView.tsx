@@ -22,8 +22,8 @@ export const InvoicePrintView = () => {
 
         const templateData: InvoiceTemplateData = {
           company: {
-            name: data.company?.name || 'Your Company',
-            address: data.company?.address || '123 Business St',
+            name: data.company?.name || '',
+            address: data.company?.address || '',
             gstin: data.company?.gstin || '',
             phone: data.company?.phone || '',
             email: data.company?.email || '',

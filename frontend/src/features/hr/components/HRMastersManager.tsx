@@ -88,7 +88,7 @@ export const HRMastersManager: React.FC = () => {
   const { data: employees = [] } = useQuery({
     queryKey: ['employees-dropdown'],
     queryFn: async () => {
-      const res = await api.get<any>('/employees');
+      const res = await api.get<any>('/hr/employees');
       return Array.isArray(res) ? res : (res?.data || []);
     }
   });
@@ -120,10 +120,18 @@ export const HRMastersManager: React.FC = () => {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => {
       const endpoint = getEndpoint(activeTab);
+      
+      // Strip system fields injected by setFormData({...item})
+      const { 
+        id: _id, companyId, createdAt, updatedAt, deletedAt, 
+        createdById, updatedById, department, manager, costCenter, 
+        ...payload 
+      } = data;
+      
       if (activeTab === 'cost-centres') {
-        return api.patch(`${endpoint}/${id}`, data);
+        return api.patch(`${endpoint}/${id}`, payload);
       }
-      return api.put(`${endpoint}/${id}`, data);
+      return api.put(`${endpoint}/${id}`, payload);
     },
     onSuccess: () => {
       notification.success('Item updated successfully');

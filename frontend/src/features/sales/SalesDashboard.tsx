@@ -193,7 +193,7 @@ export const SalesDashboard = () => {
               className="p-1.5"
               filename={`${inv.invoiceNo}.pdf`}
               data={{
-                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
+                company: { name: companyProfile.name || '', address: companyProfile.address || '', email: companyProfile.email || '' },
                 customer: { name: inv.customer?.name || 'Unknown', address: 'N/A' },
                 document: { title: 'Tax Invoice', documentNo: inv.invoiceNo, date: inv.date, status: inv.status },
                 items: inv.items?.map(i => ({
@@ -263,7 +263,7 @@ export const SalesDashboard = () => {
               className="p-1.5"
               filename={`Receipt-${pay.paymentNo}.pdf`}
               data={{
-                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
+                company: { name: companyProfile.name || '', address: companyProfile.address || '', email: companyProfile.email || '' },
                 customer: { name: pay.customer?.name || 'Unknown', address: 'N/A' },
                 document: { title: 'Payment Receipt', documentNo: pay.paymentNo, date: pay.date, status: 'PAID' },
                 items: [{

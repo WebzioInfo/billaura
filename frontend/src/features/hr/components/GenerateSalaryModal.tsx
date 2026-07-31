@@ -21,7 +21,7 @@ export const GenerateSalaryModal: React.FC<Props> = ({ onClose }) => {
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: async () => { const res = await apiClient.get('/branches'); return Array.isArray(res) ? res : res.data || []; }});
 
   const generateMutation = useMutation({
-    mutationFn: (data: any) => apiClient.post('/salary-slips/generate', data),
+    mutationFn: (data: any) => apiClient.post('/hr/salary-slips/generate', data),
     onSuccess: (res: any) => {
       notification.success(`Successfully generated payroll for ${res.data?.generated || 'employees'}`);
       queryClient.invalidateQueries({ queryKey: ['salarySlips'] });

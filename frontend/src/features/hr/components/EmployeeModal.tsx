@@ -93,9 +93,9 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, i
   const saveMutation = useMutation({
     mutationFn: (data: any) => {
       if (initialData?.id) {
-        return apiClient.put(`/employees/${initialData.id}`, data);
+        return apiClient.put(`/hr/employees/${initialData.id}`, data);
       }
-      return apiClient.post('/employees', data);
+      return apiClient.post('/hr/employees', data);
     },
     onSuccess: () => {
       notification.success(`Employee ${initialData ? 'updated' : 'created'} successfully`);

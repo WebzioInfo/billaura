@@ -17,6 +17,7 @@ import { TenantGuard } from "../common/guards/tenant.guard";
 import {
   CreateDepartmentDto,
   CreateDesignationDto,
+  UpdateDesignationDto,
   CreateShiftDto,
   CreateEmploymentTypeDto,
   CreateLeaveTypeDto,
@@ -75,7 +76,7 @@ export class HrMastersController {
   }
 
   @Put("designations/:id")
-  async updateDesignation(@Param("id") id: string, @Body() dto: CreateDesignationDto) {
+  async updateDesignation(@Param("id") id: string, @Body() dto: UpdateDesignationDto) {
     return this.mastersService.updateDesignation(id, dto);
   }
 

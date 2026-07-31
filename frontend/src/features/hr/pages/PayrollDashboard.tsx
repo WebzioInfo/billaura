@@ -8,8 +8,8 @@ import { GenerateSalaryModal } from '../components/GenerateSalaryModal';
 import { PaySalaryModal } from '../components/PaySalaryModal';
 import { Payslip } from '../components/Payslip';
 import { apiClient } from '../../../core/api/apiClient';
-import { Plus, Eye } from 'lucide-react';
-import { Dialog } from '@headlessui/react';
+import { Plus, Eye, CheckCircle, Trash2, Ban } from 'lucide-react';
+import { Modal } from '../../../shared/components/ui/Modal';
 
 export const PayrollDashboard: React.FC = () => {
   const { data: salarySlips = [], isLoading } = useSalarySlips();
@@ -18,7 +18,29 @@ export const PayrollDashboard: React.FC = () => {
   const [viewingSlip, setViewingSlip] = useState<any | null>(null);
 
   const handleOpenGenerate = () => {
-    setIsGenerateOpen(true);
+    window.location.href = '/app/hr/payroll/generate';
+  };
+
+  const handleApprove = async (id: string) => {
+    if (confirm('Are you sure you want to approve this payroll?')) {
+      await apiClient.post(`/hr/salary-slips/${id}/approve`);
+      window.location.reload();
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this draft payroll?')) {
+      await apiClient.delete(`/hr/salary-slips/${id}`);
+      window.location.reload();
+    }
+  };
+
+  const handleVoid = async (id: string) => {
+    const reason = prompt('Please enter a reason for voiding this payroll:');
+    if (reason) {
+      await apiClient.post(`/hr/salary-slips/${id}/void`, { reason });
+      window.location.reload();
+    }
   };
 
   const formatCurrency = (val: number) => {
@@ -35,8 +57,8 @@ export const PayrollDashboard: React.FC = () => {
       accessorKey: 'employee.name',
     },
     {
-      header: 'Month/Year',
-      accessorFn: (row: any) => `${row.month}/${row.year}`,
+      header: 'Payroll Period',
+      accessorFn: (row: any) => `${new Date(row.startDate).toLocaleDateString()} - ${new Date(row.endDate).toLocaleDateString()}`,
     },
     {
       header: 'Net Salary',
@@ -58,12 +80,27 @@ export const PayrollDashboard: React.FC = () => {
         const row = info.row.original;
         return (
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setViewingSlip(row)}>
-              <Eye className="w-4 h-4 mr-1" /> View
+            <Button variant="outline" size="sm" onClick={() => setViewingSlip(row)}>
+              <Eye className="w-4 h-4" />
             </Button>
-            {row.status === 'GENERATED' && (
+            {row.status === 'DRAFT' || row.status === 'GENERATED' ? (
+              <>
+                <Button variant="outline" size="sm" onClick={() => handleApprove(row.id)} title="Approve">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => handleDelete(row.id)} title="Delete Draft">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </Button>
+              </>
+            ) : null}
+            {row.status === 'APPROVED' && (
               <Button size="sm" onClick={() => setPaySlipId(row.id)}>
-                Pay Now
+                Pay Salary
+              </Button>
+            )}
+            {row.status === 'PAID' && (
+              <Button variant="outline" size="sm" onClick={() => handleVoid(row.id)} title="Void Paid Slip">
+                <Ban className="w-4 h-4 text-orange-600" />
               </Button>
             )}
           </div>
@@ -109,17 +146,14 @@ export const PayrollDashboard: React.FC = () => {
       )}
 
       {viewingSlip && (
-        <Dialog open={true} onClose={() => setViewingSlip(null)} className="relative z-50">
-          <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-          <div className="fixed inset-0 flex items-center justify-center p-4">
-            <Dialog.Panel className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-xl">
-              <div className="flex justify-end p-2 sticky top-0 bg-white border-b z-10">
-                <Button variant="ghost" onClick={() => setViewingSlip(null)}>Close</Button>
-              </div>
-              <Payslip salarySlip={viewingSlip} company={viewingSlip.company} />
-            </Dialog.Panel>
-          </div>
-        </Dialog>
+        <Modal 
+          isOpen={true} 
+          onClose={() => setViewingSlip(null)} 
+          title={`Payslip - ${viewingSlip.employee?.name || 'Employee'}`}
+          maxWidth="4xl"
+        >
+          <Payslip salarySlip={viewingSlip} company={viewingSlip.company} />
+        </Modal>
       )}
     </div>
   );

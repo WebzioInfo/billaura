@@ -249,8 +249,8 @@ export const InvoiceDetails = () => {
 
   const pdfData: PdfDocumentProps | null = invoice ? {
     company: {
-      name: company.companyName || company.legalName || 'Company Name',
-      address: [company.address, company.city, company.state, company.country, company.pinCode].filter(Boolean).join(', ') || 'Company Address',
+      name: company.companyName || company.legalName || '',
+      address: [company.address, company.city, company.state, company.country, company.pinCode].filter(Boolean).join(', ') || '',
       gstin: company.gstin,
       pan: company.pan,
       email: company.email,

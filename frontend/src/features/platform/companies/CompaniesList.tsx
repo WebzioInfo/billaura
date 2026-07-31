@@ -6,24 +6,19 @@ import { Table } from '../../../shared/components/ui/Table';
 import { Badge } from '../../../shared/components/ui/Badge';
 import { Plus, Edit, Eye, Trash, LogIn, Power } from 'lucide-react';
 
+import { useQuery } from '@tanstack/react-query';
+import apiClient from '@/core/api';
+
 export const CompaniesList = () => {
   const navigate = useNavigate();
 
-  // Mock data for now, ideally fetch from API via React Query
-  const companies = [
-    {
-      id: '1',
-      logo: 'https://via.placeholder.com/40',
-      companyName: 'Acme Corp',
-      tenantCode: 'ACME01',
-      subscription: 'Enterprise',
-      status: 'ACTIVE',
-      branchesCount: 3,
-      usersCount: 15,
-      storageUsed: '1.2 GB',
-      createdAt: '2025-01-15T10:00:00Z',
-    },
-  ];
+  const { data: companies = [], isLoading } = useQuery({
+    queryKey: ['platform-companies'],
+    queryFn: async () => {
+      const res = await apiClient.get('/companies');
+      return res.data?.data || res.data || [];
+    }
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -51,7 +46,7 @@ export const CompaniesList = () => {
             </tr>
           </thead>
           <tbody>
-            {companies.map((c) => (
+            {companies.map((c: any) => (
               <tr key={c.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center space-x-3">

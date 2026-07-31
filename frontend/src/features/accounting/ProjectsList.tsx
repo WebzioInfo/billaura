@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import apiClient from '@/core/api';
@@ -48,7 +48,7 @@ export const ProjectsList = () => {
                   <TableCell className="font-medium">{proj.name}</TableCell>
                   <TableCell>{proj.customer?.name || 'Internal'}</TableCell>
                   <TableCell>{new Date(proj.startDate).toLocaleDateString()}</TableCell>
-                  <TableCell className="font-semibold">${Number(proj.budget).toFixed(2)}</TableCell>
+                  <TableCell className="font-semibold">₹${Number(proj.budget).toFixed(2)}</TableCell>
                   <TableCell>
                     <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">{proj.status}</span>
                   </TableCell>
@@ -61,3 +61,5 @@ export const ProjectsList = () => {
     </div>
   );
 };
+
+

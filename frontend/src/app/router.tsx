@@ -40,6 +40,8 @@ const FixedAssetsList = lazy(() => import('../features/accounting/FixedAssetsLis
 const ProjectsList = lazy(() => import('../features/accounting/ProjectsList').then(m => ({ default: m.ProjectsList })));
 const EmployeesList = lazy(() => import('../features/hr/EmployeesList').then(m => ({ default: m.EmployeesList })));
 const PayrollDashboard = lazy(() => import('../features/hr/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
+const AttendanceReportPage = lazy(() => import('../features/hr/pages/AttendanceReportPage').then(m => ({ default: m.AttendanceReportPage })));
+const PayrollGenerationWizard = lazy(() => import('../features/hr/pages/PayrollGenerationWizard').then(m => ({ default: m.PayrollGenerationWizard })));
 
 const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m => ({ default: m.CustomersList })));
 const CustomerProfile = lazy(() => import('../features/crm/CustomerProfile').then(m => ({ default: m.CustomerProfile })));
@@ -72,13 +74,14 @@ const GeneralLedger = lazy(() => import('../features/reports/GeneralLedger').the
 const DayBook = lazy(() => import('../features/reports/DayBook').then(m => ({ default: m.DayBook })));
 const FinancialReports = lazy(() => import('../features/reports/FinancialReports').then(m => ({ default: m.FinancialReports })));
 const DepartmentalReport = lazy(() => import('../features/reports/DepartmentalReport').then(m => ({ default: m.DepartmentalReport })));
-const CashFlowDashboard = lazy(() => import('../features/reports/CashFlowDashboard').then(m => ({ default: m.CashFlowDashboard })));
-const ReportView = lazy(() => import('../features/reports/ReportView').then(m => ({ default: m.ReportView })));
+const EmployeeProfilePage = lazy(() => import('../features/hr/pages/EmployeeProfilePage').then(m => ({ default: m.EmployeeProfilePage })));
 const AttendanceList = lazy(() => import('../features/hr/AttendanceList').then(m => ({ default: m.AttendanceList })));
 const SubscriptionManager = lazy(() => import('../features/settings/SubscriptionManager').then(m => ({ default: m.SubscriptionManager })));
 const TemplatesList = lazy(() => import('../features/settings/TemplatesList').then(m => ({ default: m.TemplatesList })));
 const NotificationsCenter = lazy(() => import('../features/common/NotificationsCenter').then(m => ({ default: m.NotificationsCenter })));
 const GlobalSearch = lazy(() => import('../features/common/GlobalSearch').then(m => ({ default: m.GlobalSearch })));
+const CashFlowDashboard = lazy(() => import('../features/reports/CashFlowDashboard').then(m => ({ default: m.CashFlowDashboard })));
+const ReportView = lazy(() => import('../features/reports/ReportView').then(m => ({ default: m.ReportView })));
 
 // --- Onboarding & Auth Pages ---
 const Login = lazy(() => import('../features/auth/pages/Login').then(m => ({ default: m.Login })));
@@ -341,7 +344,10 @@ export const router = createBrowserRouter([
       { path: 'reports/inventory', element: <ReportView title="Inventory Report" /> },
       { path: 'reports/payroll', element: <PayrollDashboard /> },
       { path: 'hr', element: <PayrollDashboard /> },
+      { path: 'hr/attendance-report', element: <AttendanceReportPage /> },
+      { path: 'hr/payroll/generate', element: <PayrollGenerationWizard /> },
       { path: 'employees', element: <EmployeesList /> },
+      { path: 'employees/:id', element: <EmployeeProfilePage /> },
       { path: 'departments', element: <DepartmentsList /> },
       { path: 'cost-centres', element: <Navigate to="/departments?tab=masters&sub=cost-centres" replace /> },
       { path: 'cost-centers', element: <Navigate to="/departments?tab=masters&sub=cost-centres" replace /> },
@@ -372,20 +378,7 @@ export const router = createBrowserRouter([
       { path: 'customer-statements', element: <CustomerStatement /> },
       { path: 'reports/customer-ageing', element: <CustomerAgeing /> },
       
-      // Placeholders for unimplemented features
-      { path: 'budgets', element: <ComingSoon title="Budgets" /> },
-      { path: 'credit-notes', element: <ComingSoon title="Credit Notes" /> },
-      { path: 'debit-notes', element: <ComingSoon title="Debit Notes" /> },
-      { path: 'gstr-1', element: <ComingSoon title="GSTR-1 Filing" /> },
-      { path: 'gstr-2b', element: <ComingSoon title="GSTR-2B Input Credit" /> },
-      { path: 'gstr-3b', element: <ComingSoon title="GSTR-3B Monthly Return" /> },
-      { path: 'leads', element: <ComingSoon title="Leads Management" /> },
-      { path: 'leaves', element: <ComingSoon title="Leave Applications" /> },
-      { path: 'purchase-returns', element: <ComingSoon title="Purchase Returns" /> },
-      { path: 'salary-slips', element: <ComingSoon title="Salary Slips" /> },
-      { path: 'sales-returns', element: <ComingSoon title="Sales Returns" /> },
-      { path: 'sequences', element: <ComingSoon title="Document Sequences" /> },
-      { path: 'vendor-statements', element: <ComingSoon title="Vendor Statements" /> }
+      // Placeholders for unimplemented features have been removed to enforce nested routing
     ],
   },
   // Legacy URL Redirects

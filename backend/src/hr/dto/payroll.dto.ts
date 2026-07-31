@@ -23,8 +23,70 @@ export class GenerateSalarySlipDto {
   deductions?: number;
 }
 
+export class GenerateBulkPayrollDto {
+  @IsString()
+  @IsNotEmpty()
+  startDate: string;
+
+  @IsString()
+  @IsNotEmpty()
+  endDate: string;
+
+  @IsString()
+  @IsOptional()
+  departmentId?: string;
+
+  @IsString()
+  @IsOptional()
+  branchId?: string;
+}
+
 export class PaySalarySlipDto {
   @IsString()
   @IsNotEmpty()
   bankAccountId: string;
+}
+
+export class UpdateSalarySlipDto {
+  @IsNumber()
+  @IsOptional()
+  basicSalary?: number;
+
+  @IsNumber()
+  @IsOptional()
+  allowances?: number;
+
+  @IsNumber()
+  @IsOptional()
+  bonus?: number;
+
+  @IsNumber()
+  @IsOptional()
+  incentives?: number;
+
+  @IsNumber()
+  @IsOptional()
+  advances?: number;
+
+  @IsNumber()
+  @IsOptional()
+  deductions?: number;
+
+  @IsNumber()
+  @IsOptional()
+  paidDays?: number;
+
+  @IsNumber()
+  @IsOptional()
+  absentDays?: number;
+
+  @IsOptional()
+  earningsBreakdown?: Record<string, any>;
+
+  @IsOptional()
+  deductionsBreakdown?: Record<string, any>;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }

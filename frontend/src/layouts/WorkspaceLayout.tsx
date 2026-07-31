@@ -62,8 +62,26 @@ export function WorkspaceLayout() {
       } else if (location.pathname.startsWith('/accounting/ledger') && !segments[2]) {
         title = 'Search Ledger';
       } else if (segments.length > 0) {
-        title = segments[segments.length - 1].replace(/-/g, ' ');
-        title = title.charAt(0).toUpperCase() + title.slice(1);
+        const lastSegment = segments[segments.length - 1];
+        // Intercept database IDs (e.g., CUIDs starting with 'c' or standard UUIDs or long mongo IDs)
+        const isDatabaseId = /^c[a-z0-9]{24}$/i.test(lastSegment) || 
+                             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lastSegment) ||
+                             /^[0-9a-f]{24}$/i.test(lastSegment);
+
+        if (isDatabaseId) {
+          const parentSegment = segments.length > 1 ? segments[segments.length - 2] : '';
+          if (parentSegment) {
+            // singularize parent segment (e.g., "employees" -> "Employee")
+            let entityName = parentSegment.replace(/-/g, ' ');
+            if (entityName.endsWith('s')) entityName = entityName.slice(0, -1);
+            title = (entityName.charAt(0).toUpperCase() + entityName.slice(1)) + ' Details';
+          } else {
+            title = 'Loading Details...';
+          }
+        } else {
+          title = lastSegment.replace(/-/g, ' ');
+          title = title.charAt(0).toUpperCase() + title.slice(1);
+        }
       }
 
       state.openTab({

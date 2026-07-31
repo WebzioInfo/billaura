@@ -33,8 +33,8 @@ export const ExpenseReceiptPdf = ({ expense, company }: { expense: any; company:
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.logoBlock}>
-            <Text style={styles.companyName}>{company?.name || 'Company Name'}</Text>
-            <Text style={{ color: '#666', marginBottom: 2 }}>{company?.address || 'Company Address'}</Text>
+            <Text style={styles.companyName}>{company?.name || ''}</Text>
+            <Text style={{ color: '#666', marginBottom: 2 }}>{company?.address || ''}</Text>
             {company?.email && <Text style={{ color: '#666' }}>{company.email}</Text>}
           </View>
           <View style={styles.metaBlock}>

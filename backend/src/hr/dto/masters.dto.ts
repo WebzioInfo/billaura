@@ -7,6 +7,7 @@ import {
   IsDateString,
   IsIn,
 } from "class-validator";
+import { PartialType } from "@nestjs/swagger";
 
 export class CreateDepartmentDto {
   @IsString()
@@ -34,6 +35,8 @@ export class CreateDepartmentDto {
   isActive?: boolean;
 }
 
+export class UpdateDepartmentDto extends PartialType(CreateDepartmentDto) {}
+
 export class CreateDesignationDto {
   @IsString()
   @IsNotEmpty()
@@ -59,6 +62,8 @@ export class CreateDesignationDto {
   @IsOptional()
   isActive?: boolean;
 }
+
+export class UpdateDesignationDto extends PartialType(CreateDesignationDto) {}
 
 export class CreateShiftDto {
   @IsString()

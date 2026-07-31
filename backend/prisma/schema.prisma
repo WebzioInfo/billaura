@@ -126,6 +126,7 @@ model Company {
   departments         Department[]
   designations        Designation[]
   unitConversions     UnitConversion[]
+  salaryRevisions     SalaryRevision[]
 
   @@index([status])
   @@index([createdAt])
@@ -176,6 +177,8 @@ model CompanySettings {
   logoBase64             String?
   useLogoOnDocuments     Boolean        @default(true)
   activeModules          Json?
+  hrSettings             Json?
+  payrollSettings        Json?
   company                Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   financialYear          FinancialYear? @relation(fields: [currentFinancialYearId], references: [id])
 
@@ -198,50 +201,51 @@ model FinancialYear {
 }
 
 model User {
-  id                  String                @id @default(cuid())
-  email               String                @unique
-  name                String
-  passwordHash        String
-  globalRole          UserRole              @default(ACCOUNTANT)
-  isActive            Boolean               @default(true)
-  phone               String?
-  departmentId        String?
-  department          Department?           @relation(fields: [departmentId], references: [id])
-  createdBy           String?
-  lastLogin           DateTime?
-  emailVerified       Boolean               @default(false)
-  otpCode             String?
-  otpExpiresAt        DateTime?
-  failedLoginAttempts Int                   @default(0)
-  lockoutUntil        DateTime?
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  deletedAt           DateTime?
-  activityFeeds       ActivityFeed[]
-  backupAuditLogs     BackupAuditLog[]
-  backupJobs          BackupJob[]
-  backupLogs          BackupLog[]
-  backupSchedules     BackupSchedule[]
-  companies           CompanyUser[]
-  approvedAttendances  Attendance[]          @relation("AttendanceApprovedBy")
-  lockedAttendances    Attendance[]          @relation("AttendanceLockedBy")
+  id                   String                 @id @default(cuid())
+  email                String                 @unique
+  name                 String
+  passwordHash         String
+  globalRole           UserRole               @default(ACCOUNTANT)
+  isActive             Boolean                @default(true)
+  phone                String?
+  departmentId         String?
+  department           Department?            @relation(fields: [departmentId], references: [id])
+  createdBy            String?
+  lastLogin            DateTime?
+  emailVerified        Boolean                @default(false)
+  otpCode              String?
+  otpExpiresAt         DateTime?
+  failedLoginAttempts  Int                    @default(0)
+  lockoutUntil         DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+  activityFeeds        ActivityFeed[]
+  backupAuditLogs      BackupAuditLog[]
+  backupJobs           BackupJob[]
+  backupLogs           BackupLog[]
+  backupSchedules      BackupSchedule[]
+  companies            CompanyUser[]
+  approvedAttendances  Attendance[]           @relation("AttendanceApprovedBy")
+  lockedAttendances    Attendance[]           @relation("AttendanceLockedBy")
   attendanceAuditLogs  AttendanceAuditLog[]
   requestedCorrections AttendanceCorrection[] @relation("CorrectionRequester")
   approvedCorrections  AttendanceCorrection[] @relation("CorrectionApprover")
-  approvedAdvances     EmployeeAdvance[]     @relation("AdvanceApprover")
-  uploadedAttachments ExpenseAttachment[]   @relation("ExpenseUploader")
-  expenseComments     ExpenseComment[]
-  expenseHistories    ExpenseHistory[]
-  approvedExpenses    Expense[]             @relation("ExpenseApprover")
-  exportLogs          ExportLog[]
-  importLogs          ImportLog[]
-  loginHistories      LoginHistory[]
-  platformLogs        PlatformActivityLog[]
-  receiptAudits       ReceiptAudit[]
-  receivedReceipts    Receipt[]
-  sessions            Session[]
-  supportTickets      SupportTicket[]
-  taxOverrideLogs     TaxOverrideLog[]
+  approvedAdvances     EmployeeAdvance[]      @relation("AdvanceApprover")
+  uploadedAttachments  ExpenseAttachment[]    @relation("ExpenseUploader")
+  expenseComments      ExpenseComment[]
+  expenseHistories     ExpenseHistory[]
+  approvedExpenses     Expense[]              @relation("ExpenseApprover")
+  exportLogs           ExportLog[]
+  importLogs           ImportLog[]
+  loginHistories       LoginHistory[]
+  platformLogs         PlatformActivityLog[]
+  receiptAudits        ReceiptAudit[]
+  receivedReceipts     Receipt[]
+  sessions             Session[]
+  supportTickets       SupportTicket[]
+  taxOverrideLogs      TaxOverrideLog[]
+  payrollAuditLogs     PayrollAuditLog[]
 
   @@map("users")
 }
@@ -1752,14 +1756,15 @@ model Employee {
   corrections       AttendanceCorrection[]
   employeeAdvances  EmployeeAdvance[]
   loans             EmployeeLoan[]
-  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  reportingManager  Employee?          @relation("ReportingManager", fields: [reportingManagerId], references: [id])
-  reportees         Employee[]         @relation("ReportingManager")
-  shift             Shift?             @relation(fields: [shiftId], references: [id])
+  company           Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reportingManager  Employee?              @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+  reportees         Employee[]             @relation("ReportingManager")
+  shift             Shift?                 @relation(fields: [shiftId], references: [id])
   expenses          Expense[]
   leaveApplications LeaveApplication[]
   otherIncomes      OtherIncome[]
   salarySlips       SalarySlip[]
+  salaryRevisions   SalaryRevision[]
   advances          StaffAdvance[]
   commissionRecords CommissionRecord[]
 
@@ -1783,26 +1788,26 @@ model Attendance {
   lateBy       Float? // in minutes
   earlyExit    Float? // in minutes
   notes        String?
-  
+
   approvedById String?
   lockedById   String?
   approvedAt   DateTime?
   lockedAt     DateTime?
 
-  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  approvedBy   User?          @relation("AttendanceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
-  lockedBy     User?          @relation("AttendanceLockedBy", fields: [lockedById], references: [id], onDelete: SetNull)
-  
-  auditLogs    AttendanceAuditLog[]
-  corrections  AttendanceCorrection[]
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  approvedBy User?    @relation("AttendanceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  lockedBy   User?    @relation("AttendanceLockedBy", fields: [lockedById], references: [id], onDelete: SetNull)
+
+  auditLogs   AttendanceAuditLog[]
+  corrections AttendanceCorrection[]
 
   @@unique([employeeId, date])
   @@map("attendances")
 }
 
 model AttendanceAuditLog {
-  id           String     @id @default(cuid())
+  id           String   @id @default(cuid())
   attendanceId String
   userId       String?
   changedField String
@@ -1810,29 +1815,29 @@ model AttendanceAuditLog {
   newValue     String?
   reason       String?
   ipAddress    String?
-  createdAt    DateTime   @default(now())
+  createdAt    DateTime @default(now())
 
-  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("attendance_audit_logs")
 }
 
 model AttendanceCorrection {
-  id           String     @id @default(cuid())
+  id           String      @id @default(cuid())
   attendanceId String
   employeeId   String
   requestedBy  String
   approvedBy   String?
   status       LeaveStatus @default(PENDING)
   reason       String
-  requestedAt  DateTime   @default(now())
+  requestedAt  DateTime    @default(now())
   resolvedAt   DateTime?
 
-  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  employee     Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  requester    User       @relation("CorrectionRequester", fields: [requestedBy], references: [id])
-  approver     User?      @relation("CorrectionApprover", fields: [approvedBy], references: [id])
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requester  User       @relation("CorrectionRequester", fields: [requestedBy], references: [id])
+  approver   User?      @relation("CorrectionApprover", fields: [approvedBy], references: [id])
 
   @@map("attendance_corrections")
 }
@@ -1857,30 +1862,47 @@ model LeaveApplication {
 }
 
 model SalarySlip {
-  id                  String   @id @default(cuid())
+  id                  String           @id @default(cuid())
   companyId           String
   employeeId          String
-  month               Int
-  year                Int
-  basicSalary         Decimal  @db.Decimal(15, 2)
-  allowances          Decimal  @db.Decimal(15, 2)
-  bonus               Decimal  @default(0) @db.Decimal(15, 2)
-  incentives          Decimal  @default(0) @db.Decimal(15, 2)
-  advances            Decimal  @default(0) @db.Decimal(15, 2)
-  deductions          Decimal  @default(0) @db.Decimal(15, 2)
-  netSalary           Decimal  @db.Decimal(15, 2)
-  status              String   @default("GENERATED")
-  paidDays            Float    @default(0)
-  absentDays          Float    @default(0)
+  payrollNumber       String?
+  startDate           DateTime         @default(now())
+  endDate             DateTime         @default(now())
+  basicSalary         Decimal          @db.Decimal(15, 2)
+  allowances          Decimal          @db.Decimal(15, 2)
+  bonus               Decimal          @default(0) @db.Decimal(15, 2)
+  incentives          Decimal          @default(0) @db.Decimal(15, 2)
+  advances            Decimal          @default(0) @db.Decimal(15, 2)
+  deductions          Decimal          @default(0) @db.Decimal(15, 2)
+  netSalary           Decimal          @db.Decimal(15, 2)
+  status              SalarySlipStatus @default(DRAFT)
+  paidDays            Float            @default(0)
+  absentDays          Float            @default(0)
   earningsBreakdown   Json?
   deductionsBreakdown Json?
   attendanceSummary   Json?
-  generatedAt         DateTime @default(now())
-  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee            Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  generatedAt         DateTime         @default(now())
+  deletedAt           DateTime?
+  company             Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee            Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  auditLogs           PayrollAuditLog[]
 
-  @@unique([employeeId, month, year])
+  @@unique([employeeId, startDate, endDate])
   @@map("salary_slips")
+}
+
+model PayrollAuditLog {
+  id           String     @id @default(cuid())
+  salarySlipId String
+  userId       String?
+  action       String
+  reason       String?
+  createdAt    DateTime   @default(now())
+
+  salarySlip   SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
+  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("payroll_audit_logs")
 }
 
 model StaffAdvance {
@@ -2847,8 +2869,12 @@ enum GSTReportStatus {
 }
 
 enum SalarySlipStatus {
+  DRAFT
   GENERATED
+  APPROVED
+  LOCKED
   PAID
+  CANCELLED
 }
 
 enum AdvanceStatus {
@@ -3180,13 +3206,15 @@ model SalaryComponent {
   code        String
   name        String
   type        String
+  category    String?
   description String?
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company            Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeComponents EmployeeSalaryComponent[]
 
   @@unique([companyId, code])
   @@map("salary_components")
@@ -3272,4 +3300,38 @@ model HistoricalInvoice {
   @@unique([companyId, invoiceNo])
   @@index([companyId, businessPartnerId])
   @@map("historical_invoices")
+}
+
+model SalaryRevision {
+  id            String    @id @default(cuid())
+  companyId     String
+  employeeId    String
+  effectiveDate DateTime
+  basicSalary   Decimal   @db.Decimal(15, 2)
+  status        String    @default("ACTIVE") // ACTIVE, FUTURE, PAST
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  components EmployeeSalaryComponent[]
+  employee   Employee                  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company    Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, employeeId])
+  @@map("salary_revisions")
+}
+
+model EmployeeSalaryComponent {
+  id          String  @id @default(cuid())
+  revisionId  String
+  componentId String
+  amount      Decimal @db.Decimal(15, 2)
+  formula     String?
+
+  revision  SalaryRevision  @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  component SalaryComponent @relation(fields: [componentId], references: [id])
+
+  @@index([revisionId])
+  @@map("employee_salary_components")
 }

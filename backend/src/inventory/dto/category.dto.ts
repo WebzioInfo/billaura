@@ -1,8 +1,11 @@
 import { IsString, IsNotEmpty, IsOptional, IsNumber } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { PartialType } from '@nestjs/mapped-types';
 
 export class CreateCategoryDto {
   @IsString()
   @IsNotEmpty({ message: 'name should not be empty' })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   name: string;
 
   @IsString({ message: 'code must be a string' })
@@ -42,4 +45,4 @@ export class CreateCategoryDto {
   notes?: string;
 }
 
-export class UpdateCategoryDto extends CreateCategoryDto {}
+export class UpdateCategoryDto extends PartialType(CreateCategoryDto) {}

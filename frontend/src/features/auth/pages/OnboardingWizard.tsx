@@ -379,7 +379,7 @@ export const OnboardingWizard = () => {
                   <h4 className="font-bold text-slate-800 text-lg">Startup Trial</h4>
                   <p className="text-slate-400 text-xs mt-1">Ideal for young companies scaling production</p>
                   <div className="my-6">
-                    <span className="text-3xl font-extrabold text-slate-900">$0</span>
+                    <span className="text-3xl font-extrabold text-slate-900">?0</span>
                     <span className="text-slate-400 text-xs font-semibold"> / 14 Days</span>
                   </div>
                   <ul className="text-xs text-slate-600 space-y-2 mb-8">
@@ -404,7 +404,7 @@ export const OnboardingWizard = () => {
                   <h4 className="font-bold text-slate-800 text-lg">Enterprise Scale</h4>
                   <p className="text-slate-400 text-xs mt-1">Full suite access for mid-to-large business hubs</p>
                   <div className="my-6">
-                    <span className="text-3xl font-extrabold text-slate-900">$299</span>
+                    <span className="text-3xl font-extrabold text-slate-900">?299</span>
                     <span className="text-slate-400 text-xs font-semibold"> / month</span>
                   </div>
                   <ul className="text-xs text-slate-600 space-y-2 mb-8">
@@ -441,4 +441,5 @@ export const OnboardingWizard = () => {
     </div>
   );
 };
+
 

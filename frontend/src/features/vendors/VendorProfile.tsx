@@ -5,7 +5,7 @@ import {
   ArrowLeft, Edit2, Phone, Mail, Building, MapPin, DollarSign, 
   ShoppingCart, CreditCard, Activity, ArrowUpRight, CheckCircle2, AlertCircle, FileText
 } from 'lucide-react';
-import { PageContainer, LoadingState, EmptyState } from '@/shared/components/ui/LayoutComponents';
+import { PageContainer, LoadingState, EmptyState, Breadcrumb } from '@/shared/components/ui/LayoutComponents';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { DataTable } from '@/shared/components/ui/data-table/DataTable';
@@ -125,6 +125,12 @@ export const VendorProfile = () => {
 
   return (
     <PageContainer maxWidth="6xl">
+      <div className="mb-4">
+        <Breadcrumb items={[
+          { label: 'Vendors', href: '/app/vendors' },
+          { label: displayName }
+        ]} />
+      </div>
       {/* Header Profile Section */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
         <div className="flex items-start gap-4">

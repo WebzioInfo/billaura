@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import apiClient from '@/core/api';
@@ -42,7 +42,7 @@ export const BankingDashboard = () => {
           </div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Total Balance</p>
-            <p className="text-2xl font-bold">${loadingStats ? '...' : Number(stats?.totalBalance || 0).toFixed(2)}</p>
+            <p className="text-2xl font-bold">₹${loadingStats ? '...' : Number(stats?.totalBalance || 0).toFixed(2)}</p>
           </div>
         </div>
         <div className="p-6 bg-white border rounded-lg shadow-sm flex items-center gap-4">
@@ -78,7 +78,7 @@ export const BankingDashboard = () => {
                   <TableCell className="font-medium">{account.name}</TableCell>
                   <TableCell>{account.bankName || 'N/A'}</TableCell>
                   <TableCell>{account.accountNumber || 'N/A'}</TableCell>
-                  <TableCell className="font-semibold">${Number(account.currentBalance).toFixed(2)}</TableCell>
+                  <TableCell className="font-semibold">₹${Number(account.currentBalance).toFixed(2)}</TableCell>
                   <TableCell>
                     <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">{account.status}</span>
                   </TableCell>
@@ -91,3 +91,5 @@ export const BankingDashboard = () => {
     </div>
   );
 };
+
+

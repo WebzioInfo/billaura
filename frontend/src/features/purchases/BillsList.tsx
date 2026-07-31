@@ -278,6 +278,30 @@ export const BillsList = () => {
     };
   }, [bills]);
 
+  const handleExport = () => {
+    if (!bills || bills.length === 0) return;
+    const header = ['Purchase No', 'Date', 'Vendor', 'Status', 'Tax Mode', 'Sub Total', 'Tax', 'Grand Total', 'Amount Paid'];
+    const rows = bills.map((b: any) => [
+      b.purchaseNo || '',
+      b.date ? new Date(b.date).toLocaleDateString() : '',
+      b.vendor?.name || '',
+      b.status || '',
+      b.taxMode || '',
+      b.subTotal || 0,
+      b.taxTotal || 0,
+      b.grandTotal || 0,
+      b.amountPaid || 0
+    ].map((v: any) => `"${v}"`).join(','));
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bills_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Client Side Filtering
   const filteredBills = React.useMemo(() => {
     return bills.filter(b => {
@@ -395,10 +419,10 @@ export const BillsList = () => {
             >
               <Plus className="w-4 h-4" /> New Bill
             </Button>
-            <Button variant="outline" className="gap-1.5" onClick={() => notification.info('Importing is currently a mock action')}>
+            <Button variant="outline" className="gap-1.5 opacity-50 cursor-not-allowed" title="Available in a future release." disabled>
               <Download className="w-4 h-4" /> Import
             </Button>
-            <Button variant="outline" className="gap-1.5" onClick={() => notification.info('Exporting data as CSV...')}>
+            <Button variant="outline" className="gap-1.5" onClick={handleExport}>
               Export
             </Button>
             <Button variant="outline" className="p-2.5" onClick={() => window.print()}>
@@ -717,7 +741,7 @@ export const BillsList = () => {
                             <PdfDownloadButton
                               filename={`Bill-${bill.purchaseNo}.pdf`}
                               data={{
-                                company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
+                                company: { name: companyProfile.name || '', address: companyProfile.address || '', email: companyProfile.email || '' },
                                 customer: { name: bill.vendor?.name || 'Unknown', address: bill.vendor?.state || 'N/A' },
                                 document: { title: 'Purchase Bill', documentNo: bill.purchaseNo, date: bill.date, status: bill.status },
                                 items: bill.items?.map(i => {
@@ -912,7 +936,7 @@ export const BillsList = () => {
                 <PdfDownloadButton
                   filename={`Bill-${selectedBill.purchaseNo}.pdf`}
                   data={{
-                    company: { name: companyProfile.name || 'Your Company', address: companyProfile.address || 'N/A', email: companyProfile.email || 'N/A' },
+                    company: { name: companyProfile.name || '', address: companyProfile.address || '', email: companyProfile.email || '' },
                     customer: { name: selectedBill.vendor?.name || 'Unknown', address: selectedBill.vendor?.state || 'N/A' },
                     document: { title: 'Purchase Bill', documentNo: selectedBill.purchaseNo, date: selectedBill.date, status: selectedBill.status },
                     items: selectedBill.items?.map(i => {
