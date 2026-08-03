@@ -12,7 +12,6 @@ import {
 } from "@nestjs/common";
 import { BackupService } from "./backup.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { PrismaService } from "../database/prisma.service";
 import { Response } from "express";
 import { StorageService } from "../storage/storage.service";
 
@@ -21,7 +20,6 @@ import { StorageService } from "../storage/storage.service";
 export class BackupController {
   constructor(
     private readonly backupService: BackupService,
-    private readonly prisma: PrismaService,
     private readonly storage: StorageService,
   ) {}
 
@@ -52,25 +50,13 @@ export class BackupController {
   @Get("history")
   async getHistory(@Req() req: any, @Query("type") type?: string) {
     const user = req.user;
-
-    const where: any = {};
-    if (
-      user.globalRole !== "SUPER_ADMIN" ||
-      (user.globalRole === "SUPER_ADMIN" && type !== "PLATFORM")
-    ) {
-      where.companyId = user.companyId;
-    } else if (user.globalRole === "SUPER_ADMIN" && type === "PLATFORM") {
-      where.companyId = null;
+    
+    let companyIdToBackup: string | null = user.companyId;
+    if (user.globalRole === "SUPER_ADMIN" && type === "PLATFORM") {
+      companyIdToBackup = null;
     }
 
-    return this.prisma.backupJob.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: {
-        createdBy: { select: { name: true, email: true } },
-        company: { select: { companyName: true } },
-      },
-    });
+    return this.backupService.getHistory(companyIdToBackup, type);
   }
 
   @Get("download/:id")
@@ -81,7 +67,7 @@ export class BackupController {
   ) {
     const user = req.user;
 
-    const job = await this.prisma.backupJob.findUnique({ where: { id } });
+    const job = await this.backupService.getJob(id);
     if (!job) throw new ForbiddenException("Backup not found");
 
     // Authorization Check
@@ -101,15 +87,7 @@ export class BackupController {
     }
 
     // Log the download action
-    await this.prisma.backupAuditLog.create({
-      data: {
-        companyId: job.companyId,
-        userId: user.id,
-        action: "DOWNLOAD_BACKUP",
-        targetName: job.name,
-        success: true,
-      },
-    });
+    await this.backupService.logDownload(job.companyId, user.id, job.name);
 
     res.download(
       this.storage.getFilePath(job.fileUrl),
@@ -117,3 +95,4 @@ export class BackupController {
     );
   }
 }
+

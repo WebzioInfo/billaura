@@ -66,6 +66,38 @@ export class UpdateSalarySlipDto {
 
   @IsNumber()
   @IsOptional()
+  otAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  fine?: number;
+
+  @IsNumber()
+  @IsOptional()
+  advanceRecovery?: number;
+
+  @IsNumber()
+  @IsOptional()
+  loanRecovery?: number;
+
+  @IsNumber()
+  @IsOptional()
+  pf?: number;
+
+  @IsNumber()
+  @IsOptional()
+  esi?: number;
+
+  @IsNumber()
+  @IsOptional()
+  tax?: number;
+
+  @IsNumber()
+  @IsOptional()
+  otherDeductions?: number;
+
+  @IsNumber()
+  @IsOptional()
   advances?: number;
 
   @IsNumber()
@@ -89,4 +121,8 @@ export class UpdateSalarySlipDto {
   @IsString()
   @IsOptional()
   reason?: string;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
 }

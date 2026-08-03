@@ -34,6 +34,15 @@ export class HrController {
     return this.hrService.getEmployeeById(id);
   }
 
+  @Get("employees/:id/attendance-calendar")
+  async getEmployeeAttendanceCalendar(
+    @Param("id") id: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.hrService.getEmployeeAttendanceCalendar(id, startDate, endDate);
+  }
+
   @Post("employees")
   async createEmployee(@Body() dto: CreateEmployeeDto) {
     return this.hrService.createEmployee(dto);
@@ -138,6 +147,11 @@ export class HrController {
       shiftId,
       employmentTypeId,
     });
+  }
+
+  @Get('salary-slips/:id')
+  async getSalarySlipById(@Param('id') id: string) {
+    return this.hrService.getSalarySlipById(id);
   }
 
   @Post('salary-slips/generate')

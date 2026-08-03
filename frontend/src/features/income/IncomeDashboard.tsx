@@ -7,7 +7,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient as api } from '../../core/api/apiClient';
 
-// Dummy components for now, we will implement them next.
 import { OtherIncomesList } from './components/OtherIncomesList';
 import { IncomeCategoriesList } from './components/IncomeCategoriesList';
 

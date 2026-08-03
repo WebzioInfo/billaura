@@ -6,6 +6,7 @@ import { ContactsController } from "./contacts.controller";
 import { CrmActivitiesService } from "./crm-activities.service";
 import { CrmActivitiesController } from "./crm-activities.controller";
 import { CustomersController } from "./customers.controller";
+import { CustomersService } from "./customers.service";
 import { DatabaseModule } from "../database/database.module";
 
 import { CustomerSegmentsModule } from "./customer-segments/customer-segments.module";
@@ -21,7 +22,7 @@ import { AccountingModule } from "../accounting/accounting.module";
     CrmActivitiesController,
     CustomersController,
   ],
-  providers: [LeadsService, ContactsService, CrmActivitiesService],
-  exports: [LeadsService, ContactsService, CrmActivitiesService, CustomerSegmentsModule],
+  providers: [LeadsService, ContactsService, CrmActivitiesService, CustomersService],
+  exports: [LeadsService, ContactsService, CrmActivitiesService, CustomersService, CustomerSegmentsModule],
 })
 export class CrmModule {}

@@ -3,6 +3,7 @@ import { AccountingEngineService } from './accounting-engine.service';
 import { AccountsController } from './accounts.controller';
 import { AccountsService } from './accounts.service';
 import { BankAccountsController } from './bank-accounts.controller';
+import { BankAccountsService } from './bank-accounts.service';
 import { CapitalController } from './capital.controller';
 import { CapitalService } from './capital.service';
 import { CostCentersController } from './cost-centers.controller';
@@ -30,6 +31,7 @@ import { DatabaseModule } from '../database/database.module';
   providers: [
     AccountingEngineService,
     AccountsService,
+    BankAccountsService,
     CapitalService,
     CostCentersService,
     FixedAssetsService,
@@ -37,6 +39,6 @@ import { DatabaseModule } from '../database/database.module';
     JournalPostingService,
     ProjectsService,
   ],
-  exports: [AccountingEngineService, AccountsService, CostCentersService],
+  exports: [AccountingEngineService, AccountsService, CostCentersService, BankAccountsService],
 })
 export class AccountingModule {}

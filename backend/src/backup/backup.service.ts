@@ -28,6 +28,41 @@ export class BackupService {
     });
   }
 
+  async getHistory(companyId: string | null, type?: string) {
+    const where: any = {};
+    if (companyId) {
+      where.companyId = companyId;
+    } else if (companyId === null && type === "PLATFORM") {
+      where.companyId = null;
+    }
+
+    return this.prisma.backupJob.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        createdBy: { select: { name: true, email: true } },
+        company: { select: { companyName: true } },
+      },
+    });
+  }
+
+  async getJob(id: string) {
+    return this.prisma.backupJob.findUnique({ where: { id } });
+  }
+
+  async logDownload(companyId: string | null, userId: string, targetName: string) {
+    await this.prisma.backupAuditLog.create({
+      data: {
+        companyId,
+        userId,
+        action: "DOWNLOAD_BACKUP",
+        targetName,
+        success: true,
+      },
+    });
+  }
+
+
   @Cron(CronExpression.EVERY_5_MINUTES)
   async processPendingBackups() {
     if (this.isProcessing) return;

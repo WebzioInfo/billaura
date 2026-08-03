@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateEmployeeDto } from './dto/employee.dto';
 import { RecordAttendanceDto } from './dto/attendance.dto';
 import { AttendanceEngine } from './attendance-engine';
+import { PayrollEngine } from './payroll-engine';
 import { GenerateSalarySlipDto, PaySalarySlipDto, UpdateSalarySlipDto } from './dto/payroll.dto';
 import { CompanyContext } from '../common/context/company-context';
 
@@ -478,6 +479,69 @@ export class HrService {
     };
   }
 
+  async getEmployeeAttendanceCalendar(employeeId: string, startDateStr: string, endDateStr: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, companyId },
+      include: { department: true, designation: true, shift: true },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+
+    const attendances = await this.prisma.attendance.findMany({
+      where: {
+        companyId,
+        employeeId,
+        date: { gte: startDate, lte: endDate },
+      },
+    });
+
+    let leaves: any[] = [];
+    try {
+      if ((this.prisma as any).leaveRequest) {
+        leaves = await (this.prisma as any).leaveRequest.findMany({
+          where: {
+            companyId,
+            employeeId,
+            status: 'APPROVED',
+            startDate: { lte: endDate },
+            endDate: { gte: startDate },
+          },
+        });
+      }
+    } catch (e) {}
+
+    let holidays: any[] = [];
+    try {
+      if ((this.prisma as any).holiday) {
+        holidays = await (this.prisma as any).holiday.findMany({
+          where: {
+            companyId,
+            date: { gte: startDate, lte: endDate },
+          },
+        });
+      }
+    } catch (e) {}
+
+    return AttendanceEngine.generateEmployeeCalendar({
+      employee,
+      startDate,
+      endDate,
+      attendances,
+      leaves,
+      holidays,
+    });
+  }
+
   async findAttendances(filters: any = {}) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
@@ -706,86 +770,87 @@ export class HrService {
 
     const results = [];
     for (const emp of employees) {
-      // 1. Calculate Eligible Date Range for Mid-Month Joining & Resignation
-      let empPeriodStart = new Date(startDate);
-      let empPeriodEnd = new Date(endDate);
+      const empAtt = attendances.filter(a => a.employeeId === emp.id);
+      
+      // 1. Generate Attendance Insights via AttendanceEngine
+      const attResult = AttendanceEngine.generateEmployeeCalendar({
+        employee: emp,
+        startDate,
+        endDate,
+        attendances: empAtt,
+      });
 
-      if (emp.joiningDate && new Date(emp.joiningDate) > empPeriodStart) {
-        empPeriodStart = new Date(emp.joiningDate);
-      }
-
-      const relievingDateVal = (emp as any).relievingDate;
-      if (relievingDateVal && new Date(relievingDateVal) < empPeriodEnd) {
-        empPeriodEnd = new Date(relievingDateVal);
-      }
-
-      // If employee joined after the payroll period end or resigned before start, skip or set 0
-      const isEligible = empPeriodStart <= endDate && empPeriodEnd >= startDate;
-      const eligibleDays = isEligible 
-        ? Math.max(0, Math.ceil((empPeriodEnd.getTime() - empPeriodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-        : 0;
-
+      // 2. Compute Payroll via PayrollEngine
       const activeRevision = emp.salaryRevisions?.[0];
-      const monthlyBasic = activeRevision ? Number(activeRevision.basicSalary) : (Number(emp.basicSalary) || 0);
+      const basicSalary = activeRevision ? Number(activeRevision.basicSalary) : (Number(emp.basicSalary) || 0);
 
-      // Prorate base salary if employee joined mid-month or resigned mid-month
-      const proratedBasic = (monthlyBasic / daysInMonth) * eligibleDays;
+      const calcResult = PayrollEngine.calculatePayroll({
+        employee: {
+          id: emp.id,
+          name: emp.name,
+          joiningDate: emp.joiningDate,
+          relievingDate: (emp as any).relievingDate,
+          basicSalary,
+          allowances: Number((emp as any).allowances) || 0,
+          bonus: Number((emp as any).bonus) || 0,
+          incentives: Number((emp as any).incentives) || 0,
+          pfNumber: (emp as any).pfNumber || null,
+          esiNumber: (emp as any).esiNumber || null,
+          panNumber: (emp as any).panNumber || null,
+        },
+        period: { startDate, endDate },
+        attendanceSummary: attResult.insights,
+      });
 
-      const empAtt = attendances.filter(a => a.employeeId === emp.id && new Date(a.date) >= empPeriodStart && new Date(a.date) <= empPeriodEnd);
-      const metrics = AttendanceEngine.computeMetrics(
-        empAtt.map(a => ({
-          employeeId: emp.id,
-          date: a.date,
-          type: a.type
-        })),
-        eligibleDays
-      );
-
-      const totalPaidDays = metrics.totalPaidDays;
-      const lossOfPayDays = eligibleDays - totalPaidDays;
-      const dailyWage = proratedBasic / (eligibleDays || 1);
-      const lossOfPay = dailyWage * lossOfPayDays;
-      
-      let totalAllowances = 0;
-      let totalDeductions = lossOfPay;
-      
-      const earningsBreakdown: Record<string, any> = {
-        "Basic Salary": { amount: proratedBasic, formula: `(₹${monthlyBasic.toFixed(2)} / ${daysInMonth}) × ${eligibleDays} eligible days` }
-      };
-      const deductionsBreakdown: Record<string, any> = {
-        "Loss of Pay": { amount: lossOfPay, formula: `(₹${proratedBasic.toFixed(2)} / ${eligibleDays || 1}) × ${lossOfPayDays} days` }
+      const earningsBreakdown = {
+        "Earned Basic Salary": { amount: calcResult.earnings.earnedBasic, formula: calcResult.formulaSnapshot.earnedBasicFormula },
+        "Earned Allowances": { amount: calcResult.earnings.earnedAllowances, formula: `Prorated for ${calcResult.attendance.paidDays} paid days` },
+        "Overtime": { amount: calcResult.earnings.earnedOvertime, formula: `${calcResult.attendance.otHours} hrs @ 1.5x hourly wage` },
+        "Bonus": { amount: calcResult.earnings.earnedBonus, formula: "Fixed / Performance Bonus" },
+        "Incentives": { amount: calcResult.earnings.earnedIncentives, formula: "Sales / Performance Incentive" },
       };
 
-      if (activeRevision?.components) {
-        for (const empComp of activeRevision.components) {
-          const rawAmt = Number(empComp.amount);
-          const amt = (rawAmt / daysInMonth) * eligibleDays; // Prorate allowances & deductions
-          if (empComp.component.type === 'EARNING') {
-            totalAllowances += amt;
-            earningsBreakdown[empComp.component.name] = { amount: amt, formula: `${empComp.formula || "Flat Amount"} (Prorated for ${eligibleDays} days)` };
-          } else if (empComp.component.type === 'DEDUCTION') {
-            totalDeductions += amt;
-            deductionsBreakdown[empComp.component.name] = { amount: amt, formula: `${empComp.formula || "Flat Amount"} (Prorated for ${eligibleDays} days)` };
-          }
-        }
-      }
-      
-      const netSalary = Math.max(0, (proratedBasic + totalAllowances) - totalDeductions);
-      
+      const deductionsBreakdown = {
+        "PF (Provident Fund)": { amount: calcResult.deductions.pf, formula: "12% of Earned Basic (capped)" },
+        "ESI": { amount: calcResult.deductions.esi, formula: "0.75% of Earned Gross" },
+        "Income Tax / TDS": { amount: calcResult.deductions.tax, formula: "Standard TDS Deduction" },
+        "Fine / LOP": { amount: calcResult.deductions.fine, formula: `${calcResult.attendance.lossOfPayDays} LOP days deduction` },
+      };
+
       const attendanceSummary = {
-        present: metrics.present,
-        absent: metrics.absent,
-        halfDay: metrics.halfDay,
-        leave: metrics.paidLeave,
-        unpaidLeave: metrics.unpaidLeave,
-        holiday: metrics.holiday,
-        weeklyOff: metrics.weekOff,
-        remote: metrics.workFromHome,
-        totalPaidDays,
-        lossOfPayDays,
-        daysInMonth,
-        formula: `Unified Attendance Engine: ${totalPaidDays} Paid Days / ${daysInMonth} Days`
+        present: calcResult.attendance.present,
+        absent: calcResult.attendance.absent,
+        halfDay: calcResult.attendance.halfDay,
+        leave: calcResult.attendance.paidLeave,
+        unpaidLeave: calcResult.attendance.unpaidLeave,
+        holiday: calcResult.attendance.holiday,
+        weeklyOff: calcResult.attendance.weekOff,
+        lateCount: calcResult.attendance.lateCount,
+        otHours: calcResult.attendance.otHours,
+        totalPaidDays: calcResult.attendance.paidDays,
+        lossOfPayDays: calcResult.attendance.lossOfPayDays,
+        daysInMonth: calcResult.period.daysInMonth,
+        formula: calcResult.formulaSnapshot.earnedBasicFormula,
       };
+
+      // Strict Validation: Sum of all states must match totalDays exactly
+      const sumOfDays = 
+        calcResult.attendance.present +
+        calcResult.attendance.absent +
+        calcResult.attendance.halfDay +
+        calcResult.attendance.paidLeave +
+        calcResult.attendance.unpaidLeave +
+        calcResult.attendance.holiday +
+        calcResult.attendance.weekOff +
+        calcResult.attendance.futureDays +
+        calcResult.attendance.preJoiningDays +
+        calcResult.attendance.postRelievingDays;
+      
+      if (sumOfDays !== calcResult.attendance.totalDays) {
+        throw new BadRequestException(
+          `Attendance validation failed for employee ${emp.name}. Calculated days sum (${sumOfDays}) does not match period days (${calcResult.attendance.totalDays}).`
+        );
+      }
 
       const slip = await this.prisma.salarySlip.upsert({
         where: {
@@ -796,12 +861,12 @@ export class HrService {
           }
         },
         update: {
-          basicSalary: proratedBasic,
-          allowances: totalAllowances,
-          deductions: totalDeductions,
-          netSalary,
-          paidDays: totalPaidDays,
-          absentDays: lossOfPayDays,
+          basicSalary: calcResult.earnings.earnedBasic,
+          allowances: calcResult.earnings.earnedAllowances,
+          deductions: calcResult.deductions.totalDeductions,
+          netSalary: calcResult.netSalary,
+          paidDays: calcResult.attendance.paidDays,
+          absentDays: calcResult.attendance.lossOfPayDays,
           earningsBreakdown,
           deductionsBreakdown,
           attendanceSummary,
@@ -811,12 +876,12 @@ export class HrService {
           employeeId: emp.id,
           startDate,
           endDate,
-          basicSalary: proratedBasic,
-          allowances: totalAllowances,
-          deductions: totalDeductions,
-          netSalary,
-          paidDays: totalPaidDays,
-          absentDays: lossOfPayDays,
+          basicSalary: calcResult.earnings.earnedBasic,
+          allowances: calcResult.earnings.earnedAllowances,
+          deductions: calcResult.deductions.totalDeductions,
+          netSalary: calcResult.netSalary,
+          paidDays: calcResult.attendance.paidDays,
+          absentDays: calcResult.attendance.lossOfPayDays,
           earningsBreakdown,
           deductionsBreakdown,
           attendanceSummary,
@@ -937,12 +1002,44 @@ export class HrService {
     });
   }
 
+  async getSalarySlipById(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const slip = await this.prisma.salarySlip.findFirst({
+      where: { id, companyId },
+      include: {
+        employee: {
+          include: {
+            department: true,
+            designation: true,
+            branch: true,
+            shift: true,
+            employmentType: true,
+          }
+        },
+        auditLogs: {
+          include: {
+            user: true
+          },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+
+    if (!slip) throw new NotFoundException('Salary slip not found');
+    return slip;
+  }
+
   async updateSalarySlip(id: string, dto: UpdateSalarySlipDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
     const slip = await this.prisma.salarySlip.findFirst({
       where: { id, companyId },
+      include: {
+        auditLogs: true
+      }
     });
 
     if (!slip) throw new NotFoundException('Salary slip not found');
@@ -950,16 +1047,68 @@ export class HrService {
       throw new ConflictException(`Salary slip in ${slip.status} status is locked and cannot be directly modified`);
     }
 
+    const oldSnapshot = {
+      basicSalary: Number(slip.basicSalary),
+      allowances: Number(slip.allowances),
+      bonus: Number(slip.bonus),
+      incentives: Number(slip.incentives),
+      advances: Number(slip.advances),
+      deductions: Number(slip.deductions),
+      netSalary: Number(slip.netSalary),
+      earningsBreakdown: slip.earningsBreakdown,
+      deductionsBreakdown: slip.deductionsBreakdown,
+      status: slip.status,
+    };
+
     const basicSalary = dto.basicSalary !== undefined ? dto.basicSalary : Number(slip.basicSalary);
     const allowances = dto.allowances !== undefined ? dto.allowances : Number(slip.allowances);
     const bonus = dto.bonus !== undefined ? dto.bonus : Number(slip.bonus);
     const incentives = dto.incentives !== undefined ? dto.incentives : Number(slip.incentives);
-    const advances = dto.advances !== undefined ? dto.advances : Number(slip.advances);
-    const deductions = dto.deductions !== undefined ? dto.deductions : Number(slip.deductions);
+    const otAmount = dto.otAmount !== undefined ? dto.otAmount : 0;
 
-    const grossSalary = basicSalary + allowances + bonus + incentives;
-    const totalDeductions = deductions + advances;
+    const fine = dto.fine !== undefined ? dto.fine : 0;
+    const advanceRecovery = dto.advanceRecovery !== undefined ? dto.advanceRecovery : (dto.advances !== undefined ? dto.advances : Number(slip.advances));
+    const loanRecovery = dto.loanRecovery !== undefined ? dto.loanRecovery : 0;
+    const pf = dto.pf !== undefined ? dto.pf : 0;
+    const esi = dto.esi !== undefined ? dto.esi : 0;
+    const tax = dto.tax !== undefined ? dto.tax : 0;
+    const otherDeductions = dto.otherDeductions !== undefined ? dto.otherDeductions : 0;
+
+    const calculatedDeductions = dto.deductions !== undefined 
+      ? dto.deductions 
+      : (fine + advanceRecovery + loanRecovery + pf + esi + tax + otherDeductions);
+
+    const grossSalary = basicSalary + allowances + bonus + incentives + otAmount;
+    const totalDeductions = calculatedDeductions;
     const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+    const newSnapshot = {
+      basicSalary,
+      allowances,
+      bonus,
+      incentives,
+      otAmount,
+      fine,
+      advanceRecovery,
+      loanRecovery,
+      pf,
+      esi,
+      tax,
+      otherDeductions,
+      deductions: totalDeductions,
+      grossSalary,
+      netSalary,
+      status: dto.status || slip.status,
+    };
+
+    const auditPayload = {
+      userReason: dto.reason || 'Payroll edit and recalculation',
+      old: oldSnapshot,
+      new: newSnapshot,
+      version: (slip.auditLogs?.length || 0) + 1,
+    };
+
+    const updatedStatus = (dto.status as any) || slip.status;
 
     return this.prisma.salarySlip.update({
       where: { id },
@@ -968,24 +1117,42 @@ export class HrService {
         allowances,
         bonus,
         incentives,
-        advances,
+        advances: advanceRecovery,
         deductions: totalDeductions,
         netSalary,
+        status: updatedStatus,
         paidDays: dto.paidDays !== undefined ? dto.paidDays : slip.paidDays,
         absentDays: dto.absentDays !== undefined ? dto.absentDays : slip.absentDays,
-        earningsBreakdown: dto.earningsBreakdown || (slip.earningsBreakdown as any),
-        deductionsBreakdown: dto.deductionsBreakdown || (slip.deductionsBreakdown as any),
+        earningsBreakdown: dto.earningsBreakdown || {
+          "Basic Salary": { amount: basicSalary },
+          "Allowances": { amount: allowances },
+          "Bonus": { amount: bonus },
+          "Incentives": { amount: incentives },
+          "Overtime": { amount: otAmount }
+        },
+        deductionsBreakdown: dto.deductionsBreakdown || {
+          "Fine": { amount: fine },
+          "Advance Recovery": { amount: advanceRecovery },
+          "Loan Recovery": { amount: loanRecovery },
+          "PF": { amount: pf },
+          "ESI": { amount: esi },
+          "Tax": { amount: tax },
+          "Other Deductions": { amount: otherDeductions }
+        },
         auditLogs: {
           create: {
-            action: 'REVISED',
-            reason: dto.reason || 'Payroll revision and recalculation',
+            action: updatedStatus === 'DRAFT' ? 'DRAFT_SAVED' : 'REVISED',
+            reason: JSON.stringify(auditPayload),
             userId: CompanyContext.getUserId(),
           }
         }
       },
       include: {
         employee: true,
-        auditLogs: true
+        auditLogs: {
+          include: { user: true },
+          orderBy: { createdAt: 'desc' }
+        }
       }
     });
   }

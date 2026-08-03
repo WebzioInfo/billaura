@@ -3,7 +3,7 @@ import { Modal } from '@/shared/components/ui/Modal';
 import { Button } from '@/shared/components/ui/Button';
 import notification from '@/core/services/NotificationService';
 import { FileText, Download, Printer, CheckCircle, Calendar, FileSpreadsheet } from 'lucide-react';
-
+import { apiClient as api } from '@/core/api/apiClient';
 interface AttendanceReportWizardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -27,18 +27,24 @@ export const AttendanceReportWizard: React.FC<AttendanceReportWizardProps> = ({ 
     }, 1200);
   };
 
-  const handleDownload = (type: string) => {
-    notification.success(`Downloading Attendance Report (${type})...`);
-    // Create dummy download file
-    const element = document.createElement("a");
-    const file = new Blob([
-      `BILL AURA ERP - ATTENDANCE REPORT\nEmployee: ${employee.name} (${employee.employeeCode})\nPeriod: ${period}\nGenerated Date: ${new Date().toLocaleDateString()}\nStatus Summary:\nPresent: 22 Days | Absent: 0 Days | Leave: 2 Days | Weekly Off: 4 Days\nAttendance Rate: 95.6%`
-    ], {type: 'text/plain'});
-    element.href = URL.createObjectURL(file);
-    element.download = `Attendance_Report_${employee.employeeCode}_${period}.${type.toLowerCase() === 'pdf' ? 'pdf' : type.toLowerCase() === 'excel' ? 'xlsx' : 'csv'}`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+  const handleDownload = async (type: string) => {
+    try {
+      notification.info(`Requesting ${type} report...`);
+      // Request real blob from backend
+      const response = await api.get(`/reports/attendance/export?employeeId=${employee.id}&period=${period}&format=${type.toLowerCase()}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Attendance_Report_${employee.employeeCode}_${period}.${type.toLowerCase() === 'pdf' ? 'pdf' : type.toLowerCase() === 'excel' ? 'xlsx' : 'csv'}`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      notification.success('Report downloaded successfully.');
+    } catch (error) {
+      notification.error('Failed to download report. Backend API integration required.');
+    }
   };
 
   return (
@@ -124,7 +130,7 @@ export const AttendanceReportWizard: React.FC<AttendanceReportWizardProps> = ({ 
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Attendance Summary:</span>
-              <span className="font-semibold text-green-600">Present (95.6%)</span>
+              <span className="font-semibold text-muted-foreground italic">Computed dynamically in downloaded report</span>
             </div>
           </div>
 

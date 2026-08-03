@@ -4,6 +4,7 @@ import { PurchasesController } from "./purchases.controller";
 import { PurchasePaymentsService } from "./purchase-payments.service";
 import { PurchasePaymentsController } from "./purchase-payments.controller";
 import { VendorsController } from "./vendors.controller";
+import { VendorsService } from "./vendors.service";
 import { DatabaseModule } from "../database/database.module";
 import { PurchaseOrdersController } from "./purchase-orders.controller";
 import { PurchaseOrdersService } from "./purchase-orders.service";
@@ -27,12 +28,14 @@ import { SharedModule } from "../shared/shared.module";
     PurchasePaymentsService,
     PurchaseOrdersService,
     GoodsReceiptsService,
+    VendorsService,
   ],
   exports: [
     PurchasesService,
     PurchasePaymentsService,
     PurchaseOrdersService,
     GoodsReceiptsService,
+    VendorsService,
   ],
 })
 export class PurchasesModule {}

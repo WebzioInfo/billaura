@@ -35,23 +35,13 @@ export const SmartOperationsPanel: React.FC<SmartOperationsPanelProps> = ({ atte
   const pendingApprovals = filteredAttendances.filter(a => a.status === 'PENDING' || a.status === 'DRAFT');
   const leaves = filteredAttendances.filter(a => ['LEAVE', 'PAID_LEAVE', 'UNPAID_LEAVE', 'SICK_LEAVE'].includes(a.type));
 
-  // Dummy data for new HR alerts
-  const upcomingBirthdays = [
-    { name: 'Sarah Connor', date: 'Tomorrow' },
-    { name: 'John Doe', date: 'In 3 days' }
-  ];
-  const probationEnding = [
-    { name: 'Alice Smith', date: 'Next Week' }
-  ];
-  const contractExpiring = [
-    { name: 'Bob Johnson', date: 'In 15 days' }
-  ];
-  const missingDocuments = [
-    { name: 'Emma Wilson', docs: 'ID Proof' },
-    { name: 'Michael Brown', docs: 'Bank Details' }
-  ];
+  // Placeholder for real backend data
+  const upcomingBirthdays: any[] = [];
+  const probationEnding: any[] = [];
+  const contractExpiring: any[] = [];
+  const missingDocuments: any[] = [];
   const payrollAlerts = [
-    { title: 'Tax Declarations Due', count: 12 }
+    { title: 'Tax Declarations Due', count: 0 }
   ];
 
   const renderEmployeeCard = (

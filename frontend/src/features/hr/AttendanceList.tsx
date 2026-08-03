@@ -160,6 +160,7 @@ export const AttendanceList = () => {
     onSuccess: () => {
       setSheetState('SAVED');
       queryClient.invalidateQueries({ queryKey: ['attendances-advanced'] });
+      queryClient.invalidateQueries({ queryKey: ['hr'] });
       notification.success(`Successfully saved attendance.`);
       setSelectedIds([]);
     },

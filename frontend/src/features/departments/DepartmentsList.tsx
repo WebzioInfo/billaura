@@ -198,6 +198,8 @@ export const DepartmentsList = () => {
       notification.success('Attendance log saved');
       setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['hr-administrative-hub'] });
+      queryClient.invalidateQueries({ queryKey: ['hr', 'attendance-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['hr', 'salary-slips'] });
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Logging failed');

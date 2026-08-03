@@ -42,6 +42,7 @@ const EmployeesList = lazy(() => import('../features/hr/EmployeesList').then(m =
 const PayrollDashboard = lazy(() => import('../features/hr/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 const AttendanceReportPage = lazy(() => import('../features/hr/pages/AttendanceReportPage').then(m => ({ default: m.AttendanceReportPage })));
 const PayrollGenerationWizard = lazy(() => import('../features/hr/pages/PayrollGenerationWizard').then(m => ({ default: m.PayrollGenerationWizard })));
+const PayrollWorkspacePage = lazy(() => import('../features/hr/pages/PayrollWorkspacePage').then(m => ({ default: m.PayrollWorkspacePage })));
 
 const CustomersList = lazy(() => import('../features/crm/CustomersList').then(m => ({ default: m.CustomersList })));
 const CustomerProfile = lazy(() => import('../features/crm/CustomerProfile').then(m => ({ default: m.CustomerProfile })));
@@ -354,6 +355,8 @@ export const router = createBrowserRouter([
       { path: 'master-config', element: <Navigate to="/departments?tab=masters" replace /> },
       { path: 'attendance', element: <AttendanceList /> },
       { path: 'payroll', element: <PayrollDashboard /> },
+      { path: 'payroll/:id', element: <PayrollWorkspacePage /> },
+      { path: 'payroll/:id/:tab', element: <PayrollWorkspacePage /> },
       { path: 'fixed-assets', element: <FixedAssetsList /> },
       { path: 'projects', element: <ProjectsList /> },
       { path: 'settings/general', element: <SettingsPage /> },
