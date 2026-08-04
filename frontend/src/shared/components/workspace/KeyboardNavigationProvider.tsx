@@ -124,12 +124,7 @@ export const KeyboardNavigationProvider: React.FC<KeyboardNavigationProviderProp
         return;
       }
 
-      // Ctrl + P: Print Document
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
-        e.preventDefault();
-        window.print();
-        return;
-      }
+
 
       // Ctrl + /: Focus Global Search Input
       if ((e.ctrlKey || e.metaKey) && e.key === '/') {

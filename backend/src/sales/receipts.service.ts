@@ -256,11 +256,11 @@ export class ReceiptsService {
           }
 
           const newPaid = Number(inv.amountPaid) + alloc.amount;
-          const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIAL';
+          const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIALLY_PAID';
 
           await tx.invoice.update({
             where: { id: inv.id },
-            data: { amountPaid: newPaid, status },
+            data: { amountPaid: newPaid, status: status as any },
           });
 
           await tx.receiptAllocation.create({
@@ -290,11 +290,11 @@ export class ReceiptsService {
 
           if (allocate > 0) {
             const newPaid = Number(inv.amountPaid) + allocate;
-            const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIAL';
+            const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIALLY_PAID';
 
             await tx.invoice.update({
               where: { id: inv.id },
-              data: { amountPaid: newPaid, status },
+              data: { amountPaid: newPaid, status: status as any },
             });
 
             await tx.receiptAllocation.create({
@@ -526,8 +526,9 @@ export class ReceiptsService {
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Create Invoice
-      const invoiceDto = {
+      const invoiceDto: any = {
         customerId: dto.businessPartnerId,
+        businessPartnerId: dto.businessPartnerId,
         date: dto.date,
         invoiceType: 'TAX_INVOICE',
         placeOfSupply: dto.placeOfSupply || null,

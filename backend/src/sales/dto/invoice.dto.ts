@@ -34,12 +34,60 @@ export class InvoiceItemDto {
 
 export class CreateInvoiceDto {
   @IsString()
+  @IsOptional()
+  customerId?: string;
+
+  @IsString()
   @IsNotEmpty()
-  customerId: string;
+  businessPartnerId: string;
 
   @IsDateString()
   @IsNotEmpty()
   date: string;
+
+  @IsString()
+  @IsOptional()
+  taxMode?: string;
+
+  @IsString()
+  @IsOptional()
+  billingAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingAddress?: string;
+
+  @IsNumber()
+  @IsOptional()
+  subTotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxTotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  cgstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  sgstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  igstAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  cessAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  totalTaxAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  grandTotal?: number;
 
   @IsString()
   @IsOptional()

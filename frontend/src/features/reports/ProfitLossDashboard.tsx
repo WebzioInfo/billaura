@@ -10,9 +10,8 @@ const formatCurrency = (val: number) => {
 import { 
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 import notification from '@/core/services/NotificationService';
 import { useQuery } from '@tanstack/react-query';
 
@@ -40,41 +39,20 @@ export default function ProfitLossDashboard() {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(20);
-    doc.text('Profit & Loss Statement', 14, 22);
-    doc.setFontSize(11);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
-    
-    // Using autoTable securely cast to any since type definitions might conflict
-    const autoTable = (doc as any).autoTable;
-    
-    if (autoTable) {
-      autoTable({
-        startY: 40,
-        head: [['Account', 'Balance']],
-        body: [
-          ['Revenue', ''],
-          ['Sales Revenue', formatCurrency(data?.statement?.revenue?.grossRevenue || 0)],
-          ['Cost of Goods Sold', formatCurrency(data?.statement?.cogs?.total || 0)],
-          ['Gross Profit', formatCurrency(data?.statement?.grossProfit || 0)],
-          ['Operating Expenses', formatCurrency(data?.statement?.operatingExpenses?.total || 0)],
-          ['Operating Profit', formatCurrency(data?.statement?.operatingProfit || 0)],
-          ['Net Profit', formatCurrency(data?.statement?.netProfit || 0)],
-        ],
-        theme: 'grid',
-        headStyles: { fillColor: [41, 128, 185] },
-      });
-    }
-    
-    doc.save('Profit_Loss_Statement.pdf');
-    notification.success('PDF Exported Successfully');
+  const getTableData = () => {
+    return [
+      { account: 'Revenue', balance: '' },
+      { account: 'Sales Revenue', balance: formatCurrency(data?.statement?.revenue?.grossRevenue || 0) },
+      { account: 'Cost of Goods Sold', balance: formatCurrency(data?.statement?.cogs?.total || 0) },
+      { account: 'Gross Profit', balance: formatCurrency(data?.statement?.grossProfit || 0) },
+      { account: 'Operating Expenses', balance: formatCurrency(data?.statement?.operatingExpenses?.total || 0) },
+      { account: 'Operating Profit', balance: formatCurrency(data?.statement?.operatingProfit || 0) },
+      { account: 'Net Profit', balance: formatCurrency(data?.statement?.netProfit || 0) },
+    ];
   };
 
-  const exportExcel = () => {
-    const wsData = [
-      ['Account', 'Balance'],
+  const getExcelData = () => {
+    return [
       ['Revenue', data?.statement?.revenue?.grossRevenue || 0],
       ['Cost of Goods Sold', data?.statement?.cogs?.total || 0],
       ['Gross Profit', data?.statement?.grossProfit || 0],
@@ -82,11 +60,43 @@ export default function ProfitLossDashboard() {
       ['Operating Profit', data?.statement?.operatingProfit || 0],
       ['Net Profit', data?.statement?.netProfit || 0],
     ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Profit & Loss");
-    XLSX.writeFile(wb, "Profit_Loss_Statement.xlsx");
+  };
+
+  const exportPDF = async () => {
+    await DocumentEngine.generateTablePDF({
+      title: 'Profit & Loss Statement',
+      subtitle: `Generated for ${dateRange} on ${new Date().toLocaleDateString()}`,
+      columns: [
+        { header: 'Account', dataKey: 'account', width: 100 },
+        { header: 'Balance', dataKey: 'balance', align: 'right' }
+      ],
+      data: getTableData()
+    });
+    
+    notification.success('PDF Exported Successfully');
+  };
+
+  const exportExcel = () => {
+    ExportService.exportExcel({
+      filename: 'Profit_Loss_Statement.xlsx',
+      sheetName: 'Profit & Loss',
+      title: 'Profit & Loss Statement',
+      headers: ['Account', 'Balance'],
+      data: getExcelData()
+    });
     notification.success('Excel Exported Successfully');
+  };
+
+  const handlePrint = async () => {
+    const doc = DocumentEngine.generateTablePDF({
+      title: 'Profit & Loss Statement',
+      subtitle: `Generated for ${dateRange} on ${new Date().toLocaleDateString()}`,
+      columns: [
+        { header: 'Account', dataKey: 'account', width: 100 },
+        { header: 'Balance', dataKey: 'balance', align: 'right' }
+      ],
+      data: getTableData()
+    });
   };
 
   if (loading) {
@@ -122,7 +132,7 @@ export default function ProfitLossDashboard() {
           </select>
           <Button variant="outline" onClick={exportPDF}><FileText className="w-4 h-4 mr-2" /> PDF</Button>
           <Button variant="outline" onClick={exportExcel}><Download className="w-4 h-4 mr-2" /> Excel</Button>
-          <Button variant="outline" onClick={() => window.print()} className="hidden sm:flex"><Printer className="w-4 h-4 mr-2" /> Print</Button>
+          <Button variant="outline" onClick={handlePrint} className="hidden sm:flex"><Printer className="w-4 h-4 mr-2" /> Print</Button>
         </div>
       </div>
 

@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import { UnifiedReceiptForm } from './UnifiedReceiptForm';
+import { DocumentPreviewModal } from '@/shared/components/pdf/DocumentPreviewModal';
 
 interface Invoice {
   id: string;
@@ -395,6 +396,8 @@ export const ReceiptForm = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [businessPartnerId, setBusinessPartnerId] = useState('');
   const [isSplitPayment, setIsSplitPayment] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState(0);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [splitPayments, setSplitPayments] = useState<any[]>([{ paymentMethod: 'CASH', amount: 0, accountId: '', referenceNo: '' }]);
   const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
   const [bankAccountId, setBankAccountId] = useState('');
@@ -804,7 +807,7 @@ export const ReceiptForm = () => {
             <Button variant="outline" size="sm" className="gap-2 h-9" onClick={() => navigate('/receipts')}>
               <ArrowLeft className="w-4 h-4" /> Back
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 h-9" onClick={() => window.print()}>
+            <Button variant="outline" size="sm" className="gap-2 h-9" onClick={() => setIsPreviewOpen(true)}>
               <Printer className="w-4 h-4" /> Print
             </Button>
             {r.status === 'COMPLETED' && (
@@ -980,6 +983,14 @@ export const ReceiptForm = () => {
             </div>
           </div>
         </div>
+        
+        <DocumentPreviewModal 
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          data={{ company: { name: "", address: "" }, customer: { name: r.customer?.name || "", address: "" }, document: { title: "Receipt", documentNo: r.receiptNo, date: r.date }, items: [], totals: { subTotal: 0, taxTotal: 0, grandTotal: r.amount, currency: "INR" } }}
+          title="Receipt Preview"
+          filename={`Receipt_${r.receiptNo}.pdf`}
+        />
       </PageContainer>
     );
   }

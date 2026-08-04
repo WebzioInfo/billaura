@@ -14,8 +14,8 @@ import { ConfirmDialog, JournalImpactView } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
-import { PdfDownloadButton } from '@/shared/components/pdf/PdfDownloadButton';
-import { PdfDocumentProps } from '@/shared/components/pdf/StandardPdfDocument';
+import { PdfDownloadButton, PdfDocumentProps } from '@/shared/components/pdf/PdfDownloadButton';
+import { RecordPaymentModal } from './components/RecordPaymentModal';
 
 const formatIndianCurrency = (amount: number) => {
   const rounded = Math.abs(amount) < 0.005 ? 0 : amount;
@@ -120,9 +120,6 @@ export const InvoiceDetails = () => {
     }
   });
 
-  const handlePrint = () => {
-    window.print();
-  };
 
   const handleSendEmail = () => {
     notification.promise(
@@ -137,21 +134,6 @@ export const InvoiceDetails = () => {
 
   const handleCancelInvoice = () => {
     setShowCancelDialog(true);
-  };
-
-  const handleRecordPaymentSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(paymentAmount);
-    if (isNaN(amount) || amount <= 0) {
-      notification.error('Please enter a valid payment amount');
-      return;
-    }
-    const balance = outstanding;
-    if (amount > balance) {
-      notification.error('Payment amount cannot exceed outstanding invoice balance');
-      return;
-    }
-    recordPaymentMutation.mutate(amount);
   };
 
   if (isLoading) {
@@ -328,14 +310,7 @@ export const InvoiceDetails = () => {
               >
                 <Copy className="w-3.5 h-3.5" /> Duplicate
               </Button>
-              <Button
-                onClick={handlePrint}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-1.5 h-9 cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" /> Print
-              </Button>
+
               {pdfData && (
                 <PdfDownloadButton
                   data={pdfData}
@@ -674,253 +649,18 @@ export const InvoiceDetails = () => {
             </div>
           </div>
 
-          {/* 3. Pure Print View Block - ONLY visible during window.print() */}
-          <div className="hidden print:block bg-white p-0 m-0 print:w-full print:min-h-screen">
-            <div className="p-0 bg-white">
-              {/* Same A4 format code to ensure standard margins */}
-              <div className="flex justify-between items-start border-b-2 border-slate-200 pb-6 mb-6">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-bold text-lg text-slate-900 tracking-tight">{invoice.company?.name || 'Bill Aura ERP'}</span>
-                  </div>
-                  <div className="text-xs text-slate-500 space-y-0.5">
-                    <div>{invoice.company?.address || '123 Enterprise Way'}</div>
-                    {invoice.company?.phone && <div>Ph: {invoice.company.phone}</div>}
-                    {invoice.company?.email && <div>Email: {invoice.company.email}</div>}
-                    {invoice.company?.gstin && <div className="font-semibold text-slate-700">GSTIN: {invoice.company.gstin}</div>}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight">Tax Invoice</h2>
-                  <div className="mt-3 text-xs text-slate-500 space-y-1">
-                    <div><span className="font-semibold text-slate-700">Invoice No:</span> {invoice.invoiceNo}</div>
-                    <div><span className="font-semibold text-slate-700">Date:</span> {new Date(invoice.date).toLocaleDateString('en-IN')}</div>
-                    {invoice.dueDate && <div><span className="font-semibold text-slate-700">Due Date:</span> {new Date(invoice.dueDate).toLocaleDateString('en-IN')}</div>}
-                    {invoice.placeOfSupply && <div><span className="font-semibold text-slate-700">Place of Supply:</span> {invoice.placeOfSupply}</div>}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-8 border-b-2 border-slate-100 pb-6 mb-6">
-                <div>
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Billed To</span>
-                  <div className="font-bold text-sm text-slate-950 mb-1">{invoice.businessPartner?.name || 'N/A'}</div>
-                  <div className="text-xs text-slate-500 space-y-0.5">
-                    <div>{invoice.businessPartner?.billingAddress || 'N/A'}</div>
-                    {invoice.businessPartner?.phone && <div>Ph: {invoice.businessPartner.phone}</div>}
-                    {invoice.businessPartner?.gstNumber && (
-                      <div className="font-semibold text-slate-700">GSTIN: {invoice.businessPartner.gstNumber}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Shipped To</span>
-                  <div className="font-bold text-sm text-slate-950 mb-1">{invoice.businessPartner?.name || 'N/A'}</div>
-                  <div className="text-xs text-slate-500">
-                    <div>{invoice.businessPartner?.shippingAddress || invoice.businessPartner?.billingAddress || 'N/A'}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
-                      <th className="py-3 px-3">Product / Service</th>
-                      <th className="py-3 px-3 text-right">Qty</th>
-                      <th className="py-3 px-3 text-right">Unit Price</th>
-                      <th className="py-3 px-3 text-right">Tax (GST)</th>
-                      <th className="py-3 px-3 text-right">Taxable</th>
-                      <th className="py-3 px-3 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item: any, idx: number) => {
-                      const qty = Number(item.qty || item.quantity || 0);
-                      const rate = Number(item.rate || item.unitPrice || 0);
-                      const lineTaxPercent = Number(item.taxPercent || 0);
-                      const taxable = rate * qty;
-                      const lineTotal = Number(item.total || 0);
-
-                      return (
-                        <tr key={item.id || idx} className="border-b border-slate-200">
-                          <td className="py-3 px-3">
-                            <div className="font-bold text-slate-900">{item.product?.name || 'Item'}</div>
-                            {item.description && <div className="text-[10px] text-slate-500 mt-0.5">{item.description}</div>}
-                            {item.product?.hsn && <div className="text-[9px] font-mono text-slate-500 mt-0.5">HSN: {item.product.hsn}</div>}
-                          </td>
-                          <td className="py-3 px-3 text-right font-sans tabular-nums tracking-tight">{qty} {item.product?.unit || 'Pcs'}</td>
-                          <td className="py-3 px-3 text-right font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(rate)}</td>
-                          <td className="py-3 px-3 text-right font-sans tabular-nums tracking-tight">{lineTaxPercent}%</td>
-                          <td className="py-3 px-3 text-right font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(taxable)}</td>
-                          <td className="py-3 px-3 text-right font-bold font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(lineTotal)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6 pt-4">
-                <div className="space-y-4">
-                  <div>
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Customer Notes</span>
-                    <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded">{notes}</div>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Terms & Conditions</span>
-                    <div className="text-xs text-slate-500 leading-relaxed whitespace-pre-line bg-slate-50/50 p-3 rounded">{termsConditions}</div>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-xs text-slate-700">
-                  <div className="flex justify-between">
-                    <span>Subtotal Base Gross</span>
-                    <span className="font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(Number(invoice.subTotal || 0))}</span>
-                  </div>
-
-                  {cgstAmount > 0 && (
-                    <div className="flex justify-between">
-                      <span>Central GST (CGST)</span>
-                      <span className="font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(cgstAmount)}</span>
-                    </div>
-                  )}
-                  {sgstAmount > 0 && (
-                    <div className="flex justify-between">
-                      <span>State GST (SGST)</span>
-                      <span className="font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(sgstAmount)}</span>
-                    </div>
-                  )}
-                  {igstAmount > 0 && (
-                    <div className="flex justify-between">
-                      <span>Integrated GST (IGST)</span>
-                      <span className="font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(igstAmount)}</span>
-                    </div>
-                  )}
-
-                  {Number(invoice.roundOff || 0) !== 0 && (
-                    <div className="flex justify-between border-t border-slate-200 pt-1">
-                      <span>Round Off</span>
-                      <span className="font-sans tabular-nums tracking-tight">{Number(invoice.roundOff || 0) > 0 ? '+' : ''}₹{formatIndianCurrency(Number(invoice.roundOff || 0))}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between font-bold text-sm text-slate-900 border-t-2 border-slate-300 pt-2">
-                    <span>Grand Total</span>
-                    <span className="font-bold font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(grandTotal)}</span>
-                  </div>
-
-                  <div className="flex justify-between text-green-700 pt-1 font-semibold">
-                    <span>Amount Paid</span>
-                    <span className="font-semibold font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(amountPaid)}</span>
-                  </div>
-
-                  <div className="flex justify-between border-t border-slate-300 pt-2 font-bold text-slate-900">
-                    <span>Balance Outstanding</span>
-                    <span className="font-bold font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(outstanding)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* GST breakdown tax matrix block */}
-              {taxSummary.length > 0 && (
-                <div className="mt-8 pt-4 border-t border-dashed border-slate-200">
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">GST Breakdown tax matrix</span>
-                  <table className="w-full text-left text-[10px] border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                        <th className="py-2 px-2">Tax Rate</th>
-                        <th className="py-2 px-2 text-right">Taxable Value</th>
-                        {isInterState ? (
-                          <th className="py-2 px-2 text-right">IGST</th>
-                        ) : (
-                          <>
-                            <th className="py-2 px-2 text-right">CGST</th>
-                            <th className="py-2 px-2 text-right">SGST</th>
-                          </>
-                        )}
-                        <th className="py-2 px-2 text-right">Total Tax</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {taxSummary.map((sm) => (
-                        <tr key={sm.rate} className="border-b border-slate-100">
-                          <td className="py-2 px-2 font-semibold">GST {sm.rate}%</td>
-                          <td className="py-2 px-2 text-right font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(sm.taxableValue)}</td>
-                          {isInterState ? (
-                            <td className="py-2 px-2 text-right font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(sm.taxAmount)}</td>
-                          ) : (
-                            <>
-                              <td className="py-2 px-2 text-right font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(sm.taxAmount / 2)}</td>
-                              <td className="py-2 px-2 text-right font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(sm.taxAmount / 2)}</td>
-                            </>
-                          )}
-                          <td className="py-2 px-2 text-right font-semibold font-sans tabular-nums tracking-tight">₹{formatIndianCurrency(sm.taxAmount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <div className="mt-12 text-center text-[10px] text-slate-400 border-t border-slate-100 pt-4">
-                This is a computer generated invoice document and requires no physical signature.
-              </div>
-            </div>
-          </div>
-
         </div>
 
-        {/* Record Payment Modal dialog */}
-        {isRecordPaymentOpen && (
-          <div className="no-print fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-background border border-border rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden flex flex-col p-6 space-y-4">
-              <h3 className="font-bold text-lg text-foreground">Record Inbound Receipt Payment</h3>
-              <form onSubmit={handleRecordPaymentSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Payment Amount (INR)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder={`Max: ${outstanding}`}
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Notes / Reference No</label>
-                  <textarea
-                    rows={2}
-                    value={paymentNotes}
-                    onChange={(e) => setPaymentNotes(e.target.value)}
-                    placeholder="e.g. Bank Transfer Txn Ref #12345"
-                    className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent"
-                  />
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button
-                    type="button"
-                    onClick={() => setIsRecordPaymentOpen(false)}
-                    variant="outline"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={recordPaymentMutation.isPending}
-                  >
-                    {recordPaymentMutation.isPending ? 'Saving...' : 'Record Payment'}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        <RecordPaymentModal
+          isOpen={isRecordPaymentOpen}
+          onClose={() => setIsRecordPaymentOpen(false)}
+          invoice={invoice}
+          onSuccess={() => {
+            setIsRecordPaymentOpen(false);
+            refetch();
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+          }}
+        />
       </PageContainer>
 
       <ConfirmDialog

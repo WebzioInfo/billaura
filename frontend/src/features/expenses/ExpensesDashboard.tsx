@@ -10,8 +10,6 @@ import apiClient from '@/core/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import { DeleteDialog, AsyncSelect } from '@/shared/components/ui';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { PDFDownloadLink } from '@react-pdf/renderer';
-import { ExpenseReceiptPdf } from './components/ExpenseReceiptPdf';
 import { useTaxEngine } from '@/features/taxes/hooks/useTaxEngine';
 
 const expenseSchema = z.object({
@@ -469,16 +467,26 @@ export const ExpensesDashboard = () => {
                             Approve
                           </button>
                         )}
-                        <PDFDownloadLink
-                          document={<ExpenseReceiptPdf expense={exp} company={{ name: 'Bill Aura', address: 'Corporate HQ' }} />}
-                          fileName={`Receipt_${exp.expenseNo}.pdf`}
-                          className="p-1 border border-border hover:bg-muted rounded-lg text-muted-foreground transition-all flex items-center justify-center"
+                        <button
+                          onClick={async () => {
+                            try {
+                              notification.loading('Generating receipt...', { id: 'pdf-gen' });
+                              const res = await apiClient.get(`/documents/expenses/${exp.id}/export`, { responseType: 'blob' });
+                              const url = URL.createObjectURL(res.data);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = `Receipt_${exp.expenseNo}.pdf`;
+                              link.click();
+                              notification.success('Receipt downloaded', { id: 'pdf-gen' });
+                            } catch (e) {
+                              notification.error('Failed to download receipt', { id: 'pdf-gen' });
+                            }
+                          }}
+                          className="p-1 border border-border hover:bg-muted rounded-lg text-muted-foreground transition-all flex items-center justify-center cursor-pointer"
                           title="Download PDF Receipt"
                         >
-                          {({ loading }) => (
-                            <Download className="w-3.5 h-3.5" />
-                          )}
-                        </PDFDownloadLink>
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
                         {exp.approvalStatus !== 'APPROVED' && (
                           <button onClick={() => handleEdit(exp)} className="p-1 border border-border hover:bg-muted rounded-lg text-muted-foreground hover:text-blue-500 transition-colors cursor-pointer">
                             <Edit2 className="w-3.5 h-3.5" />

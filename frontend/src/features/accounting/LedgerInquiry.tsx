@@ -9,6 +9,8 @@ import { Card } from '@/shared/components/ui/Card';
 import { TableLoader } from '@/shared/components/ui/LoadingSystem';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import notification from '@/core/services/NotificationService';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 
 export function LedgerInquiry() {
   const { ledgerId } = useParams<{ ledgerId: string }>();
@@ -58,7 +60,7 @@ export function LedgerInquiry() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault();
-        window.print();
+        handlePrint();
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
         e.preventDefault();
@@ -185,7 +187,63 @@ export function LedgerInquiry() {
   };
 
   const handleExportExcel = () => {
+    if (!inquiryData || !sortedTransactions.length) {
+      notification.error('No transactions to export');
+      return;
+    }
+
+    const headers = ['Date', 'Voucher No', 'Voucher Type', 'Reference', 'Description', 'Debit', 'Credit', 'Balance', 'Status'];
+    const data = sortedTransactions.map((t: any) => [
+      t.date.split('T')[0],
+      t.voucherNo || '',
+      t.voucherType || '',
+      t.reference || '',
+      t.description || '',
+      t.debit || 0,
+      t.credit || 0,
+      t.balance || 0,
+      t.status || ''
+    ]);
+
+    ExportService.exportExcel({
+      filename: `Ledger_Statement_${inquiryData.ledger.name}_${new Date().toISOString().split('T')[0]}.xlsx`,
+      sheetName: 'Ledger Statement',
+      title: `Ledger Statement: ${inquiryData.ledger.name}`,
+      headers,
+      data
+    });
     notification.success('Excel statement exported successfully');
+  };
+
+  const handlePrint = async () => {
+    if (!inquiryData || !sortedTransactions.length) {
+      notification.error('No transactions to print');
+      return;
+    }
+
+    await DocumentEngine.generateTablePDF({
+      title: `Ledger Statement: ${inquiryData.ledger.name}`,
+      subtitle: `Period: ${startDate} to ${endDate} | Generated: ${new Date().toLocaleDateString()}`,
+      columns: [
+        { header: 'Date', dataKey: 'date', width: 25 },
+        { header: 'Voucher No', dataKey: 'voucherNo', width: 30 },
+        { header: 'Type', dataKey: 'type', width: 25 },
+        { header: 'Description', dataKey: 'description' },
+        { header: 'Debit', dataKey: 'debit', align: 'right' },
+        { header: 'Credit', dataKey: 'credit', align: 'right' },
+        { header: 'Balance', dataKey: 'balance', align: 'right' }
+      ],
+      data: sortedTransactions.map((t: any) => ({
+        date: t.date.split('T')[0],
+        voucherNo: t.voucherNo || '',
+        type: t.voucherType || '',
+        description: t.description || '',
+        debit: t.debit || 0,
+        credit: t.credit || 0,
+        balance: t.balance || 0
+      })),
+      orientation: 'landscape'
+    });
   };
 
   const handleResize = (col: string, startWidth: number, startX: number) => {
@@ -313,7 +371,7 @@ export function LedgerInquiry() {
 
             {/* Compact Action Icons */}
             <div className="flex items-center gap-1 shrink-0 print:hidden">
-              <button onClick={() => window.print()} title="Print Statement" className="p-1 border border-border/80 hover:bg-muted/80 rounded-lg transition-colors cursor-pointer">
+              <button onClick={handlePrint} title="Print Statement" className="p-1 border border-border/80 hover:bg-muted/80 rounded-lg transition-colors cursor-pointer">
                 <Printer className="w-3.5 h-3.5" />
               </button>
               <button onClick={handleExportExcel} title="Export Excel" className="p-1 border border-border/80 hover:bg-muted/80 rounded-lg transition-colors cursor-pointer">

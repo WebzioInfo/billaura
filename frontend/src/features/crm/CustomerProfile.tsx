@@ -12,6 +12,8 @@ import apiClient from '@/core/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import notification from '@/core/services/NotificationService';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 import { getCustomerDisplayName } from '@/shared/utils/entityNames';
 import { dialog } from '@/core/services/DialogService';
 import { OpeningBalanceWidget } from './components/OpeningBalanceWidget';
@@ -81,28 +83,39 @@ export const CustomerProfile = () => {
       return;
     }
     const headers = ['Date', 'Type', 'Reference', 'Debit', 'Credit'];
-    const rows = ledger.transactions.map((t: any) => [
-      formatDate(t.date),
-      t.type,
-      t.reference || '',
-      t.balanceImpact > 0 ? t.balanceImpact : '',
-      t.balanceImpact < 0 ? Math.abs(t.balanceImpact) : ''
-    ]);
+    const rows = ledger.transactions.map((t: any) => ({
+      'Date': formatDate(t.date),
+      'Type': t.type,
+      'Reference': t.reference || '',
+      'Debit': t.balanceImpact > 0 ? t.balanceImpact : '',
+      'Credit': t.balanceImpact < 0 ? Math.abs(t.balanceImpact) : ''
+    }));
     
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row: any) => row.join(','))
-    ].join('\n');
+    ExportService.exportCsv(`${customer?.name || 'Customer'}_Ledger.csv`, rows, headers);
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${customer?.name || 'Customer'}_Ledger.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handlePrint = async () => {
+    if (!ledger?.transactions || ledger.transactions.length === 0) {
+      notification.error("No transactions to print");
+      return;
+    }
+    await DocumentEngine.generateTablePDF({
+      title: `Customer Statement: ${customer?.name}`,
+      columns: [
+        { header: 'Date', dataKey: 'date', width: 25 },
+        { header: 'Type', dataKey: 'type', width: 25 },
+        { header: 'Reference', dataKey: 'reference', width: 40 },
+        { header: 'Debit', dataKey: 'debit', align: 'right' },
+        { header: 'Credit', dataKey: 'credit', align: 'right' }
+      ],
+      data: ledger.transactions.map((t: any) => ({
+        date: formatDate(t.date),
+        type: t.type,
+        reference: t.reference || '',
+        debit: t.balanceImpact > 0 ? formatCurrency(t.balanceImpact) : '',
+        credit: t.balanceImpact < 0 ? formatCurrency(Math.abs(t.balanceImpact)) : ''
+      }))
+    });
   };
 
   const tabs = [
@@ -309,7 +322,7 @@ export const CustomerProfile = () => {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+                  <Button variant="outline" size="sm" onClick={handlePrint}><Printer className="w-4 h-4 mr-2" /> Print</Button>
                   <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-2" /> Export</Button>
                 </div>
               </div>

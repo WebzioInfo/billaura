@@ -241,7 +241,7 @@ export class InvoicesService {
       const invoice = await tx.invoice.create({
         data: {
           companyId,
-          businessPartnerId: dto.customerId,
+          businessPartnerId: (dto.businessPartnerId || dto.customerId) as string,
           commissionRecordId,
           invoiceNo,
           invoiceType: invoiceTypeEnum,
@@ -296,7 +296,7 @@ export class InvoicesService {
         await tx.customerStatement.create({
           data: {
             companyId,
-            businessPartnerId: dto.customerId,
+            businessPartnerId: (dto.businessPartnerId || dto.customerId) as string,
             date: new Date(dto.date),
             type: 'INVOICE',
             reference: invoiceNo,

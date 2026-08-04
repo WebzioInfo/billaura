@@ -524,14 +524,22 @@ export class AuthService {
         state: data.state,
         country: data.country,
         currency: data.currency,
-        ...(data.logoBase64 !== undefined ? {
-          settings: {
-            upsert: {
-              create: { logoBase64: data.logoBase64 },
-              update: { logoBase64: data.logoBase64 },
-            }
+        settings: {
+          upsert: {
+            create: {
+              ...(data.logoBase64 !== undefined && { logoBase64: data.logoBase64 }),
+              ...(data.digitalSignatureUrl !== undefined && { digitalSignatureUrl: data.digitalSignatureUrl }),
+              ...(data.companySealUrl !== undefined && { companySealUrl: data.companySealUrl }),
+              ...(data.invoiceConfig !== undefined && { invoiceConfig: data.invoiceConfig }),
+            },
+            update: {
+              ...(data.logoBase64 !== undefined && { logoBase64: data.logoBase64 }),
+              ...(data.digitalSignatureUrl !== undefined && { digitalSignatureUrl: data.digitalSignatureUrl }),
+              ...(data.companySealUrl !== undefined && { companySealUrl: data.companySealUrl }),
+              ...(data.invoiceConfig !== undefined && { invoiceConfig: data.invoiceConfig }),
+            },
           }
-        } : {})
+        }
       },
       include: { settings: true }
     });

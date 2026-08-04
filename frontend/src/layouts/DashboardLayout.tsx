@@ -10,6 +10,7 @@ import { CommandPalette } from '@/shared/components/workspace/CommandPalette';
 import { QuickCreate } from '@/shared/components/workspace/QuickCreate';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { authService } from '../core/api';
+import { ROUTES } from '@/config/routes.config';
 
 export default function DashboardLayout() {
   const { user, clearSession } = useSessionStore();
@@ -105,10 +106,10 @@ export default function DashboardLayout() {
                 <p className="text-sm font-medium">{user?.name || 'User'}</p>
                 <p className="text-xs text-muted-foreground">{user?.email}</p>
               </div>
-              <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded-sm flex items-center gap-2">
+              <button onClick={() => navigate(ROUTES.PROFILE)} className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded-sm flex items-center gap-2">
                 <User className="w-4 h-4" /> Profile
               </button>
-              <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded-sm flex items-center gap-2">
+              <button onClick={() => navigate('/settings?tab=preferences')} className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded-sm flex items-center gap-2">
                 <Settings className="w-4 h-4" /> Preferences
               </button>
               <button 

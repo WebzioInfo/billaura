@@ -38,6 +38,7 @@ import { ApiLoggerInterceptor } from './logging/api-logger.interceptor';
 import { DocumentTemplatesModule } from "./settings/document-templates/document-templates.module";
 import { CommissionsModule } from './commissions/commissions.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { DocumentsModule } from './documents/documents.module';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
     DocumentTemplatesModule,
     CommissionsModule,
     AuditLogsModule,
+    DocumentsModule,
   ],
   providers: [
     {

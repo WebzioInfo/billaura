@@ -37,4 +37,45 @@ export class BankService {
       activeAccounts: accounts.length
     };
   }
+
+  async createAccount(data: any) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new NotFoundException('Company context required');
+    if (data.isDefault) {
+      await this.prisma.bankAccount.updateMany({
+        where: { companyId },
+        data: { isDefault: false }
+      });
+    }
+    return this.prisma.bankAccount.create({
+      data: {
+        ...data,
+        companyId,
+      }
+    });
+  }
+
+  async updateAccount(id: string, data: any) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new NotFoundException('Company context required');
+    if (data.isDefault) {
+      await this.prisma.bankAccount.updateMany({
+        where: { companyId },
+        data: { isDefault: false }
+      });
+    }
+    return this.prisma.bankAccount.update({
+      where: { id, companyId },
+      data,
+    });
+  }
+
+  async deleteAccount(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new NotFoundException('Company context required');
+    return this.prisma.bankAccount.update({
+      where: { id, companyId },
+      data: { deletedAt: new Date() }
+    });
+  }
 }

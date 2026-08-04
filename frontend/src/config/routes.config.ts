@@ -6,7 +6,7 @@ export const ROUTES = {
   
   // Dashboard
   DASHBOARD: '/dashboard',
-  PROFILE: '/settings?tab=profile',
+  PROFILE: '/profile',
 
   // HR & Payroll
   HR: {
@@ -45,6 +45,7 @@ export const ROUTES = {
     INVOICES: '/invoices',
     RECEIPTS: '/receipts',
     CREDIT_NOTES: '/credit-notes',
+    CUSTOMER_AGEING: '/reports/customer-ageing',
     REPORTS: '/reports/sales',
   },
 
@@ -85,10 +86,10 @@ export const ROUTES = {
 
   // Settings
   SETTINGS: {
-    COMPANY: '/settings?tab=profile',
+    COMPANY: '/settings?tab=company',
     FINANCIAL_YEAR: '/financial-year',
     BRANCHES: '/settings?tab=branches',
-    USERS: '/users',
+    USERS: '/settings?tab=users',
     ROLES: '/settings?tab=roles',
     PERMISSIONS: '/permissions',
     TAXES: '/taxes',

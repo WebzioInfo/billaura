@@ -6,6 +6,9 @@ import { Input } from '@/shared/components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/Card';
 import { Select } from '@/shared/components/ui/Select';
 import apiClient from '@/core/api';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
+import notification from '@/core/services/NotificationService';
 
 export const AttendanceReportPage = () => {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -39,7 +42,36 @@ export const AttendanceReportPage = () => {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
-            onClick={() => window.print()}
+            onClick={async () => {
+              if (!report || !report.length) {
+                notification.error('No data available to export');
+                return;
+              }
+              await DocumentEngine.generateTablePDF({
+                title: 'Enterprise Attendance Report',
+                subtitle: `Period: ${dateRange.start} to ${dateRange.end}`,
+                columns: [
+                  { header: 'Employee', dataKey: 'employee', width: 60 },
+                  { header: 'Code', dataKey: 'code' },
+                  { header: 'Work Days', dataKey: 'workingDays', align: 'right' },
+                  { header: 'Present', dataKey: 'present', align: 'right' },
+                  { header: 'Absent', dataKey: 'absent', align: 'right' },
+                  { header: 'Late', dataKey: 'late', align: 'right' },
+                  { header: 'Overtime', dataKey: 'overtime', align: 'right' },
+                  { header: 'Attendance %', dataKey: 'percentage', align: 'right' }
+                ],
+                data: report.map((r: any) => ({
+                  employee: r.employee.name,
+                  code: r.employee.employeeCode,
+                  workingDays: r.summary.totalWorkingDays,
+                  present: r.summary.present,
+                  absent: r.summary.absent,
+                  late: r.summary.lateCount,
+                  overtime: r.summary.overtimeHours,
+                  percentage: `${r.summary.attendancePercentage.toFixed(1)}%`
+                }))
+              });
+            }}
             className="border-indigo-200 hover:bg-indigo-50 dark:border-indigo-900 dark:hover:bg-indigo-900/50 transition-colors"
           >
             <FileText className="w-4 h-4 mr-2 text-indigo-600 dark:text-indigo-400" />
@@ -47,17 +79,28 @@ export const AttendanceReportPage = () => {
           </Button>
           <Button 
             onClick={() => {
-              if (!report || !report.length) return;
-              const csvContent = "data:text/csv;charset=utf-8," 
-                + ["Employee,Code,Working Days,Present,Absent,Late,Overtime,Attendance %"].join(",") + "\n"
-                + report.map((r: any) => `"${r.employee.name}","${r.employee.employeeCode}",${r.summary.totalWorkingDays},${r.summary.present},${r.summary.absent},${r.summary.lateCount},${r.summary.overtimeHours},${r.summary.attendancePercentage.toFixed(1)}%`).join("\n");
-              const encodedUri = encodeURI(csvContent);
-              const link = document.createElement("a");
-              link.setAttribute("href", encodedUri);
-              link.setAttribute("download", `Attendance_Report_${dateRange.start}_to_${dateRange.end}.csv`);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
+              if (!report || !report.length) {
+                notification.error('No data available to export');
+                return;
+              }
+              const headers = ['Employee', 'Code', 'Working Days', 'Present', 'Absent', 'Late', 'Overtime', 'Attendance %'];
+              const data = report.map((r: any) => [
+                r.employee.name,
+                r.employee.employeeCode,
+                r.summary.totalWorkingDays,
+                r.summary.present,
+                r.summary.absent,
+                r.summary.lateCount,
+                r.summary.overtimeHours,
+                `${r.summary.attendancePercentage.toFixed(1)}%`
+              ]);
+              ExportService.exportExcel({
+                filename: `Attendance_Report_${dateRange.start}_to_${dateRange.end}.xlsx`,
+                sheetName: 'Attendance',
+                title: 'Attendance Report',
+                headers,
+                data
+              });
             }}
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all text-white"
           >

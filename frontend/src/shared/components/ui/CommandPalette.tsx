@@ -88,7 +88,7 @@ export function CommandPalette() {
             <Command.Item onSelect={() => runCommand(() => navigate('/app/reports/profit-loss'))} className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted/50 rounded-lg cursor-pointer aria-selected:bg-accent/10 aria-selected:text-accent transition-colors">
               <Activity className="w-4 h-4" /> Reports
             </Command.Item>
-            <Command.Item onSelect={() => runCommand(() => navigate('/app/settings'))} className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted/50 rounded-lg cursor-pointer aria-selected:bg-accent/10 aria-selected:text-accent transition-colors">
+            <Command.Item onSelect={() => runCommand(() => navigate('/settings?tab=company'))} className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted/50 rounded-lg cursor-pointer aria-selected:bg-accent/10 aria-selected:text-accent transition-colors">
               <Settings className="w-4 h-4" /> Settings
             </Command.Item>
           </Command.Group>

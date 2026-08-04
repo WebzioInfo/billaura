@@ -25,7 +25,7 @@ export const ReferralSection = ({ form }: { form: UseFormReturn<any> }) => {
     queryKey: ['business-partners', 'partner'],
     queryFn: async () => {
       // Usually fetch partners of type VENDOR or specialized AGENT
-      const res = await apiClient.get('/business-partners?type=VENDOR');
+      const res = await apiClient.get('/vendors');
       return res.data?.data || [];
     },
   });

@@ -74,8 +74,24 @@ const duration: Record<Exclude<NotificationKind, "loading">, number> = {
   info: 4_000,
 };
 
-function publish(kind: NotificationKind, message: string, options: NotificationOptions = {}): string {
-  const safeMessage = message.trim() || "Request could not be completed.";
+function publish(kind: NotificationKind, message: any, options: NotificationOptions = {}): string {
+  let safeMessage = "Request could not be completed.";
+  
+  if (typeof message === 'string') {
+    safeMessage = message.trim() || safeMessage;
+  } else if (message instanceof Error) {
+    safeMessage = message.message;
+  } else if (typeof message === 'object' && message !== null) {
+    if (message.message && typeof message.message === 'string') {
+      safeMessage = message.message;
+    } else {
+      try {
+        safeMessage = JSON.stringify(message);
+      } catch (e) {
+        safeMessage = "An unknown error occurred.";
+      }
+    }
+  }
   
   return toast.custom(
     (t) => (
@@ -94,13 +110,13 @@ function publish(kind: NotificationKind, message: string, options: NotificationO
 }
 
 const notification = {
-  success: (message: string, options?: NotificationOptions) => publish("success", message, options),
-  error: (message: string, options?: NotificationOptions) => publish("error", message, options),
-  warning: (message: string, options?: NotificationOptions) => publish("warning", message, options),
-  info: (message: string, options?: NotificationOptions) => publish("info", message, options),
-  loading: (message: string, options?: NotificationOptions) => publish("loading", message, options),
-  progress: (id: string, message: string, completed?: boolean) => publish(completed ? "success" : "loading", message, { id, persistent: !completed }),
-  update: (id: string, kind: Exclude<NotificationKind, "loading">, message: string, options?: NotificationOptions) => publish(kind, message, { ...options, id }),
+  success: (message: any, options?: NotificationOptions) => publish("success", message, options),
+  error: (message: any, options?: NotificationOptions) => publish("error", message, options),
+  warning: (message: any, options?: NotificationOptions) => publish("warning", message, options),
+  info: (message: any, options?: NotificationOptions) => publish("info", message, options),
+  loading: (message: any, options?: NotificationOptions) => publish("loading", message, options),
+  progress: (id: string, message: any, completed?: boolean) => publish(completed ? "success" : "loading", message, { id, persistent: !completed }),
+  update: (id: string, kind: Exclude<NotificationKind, "loading">, message: any, options?: NotificationOptions) => publish(kind, message, { ...options, id }),
   promise: async <T extends unknown>(promise: Promise<T>, messages: { loading: string; success: string | ((data: T) => string); error: string | ((error: unknown) => string) }, options?: NotificationOptions): Promise<T> => {
     const id = publish("loading", messages.loading, options);
     try {

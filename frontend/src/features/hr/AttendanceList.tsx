@@ -11,6 +11,7 @@ import { AttendanceCommandBar } from './components/AttendanceCommandBar';
 import { AttendanceGrid } from './components/AttendanceGrid';
 import { AttendanceDetailDrawer } from './components/AttendanceDetailDrawer';
 import { SmartOperationsPanel } from './components/SmartOperationsPanel';
+import { ExportService } from '@/core/services/ExportService';
 import { AttendanceAnalytics } from './components/AttendanceAnalytics';
 import { Card } from '@/shared/components/ui/Card';
 import { format, addDays, subDays, isFuture } from 'date-fns';
@@ -173,26 +174,38 @@ export const AttendanceList = () => {
   const handleExport = () => {
     if (localAttendances.length === 0) return;
     const header = ['Code', 'Name', 'Type', 'Check In', 'Check Out', 'Total Time', 'Late By', 'Early Leaving', 'Status', 'Remarks'];
-    const rows = localAttendances.map(a => [
-      a.employee?.employeeCode || '',
-      a.employee?.name ? a.employee.name : '',
-      a.type || '',
-      a.checkIn ? new Date(a.checkIn).toLocaleTimeString() : '',
-      a.checkOut ? new Date(a.checkOut).toLocaleTimeString() : '',
-      a.totalTime || '',
-      a.lateBy || '',
-      a.earlyLeaving || '',
-      a.status || '',
-      a.remarks || ''
-    ].map(v => `"${v}"`).join(','));
-    const csv = [header.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `attendance_export_${format(currentDate, 'yyyy-MM-dd')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const rows = localAttendances.map(a => ({
+      'Code': a.employee?.employeeCode || '',
+      'Name': a.employee?.name ? a.employee.name : '',
+      'Type': a.type || '',
+      'Check In': a.checkIn ? new Date(a.checkIn).toLocaleTimeString() : '',
+      'Check Out': a.checkOut ? new Date(a.checkOut).toLocaleTimeString() : '',
+      'Total Time': a.totalTime || '',
+      'Late By': a.lateBy || '',
+      'Early Leaving': a.earlyLeaving || '',
+      'Status': a.status || '',
+      'Remarks': a.remarks || ''
+    }));
+    
+    ExportService.exportCsv(`attendance_export_${format(currentDate, 'yyyy-MM-dd')}.csv`, rows, header);
+  };
+
+  const handlePrint = async () => {
+    if (localAttendances.length === 0) return;
+    
+    try {
+      notification.loading('Generating document...', { id: 'pdf-gen' });
+      const response = await apiClient.get('/documents/attendance/export', {
+        params: { date: filters.date },
+        responseType: 'blob'
+      });
+      
+      ExportService.openPdfBlob(response.data);
+      notification.success('Document ready', { id: 'pdf-gen' });
+    } catch (error) {
+      console.error('Failed to generate document:', error);
+      notification.error('Failed to generate document', { id: 'pdf-gen' });
+    }
   };
 
   const handleSaveAll = async () => {
@@ -340,7 +353,7 @@ export const AttendanceList = () => {
             designations={hrData?.designations || []}
             onActionClick={(action) => {
               if (action === 'analytics') setShowAnalytics(!showAnalytics);
-              else if (action === 'print') window.print();
+              else if (action === 'print') handlePrint();
               else if (action === 'export' || action === 'download') handleExport();
               else if (action === 'register') setFilters({ ...filters, date: format(new Date(), 'yyyy-MM-dd') });
               else if (action.startsWith('bulk-')) handleBulkMark(action.replace('bulk-', '').toUpperCase());

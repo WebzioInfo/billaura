@@ -27,7 +27,7 @@ export const AttendanceReportWizard: React.FC<AttendanceReportWizardProps> = ({ 
     }, 1200);
   };
 
-  const handleDownload = async (type: string) => {
+  const handleDownload = async (type: string, openPrint = false) => {
     try {
       notification.info(`Requesting ${type} report...`);
       // Request real blob from backend
@@ -35,6 +35,13 @@ export const AttendanceReportWizard: React.FC<AttendanceReportWizardProps> = ({ 
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
+      
+      if (openPrint) {
+        window.open(url, '_blank');
+        notification.success('Report opened for printing.');
+        return;
+      }
+
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `Attendance_Report_${employee.employeeCode}_${period}.${type.toLowerCase() === 'pdf' ? 'pdf' : type.toLowerCase() === 'excel' ? 'xlsx' : 'csv'}`);
@@ -144,7 +151,7 @@ export const AttendanceReportWizard: React.FC<AttendanceReportWizardProps> = ({ 
             <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={() => handleDownload('CSV')}>
               <Download className="w-4 h-4 text-blue-500" /> Download CSV
             </Button>
-            <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={() => { window.print(); }}>
+            <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={() => handleDownload('PDF', true)}>
               <Printer className="w-4 h-4" /> Print Report
             </Button>
           </div>

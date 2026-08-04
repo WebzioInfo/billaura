@@ -3,7 +3,9 @@ import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { Download, Printer, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '@/shared/utils/formatters';
+import { ExportService } from '@/core/services/ExportService';
 import { ReportEngine } from '@/core/reporting/ReportEngine';
+import notification from '@/core/services/NotificationService';
 
 interface PayslipProps {
   salarySlip: any;
@@ -160,16 +162,14 @@ export const Payslip: React.FC<PayslipProps> = ({ salarySlip, company }) => {
         <Button 
           variant="outline" 
           className="gap-2" 
-          onClick={() => {
+          onClick={async () => {
             try {
-              const doc = ReportEngine.generatePayrollDossierPDF({
+              await ReportEngine.generatePayrollDossierPDF({
                 items: [{ salarySlip, attendances: [] }],
                 company,
               });
-              doc.autoPrint();
-              window.open(doc.output('bloburl'), '_blank');
             } catch (e) {
-              window.print();
+              notification.error('Failed to generate print document');
             }
           }}
         >
@@ -178,15 +178,15 @@ export const Payslip: React.FC<PayslipProps> = ({ salarySlip, company }) => {
         <Button 
           variant="primary" 
           className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-          onClick={() => {
+          onClick={async () => {
             try {
-              const doc = ReportEngine.generatePayrollDossierPDF({
+              await ReportEngine.generatePayrollDossierPDF({
                 items: [{ salarySlip, attendances: [] }],
                 company,
               });
-              doc.save(`Payslip_${emp?.name || 'Employee'}_${salarySlip.id?.substring(0, 6)}.pdf`);
+              notification.success('Vector PDF Payslip downloaded');
             } catch (e) {
-              window.print();
+              notification.error('Failed to download PDF');
             }
           }}
         >

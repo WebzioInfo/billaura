@@ -52,4 +52,15 @@ export class UpdateCompanyDto {
   @IsString()
   @IsOptional()
   logoBase64?: string;
+
+  @IsString()
+  @IsOptional()
+  digitalSignatureUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  companySealUrl?: string;
+
+  @IsOptional()
+  invoiceConfig?: Record<string, any>;
 }

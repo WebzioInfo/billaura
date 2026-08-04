@@ -10,6 +10,10 @@ import apiClient from '@/core/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import notification from '@/core/services/NotificationService';
+import { formatCurrency, formatDate } from '@/shared/utils/formatters';
+import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 import { DeleteDialog, ConfirmDialog } from '@/shared/components/ui';
 import { PdfDownloadButton } from '../../shared/components/pdf/PdfDownloadButton';
 
@@ -279,9 +283,9 @@ export const BillsList = () => {
   }, [bills]);
 
   const handleExport = () => {
-    if (!bills || bills.length === 0) return;
-    const header = ['Purchase No', 'Date', 'Vendor', 'Status', 'Tax Mode', 'Sub Total', 'Tax', 'Grand Total', 'Amount Paid'];
-    const rows = bills.map((b: any) => [
+    if (!filteredBills || filteredBills.length === 0) return;
+    const headers = ['Purchase No', 'Date', 'Vendor', 'Status', 'Tax Mode', 'Sub Total', 'Tax', 'Grand Total', 'Amount Paid'];
+    const data = filteredBills.map((b: any) => [
       b.purchaseNo || '',
       b.date ? new Date(b.date).toLocaleDateString() : '',
       b.vendor?.name || '',
@@ -291,15 +295,38 @@ export const BillsList = () => {
       b.taxTotal || 0,
       b.grandTotal || 0,
       b.amountPaid || 0
-    ].map((v: any) => `"${v}"`).join(','));
-    const csv = [header.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `bills_export_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    ]);
+    
+    ExportService.exportExcel({
+      filename: `Bills_Export_${new Date().toISOString().split('T')[0]}.xlsx`,
+      sheetName: 'Bills',
+      title: 'Vendor Bills',
+      headers,
+      data
+    });
+  };
+
+  const handlePrint = async () => {
+    if (!filteredBills || filteredBills.length === 0) return;
+    
+    await DocumentEngine.generateTablePDF({
+      title: 'Vendor Bills Register',
+      columns: [
+        { header: 'Bill No', dataKey: 'billNo', width: 25 },
+        { header: 'Date', dataKey: 'date', width: 25 },
+        { header: 'Vendor', dataKey: 'vendor' },
+        { header: 'Grand Total', dataKey: 'total', align: 'right' },
+        { header: 'Status', dataKey: 'status', align: 'center' }
+      ],
+      data: filteredBills.map((b: any) => ({
+        billNo: b.purchaseNo || '',
+        date: b.date ? new Date(b.date).toLocaleDateString() : '',
+        vendor: b.vendor?.name || '',
+        total: formatCurrency(Number(b.grandTotal || 0)),
+        status: b.status
+      })),
+      orientation: 'landscape'
+    });
   };
 
   // Client Side Filtering
@@ -425,7 +452,7 @@ export const BillsList = () => {
             <Button variant="outline" className="gap-1.5" onClick={handleExport}>
               Export
             </Button>
-            <Button variant="outline" className="p-2.5" onClick={() => window.print()}>
+            <Button variant="outline" className="p-2.5" onClick={handlePrint}>
               <Printer className="w-4.5 h-4.5" />
             </Button>
           </div>

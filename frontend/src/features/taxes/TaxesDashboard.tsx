@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import notification from '@/core/services/NotificationService';
-import { 
-  Shield, Search, RefreshCw, Loader2, Download, Printer, 
-  ArrowUpRight, ArrowDownLeft, Percent 
-} from 'lucide-react';
+import { Shield, RefreshCw, Printer, Download, FileSpreadsheet, Search, Loader2, ArrowUpRight, ArrowDownLeft, Percent } from 'lucide-react';
 import { apiClient as api } from '../../core/api/apiClient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 
 // --- TYPES ---
 interface GstrRow {
@@ -124,7 +123,33 @@ export const TaxesDashboard = () => {
     }
 
     const headers = ['Ref No', 'Party Name', 'GSTIN', 'Date', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Cess', 'Total GST', 'Total Value'];
-    const rows = list.map((item) => [
+    const rows = list.map((item) => ({
+      'Ref No': item.invoiceNo || item.purchaseNo || '',
+      'Party Name': item.customerName || item.vendorName || '',
+      'GSTIN': item.gstin,
+      'Date': item.date.split('T')[0],
+      'Taxable Value': item.taxableValue,
+      'CGST': item.cgst,
+      'SGST': item.sgst,
+      'IGST': item.igst,
+      'Cess': item.cess,
+      'Total GST': item.totalTax,
+      'Total Value': item.totalValue,
+    }));
+
+    ExportService.exportCsv(`${activeTab}_gst_report.csv`, rows, headers);
+    notification.success('Report exported to CSV successfully');
+  };
+
+  const handleExportExcel = () => {
+    const list = activeTab === 'gstr1' ? gstr1List : gstr2List;
+    if (list.length === 0) {
+      notification.error('No records available to export');
+      return;
+    }
+
+    const headers = ['Ref No', 'Party Name', 'GSTIN', 'Date', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Cess', 'Total GST', 'Total Value'];
+    const data = list.map((item) => [
       item.invoiceNo || item.purchaseNo || '',
       item.customerName || item.vendorName || '',
       item.gstin,
@@ -138,21 +163,42 @@ export const TaxesDashboard = () => {
       item.totalValue,
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' 
-      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${activeTab}_gst_report.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    notification.success('Report exported to CSV successfully');
+    ExportService.exportExcel({
+      filename: `${activeTab}_gst_report.xlsx`,
+      sheetName: activeTab.toUpperCase(),
+      title: `${activeTab.toUpperCase()} Register`,
+      headers,
+      data
+    });
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    const list = activeTab === 'gstr1' ? gstr1List : gstr2List;
+    if (list.length === 0) {
+      notification.error('No records available to print');
+      return;
+    }
+    
+    await DocumentEngine.generateTablePDF({
+      title: `${activeTab.toUpperCase()} Register`,
+      columns: [
+        { header: 'Ref No', dataKey: 'refNo' },
+        { header: 'Party Name', dataKey: 'party' },
+        { header: 'Date', dataKey: 'date' },
+        { header: 'Taxable', dataKey: 'taxable' },
+        { header: 'Total GST', dataKey: 'gst' },
+        { header: 'Total Value', dataKey: 'total' },
+      ],
+      data: list.map(item => ({
+        refNo: item.invoiceNo || item.purchaseNo || '',
+        party: item.customerName || item.vendorName || '',
+        date: item.date.split('T')[0],
+        taxable: item.taxableValue,
+        gst: item.totalTax,
+        total: item.totalValue,
+      })),
+      orientation: 'landscape'
+    });
   };
 
   return (
@@ -171,6 +217,13 @@ export const TaxesDashboard = () => {
         <div className="flex gap-2">
           {activeTab !== 'summary' && (
             <>
+              <button
+                onClick={handleExportExcel}
+                className="bg-surface text-foreground hover:bg-opacity-90 border border-border px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Export XLSX
+              </button>
               <button
                 onClick={handleExportCsv}
                 className="bg-surface text-foreground hover:bg-opacity-90 border border-border px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"

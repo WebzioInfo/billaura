@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 import { 
   ArrowLeft, FileText, Calendar, Building, Landmark, Save, Plus, Trash2, 
   Printer, Mail, AlertCircle, CheckCircle, FileCheck, HelpCircle, ArrowRight,
@@ -184,8 +186,47 @@ export const PurchaseOrderDetails = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    await DocumentEngine.generateTransactionPDF({
+      title: 'PURCHASE ORDER',
+      documentNo: po.orderNo,
+      date: new Date(po.date).toLocaleDateString(),
+      status: po.status,
+      partner: {
+        title: 'VENDOR:',
+        name: po.businessPartner?.name,
+        address: po.businessPartner?.address,
+        taxNo: po.businessPartner?.gstin
+      },
+      fields: [
+        { label: 'Payment Terms', value: po.paymentTerms || 'N/A' },
+        { label: 'Expected Delivery', value: po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString() : 'N/A' },
+        { label: 'Currency', value: 'INR' }
+      ],
+      columns: [
+        { header: '#', dataKey: 'no', width: 10 },
+        { header: 'Item Description', dataKey: 'item' },
+        { header: 'HSN', dataKey: 'hsn', width: 20 },
+        { header: 'Qty', dataKey: 'qty', width: 20, align: 'right' },
+        { header: 'Rate', dataKey: 'rate', width: 25, align: 'right' },
+        { header: 'Tax %', dataKey: 'tax', width: 15, align: 'right' },
+        { header: 'Total', dataKey: 'total', width: 30, align: 'right' }
+      ],
+      items: (po.items || []).map((item: any, i: number) => ({
+        no: i + 1,
+        item: item.item?.name || '',
+        hsn: item.item?.hsnCode || '',
+        qty: item.quantity,
+        rate: Number(item.rate).toFixed(2),
+        tax: item.taxRate,
+        total: (Number(item.quantity) * Number(item.rate)).toFixed(2)
+      })),
+      summary: [
+        { label: 'Taxable Amount:', value: Number(po.taxableAmount).toFixed(2) },
+        { label: 'Tax Amount:', value: Number(po.taxAmount).toFixed(2) },
+        { label: 'Total Amount:', value: Number(po.totalAmount).toFixed(2), isTotal: true }
+      ]
+    });
   };
 
   if (loadingPo) return <PageContainer maxWidth="7xl"><LoadingState variant="form" /></PageContainer>;

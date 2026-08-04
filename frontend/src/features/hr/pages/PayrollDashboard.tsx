@@ -9,7 +9,9 @@ import { Modal } from '../../../shared/components/ui/Modal';
 import { PortalDropdown } from '../../../shared/components/ui/PortalDropdown';
 import { apiClient } from '../../../core/api/apiClient';
 import notification from '@/core/services/NotificationService';
-import { ReportEngine } from '../../../core/reporting/ReportEngine';
+import { ReportEngine } from '@/core/reporting/ReportEngine';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 import { 
   Plus, Eye, Edit, CheckCircle, Trash2, Lock, DollarSign, 
   Search, Filter, Download, ArrowUpDown, FileText, ChevronDown,
@@ -204,16 +206,16 @@ export const PayrollDashboard: React.FC = () => {
 
   // --- EXPORT DROPDOWN ACTIONS ---
   const handleExportPDF = () => {
-    runProgressReport('Export Vector PDF', () => {
+    runProgressReport('Export PDF Register', async () => {
       const columns = [
         { header: 'Emp Code', dataKey: 'code' },
-        { header: 'Employee Name', dataKey: 'name' },
-        { header: 'Department', dataKey: 'dept' },
+        { header: 'Employee', dataKey: 'name' },
+        { header: 'Dept', dataKey: 'dept' },
         { header: 'Period', dataKey: 'period' },
         { header: 'Paid Days', dataKey: 'paid', align: 'center' as const },
         { header: 'LOP', dataKey: 'lop', align: 'center' as const },
-        { header: 'Net Salary (INR)', dataKey: 'net', align: 'right' as const },
-        { header: 'Status', dataKey: 'status', align: 'center' as const },
+        { header: 'Net (INR)', dataKey: 'net', align: 'right' as const },
+        { header: 'Status', dataKey: 'status' }
       ];
 
       const data = filteredSlips.map((s: any) => ({
@@ -227,7 +229,7 @@ export const PayrollDashboard: React.FC = () => {
         status: s.status,
       }));
 
-      const doc = ReportEngine.generateTablePDF({
+      await DocumentEngine.generateTablePDF({
         title: 'Payroll Register Report',
         subtitle: 'Vector Text Printable Register',
         columns,
@@ -235,7 +237,7 @@ export const PayrollDashboard: React.FC = () => {
         orientation: 'landscape',
       });
 
-      doc.save(`Payroll_Register_${new Date().toISOString().split('T')[0]}.pdf`);
+      
       notification.success('Vector PDF generated');
     });
   };
@@ -262,7 +264,7 @@ export const PayrollDashboard: React.FC = () => {
         ];
       });
 
-      ReportEngine.generateExcel({
+      ExportService.exportExcel({
         filename: `Payroll_Register_${new Date().toISOString().split('T')[0]}.xlsx`,
         sheetName: 'Payroll Register',
         title: 'BILL AURA ERP - PAYROLL REGISTER',
@@ -276,22 +278,15 @@ export const PayrollDashboard: React.FC = () => {
   const handleExportCSV = () => {
     runProgressReport('Export CSV', () => {
       const headers = ['Employee Code', 'Employee Name', 'Department', 'Net Salary', 'Status'];
-      const rows = filteredSlips.map((s: any) => [
-        s.employee?.employeeCode || '',
-        `"${s.employee?.name || ''}"`,
-        `"${s.employee?.department?.name || ''}"`,
-        s.netSalary,
-        s.status
-      ]);
+      const rows = filteredSlips.map((s: any) => ({
+        'Employee Code': s.employee?.employeeCode || '',
+        'Employee Name': s.employee?.name || '',
+        'Department': s.employee?.department?.name || '',
+        'Net Salary': s.netSalary,
+        'Status': s.status
+      }));
 
-      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `Payroll_Export_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      ExportService.exportCsv(`Payroll_Export_${new Date().toISOString().split('T')[0]}.csv`, rows, headers);
       notification.success('CSV exported');
     });
   };
@@ -304,18 +299,16 @@ export const PayrollDashboard: React.FC = () => {
 
     if (targetSlips.length === 0) return;
 
-    runProgressReport(`Generating ${targetSlips.length} Payroll Dossiers`, () => {
+    runProgressReport(`Generating ${targetSlips.length} Payroll Dossiers`, async () => {
       const items = targetSlips.map((s: any) => ({
         salarySlip: s,
         attendances: [],
       }));
 
-      const doc = ReportEngine.generatePayrollDossierPDF({
+      await ReportEngine.generatePayrollDossierPDF({
         items,
         filename: `Payroll_Dossiers_${new Date().toISOString().split('T')[0]}.pdf`,
       });
-
-      doc.save(`Payroll_Dossiers_${new Date().toISOString().split('T')[0]}.pdf`);
       notification.success('Payroll Dossiers PDF downloaded');
     });
   };
@@ -332,7 +325,7 @@ export const PayrollDashboard: React.FC = () => {
         Number(s.netSalary) || 0,
       ]);
 
-      ReportEngine.generateExcel({
+      DocumentEngine.generateExcel({
         filename: `Bank_Transfer_Advice_${new Date().toISOString().split('T')[0]}.xlsx`,
         sheetName: 'Bank Advice',
         title: 'BANK SALARY DISBURSAL ADVICE SHEET',
@@ -414,7 +407,25 @@ export const PayrollDashboard: React.FC = () => {
             <button onClick={handleExportExcel} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
               Download Attendance Register
             </button>
-            <button onClick={() => window.print()} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
+            <button onClick={() => {
+              const doc = DocumentEngine.generateTablePDF({
+                title: 'Payroll Register Report',
+                columns: [
+                  { header: 'Emp Code', dataKey: 'code' },
+                  { header: 'Employee Name', dataKey: 'name' },
+                  { header: 'Department', dataKey: 'dept' },
+                  { header: 'Net Salary', dataKey: 'net', align: 'right' },
+                  { header: 'Status', dataKey: 'status', align: 'center' },
+                ],
+                data: filteredSlips.map((s: any) => ({
+                  code: s.employee?.employeeCode || '',
+                  name: s.employee?.name || '',
+                  dept: s.employee?.department?.name || '',
+                  net: Number(s.netSalary) || 0,
+                  status: s.status,
+                }))
+              });
+            }} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
               <Printer className="w-3.5 h-3.5 text-slate-500" /> Print Report
             </button>
           </PortalDropdown>

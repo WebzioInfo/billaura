@@ -9,6 +9,8 @@ import { RolesList } from '../roles/RolesList';
 import { DocumentNumbering } from './pages/DocumentNumbering';
 import { CommissionRulesSettings } from './pages/CommissionRulesSettings';
 import { AuditLogsSettings } from './pages/AuditLogs';
+import { BankAccountSettings } from './pages/BankAccountSettings';
+import { InvoiceBrandingSettings } from './pages/InvoiceBrandingSettings';
 import notification from '@/core/services/NotificationService';
 import { apiClient } from '../../core/api/apiClient';
 import { useSessionStore } from '../auth/stores/sessionStore';
@@ -40,26 +42,27 @@ export const SettingsPage = () => {
   const navigate = useNavigate();
   const { setSession, user, accessToken } = useSessionStore();
   
-  // Resolve tab from search params or fallback to path matching for legacy routes
-  const path = location.pathname;
-  let defaultTab = 'branches';
-  if (path.includes('/roles')) defaultTab = 'roles';
-  if (path.includes('/profile') || path.includes('/company')) defaultTab = 'profile';
-  if (path.includes('/users')) defaultTab = 'users';
-  if (path.includes('/subscription')) defaultTab = 'subscription';
-  if (path.includes('/numbering')) defaultTab = 'numbering';
-  if (path.includes('/commissions')) defaultTab = 'commissions';
-  if (path.includes('/audit-logs')) defaultTab = 'audit-logs';
-
-  const activeTab = searchParams.get('tab') || defaultTab;
+  // The valid list of system settings tabs
+  const validTabs = ['company', 'security', 'notifications', 'users', 'roles', 'preferences', 'integrations', 'billing', 'backup', 'branches', 'numbering', 'commissions', 'audit-logs', 'subscription', 'invoice-branding', 'bank-accounts'];
   
-  const setActiveTab = (tab: string) => {
-    // If they were on a legacy path like /company, redirect to /settings?tab=profile
-    if (path !== '/settings') {
-      navigate(`/settings?tab=${tab}`, { replace: true });
-    } else {
-      setSearchParams({ tab });
+  let defaultTab = 'company';
+  const path = location.pathname;
+  
+  // Resolve tab from search params or fallback
+  const requestedTab = searchParams.get('tab') || defaultTab;
+  
+  // Validate tab
+  const activeTab = validTabs.includes(requestedTab) ? requestedTab : defaultTab;
+
+  useEffect(() => {
+    // If invalid tab was requested, or legacy route, redirect to correct URL
+    if (path !== '/settings' || (!validTabs.includes(requestedTab) && requestedTab !== null)) {
+      navigate(`/settings?tab=${activeTab}`, { replace: true });
     }
+  }, [path, requestedTab, activeTab, navigate, validTabs]);
+
+  const setActiveTab = (tab: string) => {
+    setSearchParams({ tab });
   };
   
   // Define local state ONLY for unsaved logo uploads. 
@@ -74,7 +77,7 @@ export const SettingsPage = () => {
       const res = await apiClient.get<any>('/auth/me');
       return res;
     },
-    enabled: activeTab === 'profile',
+    enabled: activeTab === 'company',
   });
 
   const companyData = profileData?.data?.company || profileData?.company;
@@ -211,14 +214,64 @@ export const SettingsPage = () => {
           Roles & Permissions
         </button>
         <button
-          onClick={() => setActiveTab('profile')}
+          onClick={() => setActiveTab('company')}
           className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'profile' 
+            activeTab === 'company' 
               ? 'border-accent text-accent' 
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           Company Profile
+        </button>
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'security' 
+              ? 'border-accent text-accent' 
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Security
+        </button>
+        <button
+          onClick={() => setActiveTab('notifications')}
+          className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'notifications' 
+              ? 'border-accent text-accent' 
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Notifications
+        </button>
+        <button
+          onClick={() => setActiveTab('preferences')}
+          className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'preferences' 
+              ? 'border-accent text-accent' 
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Preferences
+        </button>
+        <button
+          onClick={() => setActiveTab('integrations')}
+          className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'integrations' 
+              ? 'border-accent text-accent' 
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Integrations
+        </button>
+        <button
+          onClick={() => setActiveTab('billing')}
+          className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'billing' 
+              ? 'border-accent text-accent' 
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Billing
         </button>
         <button
             onClick={() => setActiveTab('numbering')}
@@ -241,6 +294,26 @@ export const SettingsPage = () => {
             Commission Rules
           </button>
           <button
+            onClick={() => setActiveTab('invoice-branding')}
+            className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'invoice-branding' 
+                ? 'border-accent text-accent' 
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Invoice Branding
+          </button>
+          <button
+            onClick={() => setActiveTab('bank-accounts')}
+            className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'bank-accounts' 
+                ? 'border-accent text-accent' 
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Bank Accounts
+          </button>
+          <button
             onClick={() => setActiveTab('audit-logs')}
             className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === 'audit-logs' 
@@ -260,7 +333,21 @@ export const SettingsPage = () => {
         {activeTab === 'commissions' && <CommissionRulesSettings />}
         {activeTab === 'audit-logs' && <AuditLogsSettings />}
         
-        {activeTab === 'profile' && (
+        {activeTab === 'bank-accounts' && <BankAccountSettings />}
+        {activeTab === 'invoice-branding' && <InvoiceBrandingSettings />}
+        
+        {/* Placeholders for new tabs */}
+        {['security', 'notifications', 'preferences', 'integrations', 'billing'].includes(activeTab) && (
+          <div className="p-12 text-center border border-border bg-card rounded-xl shadow-sm">
+            <Settings className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground mb-2 capitalize">{activeTab} Settings</h3>
+            <p className="text-muted-foreground text-sm">
+              This module is currently being built for the new Settings Hub architecture.
+            </p>
+          </div>
+        )}
+
+        {(!['branches', 'roles', 'numbering', 'commissions', 'audit-logs', 'security', 'notifications', 'preferences', 'integrations', 'billing', 'bank-accounts', 'invoice-branding'].includes(activeTab)) && (
           isLoading ? (
             <div className="p-12 text-center text-muted-foreground flex flex-col justify-center items-center gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-accent" /> 

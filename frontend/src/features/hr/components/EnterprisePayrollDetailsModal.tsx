@@ -5,7 +5,8 @@ import { Badge } from '../../../shared/components/ui/Badge';
 import { Modal } from '../../../shared/components/ui/Modal';
 import { AttendanceCalendar } from './AttendanceCalendar';
 import { hrApi } from '../api/hr.api';
-import { ReportEngine } from '../../../core/reporting/ReportEngine';
+import { ExportService } from '@/core/services/ExportService';
+import { ReportEngine } from '@/core/reporting/ReportEngine';
 import notification from '@/core/services/NotificationService';
 import { 
   Eye, Download, Printer, Calendar, User, Clock, Building2, 
@@ -53,31 +54,28 @@ export const EnterprisePayrollDetailsModal: React.FC<EnterprisePayrollDetailsMod
     }
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!slip) return;
     try {
-      const doc = ReportEngine.generatePayrollDossierPDF({
+      await ReportEngine.generatePayrollDossierPDF({
         items: [{ salarySlip: slip, attendances }],
         company: slip.company,
       });
-      doc.save(`Payroll_Dossier_${slip.employee?.name || 'Employee'}_${slip.id?.substring(0, 6)}.pdf`);
       notification.success('Vector PDF Payroll Dossier downloaded');
     } catch (e: any) {
       notification.error('Failed to download Vector PDF');
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (!slip) return;
     try {
-      const doc = ReportEngine.generatePayrollDossierPDF({
+      await ReportEngine.generatePayrollDossierPDF({
         items: [{ salarySlip: slip, attendances }],
         company: slip.company,
       });
-      doc.autoPrint();
-      window.open(doc.output('bloburl'), '_blank');
     } catch (e: any) {
-      window.print();
+      notification.error('Failed to generate print document');
     }
   };
 

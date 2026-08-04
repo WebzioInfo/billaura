@@ -33,6 +33,7 @@ import {
 import { UpdateCompanyDto } from "./dto/update-company.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { RefreshTokenDto } from "./dto/refresh.dto";
 
 import { ConfigService } from "@nestjs/config";
 
@@ -125,6 +126,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Req() request: ExpressRequest,
+    @Body() body: RefreshTokenDto,
     @Headers("user-agent") userAgent: string,
     @Ip() ip: string,
     @Res({ passthrough: true }) response: Response,
@@ -132,7 +134,7 @@ export class AuthController {
     this.assertCsrf(request);
     
     // Accept refresh token from body OR cookie
-    const refreshToken = (request.body as any)?.refreshToken || this.getCookie(request, "ba_refresh");
+    const refreshToken = body.refreshToken || this.getCookie(request, "ba_refresh");
     if (!refreshToken) {
       throw new UnauthorizedException("No refresh token provided");
     }

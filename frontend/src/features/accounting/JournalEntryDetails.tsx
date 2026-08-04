@@ -7,6 +7,8 @@ import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import apiClient from '@/core/api';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-IN', {
@@ -88,7 +90,33 @@ export const JournalEntryDetails = () => {
 
           <div className="flex flex-wrap gap-2">
             <Button 
-              onClick={() => window.print()}
+              onClick={async () => {
+                await DocumentEngine.generateTransactionPDF({
+                  title: 'JOURNAL VOUCHER',
+                  documentNo: entry.reference || 'JV',
+                  date: new Date(entry.date).toLocaleDateString('en-IN'),
+                  status: 'POSTED',
+                  partner: {
+                    title: 'PARTICULARS',
+                    name: entry.description || 'N/A'
+                  },
+                  fields: [],
+                  columns: [
+                    { header: 'Account', dataKey: 'account' },
+                    { header: 'Debit', dataKey: 'debit', width: 40, align: 'right' },
+                    { header: 'Credit', dataKey: 'credit', width: 40, align: 'right' }
+                  ],
+                  items: entry.lines.map((l: any) => ({
+                    account: l.account?.name || 'Unknown',
+                    debit: Number(l.debit || 0) > 0 ? formatCurrency(Number(l.debit)) : '-',
+                    credit: Number(l.credit || 0) > 0 ? formatCurrency(Number(l.credit)) : '-'
+                  })),
+                  summary: [
+                    { label: 'Total Debit:', value: formatCurrency(totalDebit) },
+                    { label: 'Total Credit:', value: formatCurrency(totalCredit), isTotal: true }
+                  ]
+                });
+              }}
               variant="outline" 
               size="sm"
               className="flex items-center gap-1.5 h-9 cursor-pointer"

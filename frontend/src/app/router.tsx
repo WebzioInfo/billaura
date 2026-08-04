@@ -96,6 +96,7 @@ const BranchesPage = lazy(() => import('../features/settings/pages/BranchesPage'
 const RolesPage = lazy(() => import('../features/settings/pages/RolesPage').then(m => ({ default: m.RolesPage })));
 const UsersPage = lazy(() => import('../features/settings/pages/UsersPage').then(m => ({ default: m.UsersPage })));
 const UserForm = lazy(() => import('../features/users/UserForm').then(m => ({ default: m.UserForm })));
+const UserProfilePage = lazy(() => import('../features/users/UserProfilePage').then(m => ({ default: m.UserProfilePage })));
 const CompanyProfilePage = lazy(() => import('../features/settings/pages/CompanyProfilePage').then(m => ({ default: m.CompanyProfilePage })));
 const BackupRestoreCenter = lazy(() => import('../features/settings/BackupRestoreCenter').then(m => ({ default: m.BackupRestoreCenter })));
 const ExecutiveDashboard = lazy(() => import('../features/dashboard/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
@@ -359,16 +360,17 @@ export const router = createBrowserRouter([
       { path: 'payroll/:id/:tab', element: <PayrollWorkspacePage /> },
       { path: 'fixed-assets', element: <FixedAssetsList /> },
       { path: 'projects', element: <ProjectsList /> },
-      { path: 'settings/general', element: <SettingsPage /> },
-      { path: 'company', element: <CompanyProfilePage /> },
-      { path: 'branches', element: <BranchesPage /> },
-      { path: 'users', element: <UsersPage /> },
+      { path: 'settings', element: <SettingsPage /> },
+      { path: 'settings/general', element: <Navigate to="/settings?tab=company" replace /> },
+      { path: 'company', element: <Navigate to="/settings?tab=company" replace /> },
+      { path: 'branches', element: <Navigate to="/settings?tab=branches" replace /> },
+      { path: 'users', element: <Navigate to="/settings?tab=users" replace /> },
       { path: 'users/new', element: <UserForm /> },
       { path: 'users/:id/edit', element: <UserForm /> },
-      { path: 'roles', element: <RolesPage /> },
-      { path: 'profile', element: <CompanyProfilePage /> },
-      { path: 'subscription', element: <SubscriptionManager /> },
-      { path: 'backup-restore', element: <BackupRestoreCenter /> },
+      { path: 'roles', element: <Navigate to="/settings?tab=roles" replace /> },
+      { path: 'profile', element: <UserProfilePage /> },
+      { path: 'subscription', element: <Navigate to="/settings?tab=subscription" replace /> },
+      { path: 'backup-restore', element: <Navigate to="/settings?tab=backup" replace /> },
       { path: 'settings/templates', element: <TemplatesList /> }, // We can make a list page later
       { path: 'settings/templates/new', element: <TemplateBuilder /> },
       { path: 'settings/templates/:id', element: <TemplateBuilder /> },

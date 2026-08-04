@@ -395,7 +395,7 @@ export const ExecutiveDashboard = () => {
 
         <WidgetCard title="Shortcut Panel" className="xl:col-span-3">
           <div className="grid grid-cols-2 gap-2">
-            {[['Reports', '/reports'], ['Day Book', '/day-book'], ['GST', '/gst'], ['Settings', '/settings/general']].map(([label, path]) => (
+            {[['Reports', '/reports'], ['Day Book', '/day-book'], ['GST', '/gst'], ['Settings', '/settings?tab=company']].map(([label, path]) => (
               <button key={label} onClick={() => navigate(path)} className="rounded-md border border-border bg-background px-3 py-3 text-xs font-bold text-foreground hover:border-accent cursor-pointer">{label}</button>
             ))}
           </div>

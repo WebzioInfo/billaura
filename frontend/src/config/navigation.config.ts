@@ -69,6 +69,7 @@ export const ERP_NAVIGATION: NavModule[] = [
       { id: 'invoices', label: 'Invoices', path: ROUTES.SALES.INVOICES, icon: 'FileText' },
       { id: 'receipts', label: 'Receipts', path: ROUTES.SALES.RECEIPTS, icon: 'Receipt' },
       { id: 'credit-notes', label: 'Credit Notes', path: ROUTES.SALES.CREDIT_NOTES, icon: 'CreditCard' },
+      { id: 'customer-ageing', label: 'Outstanding Receivables', path: ROUTES.SALES.CUSTOMER_AGEING, icon: 'Clock' },
       { id: 'report-sales', label: 'Sales Reports', path: ROUTES.SALES.REPORTS, icon: 'BarChart3' },
     ]
   },

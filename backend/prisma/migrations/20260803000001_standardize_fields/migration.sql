@@ -1,0 +1,470 @@
+-- AlterEnum
+BEGIN;
+CREATE TYPE "DocumentStatus_new" AS ENUM ('DRAFT', 'SENT', 'PARTIAL', 'PAID', 'OVERDUE', 'CANCELLED', 'ACCEPTED', 'REJECTED', 'CONVERTED');
+ALTER TABLE "public"."delivery_notes" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "public"."goods_receipts" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "public"."invoices" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "public"."other_incomes" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "public"."purchase_orders" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "public"."purchases" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "public"."quotations" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "public"."sales_orders" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "invoices" ALTER COLUMN "status" TYPE "DocumentStatus_new" USING ("status"::text::"DocumentStatus_new");
+ALTER TABLE "quotations" ALTER COLUMN "status" TYPE "DocumentStatus_new" USING ("status"::text::"DocumentStatus_new");
+ALTER TABLE "delivery_notes" ALTER COLUMN "status" TYPE "DocumentStatus_new" USING ("status"::text::"DocumentStatus_new");
+ALTER TABLE "purchases" ALTER COLUMN "status" TYPE "DocumentStatus_new" USING ("status"::text::"DocumentStatus_new");
+ALTER TABLE "purchase_orders" ALTER COLUMN "status" TYPE "DocumentStatus_new" USING ("status"::text::"DocumentStatus_new");
+ALTER TABLE "goods_receipts" ALTER COLUMN "status" TYPE "DocumentStatus_new" USING ("status"::text::"DocumentStatus_new");
+ALTER TABLE "other_incomes" ALTER COLUMN "status" TYPE "DocumentStatus_new" USING ("status"::text::"DocumentStatus_new");
+ALTER TABLE "sales_orders" ALTER COLUMN "status" TYPE "DocumentStatus_new" USING ("status"::text::"DocumentStatus_new");
+ALTER TYPE "DocumentStatus" RENAME TO "DocumentStatus_old";
+ALTER TYPE "DocumentStatus_new" RENAME TO "DocumentStatus";
+DROP TYPE "public"."DocumentStatus_old";
+ALTER TABLE "delivery_notes" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+ALTER TABLE "goods_receipts" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+ALTER TABLE "invoices" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+ALTER TABLE "other_incomes" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+ALTER TABLE "purchase_orders" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+ALTER TABLE "purchases" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+ALTER TABLE "quotations" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+ALTER TABLE "sales_orders" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+COMMIT;
+
+-- AlterTable
+ALTER TABLE "accounts" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "activity_feeds" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "api_keys" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "archive_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "archive_rules" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "attendance_audit_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "attendance_corrections" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "attendances" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "audit_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "backup_audit_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "backup_jobs" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "backup_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "backup_schedules" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "bank_accounts" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "bank_statement_lines" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "bank_statements" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "bank_transactions" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "bill_of_materials" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "bom_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "business_partners" DROP COLUMN "totalOverdue";
+
+-- AlterTable
+ALTER TABLE "cash_accounts" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "cash_transactions" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "commission_records" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "commission_rules" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "company_settings" DROP COLUMN "companySealUrl",
+DROP COLUMN "digitalSignatureUrl",
+DROP COLUMN "invoiceConfig",
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "company_users" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "cost_centers" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "crm_activities" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "customer_departments" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "customer_segments" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "customer_statements" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "delivery_note_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "delivery_notes" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "document_sequences" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "document_templates" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "employee_advances" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "employee_loans" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "employee_salary_components" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "expense_attachments" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "expense_categories" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "expense_comments" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "expense_histories" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "export_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "feature_limits" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "feature_usages" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "financial_years" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "fixed_assets" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "goods_receipt_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "goods_receipts" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "gst_reports" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "historical_invoices" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "import_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "income_categories" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "internal_transfers" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "inventory_batches" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "inventory_serials" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "invoice_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "invoices" DROP COLUMN "outstandingAmount",
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "journal_entries" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "journal_lines" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "leave_applications" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "login_histories" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "notification_preferences" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "notifications" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "payment_allocations" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "payroll_audit_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "platform_activity_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "platform_payments" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "production_orders" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "products" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "projects" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "purchase_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "purchase_order_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "purchase_orders" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "purchase_return_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "purchase_returns" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "purchases" ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "quotation_items" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "receipt_allocations" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "receipt_attachments" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "receipt_audits" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "receipt_payments" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "recurring_invoice_items" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "refund_transactions" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "role_permissions" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "roles" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "salary_slips" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "sales_order_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "sales_orders" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "sales_return_items" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "sales_returns" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "scheduled_tasks" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "sessions" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "shifts" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "staff_advances" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "stock_ledgers" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "stocks" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "subscription_plans" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "subscriptions" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "support_tickets" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "system_settings" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "tax_override_logs" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "transaction_payments" ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "unit_conversions" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "units" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "warehouses" ADD COLUMN     "deletedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "webhooks" ADD COLUMN     "deletedAt" TIMESTAMP(3),
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
