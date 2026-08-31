@@ -71,8 +71,6 @@ function loadAppModules() {
   return false;
 }
 
-loadAppModules();
-
 const expressApp = express();
 
 let isInitialized = false;
