@@ -64,6 +64,8 @@ export const ERP_NAVIGATION: NavModule[] = [
     label: 'Sales',
     items: [
       { id: 'customers', label: 'Customers', path: ROUTES.SALES.CUSTOMERS, icon: 'Users' },
+      { id: 'customer-segments', label: 'Customer Segments', path: ROUTES.SALES.CUSTOMER_SEGMENTS, icon: 'PieChart' },
+      { id: 'customer-departments', label: 'Customer Departments', path: ROUTES.SALES.CUSTOMER_DEPARTMENTS, icon: 'Building2' },
       { id: 'quotations', label: 'Quotations', path: ROUTES.SALES.QUOTATIONS, icon: 'MessageSquare' },
       { id: 'sales-orders', label: 'Sales Orders', path: ROUTES.SALES.ORDERS, icon: 'FileSpreadsheet' },
       { id: 'invoices', label: 'Invoices', path: ROUTES.SALES.INVOICES, icon: 'FileText' },

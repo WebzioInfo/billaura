@@ -40,6 +40,8 @@ export const ROUTES = {
   // Sales
   SALES: {
     CUSTOMERS: '/customers',
+    CUSTOMER_SEGMENTS: '/customer-segments',
+    CUSTOMER_DEPARTMENTS: '/customer-departments',
     QUOTATIONS: '/quotations',
     ORDERS: '/sales-orders',
     INVOICES: '/invoices',
