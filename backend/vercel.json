@@ -4,8 +4,7 @@
     "api/index.js": {
       "includeFiles": [
         "dist/**",
-        "prisma/**",
-        "node_modules/.prisma/**"
+        "prisma/**"
       ],
       "maxDuration": 30
     }
