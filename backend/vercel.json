@@ -5,8 +5,7 @@
       "includeFiles": [
         "dist/**",
         "prisma/**"
-      ],
-      "maxDuration": 30
+      ]
     }
   },
   "headers": [

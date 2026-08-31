@@ -1,51 +1,3 @@
-let topLevelError = null;
-let topLevelLogs = [];
-const log = (msg) => {
-  const entry = `[${new Date().toISOString()}] ${msg}`;
-  topLevelLogs.push(entry);
-  console.log(entry);
-};
-
-log("TOP LEVEL SCRIPT START");
-
-let path, fs, NestFactory, ExpressAdapter, ValidationPipe, ConfigService, helmet, compression, express;
-let AppModule, AllExceptionsFilter, ResponseEnvelopeInterceptor, RequestContextInterceptor, AppLogger, corsOptions;
-let expressApp;
-let isInitialized = false;
-let initPromise = null;
-
-try {
-  path = require('path');
-  fs = require('fs');
-  require("reflect-metadata");
-  
-  const nestCore = require('@nestjs/core');
-  NestFactory = nestCore.NestFactory;
-  
-  const nestPlatformExpress = require('@nestjs/platform-express');
-  ExpressAdapter = nestPlatformExpress.ExpressAdapter;
-  
-  const nestCommon = require('@nestjs/common');
-  ValidationPipe = nestCommon.ValidationPipe;
-  
-  const nestConfig = require('@nestjs/config');
-  ConfigService = nestConfig.ConfigService;
-  
-  helmet = require('helmet');
-  compression = require('compression');
-  express = require('express');
-  expressApp = express();
-  
-  log("FRAMEWORK DEPENDENCIES LOADED");
-} catch (err) {
-  topLevelError = {
-    phase: "framework_load",
-    message: err.message,
-    stack: err.stack,
-  };
-  console.error("[TOP LEVEL LOAD ERROR]", err);
-}
-
 const DEFAULT_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:3000',
@@ -55,7 +7,7 @@ const DEFAULT_ORIGINS = [
 ];
 
 function applyCorsHeaders(req, res) {
-  const requestOrigin = req.headers ? req.headers.origin : undefined;
+  const requestOrigin = req && req.headers ? req.headers.origin : undefined;
   if (requestOrigin) {
     res.setHeader('Access-Control-Allow-Origin', requestOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -71,9 +23,36 @@ function applyCorsHeaders(req, res) {
   res.setHeader('Access-Control-Expose-Headers', 'x-request-id');
 }
 
-function loadApplicationModules() {
-  if (AppModule) return true;
-  
+let isInitialized = false;
+let initPromise = null;
+let cachedExpressApp = null;
+let startupLogs = [];
+
+const log = (msg) => {
+  const entry = `[${new Date().toISOString()}] ${msg}`;
+  startupLogs.push(entry);
+  console.log(entry);
+};
+
+async function bootstrap() {
+  const bootstrapStart = performance.now();
+  log("BOOTSTRAP START");
+
+  const path = require('path');
+  const fs = require('fs');
+  require("reflect-metadata");
+
+  const { NestFactory } = require('@nestjs/core');
+  const { ExpressAdapter } = require('@nestjs/platform-express');
+  const { ValidationPipe } = require('@nestjs/common');
+  const { ConfigService } = require('@nestjs/config');
+  const helmet = require('helmet');
+  const compression = require('compression');
+  const express = require('express');
+
+  const expressApp = express();
+  log(`Framework modules loaded (${(performance.now() - bootstrapStart).toFixed(2)} ms)`);
+
   const candidateBases = [
     path.resolve(__dirname, '../dist'),
     path.resolve(__dirname, '../../dist'),
@@ -82,65 +61,53 @@ function loadApplicationModules() {
     path.resolve(process.cwd(), 'apps/backend/dist'),
   ];
 
-  const errors = [];
+  let AppModule, AllExceptionsFilter, ResponseEnvelopeInterceptor, RequestContextInterceptor, AppLogger, corsOptions;
+  let loadErrors = [];
+
   for (const base of candidateBases) {
     const target = path.join(base, 'app.module.js');
     try {
-      if (fs.existsSync(base)) {
-        log(`Found base directory at ${base}`);
-      }
       if (fs.existsSync(target)) {
-        log(`Found target file at ${target}`);
-        const appMod = require(target);
-        AppModule = appMod.AppModule;
+        log(`Found AppModule at ${target}`);
+        AppModule = require(target).AppModule;
         AllExceptionsFilter = require(path.join(base, 'common/filters/all-exceptions.filter.js')).AllExceptionsFilter;
         ResponseEnvelopeInterceptor = require(path.join(base, 'common/interceptors/response-envelope.interceptor.js')).ResponseEnvelopeInterceptor;
         RequestContextInterceptor = require(path.join(base, 'common/interceptors/request-context.interceptor.js')).RequestContextInterceptor;
         AppLogger = require(path.join(base, 'logging/app-logger.service.js')).AppLogger;
         corsOptions = require(path.join(base, 'config/cors.config.js')).corsOptions;
-        log(`Application modules loaded successfully from ${base}`);
-        return true;
+        log(`AppModule loaded from ${base}`);
+        break;
       }
     } catch (e) {
-      log(`Error loading from ${base}: ${e.message}`);
-      errors.push({ base, message: e.message, stack: e.stack });
+      loadErrors.push({ base, error: e.message, stack: e.stack });
+      log(`Failed requiring from ${base}: ${e.message}`);
     }
   }
 
-  // Direct require fallback
-  try {
-    const appMod = require('../dist/app.module');
-    AppModule = appMod.AppModule;
-    AllExceptionsFilter = require('../dist/common/filters/all-exceptions.filter').AllExceptionsFilter;
-    ResponseEnvelopeInterceptor = require('../dist/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
-    RequestContextInterceptor = require('../dist/common/interceptors/request-context.interceptor').RequestContextInterceptor;
-    AppLogger = require('../dist/logging/app-logger.service').AppLogger;
-    corsOptions = require('../dist/config/cors.config').corsOptions;
-    return true;
-  } catch (e) {
-    errors.push({ fallback: '../dist/app.module', message: e.message, stack: e.stack });
-  }
-
-  let dirListing = '';
-  try {
-    dirListing = `cwd: ${process.cwd()} [${fs.readdirSync(process.cwd()).join(',')}], __dirname: ${__dirname} [${fs.readdirSync(__dirname).join(',')}]`;
-    if (fs.existsSync(path.resolve(__dirname, '..'))) {
-      dirListing += ` | parent: [${fs.readdirSync(path.resolve(__dirname, '..')).join(',')}]`;
+  if (!AppModule) {
+    try {
+      AppModule = require('../dist/app.module').AppModule;
+      AllExceptionsFilter = require('../dist/common/filters/all-exceptions.filter').AllExceptionsFilter;
+      ResponseEnvelopeInterceptor = require('../dist/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
+      RequestContextInterceptor = require('../dist/common/interceptors/request-context.interceptor').RequestContextInterceptor;
+      AppLogger = require('../dist/logging/app-logger.service').AppLogger;
+      corsOptions = require('../dist/config/cors.config').corsOptions;
+    } catch (e) {
+      loadErrors.push({ fallback: '../dist/app.module', error: e.message, stack: e.stack });
     }
-  } catch (e) {
-    dirListing = `fs error: ${e.message}`;
   }
 
-  throw new Error(`Failed to load AppModule. ${dirListing} | errors: ${JSON.stringify(errors)}`);
-}
-
-async function bootstrap() {
-  log("BOOTSTRAP START");
-  loadApplicationModules();
+  if (!AppModule) {
+    let debug = `cwd: ${process.cwd()}, __dirname: ${__dirname}`;
+    try {
+      debug += ` | files in parent: ${fs.readdirSync(path.resolve(__dirname, '..')).join(',')}`;
+    } catch (_) {}
+    throw new Error(`AppModule could not be loaded. (${debug}) Errors: ${JSON.stringify(loadErrors)}`);
+  }
 
   const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bufferLogs: true });
-  log("NestFactory app instance created");
-  
+  log(`NestFactory created (${(performance.now() - bootstrapStart).toFixed(2)} ms)`);
+
   const logger = app.get(AppLogger);
   const config = app.get(ConfigService);
 
@@ -152,14 +119,14 @@ async function bootstrap() {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  
+
   if (corsOptions) {
     app.enableCors(corsOptions(allowedOrigins));
   }
-  
+
   const helmetMiddleware = helmet.default || helmet;
   app.use(helmetMiddleware());
-  
+
   const compressionMiddleware = compression.default || compression;
   app.use(compressionMiddleware());
 
@@ -176,16 +143,11 @@ async function bootstrap() {
 
   log("START app.init()");
   await app.init();
-  log("END app.init() - Routes Registered");
-  isInitialized = true;
-}
+  log(`END app.init() (${(performance.now() - bootstrapStart).toFixed(2)} ms)`);
 
-async function withTimeout(promise, ms) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`Bootstrap timed out after ${ms}ms`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  cachedExpressApp = expressApp;
+  isInitialized = true;
+  return expressApp;
 }
 
 module.exports = async (req, res) => {
@@ -196,36 +158,24 @@ module.exports = async (req, res) => {
     return res.end();
   }
 
-  if (topLevelError) {
-    applyCorsHeaders(req, res);
-    res.setHeader('Content-Type', 'application/json');
-    res.statusCode = 500;
-    return res.end(JSON.stringify({
-      error: "Top Level Module Load Error",
-      details: topLevelError,
-      logs: topLevelLogs
-    }));
-  }
-
   try {
     if (!isInitialized) {
-      log("Initializing NestJS Application...");
       if (!initPromise) {
         initPromise = bootstrap();
       }
-      await withTimeout(initPromise, 25000);
+      await initPromise;
     }
-    return expressApp(req, res);
+    return cachedExpressApp(req, res);
   } catch (err) {
     initPromise = null;
-    console.error(`[Vercel Serverless Handler Error] ${err.message}`, err);
+    console.error(`[CRITICAL HANDLER ERROR] ${err.message}`, err);
     applyCorsHeaders(req, res);
     res.setHeader('Content-Type', 'application/json');
     res.statusCode = 500;
     return res.end(JSON.stringify({
       error: "Backend Startup Error",
       message: err.message,
-      logs: topLevelLogs
+      logs: startupLogs
     }));
   }
 };

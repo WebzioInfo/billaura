@@ -5,15 +5,13 @@
       "includeFiles": [
         "backend/dist/**",
         "backend/prisma/**"
-      ],
-      "maxDuration": 30
+      ]
     },
     "api/index.js": {
       "includeFiles": [
         "dist/**",
         "prisma/**"
-      ],
-      "maxDuration": 30
+      ]
     }
   },
   "headers": [
