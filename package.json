@@ -1,0 +1,10 @@
+{
+  "name": "billaura-apps",
+  "private": true,
+  "scripts": {
+    "postinstall": "npm --prefix backend install && npm --prefix backend run build",
+    "build": "npm --prefix backend run build",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build"
+  }
+}

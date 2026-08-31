@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "functions": {
+    "backend/api/index.js": {
+      "includeFiles": [
+        "backend/dist/**",
+        "backend/prisma/**"
+      ],
+      "maxDuration": 30
+    },
+    "api/index.js": {
+      "includeFiles": [
+        "dist/**",
+        "prisma/**"
+      ],
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-company-id, x-tenant-id, x-request-id, Cache-Control, Pragma, Expires" },
+        { "key": "Access-Control-Expose-Headers", "value": "x-request-id" }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/ping",
+      "destination": "/backend/api/ping.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/backend/api/index.js"
+    }
+  ]
+}
