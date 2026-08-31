@@ -359,7 +359,7 @@ export const BusinessPartnerForm = () => {
                     options={[
                       { value: '', label: 'Select Segment...' },
                       ...(segments || [])
-                        .filter((s: any) => s.isActive)
+                        .filter((s: any) => s.isActive && (b2bMode ? s.segmentType !== 'B2C' : s.segmentType !== 'B2B'))
                         .map((s: any) => ({
                           value: s.id,
                           label: s.name
@@ -377,7 +377,7 @@ export const BusinessPartnerForm = () => {
                     options={[
                       { value: '', label: 'Select Department...' },
                       ...(departments || [])
-                        .filter((d: any) => d.isActive)
+                        .filter((d: any) => d.isActive && (b2bMode ? d.customerType !== 'B2C' : d.customerType !== 'B2B'))
                         .map((d: any) => ({
                           value: d.id,
                           label: d.name
