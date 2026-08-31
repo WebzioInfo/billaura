@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import puppeteer from 'puppeteer';
 
 @Injectable()
 export class PdfEngineService {
@@ -82,7 +81,12 @@ export class PdfEngineService {
     `;
 
     // Generate real PDF using puppeteer
-    const browser = await puppeteer.launch({ headless: true });
+    const puppeteerModule = await import('puppeteer');
+    const puppeteer = puppeteerModule.default || puppeteerModule;
+    const browser = await puppeteer.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'domcontentloaded' });
     const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });

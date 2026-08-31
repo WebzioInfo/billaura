@@ -23,46 +23,43 @@ moduleLog(`FRAMEWORK MODULES LOADED (${(performance.now() - moduleLoadStartedAt)
 let AppModule, AllExceptionsFilter, ResponseEnvelopeInterceptor, RequestContextInterceptor, AppLogger, corsOptions;
 const applicationModulesStartedAt = performance.now();
 
+let moduleLoadErrors = [];
+
 function loadAppModules() {
-  const candidatePaths = [
-    { base: path.resolve(__dirname, '../dist'), name: 'dist' },
-    { base: path.resolve(__dirname, '../../dist'), name: '../dist' },
-    { base: path.resolve(process.cwd(), 'dist'), name: 'cwd/dist' },
-    { base: path.resolve(process.cwd(), 'backend/dist'), name: 'cwd/backend/dist' },
-    { base: path.resolve(process.cwd(), 'apps/backend/dist'), name: 'cwd/apps/backend/dist' },
+  moduleLoadErrors = [];
+  const candidateBases = [
+    path.resolve(__dirname, '../dist'),
+    path.resolve(__dirname, '../../dist'),
+    path.resolve(process.cwd(), 'dist'),
+    path.resolve(process.cwd(), 'backend/dist'),
+    path.resolve(process.cwd(), 'apps/backend/dist'),
   ];
 
-  for (const { base, name } of candidatePaths) {
+  for (const base of candidateBases) {
+    const appModulePath = path.join(base, 'app.module.js');
     try {
-      const appModulePath = path.join(base, 'app.module.js');
-      if (fs.existsSync(appModulePath) || fs.existsSync(path.join(base, 'app.module'))) {
-        AppModule = require(path.join(base, 'app.module')).AppModule;
-        AllExceptionsFilter = require(path.join(base, 'common/filters/all-exceptions.filter')).AllExceptionsFilter;
-        ResponseEnvelopeInterceptor = require(path.join(base, 'common/interceptors/response-envelope.interceptor')).ResponseEnvelopeInterceptor;
-        RequestContextInterceptor = require(path.join(base, 'common/interceptors/request-context.interceptor')).RequestContextInterceptor;
-        AppLogger = require(path.join(base, 'logging/app-logger.service')).AppLogger;
-        corsOptions = require(path.join(base, 'config/cors.config')).corsOptions;
-        moduleLog(`APPLICATION MODULES LOADED from ${name} (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
-        return true;
+      if (fs.existsSync(base)) {
+        const distFiles = fs.readdirSync(base);
+        startupLogs.push(`Checked base ${base} (found: ${distFiles.slice(0, 10).join(', ')})`);
       }
+      
+      const appMod = require(path.join(base, 'app.module.js'));
+      AppModule = appMod.AppModule;
+      AllExceptionsFilter = require(path.join(base, 'common/filters/all-exceptions.filter.js')).AllExceptionsFilter;
+      ResponseEnvelopeInterceptor = require(path.join(base, 'common/interceptors/response-envelope.interceptor.js')).ResponseEnvelopeInterceptor;
+      RequestContextInterceptor = require(path.join(base, 'common/interceptors/request-context.interceptor.js')).RequestContextInterceptor;
+      AppLogger = require(path.join(base, 'logging/app-logger.service.js')).AppLogger;
+      corsOptions = require(path.join(base, 'config/cors.config.js')).corsOptions;
+      
+      startupLogs.push(`Successfully loaded AppModule from ${base}`);
+      return true;
     } catch (e) {
-      console.warn(`[MODULE LOAD] Tried ${name} but encountered error:`, e.message);
+      moduleLoadErrors.push({ base, error: e.message, stack: e.stack });
+      startupLogs.push(`Failed loading from ${base}: ${e.message}`);
     }
   }
 
-  // Fallback direct require
-  try {
-    AppModule = require('../dist/app.module').AppModule;
-    AllExceptionsFilter = require('../dist/common/filters/all-exceptions.filter').AllExceptionsFilter;
-    ResponseEnvelopeInterceptor = require('../dist/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
-    RequestContextInterceptor = require('../dist/common/interceptors/request-context.interceptor').RequestContextInterceptor;
-    AppLogger = require('../dist/logging/app-logger.service').AppLogger;
-    corsOptions = require('../dist/config/cors.config').corsOptions;
-    return true;
-  } catch (e) {
-    console.error(`[MODULE LOAD ERROR] Failed to load application modules: ${e.message}`);
-    return false;
-  }
+  return false;
 }
 
 loadAppModules();
@@ -114,6 +111,7 @@ async function bootstrap() {
             try {
                 debugInfo += ` | files in __dirname: ${fs.readdirSync(__dirname).join(',')}`;
                 debugInfo += ` | files in parent: ${fs.readdirSync(path.resolve(__dirname, '..')).join(',')}`;
+                debugInfo += ` | load errors: ${JSON.stringify(moduleLoadErrors)}`;
             } catch (e) {
                 debugInfo += ` | fs error: ${e.message}`;
             }

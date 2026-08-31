@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import puppeteer from 'puppeteer';
+// Dynamic import used inside generatePdf
 
 @Injectable()
 export class DocumentEngineService {
@@ -10,6 +10,8 @@ export class DocumentEngineService {
     
     // In a real enterprise app, we'd reuse the browser instance or use a pool.
     // For this implementation, we launch per request as a starting point.
+    const puppeteerModule = await import('puppeteer');
+    const puppeteer = puppeteerModule.default || puppeteerModule;
     const browser = await puppeteer.launch({ 
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
