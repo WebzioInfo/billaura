@@ -1,0 +1,29 @@
+[
+  {
+    "id": "cmqagxy7n0000jp04tinvrqku",
+    "companyName": "ESSAR ENTERPRISES",
+    "gstin": "29AOPPM7487J1ZV",
+    "pan": "",
+    "address1": "SITE NO.9, SEEGAHALLI VILLAGE",
+    "address2": "KR PURAM HOBLI",
+    "city": "BANGALORE",
+    "state": "Karnataka",
+    "pincode": "560049",
+    "phone": "+91 85531 85300",
+    "email": "essarwater.info@gmail.com",
+    "website": null,
+    "bankName": "FEDERAL BANK",
+    "bankBranch": "DOMMASANDRA",
+    "bankAccountNo": "21650200003173",
+    "bankIfsc": "FDRL0002165",
+    "bankAccountName": "ESSAR ENTERPRISES",
+    "invoicePrefix": "SRB2B",
+    "quotationPrefix": "SRQUO",
+    "defaultGstType": "CGST_SGST",
+    "currency": "INR",
+    "showPkgDetails": true,
+    "showLogo": true,
+    "logoUrl": "logo.png",
+    "updatedAt": "2026-06-30T08:59:01.182Z"
+  }
+]

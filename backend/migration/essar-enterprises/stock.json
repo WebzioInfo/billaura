@@ -1,0 +1,74 @@
+[
+  {
+    "id": "cmp88vg1a0002i8x40c802ih1",
+    "productId": "cmp88vfee0000i8x4amzmxrss",
+    "quantity": "-11",
+    "updatedAt": "2026-07-17T12:18:06.253Z"
+  },
+  {
+    "id": "cmpqjbgzl0002ju046fbf45k2",
+    "productId": "cmpqjbgo10000ju04c08zgntq",
+    "quantity": "-96500",
+    "updatedAt": "2026-05-29T06:34:08.521Z"
+  },
+  {
+    "id": "cmqb5e4px0006l504fvusskp4",
+    "productId": "cmoh4if2a0008i8csoni38o81",
+    "quantity": "-2",
+    "updatedAt": "2026-06-12T17:16:52.817Z"
+  },
+  {
+    "id": "cmqjg33go0002kv04td51m2iv",
+    "productId": "cmqjg335n0000kv049rhltva2",
+    "quantity": "-1",
+    "updatedAt": "2026-06-19T09:00:52.038Z"
+  },
+  {
+    "id": "cmqkpoxf20007ju04238zw31o",
+    "productId": "cmqkpox4d0005ju045u3nnpzt",
+    "quantity": "-1",
+    "updatedAt": "2026-06-19T09:14:16.505Z"
+  },
+  {
+    "id": "cmquko5mu0002l704atdvo4ln",
+    "productId": "cmquko5c50000l704qpmqw602",
+    "quantity": "-25",
+    "updatedAt": "2026-06-26T06:51:36.115Z"
+  },
+  {
+    "id": "cmr4v9nmo0007jm04ff7joql2",
+    "productId": "cmr4v9nb70005jm043p331jo7",
+    "quantity": "0",
+    "updatedAt": "2026-07-03T11:49:14.329Z"
+  },
+  {
+    "id": "cmsd0kxp70002ih04kdcubsra",
+    "productId": "cmsd0kxdf0000ih048iugfg2z",
+    "quantity": "-18000",
+    "updatedAt": "2026-08-03T09:18:39.369Z"
+  },
+  {
+    "id": "cmsgehlgm0002i304l7fudwco",
+    "productId": "cmsgehl5z0000i304j8ifgapw",
+    "quantity": "-2",
+    "updatedAt": "2026-08-05T20:27:03.153Z"
+  },
+  {
+    "id": "cmsgeim9u0002ju041vokhgpe",
+    "productId": "cmsgeilyx0000ju04leiuk51b",
+    "quantity": "-1",
+    "updatedAt": "2026-08-05T20:27:04.623Z"
+  },
+  {
+    "id": "cmsgejlon0007i3048qw1ioz5",
+    "productId": "cmsgejlje0005i304hosm49rq",
+    "quantity": "-1",
+    "updatedAt": "2026-08-05T20:27:05.930Z"
+  },
+  {
+    "id": "cmsgelrz1000ci3042uxalbeu",
+    "productId": "cmsgelrr6000ai304n5kkbvch",
+    "quantity": "-1",
+    "updatedAt": "2026-08-05T20:27:07.197Z"
+  }
+]

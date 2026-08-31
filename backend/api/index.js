@@ -15,24 +15,30 @@ moduleLog(`FRAMEWORK MODULES LOADED (${(performance.now() - moduleLoadStartedAt)
 let AppModule, AllExceptionsFilter, ResponseEnvelopeInterceptor, RequestContextInterceptor, AppLogger, corsOptions;
 const applicationModulesStartedAt = performance.now();
 try {
-  AppModule = require('../dist/app.module').AppModule;
+  const appMod = require('../dist/app.module');
+  AppModule = appMod.AppModule;
   AllExceptionsFilter = require('../dist/common/filters/all-exceptions.filter').AllExceptionsFilter;
   ResponseEnvelopeInterceptor = require('../dist/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
   RequestContextInterceptor = require('../dist/common/interceptors/request-context.interceptor').RequestContextInterceptor;
   AppLogger = require('../dist/logging/app-logger.service').AppLogger;
   corsOptions = require('../dist/config/cors.config').corsOptions;
-} catch (e) {
-  AppModule = require('../dist/src/app.module').AppModule;
-  AllExceptionsFilter = require('../dist/src/common/filters/all-exceptions.filter').AllExceptionsFilter;
-  ResponseEnvelopeInterceptor = require('../dist/src/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
-  RequestContextInterceptor = require('../dist/src/common/interceptors/request-context.interceptor').RequestContextInterceptor;
-  AppLogger = require('../dist/src/logging/app-logger.service').AppLogger;
-  corsOptions = require('../dist/src/config/cors.config').corsOptions;
+  moduleLog(`APPLICATION MODULES LOADED from ../dist (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
+} catch (e1) {
+  try {
+    const appMod = require('../dist/src/app.module');
+    AppModule = appMod.AppModule;
+    AllExceptionsFilter = require('../dist/src/common/filters/all-exceptions.filter').AllExceptionsFilter;
+    ResponseEnvelopeInterceptor = require('../dist/src/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
+    RequestContextInterceptor = require('../dist/src/common/interceptors/request-context.interceptor').RequestContextInterceptor;
+    AppLogger = require('../dist/src/logging/app-logger.service').AppLogger;
+    corsOptions = require('../dist/src/config/cors.config').corsOptions;
+    moduleLog(`APPLICATION MODULES LOADED from ../dist/src (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
+  } catch (e2) {
+    console.error(`[MODULE LOAD ERROR] Failed to load application modules: ${e1.message} | ${e2.message}`);
+  }
 }
-moduleLog(`APPLICATION MODULES LOADED (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
 
 const expressApp = express();
-
 
 let isInitialized = false;
 let initPromise = null;
@@ -43,9 +49,38 @@ const log = (msg) => {
     console.log(entry);
 };
 
+const DEFAULT_ORIGINS = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://billaura.webziotech.in',
+    'https://billaura.webziointernational.in',
+    'https://billaura-sage.vercel.app'
+];
+
+function applyCorsHeaders(req, res) {
+    const requestOrigin = req.headers.origin;
+    if (requestOrigin) {
+        res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Vary', 'Origin');
+    } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type,Authorization,Accept,x-company-id,x-tenant-id,x-request-id,Cache-Control,Pragma,Expires,X-CSRF-Token,X-Requested-With'
+    );
+    res.setHeader('Access-Control-Expose-Headers', 'x-request-id');
+}
+
 async function bootstrap() {
     const bootstrapStartedAt = performance.now();
     log("BOOTSTRAP START");
+    if (!AppModule) {
+        throw new Error("AppModule failed to load. Please verify dist/ build artifacts are included.");
+    }
+
     const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bufferLogs: true });
     log(`Nest Initialized (${(performance.now() - bootstrapStartedAt).toFixed(2)} ms)`);
     
@@ -53,13 +88,17 @@ async function bootstrap() {
     const config = app.get(ConfigService);
   
     app.useLogger(logger);
-    app.setGlobalPrefix(config.getOrThrow("API_PREFIX"));
-    const allowedOrigins = config.getOrThrow("ALLOWED_ORIGINS")
+    app.setGlobalPrefix(config.get("API_PREFIX") || "api");
+
+    const rawOrigins = config.get("ALLOWED_ORIGINS") || DEFAULT_ORIGINS.join(',');
+    const allowedOrigins = rawOrigins
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean);
     
-    app.enableCors(corsOptions(allowedOrigins));
+    if (corsOptions) {
+      app.enableCors(corsOptions(allowedOrigins));
+    }
     
     const helmetMiddleware = helmet.default || helmet;
     app.use(helmetMiddleware());
@@ -90,28 +129,36 @@ async function bootstrap() {
 async function withTimeout(promise, ms) {
     let timer;
     const timeout = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
+        timer = setTimeout(() => reject(new Error(`Bootstrap timed out after ${ms}ms`)), ms);
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 module.exports = async (req, res) => {
+    applyCorsHeaders(req, res);
+
+    // Immediate fast preflight response
+    if (req.method === 'OPTIONS') {
+        res.statusCode = 204;
+        return res.end();
+    }
+
     try {
         if (!isInitialized) {
-            log("Initializing...");
+            log("Initializing NestJS app...");
             if (!initPromise) {
                 initPromise = bootstrap();
             }
-            await withTimeout(initPromise, 5000);
+            await withTimeout(initPromise, 25000);
         }
         return expressApp(req, res);
     } catch (err) {
         console.error(`[Vercel Handler] CRITICAL ERROR: ${err.message}`, err);
-        // If it's a timeout, return 500 immediately with the logs
+        applyCorsHeaders(req, res);
         res.setHeader('Content-Type', 'application/json');
         res.statusCode = 500;
         return res.end(JSON.stringify({ 
-            error: "Startup Crash or Timeout", 
+            error: "Backend Startup Error", 
             message: err.message, 
             logs: startupLogs
         }));

@@ -22,6 +22,8 @@ import { AccountingModule } from "../accounting/accounting.module";
 import { SharedModule } from "../shared/shared.module";
 import { CommissionsModule } from "../commissions/commissions.module";
 
+import { PdfEngineService } from "./pdf-engine.service";
+
 @Module({
   imports: [
     DatabaseModule,
@@ -50,6 +52,7 @@ import { CommissionsModule } from "../commissions/commissions.module";
     SalesOrdersService,
     DeliveryNotesService,
     RecurringInvoicesService,
+    PdfEngineService,
   ],
   exports: [
     InvoicesService,

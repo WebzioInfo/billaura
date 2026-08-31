@@ -1,0 +1,1121 @@
+[
+  {
+    "id": "cmoh46bit0002i8csnoomozmg",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_CREATED",
+    "entityType": "Client",
+    "entityId": "cmoh46alv0000i8csbswoh63z",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-04-27T11:28:44.502Z"
+  },
+  {
+    "id": "cmoh4gotr0007i8cs2lqfqt0y",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmoh4gnfj0003i8cs2cncfmfq",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "001",
+      "description": "HOUSEHOLD ITEMS (USED)",
+      "hsn": "63090000",
+      "purchaseRate": 8000,
+      "sellingRate": 8000,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "BOX",
+      "qtyPerBox": 1,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-04-27T11:36:48.303Z"
+  },
+  {
+    "id": "cmoh4ifwa000ci8cshl14opo5",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmoh4if2a0008i8csoni38o81",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "002",
+      "description": "RO PLANT MATERIAL (USED)",
+      "hsn": "84212190",
+      "purchaseRate": 30000,
+      "sellingRate": 30000,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "NOS",
+      "qtyPerBox": 1,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-04-27T11:38:10.042Z"
+  },
+  {
+    "id": "cmoqvnft40002i8ms1xvrxbhx",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_CREATED",
+    "entityType": "Client",
+    "entityId": "cmoqvnep00000i8msc32er663",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-05-04T07:27:48.425Z"
+  },
+  {
+    "id": "cmoqw77840004i8h03mcj3alh",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmoqw75o00000i8h0deejir5n",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "description": "RIVUS 500ml SLEEVES",
+      "hsn": "39201019",
+      "purchaseRate": 0.2,
+      "sellingRate": 0.25,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "BOX",
+      "qtyPerBox": 0,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-04T07:43:10.420Z"
+  },
+  {
+    "id": "cmoqw82gk0009i8h0w2xl97nu",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmoqw81i20005i8h0zsqsuwgw",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "description": "RIVUS 1ltr SLEEVES",
+      "hsn": "39201019",
+      "purchaseRate": 0.3,
+      "sellingRate": 0.35,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "BOX",
+      "qtyPerBox": 0,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-04T07:43:50.901Z"
+  },
+  {
+    "id": "cmoqwm7o70005i8ecdbmwp6as",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmoqwm5xx0001i8eciy5756t7",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-003"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-04T07:54:50.839Z"
+  },
+  {
+    "id": "cmp58u3n50002i3a8jg6bo6bk",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_CREATED",
+    "entityType": "Client",
+    "entityId": "cmp58u2bj0000i3a8777rmf2t",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": null,
+    "ipAddress": null,
+    "createdAt": "2026-05-14T08:45:40.721Z"
+  },
+  {
+    "id": "cmp58voby0005i3a8do1b253l",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmp58vn0n0003i3a8hu7tudns",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "PET-JAR",
+      "description": "PET PREFORM 690 (55MM) JAR PLANE GREEN",
+      "hsn": "39239090",
+      "purchaseRate": 110.4,
+      "sellingRate": 115.49,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "BAG",
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-14T08:46:54.190Z"
+  },
+  {
+    "id": "cmp58y1wm000ai3a8dtnly9cv",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmp58y0970007i3a851jaj9w0",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-004"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-14T08:48:45.094Z"
+  },
+  {
+    "id": "cmp590092000di3a8aid47w78",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmp58y0970007i3a851jaj9w0",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-004"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-14T08:50:16.261Z"
+  },
+  {
+    "id": "cmp597p26000gi3a887b354fg",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmp58y0970007i3a851jaj9w0",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-004"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-14T08:56:15.006Z"
+  },
+  {
+    "id": "cmp88vgzz0004i8x479ja6g83",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmp88vfee0000i8x4amzmxrss",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "008",
+      "description": "PH Booster",
+      "hsn": "38249022",
+      "purchaseRate": 400,
+      "sellingRate": 430,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "NOS",
+      "qtyPerBox": 1,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-16T11:10:03.215Z"
+  },
+  {
+    "id": "cmp88ym7q0009i8x4pyw4c9ns",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmp88ykuf0006i8x4img59nuk",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-005"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-16T11:12:29.943Z"
+  },
+  {
+    "id": "cmp88zrsw000gi8x4otvrjaca",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmp88ykuf0006i8x4img59nuk",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-005"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-16T11:13:23.840Z"
+  },
+  {
+    "id": "cmpqjbhgs0004ju041cjdssk1",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmpqjbgo10000ju04c08zgntq",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "description": "Rivus 20L Jar Sleeve ",
+      "hsn": "39233090",
+      "purchaseRate": 3,
+      "sellingRate": 0.3,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "BOX",
+      "qtyPerBox": 0,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-29T06:22:17.645Z"
+  },
+  {
+    "id": "cmpqjcmxg0004l204lnibyn58",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmpqjcm5s0001l204u3ar77gp",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "B2B-26-27-004"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-29T06:23:11.381Z"
+  },
+  {
+    "id": "cmpqjmchu0001l704yf8xdb5b",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_UPDATED",
+    "entityType": "Product",
+    "entityId": "cmpqjbgo10000ju04c08zgntq",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "description": "Rivus 20L Jar Sleeve ",
+      "hsn": "39233090",
+      "purchaseRate": 3,
+      "sellingRate": 0.35,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "BOX",
+      "qtyPerBox": 0,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-29T06:30:44.418Z"
+  },
+  {
+    "id": "cmpqjqo0x0002ib045l1d07ol",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmpqjcm5s0001l204u3ar77gp",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-006"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-05-29T06:34:05.986Z"
+  },
+  {
+    "id": "cmqb5e49y0004l50412105g5g",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmqb5e3lx0001l5043uu0p883",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-001"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-12T16:35:35.590Z"
+  },
+  {
+    "id": "cmqb6hgsu0004jr04woq6rb11",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmqb6hg4a0001jr04j9tc55gb",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-002"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-12T17:06:11.407Z"
+  },
+  {
+    "id": "cmqb6hslk000bjr0411wujybd",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmqb6hg4a0001jr04j9tc55gb",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-002"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-12T17:06:26.696Z"
+  },
+  {
+    "id": "cmqb6udne0001kz04j8h5dt8a",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_UPDATED",
+    "entityType": "Product",
+    "entityId": "cmoh4if2a0008i8csoni38o81",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "002",
+      "description": "RO PLANT SKID",
+      "hsn": "84212190",
+      "purchaseRate": 10000,
+      "sellingRate": 10000,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "NOS",
+      "qtyPerBox": 0,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-12T17:16:13.850Z"
+  },
+  {
+    "id": "cmqb6v60e0002la04vkpe5bu8",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmqb6hg4a0001jr04j9tc55gb",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-002"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-12T17:16:50.606Z"
+  },
+  {
+    "id": "cmqjg33x50004kv04ekm7fmt9",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmqjg335n0000kv049rhltva2",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "EE-RO-01",
+      "description": "500LPH RO Plant",
+      "purchaseRate": 100000,
+      "sellingRate": 110000,
+      "gstRate": 18,
+      "unit": "SET",
+      "pkgType": "BDL",
+      "qtyPerBox": 0,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-18T11:57:07.098Z"
+  },
+  {
+    "id": "cmqjgbn6v0004l704cx49b0yu",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmqjgbmit0001l7041dc9alwz",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-007"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-18T12:03:45.319Z"
+  },
+  {
+    "id": "cmqkp5hc60002la04n69la6k8",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmqjgbmit0001l7041dc9alwz",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-007"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-19T08:58:40.519Z"
+  },
+  {
+    "id": "cmqkp6ubc000dla04wmbz89et",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmqjgbmit0001l7041dc9alwz",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-007"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-19T08:59:43.993Z"
+  },
+  {
+    "id": "cmqkp893f0002jo04l5auc72x",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmqjgbmit0001l7041dc9alwz",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-007"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-19T09:00:49.803Z"
+  },
+  {
+    "id": "cmqkpkg8u0002ju04oodahnuy",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_CREATED",
+    "entityType": "Client",
+    "entityId": "cmqkpkfq10000ju045m0hezhe",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-06-19T09:10:18.942Z"
+  },
+  {
+    "id": "cmqkpl7ut0004ju04813h2kan",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_UPDATED",
+    "entityType": "Client",
+    "entityId": "cmqkpkfq10000ju045m0hezhe",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-06-19T09:10:54.726Z"
+  },
+  {
+    "id": "cmqkpoxv30009ju04g67fys3e",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmqkpox4d0005ju045u3nnpzt",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "description": "40NB Multi-Port Valve",
+      "hsn": "84818090",
+      "purchaseRate": 2900,
+      "sellingRate": 3400,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "NOS",
+      "qtyPerBox": 0,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-19T09:13:48.399Z"
+  },
+  {
+    "id": "cmqkppj92000eju043xrr3mct",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmqkppikv000bju04gec9gszf",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-008"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-19T09:14:16.118Z"
+  },
+  {
+    "id": "cmqp13dxi0001l504l9kyelk2",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_UPDATED",
+    "entityType": "Client",
+    "entityId": "cmqkpkfq10000ju045m0hezhe",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-06-22T09:44:02.887Z"
+  },
+  {
+    "id": "cmquko62t0004l704p8elxtuq",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmquko5c50000l704qpmqw602",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "description": "Activated Carbon 1050IV",
+      "hsn": "38021000",
+      "purchaseRate": 320,
+      "sellingRate": 340,
+      "gstRate": 18,
+      "unit": "KGS",
+      "notes": "coconut shell",
+      "pkgType": "BAG",
+      "qtyPerBox": 25,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-26T06:50:56.069Z"
+  },
+  {
+    "id": "cmqukp0j80004jy040sv2nxiy",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmqukozv70001jy042dmwm70r",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-009"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-06-26T06:51:35.540Z"
+  },
+  {
+    "id": "cmr4v716b0002jo04fl2csvs0",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_CREATED",
+    "entityType": "Client",
+    "entityId": "cmr4v70m70000jo04dgu61o1a",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-07-03T11:43:14.099Z"
+  },
+  {
+    "id": "cmr4v8hbe0004jm04abpx963c",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmr4v8gr90001jm04dzlcyse7",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-010"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-03T11:44:21.674Z"
+  },
+  {
+    "id": "cmr4v9o3v0009jm04t6b21yfn",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmr4v9nb70005jm043p331jo7",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "description": "IRON STEAMER",
+      "hsn": "85164000",
+      "purchaseRate": 8900,
+      "sellingRate": 9000,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "BOX",
+      "qtyPerBox": 1,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-03T11:45:17.132Z"
+  },
+  {
+    "id": "cmr4vay3w0005jo04bypbbrg0",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmr4v8gr90001jm04dzlcyse7",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-010"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-03T11:46:16.748Z"
+  },
+  {
+    "id": "cmr4vbltz000gjo044tbl42cu",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmr4v8gr90001jm04dzlcyse7",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-010"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-03T11:46:47.495Z"
+  },
+  {
+    "id": "cmr4vdlpd000qjo040a7be1mt",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_UPDATED",
+    "entityType": "Client",
+    "entityId": "cmr4v70m70000jo04dgu61o1a",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-07-03T11:48:20.642Z"
+  },
+  {
+    "id": "cmr4vepax0002l704spm97na6",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmr4v8gr90001jm04dzlcyse7",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-010"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-03T11:49:11.961Z"
+  },
+  {
+    "id": "cmrov2r3u0004l8040ho5z7gb",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmrov2qe20001l804s6y092nm",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-011"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-17T11:35:17.947Z"
+  },
+  {
+    "id": "cmrov3p5x0001la047ece0qrd",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_UPDATED",
+    "entityType": "Product",
+    "entityId": "cmp88vfee0000i8x4amzmxrss",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "008",
+      "description": "PH Booster",
+      "hsn": "38249022",
+      "purchaseRate": 400,
+      "sellingRate": 430,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "NOS",
+      "qtyPerBox": 5,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-17T11:36:02.085Z"
+  },
+  {
+    "id": "cmrov4gs80003la04zs3y4si6",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_UPDATED",
+    "entityType": "Product",
+    "entityId": "cmp88vfee0000i8x4amzmxrss",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "008",
+      "description": "PH Booster",
+      "hsn": "38249022",
+      "purchaseRate": 400,
+      "sellingRate": 430,
+      "gstRate": 18,
+      "unit": "KGS",
+      "pkgType": "BOX",
+      "qtyPerBox": 5,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-17T11:36:37.881Z"
+  },
+  {
+    "id": "cmrov7rit0001jx045dixrip2",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_UPDATED",
+    "entityType": "Product",
+    "entityId": "cmp88vfee0000i8x4amzmxrss",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "008",
+      "description": "PH Booster",
+      "hsn": "38249022",
+      "purchaseRate": 400,
+      "sellingRate": 430,
+      "gstRate": 18,
+      "unit": "KGS",
+      "pkgType": "BOX",
+      "qtyPerBox": 5,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-17T11:39:11.766Z"
+  },
+  {
+    "id": "cmrov8aa70006la04v25nzknm",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmrov2qe20001l804s6y092nm",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-011"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-17T11:39:36.080Z"
+  },
+  {
+    "id": "cmrov8nz0000hla043nnewla8",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmrov2qe20001l804s6y092nm",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-011"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-17T11:39:53.820Z"
+  },
+  {
+    "id": "cmrow1w8q0002jo043ticsfoy",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmrov2qe20001l804s6y092nm",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-011"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-17T12:02:37.562Z"
+  },
+  {
+    "id": "cmrowlqz10002l704bj04ueje",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmrov2qe20001l804s6y092nm",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-011"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-07-17T12:18:03.854Z"
+  },
+  {
+    "id": "cmsd0hf4u0002jq049r9ucsxy",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_CREATED",
+    "entityType": "Client",
+    "entityId": "cmsd0hek80000jq04sn42rv8h",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-08-03T09:13:08.575Z"
+  },
+  {
+    "id": "cmsd0ky6r0004ih04fln2959k",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmsd0kxdf0000ih048iugfg2z",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "description": "PVC Shrink Sleeve",
+      "hsn": "3920",
+      "purchaseRate": 0.27,
+      "sellingRate": 0.35,
+      "gstRate": 18,
+      "unit": "PCS",
+      "pkgType": "BOX",
+      "qtyPerBox": 18000,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-03T09:15:53.236Z"
+  },
+  {
+    "id": "cmsd0lxmy0009ih04un9gnqnm",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmsd0lwwl0006ih044j6vz34u",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-012"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-03T09:16:39.178Z"
+  },
+  {
+    "id": "cmsd0noje000fih04bk74qfa7",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_UPDATED",
+    "entityType": "Client",
+    "entityId": "cmsd0hek80000jq04sn42rv8h",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-08-03T09:18:00.699Z"
+  },
+  {
+    "id": "cmsd0ogjt0005jq044lt8alwq",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmsd0lwwl0006ih044j6vz34u",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-012"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-03T09:18:37.002Z"
+  },
+  {
+    "id": "cmsgefw6e0002lb04nunkxc9k",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "CLIENT_CREATED",
+    "entityType": "Client",
+    "entityId": "cmsgefvno0000lb04ewate5ad",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {},
+    "ipAddress": null,
+    "createdAt": "2026-08-05T18:07:10.503Z"
+  },
+  {
+    "id": "cmsgehlwg0004i304uk3mfold",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmsgehl5z0000i304j8ifgapw",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "SST",
+      "description": "SS STORAGE TANK 5KI SS 304",
+      "hsn": "73090010",
+      "purchaseRate": 85000,
+      "sellingRate": 150000,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "NOS",
+      "qtyPerBox": 1,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-05T18:08:30.496Z"
+  },
+  {
+    "id": "cmsgeimq60004ju04l4iava45",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmsgeilyx0000ju04leiuk51b",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "SFSS",
+      "description": "SAND FILTER - SS 304",
+      "hsn": "84219900",
+      "purchaseRate": 55000,
+      "sellingRate": 125000,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "NOS",
+      "qtyPerBox": 1,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-05T18:09:18.222Z"
+  },
+  {
+    "id": "cmsgejlz60009i304cow1ycff",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmsgejlje0005i304hosm49rq",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "CFSS",
+      "description": "CARBON FILTER - SS 304",
+      "hsn": "84198990",
+      "purchaseRate": 65000,
+      "sellingRate": 135000,
+      "gstRate": 18,
+      "unit": "NOS",
+      "pkgType": "NOS",
+      "qtyPerBox": 1,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-05T18:10:03.907Z"
+  },
+  {
+    "id": "cmsgels9j000ei304bclbe1u7",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "PRODUCT_CREATED",
+    "entityType": "Product",
+    "entityId": "cmsgelrr6000ai304n5kkbvch",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "sku": "ROS",
+      "description": "RO SYSTEM",
+      "hsn": "84212110",
+      "purchaseRate": 410000,
+      "sellingRate": 890000,
+      "gstRate": 18,
+      "unit": "SET",
+      "notes": "6000LPH RO with Assembly",
+      "pkgType": "NOS",
+      "qtyPerBox": 1,
+      "active": true
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-05T18:11:45.367Z"
+  },
+  {
+    "id": "cmsgeqm19000cju04av6mhp4r",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_CREATED",
+    "entityType": "Invoice",
+    "entityId": "cmsgeqkxv0006ju0489mrdz3w",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-013"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-05T18:15:30.573Z"
+  },
+  {
+    "id": "cmsgfca530005l404xd8gdqvd",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmsgeqkxv0006ju0489mrdz3w",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-013"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-05T18:32:21.592Z"
+  },
+  {
+    "id": "cmsgjfizr0005i3zckgdaqhk9",
+    "userId": "cmoh3woiz0000i8pk2fl0qxsz",
+    "action": "INVOICE_UPDATED",
+    "entityType": "Invoice",
+    "entityId": "cmsgeqkxv0006ju0489mrdz3w",
+    "oldValue": null,
+    "newValue": null,
+    "changes": null,
+    "details": {
+      "invoiceNo": "SRB2B-26-27-013"
+    },
+    "ipAddress": null,
+    "createdAt": "2026-08-05T20:26:51.495Z"
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "cmoh3woiz0000i8pk2fl0qxsz",
+    "email": "admin@essar.com",
+    "name": "Admin User",
+    "passwordHash": "$2b$10$KRzRzrSBYk7knE2Z8O7MRu8wP0qUNgGBeJ5sz01Hu/TlHltEvoHdS",
+    "role": "ADMIN",
+    "lastLoginAt": null,
+    "lastLoginIp": null,
+    "failedLogins": 0,
+    "isLockedOut": false,
+    "createdAt": "2026-04-27T11:21:14.795Z",
+    "updatedAt": "2026-05-16T10:58:41.862Z",
+    "deletedAt": null
+  }
+]

@@ -25,7 +25,8 @@ async function bootstrap() {
   app.useLogger(logger);
   app.setGlobalPrefix(config.getOrThrow<string>("API_PREFIX"));
   
-  const allowedOrigins = config.getOrThrow<string>("ALLOWED_ORIGINS")
+  const rawOrigins = config.get<string>("ALLOWED_ORIGINS") || "http://localhost:5173,http://localhost:3000,https://billaura.webziotech.in,https://billaura.webziointernational.in,https://billaura-sage.vercel.app";
+  const allowedOrigins = rawOrigins
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
