@@ -5,9 +5,18 @@ const moduleLoadStartedAt = performance.now();
 const moduleLog = (message) => console.log(`[${new Date().toISOString()}] ${message}`);
 moduleLog("MODULE LOAD START");
 
-// Static require hint so Vercel NFT (Node File Trace) includes dist in the lambda bundle
+// Static require hints so Vercel NFT (Node File Trace) includes dist, Prisma client and modules in the lambda bundle
 try {
   require('../dist/app.module.js');
+  require('@prisma/client');
+  require('bcrypt');
+  require('pg');
+  require('@nestjs/jwt');
+  require('@nestjs/passport');
+  require('passport-jwt');
+  require('nodemailer');
+  require('archiver');
+  require('date-fns');
 } catch (_) {}
 
 require("reflect-metadata");
