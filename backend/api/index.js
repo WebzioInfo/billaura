@@ -191,6 +191,7 @@ module.exports = async (req, res) => {
         }
         return expressApp(req, res);
     } catch (err) {
+        initPromise = null;
         console.error(`[Vercel Handler] CRITICAL ERROR: ${err.message}`, err);
         applyCorsHeaders(req, res);
         res.setHeader('Content-Type', 'application/json');
