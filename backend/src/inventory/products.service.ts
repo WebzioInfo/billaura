@@ -24,6 +24,7 @@ export class ProductsService {
 
     const where: Prisma.ProductWhereInput = {
       companyId,
+      deletedAt: null,
       ...(query.search
         ? {
           OR: [
