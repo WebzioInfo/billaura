@@ -1,6 +1,14 @@
+const path = require('path');
+const fs = require('fs');
+
 const moduleLoadStartedAt = performance.now();
 const moduleLog = (message) => console.log(`[${new Date().toISOString()}] ${message}`);
 moduleLog("MODULE LOAD START");
+
+// Static require hint so Vercel NFT (Node File Trace) includes dist in the lambda bundle
+try {
+  require('../dist/app.module.js');
+} catch (_) {}
 
 require("reflect-metadata");
 const { NestFactory } = require('@nestjs/core');
@@ -14,29 +22,50 @@ moduleLog(`FRAMEWORK MODULES LOADED (${(performance.now() - moduleLoadStartedAt)
 
 let AppModule, AllExceptionsFilter, ResponseEnvelopeInterceptor, RequestContextInterceptor, AppLogger, corsOptions;
 const applicationModulesStartedAt = performance.now();
-try {
-  const appMod = require('../dist/app.module');
-  AppModule = appMod.AppModule;
-  AllExceptionsFilter = require('../dist/common/filters/all-exceptions.filter').AllExceptionsFilter;
-  ResponseEnvelopeInterceptor = require('../dist/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
-  RequestContextInterceptor = require('../dist/common/interceptors/request-context.interceptor').RequestContextInterceptor;
-  AppLogger = require('../dist/logging/app-logger.service').AppLogger;
-  corsOptions = require('../dist/config/cors.config').corsOptions;
-  moduleLog(`APPLICATION MODULES LOADED from ../dist (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
-} catch (e1) {
+
+function loadAppModules() {
+  const candidatePaths = [
+    { base: path.resolve(__dirname, '../dist'), name: 'dist' },
+    { base: path.resolve(__dirname, '../../dist'), name: '../dist' },
+    { base: path.resolve(process.cwd(), 'dist'), name: 'cwd/dist' },
+    { base: path.resolve(process.cwd(), 'backend/dist'), name: 'cwd/backend/dist' },
+    { base: path.resolve(process.cwd(), 'apps/backend/dist'), name: 'cwd/apps/backend/dist' },
+  ];
+
+  for (const { base, name } of candidatePaths) {
+    try {
+      const appModulePath = path.join(base, 'app.module.js');
+      if (fs.existsSync(appModulePath) || fs.existsSync(path.join(base, 'app.module'))) {
+        AppModule = require(path.join(base, 'app.module')).AppModule;
+        AllExceptionsFilter = require(path.join(base, 'common/filters/all-exceptions.filter')).AllExceptionsFilter;
+        ResponseEnvelopeInterceptor = require(path.join(base, 'common/interceptors/response-envelope.interceptor')).ResponseEnvelopeInterceptor;
+        RequestContextInterceptor = require(path.join(base, 'common/interceptors/request-context.interceptor')).RequestContextInterceptor;
+        AppLogger = require(path.join(base, 'logging/app-logger.service')).AppLogger;
+        corsOptions = require(path.join(base, 'config/cors.config')).corsOptions;
+        moduleLog(`APPLICATION MODULES LOADED from ${name} (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
+        return true;
+      }
+    } catch (e) {
+      console.warn(`[MODULE LOAD] Tried ${name} but encountered error:`, e.message);
+    }
+  }
+
+  // Fallback direct require
   try {
-    const appMod = require('../dist/src/app.module');
-    AppModule = appMod.AppModule;
-    AllExceptionsFilter = require('../dist/src/common/filters/all-exceptions.filter').AllExceptionsFilter;
-    ResponseEnvelopeInterceptor = require('../dist/src/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
-    RequestContextInterceptor = require('../dist/src/common/interceptors/request-context.interceptor').RequestContextInterceptor;
-    AppLogger = require('../dist/src/logging/app-logger.service').AppLogger;
-    corsOptions = require('../dist/src/config/cors.config').corsOptions;
-    moduleLog(`APPLICATION MODULES LOADED from ../dist/src (${(performance.now() - applicationModulesStartedAt).toFixed(2)} ms)`);
-  } catch (e2) {
-    console.error(`[MODULE LOAD ERROR] Failed to load application modules: ${e1.message} | ${e2.message}`);
+    AppModule = require('../dist/app.module').AppModule;
+    AllExceptionsFilter = require('../dist/common/filters/all-exceptions.filter').AllExceptionsFilter;
+    ResponseEnvelopeInterceptor = require('../dist/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
+    RequestContextInterceptor = require('../dist/common/interceptors/request-context.interceptor').RequestContextInterceptor;
+    AppLogger = require('../dist/logging/app-logger.service').AppLogger;
+    corsOptions = require('../dist/config/cors.config').corsOptions;
+    return true;
+  } catch (e) {
+    console.error(`[MODULE LOAD ERROR] Failed to load application modules: ${e.message}`);
+    return false;
   }
 }
+
+loadAppModules();
 
 const expressApp = express();
 
@@ -77,8 +106,19 @@ function applyCorsHeaders(req, res) {
 async function bootstrap() {
     const bootstrapStartedAt = performance.now();
     log("BOOTSTRAP START");
+    
     if (!AppModule) {
-        throw new Error("AppModule failed to load. Please verify dist/ build artifacts are included.");
+        const loaded = loadAppModules();
+        if (!loaded || !AppModule) {
+            let debugInfo = `cwd: ${process.cwd()}, __dirname: ${__dirname}`;
+            try {
+                debugInfo += ` | files in __dirname: ${fs.readdirSync(__dirname).join(',')}`;
+                debugInfo += ` | files in parent: ${fs.readdirSync(path.resolve(__dirname, '..')).join(',')}`;
+            } catch (e) {
+                debugInfo += ` | fs error: ${e.message}`;
+            }
+            throw new Error(`AppModule failed to load. (${debugInfo})`);
+        }
     }
 
     const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bufferLogs: true });
