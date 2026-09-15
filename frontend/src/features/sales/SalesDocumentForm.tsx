@@ -74,7 +74,11 @@ const invoiceItemSchema = z.object({
 const invoiceSchema = z.object({
   invoiceType: z.enum(['B2B', 'B2C', 'NO_TAX']),
   customerId: z.string().min(1, 'Select a customer'),
-  invoiceNo: z.string().min(1, 'Invoice number is required'),
+  invoiceNo: z.string().optional(),
+  invoiceCategoryId: z.string().optional(),
+  taxTreatmentId: z.string().optional(),
+  numberingSeriesId: z.string().optional(),
+  taxExemptionReason: z.string().optional(),
   date: z.string().nonempty('Select date'),
   dueDate: z.string().optional(),
   currency: z.string().default('INR'),
@@ -161,6 +165,19 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
     retry: 1,
     refetchOnWindowFocus: false,
   });
+
+  const { data: categoriesData } = useQuery<any>({
+    queryKey: ['invoice-categories'],
+    queryFn: () => apiClient.get('/invoice-config/categories').catch(() => []),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+
+  const categories = useMemo(() => {
+    const list = categoriesData?.data?.items || categoriesData?.data || categoriesData || [];
+    return Array.isArray(list) ? list : [];
+  }, [categoriesData]);
 
   const { data: nextNoData, error: nextNoError, isLoading: nextNoLoading, refetch: refetchNextNo } = useQuery<any>({
     queryKey: ['sales-documents', 'next-number', docType],
@@ -404,12 +421,17 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
 
       const payload = {
         customerId: data.customerId,
+        businessPartnerId: data.customerId,
         docNo: data.invoiceNo,
         date: new Date(data.date).toISOString(),
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
         invoiceType: backendType,
         placeOfSupply: data.placeOfSupply,
         status: submitStatus,
+        invoiceCategoryId: data.invoiceCategoryId,
+        taxTreatmentId: data.taxTreatmentId,
+        numberingSeriesId: data.numberingSeriesId,
+        taxExemptionReason: data.taxExemptionReason,
         items: data.items.map(item => {
           const discountPercent = Number(item.discount) || 0;
           const rate = Number(item.rate);
@@ -547,6 +569,28 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     <option value="B2B">B2B (Tax Invoice)</option>
                     <option value="B2C">B2C (Retail Invoice)</option>
                     <option value="NO_TAX">No Tax (Bill of Supply)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice Category</label>
+                  <select
+                    {...register('invoiceCategoryId')}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      setValue('invoiceCategoryId', selectedId);
+                      const cat = categories.find((c: any) => c.id === selectedId);
+                      if (cat) {
+                        if (cat.defaultTaxTreatmentId) setValue('taxTreatmentId', cat.defaultTaxTreatmentId);
+                        if (cat.defaultNumberingSeriesId) setValue('numberingSeriesId', cat.defaultNumberingSeriesId);
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                  >
+                    <option value="">Standard / Default</option>
+                    {categories.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                    ))}
                   </select>
                 </div>
               </div>

@@ -127,6 +127,7 @@ export const ERP_NAVIGATION: NavModule[] = [
       { id: 'roles', label: 'Roles', path: ROUTES.SETTINGS.ROLES, icon: 'Users' },
       { id: 'permissions', label: 'Permissions', path: ROUTES.SETTINGS.PERMISSIONS, icon: 'Landmark' },
       { id: 'taxes', label: 'Taxes', path: ROUTES.SETTINGS.TAXES, icon: 'Percent' },
+      { id: 'invoice-engine', label: 'Invoice Rules Engine', path: ROUTES.SETTINGS.INVOICE_ENGINE, icon: 'Sliders' },
       { id: 'sequences', label: 'Number Series', path: ROUTES.SETTINGS.SEQUENCES, icon: 'Binary' },
       { id: 'currencies', label: 'Currencies', path: ROUTES.SETTINGS.CURRENCIES, icon: 'DollarSign' },
       { id: 'settings-backup', label: 'Backup', path: ROUTES.SETTINGS.BACKUP, icon: 'Database' },

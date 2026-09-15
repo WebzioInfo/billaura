@@ -558,4 +558,104 @@ export class ReportsService {
 
     return Object.values(customerAgeingMap).filter(c => c.total > 0);
   }
+
+  async generateDayBook(companyId: string, startDate?: Date, endDate?: Date) {
+    if (!companyId) throw new BadRequestException('Company ID is required');
+
+    const where: any = { companyId, deletedAt: null };
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date.gte = startDate;
+      if (endDate) where.date.lte = endDate;
+    }
+
+    const journalEntries = await this.prisma.journalEntry.findMany({
+      where,
+      include: {
+        lines: {
+          include: {
+            account: true,
+            department: true,
+          }
+        }
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const rows: any[] = [];
+    for (const entry of journalEntries) {
+      let voucherType = 'JOURNAL';
+      const ref = (entry.reference || '').toUpperCase();
+      if (ref.startsWith('EXP') || ref.includes('EXPENSE')) voucherType = 'PAYMENT';
+      else if (ref.startsWith('REC') || ref.startsWith('FEE') || ref.includes('RECEIPT') || ref.includes('FEE')) voucherType = 'RECEIPT';
+      else if (ref.startsWith('INV') || ref.includes('INVOICE')) voucherType = 'SALES';
+      else if (ref.startsWith('TRF') || ref.includes('TRANSFER')) voucherType = 'CONTRA';
+      else if (ref.startsWith('INC') || ref.includes('INCOME')) voucherType = 'RECEIPT';
+
+      for (const line of entry.lines) {
+        rows.push({
+          id: line.id,
+          journalEntryId: entry.id,
+          date: entry.date,
+          voucherNo: entry.reference || entry.id,
+          voucherType,
+          accountId: line.accountId,
+          accountName: line.account?.name || 'Unknown Account',
+          departmentName: line.department?.name || null,
+          description: line.description || entry.description,
+          debit: Number(line.debit || 0),
+          credit: Number(line.credit || 0),
+        });
+      }
+    }
+
+    return rows;
+  }
+
+  async generateGeneralLedger(companyId: string, startDate?: Date, endDate?: Date, accountId?: string) {
+    if (!companyId) throw new BadRequestException('Company ID is required');
+
+    const where: any = {
+      journalEntry: {
+        companyId,
+        deletedAt: null,
+      },
+      deletedAt: null,
+    };
+
+    if (accountId) {
+      where.accountId = accountId;
+    }
+
+    if (startDate || endDate) {
+      where.journalEntry.date = {};
+      if (startDate) where.journalEntry.date.gte = startDate;
+      if (endDate) where.journalEntry.date.lte = endDate;
+    }
+
+    const lines = await this.prisma.journalLine.findMany({
+      where,
+      include: {
+        account: true,
+        department: true,
+        journalEntry: true,
+      },
+      orderBy: [
+        { journalEntry: { date: 'asc' } },
+        { createdAt: 'asc' },
+      ],
+    });
+
+    return lines.map(line => ({
+      id: line.id,
+      date: line.journalEntry.date,
+      accountName: line.account?.name || 'Unknown Account',
+      accountId: line.accountId,
+      voucherNo: line.journalEntry.reference,
+      description: line.description || line.journalEntry.description,
+      debit: Number(line.debit || 0),
+      credit: Number(line.credit || 0),
+      departmentName: line.department?.name || null,
+    }));
+  }
 }

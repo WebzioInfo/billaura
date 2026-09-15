@@ -5,7 +5,7 @@ import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
-import type { Prisma, TaxCategory } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ProductsService {
@@ -88,7 +88,7 @@ export class ProductsService {
     }
 
     let finalGstRate = dto.gstRate || 0;
-    let finalHsnCode = dto.hsnCode || null;
+    const finalHsnCode = dto.hsnCode || null;
     let finalTaxPreference = dto.taxPreference || 'TAXABLE';
 
     if (dto.isTaxable === false || finalTaxPreference !== 'TAXABLE') {
@@ -206,7 +206,7 @@ export class ProductsService {
     }
 
     let finalGstRate = dto.gstRate !== undefined ? dto.gstRate : Number(product.gstRate || 0);
-    let finalHsnCode = dto.hsnCode !== undefined ? (dto.hsnCode || null) : product.hsnCode;
+    const finalHsnCode = dto.hsnCode !== undefined ? (dto.hsnCode || null) : product.hsnCode;
     let finalTaxPreference = dto.taxPreference !== undefined ? dto.taxPreference : product.taxPreference;
 
     const isTaxable = dto.isTaxable !== undefined ? dto.isTaxable : product.isTaxable;

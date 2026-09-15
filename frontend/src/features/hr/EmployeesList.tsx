@@ -24,11 +24,12 @@ export const EmployeesList = () => {
     }
   });
 
-  const filteredEmployees = employees.filter((emp: any) => 
-    emp.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.employeeCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.designation?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredEmployees = employees.filter((emp: any) => {
+    const matchesQuery = emp.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.employeeCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.designation?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesQuery;
+  });
 
   return (
     <PageContainer maxWidth="7xl">
@@ -103,8 +104,8 @@ export const EmployeesList = () => {
               <div className="p-5 flex flex-col items-center text-center relative">
                 {/* Status Badge */}
                 <div className="absolute top-4 right-4">
-                  <Badge variant={emp.isActive !== false ? "success" : "default"} className="text-[10px] px-2 py-0.5">
-                    {emp.isActive !== false ? 'Active' : 'Inactive'}
+                  <Badge variant={emp.status === 'INACTIVE' ? "default" : "success"} className="text-[10px] px-2 py-0.5">
+                    {emp.status || (emp.isActive === false ? 'INACTIVE' : 'ACTIVE')}
                   </Badge>
                 </div>
 

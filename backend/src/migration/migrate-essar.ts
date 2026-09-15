@@ -187,7 +187,7 @@ async function runMigration() {
   let invoicesImportedCount = 0;
   let invoiceItemsImportedCount = 0;
   let inventoryRecordsImportedCount = 0;
-  let skippedCount = 0;
+  const skippedCount = 0;
   let duplicateCount = 0;
 
   const legacyClientIdMap: Record<string, string> = {};
@@ -250,9 +250,9 @@ async function runMigration() {
       });
 
       // Default Branch
-      let branch = await tx.branch.findFirst({ where: { companyId } });
+      const branch = await tx.branch.findFirst({ where: { companyId } });
       if (!branch) {
-        branch = await tx.branch.create({
+        await tx.branch.create({
           data: {
             companyId,
             name: "Headquarters",

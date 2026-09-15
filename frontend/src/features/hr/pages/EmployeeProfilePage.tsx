@@ -104,8 +104,8 @@ export const EmployeeProfilePage = () => {
               <h1 className="text-3xl font-extrabold text-foreground">
                 {employee.name || 'Unknown Employee'}
               </h1>
-              <Badge variant={employee.isActive ? "success" : "default"}>
-                {employee.isActive ? 'Active Employee' : 'Inactive'}
+              <Badge variant={employee.status === 'INACTIVE' ? "default" : "success"}>
+                {employee.status || (employee.isActive === false ? 'Inactive' : 'Active Employee')}
               </Badge>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-2">

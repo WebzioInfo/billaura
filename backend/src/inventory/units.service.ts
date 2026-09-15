@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CompanyContext } from '../common/context/company-context';
 import { DEFAULT_UNITS_LIBRARY } from './default-units.data';

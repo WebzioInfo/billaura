@@ -10,123 +10,126 @@ datasource db {
 }
 
 model Company {
-  units               Unit[]
-  historicalInvoices  HistoricalInvoice[]
-  tenantCode          String?                  @unique
-  employmentTypes     EmploymentType[]
-  leaveTypes          LeaveType[]
-  salaryComponents    SalaryComponent[]
-  holidayCalendars    HolidayCalendar[]
-  id                  String                   @id @default(cuid())
-  companyName         String
-  legalName           String?
-  gstin               String?
-  pan                 String?
-  tan                 String?
-  msme                String?
-  email               String?
-  phone               String?
-  address             String?
-  state               String?
-  country             String?
-  currency            String                   @default("INR")
-  logo                String?
-  status              SubscriptionStatus       @default(FREE_TRIAL)
-  onboardingStep      String                   @default("BUSINESS_DETAILS")
-  businessType        BusinessType             @default(TRADING)
-  trialStartAt        DateTime                 @default(now())
-  trialEndAt          DateTime?
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
-  deletedAt           DateTime?
-  pinCode             String?
-  accounts            Account[]
-  activityFeeds       ActivityFeed[]
-  apiKeys             ApiKey[]
-  archiveLogs         ArchiveLog[]
-  archiveRules        ArchiveRule[]
-  attendances         Attendance[]
-  auditLogs           AuditLog[]
-  backupAuditLogs     BackupAuditLog[]
-  backupJobs          BackupJob[]
-  backupLogs          BackupLog[]
-  backupSchedules     BackupSchedule[]
-  bankAccounts        BankAccount[]
-  bankStatements      BankStatement[]
-  bankTransactions    BankTransaction[]
-  billOfMaterials     BillOfMaterial[]
-  branches            Branch[]
-  businessPartners    BusinessPartner[]
-  cashAccounts        CashAccount[]
-  cashTransactions    CashTransaction[]
-  settings            CompanySettings?
-  users               CompanyUser[]
-  contacts            Contact[]
-  costCenters         CostCenter[]
-  crmActivities       CrmActivity[]
-  customerStatements  CustomerStatement[]
-  deliveryNotes       DeliveryNote[]
-  sequences           DocumentSequence[]
-  documentTemplates   DocumentTemplate[]
-  advances            EmployeeAdvance[]
-  employeeLoans       EmployeeLoan[]
-  employees           Employee[]
-  expenseCategories   ExpenseCategory[]
-  expenses            Expense[]
-  exportLogs          ExportLog[]
-  featureUsages       FeatureUsage[]
-  financialYears      FinancialYear[]
-  fixedAssets         FixedAsset[]
-  goodsReceipts       GoodsReceipt[]
-  gstReports          GSTReport[]
-  importLogs          ImportLog[]
-  incomeCategories    IncomeCategory[]
-  internalTransfers   InternalTransfer[]
-  inventoryBatches    InventoryBatch[]
-  inventorySerials    InventorySerial[]
-  invoices            Invoice[]
-  journalEntries      JournalEntry[]
-  leaveApplications   LeaveApplication[]
-  notificationPrefs   NotificationPreference[]
-  notifications       Notification[]
-  otherIncomes        OtherIncome[]
-  platformLogs        PlatformActivityLog[]    @relation("CompanyPlatformLogs")
-  platformPayments    PlatformPayment[]
-  productionOrders    ProductionOrder[]
-  products            Product[]
-  projects            Project[]
-  purchaseOrders      PurchaseOrder[]
-  purchaseReturns     PurchaseReturn[]
-  purchases           Purchase[]
-  quotations          Quotation[]
-  receipts            Receipt[]
-  recurringInvoices   RecurringInvoice[]
-  refundTransactions  RefundTransaction[]
-  roles               Role[]
-  salarySlips         SalarySlip[]
-  salesOrders         SalesOrder[]
-  salesReturns        SalesReturn[]
-  scheduledTasks      ScheduledTask[]
-  shifts              Shift[]
-  staffAdvances       StaffAdvance[]
-  stockLedgers        StockLedger[]
-  stocks              Stock[]
-  subscriptions       Subscription[]
-  supportTickets      SupportTicket[]
-  taxOverrideLogs     TaxOverrideLog[]
-  transactionPayments TransactionPayment[]
-  warehouses          Warehouse[]
-  webhooks            Webhook[]
-  commissionRules     CommissionRule[]
-  commissionRecords   CommissionRecord[]
-  brands              Brand[]
-  productCategories   ProductCategory[]
-  customerSegments    CustomerSegment[]
-  customerDepartments CustomerDepartment[]
-  departments         Department[]
-  designations        Designation[]
-  unitConversions     UnitConversion[]
-  salaryRevisions     SalaryRevision[]
+  units                  Unit[]
+  historicalInvoices     HistoricalInvoice[]
+  tenantCode             String?                  @unique
+  employmentTypes        EmploymentType[]
+  leaveTypes             LeaveType[]
+  salaryComponents       SalaryComponent[]
+  holidayCalendars       HolidayCalendar[]
+  id                     String                   @id @default(cuid())
+  companyName            String
+  legalName              String?
+  gstin                  String?
+  pan                    String?
+  tan                    String?
+  msme                   String?
+  email                  String?
+  phone                  String?
+  address                String?
+  state                  String?
+  country                String?
+  currency               String                   @default("INR")
+  logo                   String?
+  status                 SubscriptionStatus       @default(FREE_TRIAL)
+  onboardingStep         String                   @default("BUSINESS_DETAILS")
+  businessType           BusinessType             @default(TRADING)
+  trialStartAt           DateTime                 @default(now())
+  trialEndAt             DateTime?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  deletedAt              DateTime?
+  pinCode                String?
+  accounts               Account[]
+  activityFeeds          ActivityFeed[]
+  apiKeys                ApiKey[]
+  archiveLogs            ArchiveLog[]
+  archiveRules           ArchiveRule[]
+  attendances            Attendance[]
+  auditLogs              AuditLog[]
+  backupAuditLogs        BackupAuditLog[]
+  backupJobs             BackupJob[]
+  backupLogs             BackupLog[]
+  backupSchedules        BackupSchedule[]
+  bankAccounts           BankAccount[]
+  bankStatements         BankStatement[]
+  bankTransactions       BankTransaction[]
+  billOfMaterials        BillOfMaterial[]
+  branches               Branch[]
+  businessPartners       BusinessPartner[]
+  cashAccounts           CashAccount[]
+  cashTransactions       CashTransaction[]
+  settings               CompanySettings?
+  users                  CompanyUser[]
+  contacts               Contact[]
+  costCenters            CostCenter[]
+  crmActivities          CrmActivity[]
+  customerStatements     CustomerStatement[]
+  deliveryNotes          DeliveryNote[]
+  sequences              DocumentSequence[]
+  documentTemplates      DocumentTemplate[]
+  advances               EmployeeAdvance[]
+  employeeLoans          EmployeeLoan[]
+  employees              Employee[]
+  expenseCategories      ExpenseCategory[]
+  expenses               Expense[]
+  exportLogs             ExportLog[]
+  featureUsages          FeatureUsage[]
+  financialYears         FinancialYear[]
+  fixedAssets            FixedAsset[]
+  goodsReceipts          GoodsReceipt[]
+  gstReports             GSTReport[]
+  importLogs             ImportLog[]
+  incomeCategories       IncomeCategory[]
+  internalTransfers      InternalTransfer[]
+  inventoryBatches       InventoryBatch[]
+  inventorySerials       InventorySerial[]
+  invoices               Invoice[]
+  journalEntries         JournalEntry[]
+  leaveApplications      LeaveApplication[]
+  notificationPrefs      NotificationPreference[]
+  notifications          Notification[]
+  otherIncomes           OtherIncome[]
+  platformLogs           PlatformActivityLog[]    @relation("CompanyPlatformLogs")
+  platformPayments       PlatformPayment[]
+  productionOrders       ProductionOrder[]
+  products               Product[]
+  projects               Project[]
+  purchaseOrders         PurchaseOrder[]
+  purchaseReturns        PurchaseReturn[]
+  purchases              Purchase[]
+  quotations             Quotation[]
+  receipts               Receipt[]
+  recurringInvoices      RecurringInvoice[]
+  refundTransactions     RefundTransaction[]
+  roles                  Role[]
+  salarySlips            SalarySlip[]
+  salesOrders            SalesOrder[]
+  salesReturns           SalesReturn[]
+  scheduledTasks         ScheduledTask[]
+  shifts                 Shift[]
+  staffAdvances          StaffAdvance[]
+  stockLedgers           StockLedger[]
+  stocks                 Stock[]
+  subscriptions          Subscription[]
+  supportTickets         SupportTicket[]
+  taxOverrideLogs        TaxOverrideLog[]
+  transactionPayments    TransactionPayment[]
+  warehouses             Warehouse[]
+  webhooks               Webhook[]
+  commissionRules        CommissionRule[]
+  commissionRecords      CommissionRecord[]
+  brands                 Brand[]
+  productCategories      ProductCategory[]
+  customerSegments       CustomerSegment[]
+  customerDepartments    CustomerDepartment[]
+  departments            Department[]
+  designations           Designation[]
+  unitConversions        UnitConversion[]
+  salaryRevisions        SalaryRevision[]
+  invoiceCategories      InvoiceCategory[]
+  taxTreatments          TaxTreatment[]
+  invoiceNumberingSeries InvoiceNumberingSeries[]
 
   @@index([status])
   @@index([createdAt])
@@ -189,18 +192,19 @@ model CompanySettings {
 }
 
 model FinancialYear {
-  id        String            @id @default(cuid())
-  companyId String
-  name      String
-  startDate DateTime
-  endDate   DateTime
-  isActive  Boolean           @default(false)
-  isClosed  Boolean           @default(false)
-  settings  CompanySettings[]
-  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @default(now()) @updatedAt
-  deletedAt DateTime?
+  id                     String                   @id @default(cuid())
+  companyId              String
+  name                   String
+  startDate              DateTime
+  endDate                DateTime
+  isActive               Boolean                  @default(false)
+  isClosed               Boolean                  @default(false)
+  settings               CompanySettings[]
+  company                Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @default(now()) @updatedAt
+  deletedAt              DateTime?
+  invoiceNumberingSeries InvoiceNumberingSeries[]
 
   @@unique([companyId, name])
   @@map("financial_years")
@@ -654,7 +658,9 @@ enum TaxPreference {
   TAXABLE
   EXEMPT
   NIL_RATED
+  ZERO_RATED
   NON_GST
+  NOT_APPLICABLE
   COMPOSITION
   REVERSE_CHARGE
 }
@@ -793,13 +799,82 @@ model DocumentSequence {
   @@map("document_sequences")
 }
 
+model InvoiceCategory {
+  id                         String                  @id @default(cuid())
+  companyId                  String
+  name                       String
+  code                       String
+  description                String?
+  active                     Boolean                 @default(true)
+  defaultTaxTreatmentId      String?
+  defaultNumberingSeriesId   String?
+  defaultSalesAccountId      String?
+  requiresTaxExemptionReason Boolean                 @default(false)
+  requiresReference          Boolean                 @default(false)
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+  company                    Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taxTreatment               TaxTreatment?           @relation(fields: [defaultTaxTreatmentId], references: [id])
+  numberingSeries            InvoiceNumberingSeries? @relation(fields: [defaultNumberingSeriesId], references: [id])
+  invoices                   Invoice[]
+
+  @@unique([companyId, code])
+  @@map("invoice_categories")
+}
+
+model TaxTreatment {
+  id            String            @id @default(cuid())
+  companyId     String
+  name          String
+  code          String
+  treatmentType String // STANDARD_GST, ZERO_RATED, EXEMPT, NON_GST
+  cgstRate      Decimal           @default(0) @db.Decimal(5, 2)
+  sgstRate      Decimal           @default(0) @db.Decimal(5, 2)
+  igstRate      Decimal           @default(0) @db.Decimal(5, 2)
+  cessRate      Decimal           @default(0) @db.Decimal(5, 2)
+  active        Boolean           @default(true)
+  description   String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  categories    InvoiceCategory[]
+  invoices      Invoice[]
+
+  @@unique([companyId, code])
+  @@map("tax_treatments")
+}
+
+model InvoiceNumberingSeries {
+  id              String            @id @default(cuid())
+  companyId       String
+  branchId        String?
+  name            String
+  code            String
+  documentType    String            @default("INVOICE")
+  prefix          String?
+  numberFormat    String            @default("{PREFIX}/{FY}/{SEQ}")
+  currentNumber   Int               @default(0)
+  financialYearId String?
+  active          Boolean           @default(true)
+  isDefault       Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  financialYear   FinancialYear?    @relation(fields: [financialYearId], references: [id])
+  categories      InvoiceCategory[]
+  invoices        Invoice[]
+
+  @@unique([companyId, code])
+  @@map("invoice_numbering_series")
+}
+
 model Invoice {
-  id                 String              @id @default(cuid())
+  id                 String                  @id @default(cuid())
   companyId          String
   businessPartnerId  String
   invoiceNo          String
-  invoiceType        InvoiceType         @default(TAX_INVOICE)
-  taxMode            TaxMode             @default(CGST_SGST)
+  invoiceType        InvoiceType             @default(TAX_INVOICE)
+  taxMode            TaxMode                 @default(CGST_SGST)
   placeOfSupply      String?
   companyStateCode   String?
   customerStateCode  String?
@@ -807,19 +882,19 @@ model Invoice {
   shippingAddress    String?
   date               DateTime
   dueDate            DateTime?
-  status             DocumentStatus      @default(DRAFT)
-  subTotal           Decimal             @default(0) @db.Decimal(15, 2)
-  taxTotal           Decimal             @default(0) @db.Decimal(15, 2)
-  cgstAmount         Decimal             @default(0) @db.Decimal(15, 2)
-  sgstAmount         Decimal             @default(0) @db.Decimal(15, 2)
-  igstAmount         Decimal             @default(0) @db.Decimal(15, 2)
-  cessAmount         Decimal             @default(0) @db.Decimal(15, 2)
-  totalTaxAmount     Decimal             @default(0) @db.Decimal(15, 2)
-  grandTotal         Decimal             @default(0) @db.Decimal(15, 2)
-  amountPaid         Decimal             @default(0) @db.Decimal(15, 2)
-  isRcm              Boolean             @default(false)
-  tdsAmount          Decimal             @default(0) @db.Decimal(15, 2)
-  tcsAmount          Decimal             @default(0) @db.Decimal(15, 2)
+  status             DocumentStatus          @default(DRAFT)
+  subTotal           Decimal                 @default(0) @db.Decimal(15, 2)
+  taxTotal           Decimal                 @default(0) @db.Decimal(15, 2)
+  cgstAmount         Decimal                 @default(0) @db.Decimal(15, 2)
+  sgstAmount         Decimal                 @default(0) @db.Decimal(15, 2)
+  igstAmount         Decimal                 @default(0) @db.Decimal(15, 2)
+  cessAmount         Decimal                 @default(0) @db.Decimal(15, 2)
+  totalTaxAmount     Decimal                 @default(0) @db.Decimal(15, 2)
+  grandTotal         Decimal                 @default(0) @db.Decimal(15, 2)
+  amountPaid         Decimal                 @default(0) @db.Decimal(15, 2)
+  isRcm              Boolean                 @default(false)
+  tdsAmount          Decimal                 @default(0) @db.Decimal(15, 2)
+  tcsAmount          Decimal                 @default(0) @db.Decimal(15, 2)
   gstBreakup         Json?
   irn                String?
   qrCode             String?
@@ -827,10 +902,20 @@ model Invoice {
   vehicleNumber      String?
   lrNumber           String?
   transportDetails   Json?
-  createdAt          DateTime            @default(now())
+  createdAt          DateTime                @default(now())
   deletedAt          DateTime?
   commissionRecordId String?
-  commissionRecord   CommissionRecord?   @relation(fields: [commissionRecordId], references: [id])
+  commissionRecord   CommissionRecord?       @relation(fields: [commissionRecordId], references: [id])
+  invoiceCategoryId  String?
+  invoiceCategory    InvoiceCategory?        @relation(fields: [invoiceCategoryId], references: [id])
+  taxTreatmentId     String?
+  taxTreatment       TaxTreatment?           @relation(fields: [taxTreatmentId], references: [id])
+  numberingSeriesId  String?
+  numberingSeries    InvoiceNumberingSeries? @relation(fields: [numberingSeriesId], references: [id])
+  taxExemptionReason String?
+  taxSnapshot        Json?
+  categorySnapshot   Json?
+
   items              InvoiceItem[]
   businessPartner    BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
   company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -3024,10 +3109,14 @@ enum InvoiceType {
   DEBIT_NOTE
   CREDIT_NOTE
   PROFORMA_INVOICE
+  QUOTATION
   ESTIMATE
   DELIVERY_CHALLAN
   PURCHASE_INVOICE
   PURCHASE_RETURN
+  FEE_RECEIPT
+  PAYMENT_RECEIPT
+  OTHER_RECEIPT
 }
 
 enum TaxCategory {

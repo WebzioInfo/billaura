@@ -6,14 +6,14 @@ import {
   ValidateNested,
   IsNumber,
   IsDateString,
-} from "class-validator";
-import { Type } from "class-transformer";
-import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export class InvoiceItemDto {
   @IsString()
-  @IsNotEmpty()
-  productId: string;
+  @IsOptional()
+  productId?: string;
 
   @IsString()
   @IsOptional()
@@ -30,6 +30,14 @@ export class InvoiceItemDto {
   @IsNumber()
   @IsOptional()
   taxPercent?: number;
+
+  @IsNumber()
+  @IsOptional()
+  cessPercent?: number;
+
+  @IsString()
+  @IsOptional()
+  taxPreference?: string;
 }
 
 export class CreateInvoiceDto {
@@ -111,7 +119,15 @@ export class CreateInvoiceDto {
 
   @IsString()
   @IsOptional()
+  documentType?: string;
+
+  @IsString()
+  @IsOptional()
   invoiceNo?: string;
+
+  @IsString()
+  @IsOptional()
+  documentNo?: string;
 
   @IsString()
   @IsOptional()
@@ -128,6 +144,46 @@ export class CreateInvoiceDto {
   @IsString()
   @IsOptional()
   termsConditions?: string;
+
+  @IsString()
+  @IsOptional()
+  invoiceCategoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  taxTreatmentId?: string;
+
+  @IsString()
+  @IsOptional()
+  taxPreference?: string;
+
+  @IsString()
+  @IsOptional()
+  numberingSeriesId?: string;
+
+  @IsString()
+  @IsOptional()
+  taxExemptionReason?: string;
+
+  @IsString()
+  @IsOptional()
+  sourceDocumentId?: string;
+
+  @IsString()
+  @IsOptional()
+  sourceDocumentType?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentMode?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentReference?: string;
+
+  @IsNumber()
+  @IsOptional()
+  amountPaid?: number;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -149,4 +205,12 @@ export class InvoiceQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @IsOptional()
+  @IsString()
+  documentType?: string;
+
+  @IsOptional()
+  @IsString()
+  invoiceType?: string;
 }

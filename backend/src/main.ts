@@ -14,6 +14,7 @@ import { NoCacheInterceptor } from "./common/interceptors/no-cache.interceptor";
 import { AuditInterceptor } from "./common/interceptors/audit.interceptor";
 import { AppLogger } from "./logging/app-logger.service";
 import { PrismaService } from "./database/prisma.service";
+import { analyzeDatabaseTarget } from "./common/utils/database-safety.util";
 
 import { corsOptions } from "./config/cors.config";
 
@@ -23,6 +24,13 @@ async function bootstrap() {
   const config = app.get(ConfigService);
 
   app.useLogger(logger);
+  
+  const dbSafety = analyzeDatabaseTarget(config.get<string>("DATABASE_URL"));
+  logger.log(
+    `[Database Safety] Environment: ${dbSafety.environment.toUpperCase()} | Host: ${dbSafety.host} | Production Locked: ${dbSafety.isProduction}`,
+    "Bootstrap"
+  );
+
   app.setGlobalPrefix(config.getOrThrow<string>("API_PREFIX"));
   
   const rawOrigins = config.get<string>("ALLOWED_ORIGINS") || "http://localhost:5173,http://localhost:3000,https://billaura.webziotech.in,https://billaura.webziointernational.in,https://billaura-sage.vercel.app";

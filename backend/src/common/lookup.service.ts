@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { AccountCategory, AccountSubCategory } from "@prisma/client";
 

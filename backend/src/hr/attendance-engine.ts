@@ -130,7 +130,7 @@ export class AttendanceEngine {
 
       let computedWorkingMins = record.workingMinutes;
       let computedOvertimeMins = record.overtimeMinutes;
-      let computedLateMins = record.lateMinutes || record.lateBy;
+      const computedLateMins = record.lateMinutes || record.lateBy;
 
       if ((computedWorkingMins === undefined || computedWorkingMins === null) && record.checkIn && record.checkOut) {
         const ci = new Date(record.checkIn).getTime();
@@ -447,7 +447,7 @@ export class AttendanceEngine {
       if (attRec) {
         let workMins = attRec.workingMinutes || 0;
         let otMins = attRec.overtimeMinutes || Math.round((attRec.overtime || 0) * 60);
-        let lateMins = attRec.lateMinutes || attRec.lateBy || 0;
+        const lateMins = attRec.lateMinutes || attRec.lateBy || 0;
 
         if (workMins === 0 && attRec.checkIn && attRec.checkOut) {
           const ci = new Date(attRec.checkIn).getTime();
@@ -469,8 +469,8 @@ export class AttendanceEngine {
         totalOvertimeMinutes += otMins;
 
         const rawStatus = (attRec.type || attRec.status || 'PRESENT').toUpperCase();
-        let finalStatus: CalendarDayResult['status'] = 'PRESENT';
-        let statusLabel = 'Present';
+        let finalStatus: CalendarDayResult['status'];
+        let statusLabel: string;
         let leaveType: string | null = null;
         let holidayName: string | null = null;
 

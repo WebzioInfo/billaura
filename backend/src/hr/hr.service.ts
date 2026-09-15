@@ -1,10 +1,9 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateEmployeeDto } from './dto/employee.dto';
-import { RecordAttendanceDto } from './dto/attendance.dto';
+import { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
 import { AttendanceEngine } from './attendance-engine';
 import { PayrollEngine } from './payroll-engine';
-import { GenerateSalarySlipDto, PaySalarySlipDto, UpdateSalarySlipDto } from './dto/payroll.dto';
+import { PaySalarySlipDto, UpdateSalarySlipDto } from './dto/payroll.dto';
 import { CompanyContext } from '../common/context/company-context';
 
 @Injectable()
@@ -127,7 +126,7 @@ export class HrService {
     });
   }
 
-  async updateEmployee(id: string, dto: CreateEmployeeDto) {
+  async updateEmployee(id: string, dto: UpdateEmployeeDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -138,7 +137,7 @@ export class HrService {
     });
     if (!employee) throw new NotFoundException('Employee not found');
 
-    if (dto.employeeCode !== employee.employeeCode) {
+    if (dto.employeeCode && dto.employeeCode !== employee.employeeCode) {
       const codeExists = await this.prisma.employee.findFirst({
         where: { companyId, employeeCode: dto.employeeCode, NOT: { id } },
       });
@@ -147,24 +146,51 @@ export class HrService {
       }
     }
 
+    let fullName = dto.name;
+    if (!fullName && (dto.firstName || dto.lastName)) {
+      fullName = `${dto.firstName || ''} ${dto.lastName || ''}`.trim();
+    }
+
+    // Determine status
+    let statusToSet = dto.status;
+    if (!statusToSet && (dto as any).isActive !== undefined) {
+      statusToSet = (dto as any).isActive ? 'ACTIVE' : 'INACTIVE';
+    }
+
     return this.prisma.employee.update({
       where: { id },
       data: {
-        employeeCode: dto.employeeCode,
-        name: dto.name,
-        mobile: dto.mobile || null,
-        email: dto.email || null,
-        departmentId: dto.departmentId || null,
-        designationId: dto.designationId || null,
-        shiftId: dto.shiftId || null,
-        employmentTypeId: dto.employmentTypeId || null,
-        reportingManagerId: dto.reportingManagerId || null,
-        basicSalary: dto.basicSalary || 0,
-        allowances: dto.allowances || null,
-        bankDetails: dto.bankDetails || null,
+        employeeCode: dto.employeeCode !== undefined ? dto.employeeCode : undefined,
+        name: fullName || undefined,
+        mobile: dto.mobile !== undefined ? dto.mobile : undefined,
+        email: dto.email !== undefined ? dto.email : undefined,
+        address: dto.address !== undefined ? dto.address : undefined,
+        gender: dto.gender !== undefined ? dto.gender : undefined,
+        dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
+        departmentId: dto.departmentId !== undefined ? dto.departmentId : undefined,
+        designationId: dto.designationId !== undefined ? dto.designationId : undefined,
+        shiftId: dto.shiftId !== undefined ? dto.shiftId : undefined,
+        employmentTypeId: dto.employmentTypeId !== undefined ? dto.employmentTypeId : undefined,
+        branchId: dto.branchId !== undefined ? dto.branchId : undefined,
+        roleId: dto.roleId !== undefined ? dto.roleId : undefined,
+        reportingManagerId: dto.reportingManagerId !== undefined ? dto.reportingManagerId : undefined,
+        basicSalary: dto.basicSalary !== undefined ? dto.basicSalary : undefined,
+        salaryType: dto.salaryType !== undefined ? (dto.salaryType as any) : undefined,
+        allowances: dto.allowances !== undefined ? dto.allowances : undefined,
+        bankDetails: dto.bankDetails !== undefined ? dto.bankDetails : undefined,
+        aadhaarNumber: dto.aadhaarNumber !== undefined ? dto.aadhaarNumber : undefined,
+        panNumber: dto.panNumber !== undefined ? dto.panNumber : undefined,
         joiningDate: dto.joiningDate ? new Date(dto.joiningDate) : undefined,
-        status: dto.status || undefined,
+        status: statusToSet !== undefined ? statusToSet : undefined,
       },
+      include: {
+        department: true,
+        designation: true,
+        branch: true,
+        shift: true,
+        employmentType: true,
+        reportingManager: true,
+      }
     });
   }
 
@@ -388,9 +414,6 @@ export class HrService {
       attendanceMap.set(dateStr, a);
     });
 
-    // Generate complete calendar entries for the requested month
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const calendarRecords: any[] = [];
 
     // Convert DB attendances to standard format
     const dbAttendanceList = yearlyAttendancesData.map(a => {
@@ -443,6 +466,7 @@ export class HrService {
     const attendances = [...dbAttendanceList, ...holidayList];
 
     // 3. Compute Monthly KPI Summaries via AttendanceEngine
+    const daysInMonth = new Date(year, month, 0).getDate();
     const monthlyAttendances = attendances.filter(a => {
       const [y, m] = a.date.split('-');
       return parseInt(y, 10) === year && parseInt(m, 10) === month;
@@ -518,7 +542,9 @@ export class HrService {
           },
         });
       }
-    } catch (e) {}
+    } catch {
+      // Leave table may not be queried or populated
+    }
 
     let holidays: any[] = [];
     try {
@@ -530,7 +556,9 @@ export class HrService {
           },
         });
       }
-    } catch (e) {}
+    } catch {
+      // Holiday table may not be queried or populated
+    }
 
     return AttendanceEngine.generateEmployeeCalendar({
       employee,
@@ -755,10 +783,6 @@ export class HrService {
 
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
-    
-    // Calculate days between start and end (inclusive)
-    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    const daysInMonth = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
     const attendances = await this.prisma.attendance.findMany({
       where: {

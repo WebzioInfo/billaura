@@ -1,4 +1,4 @@
-import { ExceptionFilter, Catch, ArgumentsHost, BadRequestException, HttpStatus } from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, BadRequestException } from '@nestjs/common';
 import { Response } from 'express';
 
 @Catch(BadRequestException)
@@ -9,7 +9,7 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
     const exceptionResponse: any = exception.getResponse();
 
-    let errorsMap: Record<string, string[]> = {};
+    const errorsMap: Record<string, string[]> = {};
     let mainMessage = 'Validation failed';
 
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
@@ -18,7 +18,6 @@ export class ValidationExceptionFilter implements ExceptionFilter {
           const firstSpace = msg.indexOf(' ');
           if (firstSpace !== -1) {
             const field = msg.substring(0, firstSpace);
-            const detail = msg.substring(firstSpace + 1);
             if (!errorsMap[field]) {
               errorsMap[field] = [];
             }

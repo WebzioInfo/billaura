@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -12,9 +13,9 @@ import {
   Query,
 } from "@nestjs/common";
 import { HrService } from "./hr.service";
-import { CreateEmployeeDto } from "./dto/employee.dto";
-import { RecordAttendanceDto, BulkRecordAttendanceDto } from "./dto/attendance.dto";
-import { GenerateSalarySlipDto, GenerateBulkPayrollDto, PaySalarySlipDto, UpdateSalarySlipDto } from "./dto/payroll.dto";
+import { CreateEmployeeDto, UpdateEmployeeDto } from "./dto/employee.dto";
+import { RecordAttendanceDto } from "./dto/attendance.dto";
+import { GenerateBulkPayrollDto, PaySalarySlipDto, UpdateSalarySlipDto } from "./dto/payroll.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 
@@ -49,7 +50,8 @@ export class HrController {
   }
 
   @Put("employees/:id")
-  async updateEmployee(@Param("id") id: string, @Body() dto: CreateEmployeeDto) {
+  @Patch("employees/:id")
+  async updateEmployee(@Param("id") id: string, @Body() dto: UpdateEmployeeDto) {
     return this.hrService.updateEmployee(id, dto);
   }
 

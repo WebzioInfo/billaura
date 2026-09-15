@@ -83,6 +83,7 @@ const NotificationsCenter = lazy(() => import('../features/common/NotificationsC
 const GlobalSearch = lazy(() => import('../features/common/GlobalSearch').then(m => ({ default: m.GlobalSearch })));
 const CashFlowDashboard = lazy(() => import('../features/reports/CashFlowDashboard').then(m => ({ default: m.CashFlowDashboard })));
 const ReportView = lazy(() => import('../features/reports/ReportView').then(m => ({ default: m.ReportView })));
+const InvoiceConfiguration = lazy(() => import('../features/settings/InvoiceConfiguration').then(m => ({ default: m.InvoiceConfiguration })));
 
 // --- Onboarding & Auth Pages ---
 const Login = lazy(() => import('../features/auth/pages/Login').then(m => ({ default: m.Login })));
@@ -372,6 +373,7 @@ export const router = createBrowserRouter([
       { path: 'subscription', element: <Navigate to="/settings?tab=subscription" replace /> },
       { path: 'backup-restore', element: <Navigate to="/settings?tab=backup" replace /> },
       { path: 'settings/templates', element: <TemplatesList /> }, // We can make a list page later
+      { path: 'invoice-engine', element: <InvoiceConfiguration /> },
       { path: 'settings/templates/new', element: <TemplateBuilder /> },
       { path: 'settings/templates/:id', element: <TemplateBuilder /> },
       { path: 'help', element: <HelpCenterPortal /> },

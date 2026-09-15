@@ -39,6 +39,7 @@ import { DocumentTemplatesModule } from "./settings/document-templates/document-
 import { CommissionsModule } from './commissions/commissions.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { DocumentsModule } from './documents/documents.module';
+import { InvoiceConfigModule } from './settings/invoice-config/invoice-config.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { DocumentsModule } from './documents/documents.module';
     CommissionsModule,
     AuditLogsModule,
     DocumentsModule,
+    InvoiceConfigModule,
   ],
   providers: [
     {

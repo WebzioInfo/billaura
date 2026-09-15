@@ -96,6 +96,7 @@ export const ROUTES = {
     PERMISSIONS: '/permissions',
     TAXES: '/taxes',
     SEQUENCES: '/settings?tab=numbering',
+    INVOICE_ENGINE: '/invoice-engine',
     CURRENCIES: '/currencies',
     BACKUP: '/backup-restore',
     INTEGRATIONS: '/integrations',

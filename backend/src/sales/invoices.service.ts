@@ -8,14 +8,16 @@ import { GSTEngine } from '../common/utils/gst-engine.util';
 import type { Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
 import { CommissionsService } from '../commissions/commissions.service';
+import { SequenceService } from '../shared/sequence/sequence.service';
 
 @Injectable()
 export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accountingEngine: AccountingEngineService,
-    private readonly commissionsService: CommissionsService
-  ) {}
+    private readonly commissionsService: CommissionsService,
+    private readonly sequenceService: SequenceService
+  ) { }
 
   async findAll(query: PaginationQueryDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -29,11 +31,11 @@ export class InvoicesService {
       companyId,
       ...(query.search
         ? {
-            OR: [
-              { invoiceNo: { contains: query.search } },
-              { businessPartner: { name: { contains: query.search } } },
-            ],
-          }
+          OR: [
+            { invoiceNo: { contains: query.search } },
+            { businessPartner: { name: { contains: query.search } } },
+          ],
+        }
         : {}),
       ...((query as any).customerId ? { businessPartnerId: (query as any).customerId } : {}),
       ...((query as any).status ? { status: (query as any).status } : {}),
@@ -61,8 +63,8 @@ export class InvoicesService {
 
     const invoice = await this.prisma.invoice.findFirst({
       where: { id },
-      include: { 
-        businessPartner: true, 
+      include: {
+        businessPartner: true,
         items: { include: { product: true } },
         receiptAllocations: { include: { receipt: true } }
       },
@@ -81,114 +83,131 @@ export class InvoicesService {
       throw new ConflictException('Company context is required');
     }
 
+    const partnerId = (dto.businessPartnerId || dto.customerId) as string;
+    if (!partnerId) {
+      throw new BadRequestException('Customer / Business Partner ID is required');
+    }
+
     // Check customer exists
     const customer = await this.prisma.businessPartner.findFirst({
-      where: { id: dto.customerId, companyId },
+      where: { id: partnerId, companyId },
     });
     if (!customer) {
-      throw new NotFoundException(`Customer with ID ${dto.customerId} not found`);
+      throw new NotFoundException(`Customer with ID ${partnerId} not found`);
     }
 
     const execute = async (tx: Prisma.TransactionClient) => {
-      let invoiceNo = dto.invoiceNo;
-      if (invoiceNo) {
-        // Validate uniqueness
+      const docType = (dto.documentType || dto.invoiceType || 'TAX_INVOICE') as any;
+
+      // 1. Concurrency-Safe Document Sequence Allocation
+      let invoiceNo = dto.documentNo || dto.invoiceNo;
+      if (!invoiceNo) {
+        invoiceNo = await this.sequenceService.generateUniversalSequence(
+          companyId,
+          docType,
+          { seriesId: dto.numberingSeriesId },
+          tx
+        );
+      } else {
+        // Validate uniqueness if manually provided
         const existing = await tx.invoice.findFirst({
           where: { companyId, invoiceNo, deletedAt: null },
         });
         if (existing) {
-          throw new BadRequestException('Invoice number already exists');
+          throw new BadRequestException(`Document number "${invoiceNo}" already exists`);
         }
-
-        // If user accepted/matched the next auto sequence number, increment the sequence to keep it synchronized
-        let sequence = await tx.documentSequence.findFirst({
-          where: { companyId, documentType: 'INVOICE' },
-        });
-        if (!sequence) {
-          sequence = await tx.documentSequence.create({
-            data: { companyId, documentType: 'INVOICE', currentNumber: 0 },
-          });
-        }
-        const nextNumber = sequence.currentNumber + 1;
-        const expectedAuto = `INV-${String(nextNumber).padStart(5, '0')}`;
-        if (invoiceNo === expectedAuto) {
-          await tx.documentSequence.update({
-            where: { id: sequence.id },
-            data: { currentNumber: nextNumber },
-          });
-        }
-      } else {
-        // 1. Generate invoice number using DocumentSequence
-        let sequence = await tx.documentSequence.findFirst({
-          where: { companyId, documentType: 'INVOICE' },
-        });
-
-        if (!sequence) {
-          sequence = await tx.documentSequence.create({
-            data: {
-              companyId,
-              documentType: 'INVOICE',
-              currentNumber: 0,
-            },
-          });
-        }
-
-        const nextNumber = sequence.currentNumber + 1;
-        await tx.documentSequence.update({
-          where: { id: sequence.id },
-          data: { currentNumber: nextNumber },
-        });
-
-        invoiceNo = `INV-${String(nextNumber).padStart(5, '0')}`;
       }
 
-      // Fetch company profile to verify placeOfSupply relative to companyState for GST routing
+      // 2. Fetch category & tax treatment configurations
+      let categorySnapshot = null;
+      let taxSnapshot = null;
+      let overrideTaxPref = dto.taxPreference;
+
+      if (dto.invoiceCategoryId) {
+        const category = await tx.invoiceCategory.findUnique({
+          where: { id: dto.invoiceCategoryId },
+          include: { taxTreatment: true, numberingSeries: true },
+        });
+        if (category) {
+          categorySnapshot = category;
+          if (category.taxTreatment?.treatmentType && !overrideTaxPref) {
+            overrideTaxPref = category.taxTreatment.treatmentType;
+          }
+        }
+      }
+
+      if (dto.taxTreatmentId) {
+        const taxTreatment = await tx.taxTreatment.findUnique({
+          where: { id: dto.taxTreatmentId },
+        });
+        if (taxTreatment) {
+          taxSnapshot = taxTreatment;
+          overrideTaxPref = taxTreatment.treatmentType;
+        }
+      }
+
+      // Fetch company profile for GST state routing
       const company = await tx.company.findUnique({
         where: { id: companyId },
       });
       const companyState = company?.state?.trim().toLowerCase() || '';
-      const supplyState = dto.placeOfSupply?.trim().toLowerCase() || '';
+      const supplyState = dto.placeOfSupply?.trim().toLowerCase() || companyState;
       const isInterState = supplyState && companyState && supplyState !== companyState;
 
-      const customer = await tx.businessPartner.findUnique({ where: { id: dto.customerId } });
       const bpTaxPreference = customer?.taxPreference || 'TAXABLE';
 
-      // 2. Fetch products and calculate totals
+      // Document Type Policy: Define capabilities
+      const isNonPosting = ['QUOTATION', 'ESTIMATE', 'PROFORMA_INVOICE', 'DELIVERY_CHALLAN'].includes(docType);
+      const isReceipt = ['FEE_RECEIPT', 'PAYMENT_RECEIPT', 'OTHER_RECEIPT'].includes(docType);
+      const isCreditNote = docType === 'CREDIT_NOTE';
+
+      // 3. Process items and calculate authoritative totals via GSTEngine
       let subTotal = 0;
       let taxTotal = 0;
       let totalCgst = 0;
       let totalSgst = 0;
       let totalIgst = 0;
-      let totalCogs = 0;
+      let totalCess = 0;
       const itemsToCreate = [];
 
-      for (const item of dto.items) {
-        const product = await tx.product.findFirst({
-          where: { id: item.productId, companyId },
-        });
-
-        if (!product) {
-          throw new NotFoundException(`Product with ID ${item.productId} not found`);
+      for (const item of dto.items || []) {
+        let product: any = null;
+        if (item.productId) {
+          product = await tx.product.findFirst({
+            where: { id: item.productId, companyId },
+          });
         }
 
-        const rate = Number(item.rate);
-        const qty = Number(item.qty);
-        const lineTotal = rate * qty;
-        
-        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.gstRate || 18);
-        const nonGstTypes = ['BILL_OF_SUPPLY', 'EXEMPT_SUPPLY', 'NIL_RATED_INVOICE', 'EXPORT_INVOICE'];
-        
-        let activeTaxPref = bpTaxPreference;
-        if (nonGstTypes.includes(dto.invoiceType as string)) {
-          activeTaxPref = 'NON_GST';
+        const qty = Number(item.qty || 1);
+        const rate = Number(item.rate || 0);
+        const lineTotal = qty * rate;
+
+        // Resolve item-level tax preference
+        let lineTaxPref = item.taxPreference || overrideTaxPref || product?.taxPreference || bpTaxPreference;
+        if (docType === 'BILL_OF_SUPPLY') {
+          lineTaxPref = 'EXEMPT';
+        } else if (docType === 'FEE_RECEIPT' && !item.taxPreference && !overrideTaxPref) {
+          lineTaxPref = 'NOT_APPLICABLE';
         }
+
+        const taxRate =
+          item.taxPercent !== undefined
+            ? Number(item.taxPercent)
+            : product?.gstRate !== undefined
+            ? Number(product.gstRate)
+            : lineTaxPref === 'NOT_APPLICABLE' || lineTaxPref === 'EXEMPT' || lineTaxPref === 'NON_GST'
+            ? 0
+            : 18;
+
+        const cessRate = item.cessPercent !== undefined ? Number(item.cessPercent) : 0;
 
         const gstResult = GSTEngine.calculate({
-           taxableAmount: lineTotal,
-           gstRate: taxRate,
-           taxPreference: activeTaxPref as any,
-           companyStateCode: companyState,
-           customerStateCode: supplyState
+          taxableAmount: lineTotal,
+          gstRate: taxRate,
+          cessRate,
+          taxPreference: lineTaxPref as any,
+          companyStateCode: companyState,
+          customerStateCode: supplyState,
         });
 
         subTotal += gstResult.taxableAmount;
@@ -196,14 +215,11 @@ export class InvoicesService {
         totalCgst += gstResult.cgstAmount;
         totalSgst += gstResult.sgstAmount;
         totalIgst += gstResult.igstAmount;
-
-        if (product.itemType === 'FINISHED_GOOD' || product.itemType === 'RAW_MATERIAL') {
-          totalCogs += (Number(product.purchasePrice || 0) * qty);
-        }
+        totalCess += gstResult.cessAmount;
 
         itemsToCreate.push({
-          productId: product.id,
-          description: item.description || product.name,
+          productId: product?.id || null,
+          description: item.description || product?.name || 'Item',
           qty,
           rate,
           taxPercent: taxRate,
@@ -212,56 +228,70 @@ export class InvoicesService {
           cgstAmount: gstResult.cgstAmount,
           sgstAmount: gstResult.sgstAmount,
           igstAmount: gstResult.igstAmount,
+          cessAmount: gstResult.cessAmount,
         });
       }
 
-      const grandTotal = subTotal + taxTotal;
+      const grandTotal = Number((subTotal + taxTotal).toFixed(2));
+      const amountPaid = Number(dto.amountPaid || (isReceipt ? grandTotal : 0));
 
-      // Determine Enums
-      const invoiceTypeEnum = (dto.invoiceType as any) || 'TAX_INVOICE';
-      
-      // Evaluate Commission if requested
+      // 4. Commission evaluation if requested
       let commissionRecordId: string | null = null;
-      if (dto.referralSourceType) {
+      if (dto.referralSourceType && !isNonPosting) {
         const commission = await this.commissionsService.evaluateCommission({
           companyId,
           referenceType: 'INVOICE',
-          referenceId: invoiceNo,
+          referenceId: invoiceNo || '',
           referralSourceType: dto.referralSourceType as any,
           employeeId: dto.employeeId,
           businessPartnerId: dto.referralPartnerId,
-          baseAmount: subTotal
+          baseAmount: subTotal,
         });
         if (commission) {
           commissionRecordId = commission.id;
         }
       }
 
-      // 3. Create Invoice record
+      // 5. Create Document record in Invoice table
       const invoice = await tx.invoice.create({
         data: {
           companyId,
-          businessPartnerId: (dto.businessPartnerId || dto.customerId) as string,
+          businessPartnerId: partnerId,
           commissionRecordId,
-          invoiceNo,
-          invoiceType: invoiceTypeEnum,
-          placeOfSupply: dto.placeOfSupply,
+          invoiceNo: invoiceNo || '',
+          invoiceType: docType,
+          placeOfSupply: dto.placeOfSupply || company?.state || '',
           date: new Date(dto.date),
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-          status: (dto as any).status || 'SENT', // Use status from DTO or default to SENT
-          subTotal,
-          taxTotal,
+          status: (dto.status as any) || (isReceipt ? 'PAID' : isNonPosting ? 'DRAFT' : 'SENT'),
+          subTotal: Number(subTotal.toFixed(2)),
+          taxTotal: Number(taxTotal.toFixed(2)),
           grandTotal,
-          amountPaid: 0,
-          cgstAmount: totalCgst,
-          sgstAmount: totalSgst,
-          igstAmount: totalIgst,
-          cessAmount: 0,
-          totalTaxAmount: taxTotal,
+          amountPaid,
+          cgstAmount: Number(totalCgst.toFixed(2)),
+          sgstAmount: Number(totalSgst.toFixed(2)),
+          igstAmount: Number(totalIgst.toFixed(2)),
+          cessAmount: Number(totalCess.toFixed(2)),
+          totalTaxAmount: Number(taxTotal.toFixed(2)),
           gstBreakup: {
             notes: dto.notes,
             termsConditions: dto.termsConditions,
+            documentType: docType,
+            paymentMode: dto.paymentMode,
+            paymentReference: dto.paymentReference,
+            sourceDocumentId: dto.sourceDocumentId,
+            sourceDocumentType: dto.sourceDocumentType,
           },
+          invoiceCategoryId: dto.invoiceCategoryId || null,
+          taxTreatmentId: dto.taxTreatmentId || null,
+          numberingSeriesId: dto.numberingSeriesId || null,
+          taxExemptionReason: dto.taxExemptionReason || null,
+          categorySnapshot: categorySnapshot as unknown as Prisma.InputJsonValue,
+          taxSnapshot: (taxSnapshot || {
+            taxPreference: overrideTaxPref || bpTaxPreference,
+            subTotal,
+            taxTotal,
+          }) as unknown as Prisma.InputJsonValue,
           items: {
             create: itemsToCreate,
           },
@@ -269,100 +299,87 @@ export class InvoicesService {
         include: { items: true },
       });
 
-      // 4. Update customer outstanding balance
-      if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
-        if (customer) {
+      // 6. Execute Accounting Policy per Document Type
+      if (!isNonPosting) {
+        const netReceivableDelta = isCreditNote ? -grandTotal : isReceipt ? grandTotal - amountPaid : grandTotal;
+
+        // A. Update customer outstanding balance
+        if (customer && netReceivableDelta !== 0) {
           await tx.businessPartner.update({
-            where: { id: dto.customerId },
+            where: { id: partnerId },
             data: {
               receivableBalance: {
-                increment: grandTotal,
+                increment: netReceivableDelta,
               },
             },
           });
         }
-      }
 
-      // Update commission record with actual invoice ID
-      if (commissionRecordId) {
-        await tx.commissionRecord.update({
-          where: { id: commissionRecordId },
-          data: { referenceId: invoice.id }
-        });
-      }
-
-      // 5. Create Customer Statement record
-      if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
+        // B. Create Customer Statement record
         await tx.customerStatement.create({
           data: {
             companyId,
-            businessPartnerId: (dto.businessPartnerId || dto.customerId) as string,
+            businessPartnerId: partnerId,
             date: new Date(dto.date),
-            type: 'INVOICE',
-            reference: invoiceNo,
-            debit: grandTotal,
-            credit: 0,
-            balance: Number(customer?.receivableBalance || 0) + grandTotal,
+            type: docType,
+            reference: invoiceNo || '',
+            debit: isCreditNote ? 0 : grandTotal,
+            credit: isCreditNote ? grandTotal : amountPaid,
+            balance: Number(customer?.receivableBalance || 0) + netReceivableDelta,
           },
         });
-      }
 
-      // 6. Reduce stock quantities and create movement logs
-      if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
+        // C. Update stock ledger if physical inventory items exist
         for (const item of itemsToCreate) {
-          // Find default warehouse stock
-          const defaultWh = await tx.warehouse.findFirst({
-            where: { companyId, isDefault: true },
-          });
-
-          if (defaultWh) {
-            const stock = await tx.stock.findFirst({
-              where: { companyId, productId: item.productId, warehouseId: defaultWh.id },
+          if (item.productId) {
+            const defaultWh = await tx.warehouse.findFirst({
+              where: { companyId, isDefault: true },
             });
 
-            const currentQty = stock ? Number(stock.quantity) : 0;
-            const newQty = currentQty - item.qty;
-
-            if (stock) {
-              await tx.stock.update({
-                where: { id: stock.id },
-                data: {
-                  quantity: newQty,
-                  availableQuantity: newQty,
-                },
+            if (defaultWh) {
+              const stock = await tx.stock.findFirst({
+                where: { companyId, productId: item.productId, warehouseId: defaultWh.id },
               });
-            } else {
-              await tx.stock.create({
+
+              const currentQty = stock ? Number(stock.quantity) : 0;
+              const qtyDelta = isCreditNote ? item.qty : -item.qty;
+              const newQty = currentQty + qtyDelta;
+
+              if (stock) {
+                await tx.stock.update({
+                  where: { id: stock.id },
+                  data: { quantity: newQty, availableQuantity: newQty },
+                });
+              } else {
+                await tx.stock.create({
+                  data: {
+                    companyId,
+                    productId: item.productId,
+                    warehouseId: defaultWh.id,
+                    quantity: newQty,
+                    availableQuantity: newQty,
+                  },
+                });
+              }
+
+              await tx.stockLedger.create({
                 data: {
                   companyId,
                   productId: item.productId,
-                  warehouseId: defaultWh.id,
-                  quantity: newQty,
-                  availableQuantity: newQty,
+                  type: isCreditNote ? 'RETURN' : 'SALE',
+                  quantityBefore: currentQty,
+                  quantityChange: qtyDelta,
+                  quantityAfter: newQty,
+                  notes: `Issued via ${docType} ${invoiceNo}`,
+                  referenceId: invoice.id,
+                  referenceType: 'INVOICE',
                 },
               });
             }
-
-            // Stock ledger entry
-            await tx.stockLedger.create({
-              data: {
-                companyId,
-                productId: item.productId,
-                type: 'SALE',
-                quantityBefore: currentQty,
-                quantityChange: -item.qty,
-                quantityAfter: newQty,
-                notes: `Issued via Invoice ${invoiceNo}`,
-                referenceId: invoice.id,
-                referenceType: 'INVOICE'
-              },
-            });
           }
         }
-      }
 
-      // 7. Post automatic journal entry to General Ledger
-      if (invoiceTypeEnum !== 'PROFORMA_INVOICE') {
+        // D. Post Journal Entry to General Ledger
         let arAccount = await tx.account.findFirst({
           where: { companyId, name: 'Accounts Receivable' },
         });
@@ -372,16 +389,24 @@ export class InvoicesService {
           });
         }
 
-        let salesAccount = await tx.account.findFirst({
-          where: { companyId, name: 'Sales Revenue' },
+        const defaultRevenueName = docType === 'FEE_RECEIPT' ? 'Fee Revenue' : 'Sales Revenue';
+        let revenueAccount = await tx.account.findFirst({
+          where: { companyId, name: defaultRevenueName },
         });
-        if (!salesAccount) {
-          salesAccount = await tx.account.create({
-            data: { companyId, name: 'Sales Revenue', category: 'REVENUE', balance: 0 },
+
+        if (categorySnapshot?.defaultSalesAccountId) {
+          const catAccount = await tx.account.findUnique({
+            where: { id: categorySnapshot.defaultSalesAccountId },
+          });
+          if (catAccount) revenueAccount = catAccount;
+        }
+
+        if (!revenueAccount) {
+          revenueAccount = await tx.account.create({
+            data: { companyId, name: defaultRevenueName, category: 'REVENUE', balance: 0 },
           });
         }
 
-        // Find or create Tax Accounts
         const getTaxAccount = async (name: string) => {
           let acc = await tx.account.findFirst({ where: { companyId, name } });
           if (!acc) {
@@ -396,57 +421,54 @@ export class InvoicesService {
         const sgstAccount = isInterState ? null : await getTaxAccount('Output SGST');
         const igstAccount = isInterState ? await getTaxAccount('Output IGST') : null;
 
-        const journalLines = [
-          { accountId: arAccount.id, debit: grandTotal, credit: 0 },
-          { accountId: salesAccount.id, debit: 0, credit: subTotal },
-        ];
+        const journalLines = isCreditNote
+          ? [
+              { accountId: revenueAccount.id, debit: subTotal, credit: 0 },
+              { accountId: arAccount.id, debit: 0, credit: grandTotal },
+            ]
+          : [
+              { accountId: arAccount.id, debit: grandTotal, credit: 0 },
+              { accountId: revenueAccount.id, debit: 0, credit: subTotal },
+            ];
 
-        const cgstAmt = totalCgst;
-        const sgstAmt = totalSgst;
-        const igstAmt = totalIgst;
-
-        if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
-          journalLines.push({ accountId: cgstAccount.id, debit: 0, credit: cgstAmt });
-          journalLines.push({ accountId: sgstAccount.id, debit: 0, credit: sgstAmt });
+        if (!isInterState && totalCgst > 0 && cgstAccount && sgstAccount) {
+          journalLines.push({
+            accountId: cgstAccount.id,
+            debit: isCreditNote ? totalCgst : 0,
+            credit: isCreditNote ? 0 : totalCgst,
+          });
+          journalLines.push({
+            accountId: sgstAccount.id,
+            debit: isCreditNote ? totalSgst : 0,
+            credit: isCreditNote ? 0 : totalSgst,
+          });
         }
-        if (isInterState && igstAmt > 0 && igstAccount) {
-          journalLines.push({ accountId: igstAccount.id, debit: 0, credit: igstAmt });
+        if (isInterState && totalIgst > 0 && igstAccount) {
+          journalLines.push({
+            accountId: igstAccount.id,
+            debit: isCreditNote ? totalIgst : 0,
+            credit: isCreditNote ? 0 : totalIgst,
+          });
         }
 
-        await this.accountingEngine.postTransaction({
-          companyId,
-          date: new Date(dto.date),
-          reference: invoiceNo,
-          description: `Automatic invoice posting ${invoiceNo}`,
-          lines: journalLines,
-        }, tx);
-
-        // 8. Post automatic COGS journal entry
-        if (totalCogs > 0) {
-          let cogsAccount = await tx.account.findFirst({ where: { companyId, name: 'Cost of Goods Sold' } });
-          if (!cogsAccount) {
-            cogsAccount = await tx.account.create({
-              data: { companyId, name: 'Cost of Goods Sold', category: 'EXPENSE', subCategory: 'COGS', balance: 0 },
-            });
-          }
-          let invAccount = await tx.account.findFirst({ where: { companyId, name: 'Inventory' } });
-          if (!invAccount) {
-            invAccount = await tx.account.create({
-              data: { companyId, name: 'Inventory', category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
-            });
-          }
-
-          await this.accountingEngine.postTransaction({
+        await this.accountingEngine.postTransaction(
+          {
             companyId,
             date: new Date(dto.date),
             reference: invoiceNo,
-            description: `Automatic COGS posting ${invoiceNo}`,
-            lines: [
-              { accountId: cogsAccount.id, debit: totalCogs, credit: 0 },
-              { accountId: invAccount.id, debit: 0, credit: totalCogs },
-            ],
-          }, tx);
-        }
+            description: `Automatic ${docType} posting ${invoiceNo}`,
+            lines: journalLines,
+          },
+          tx
+        );
+      }
+
+      // Update commission record with actual invoice ID
+      if (commissionRecordId) {
+        await tx.commissionRecord.update({
+          where: { id: commissionRecordId },
+          data: { referenceId: invoice.id },
+        });
       }
 
       return invoice;
@@ -500,7 +522,7 @@ export class InvoicesService {
         if (stock) {
           const currentQty = Number(stock.quantity);
           const newQty = currentQty + changeQty;
-          
+
           await tx.stock.update({
             where: { id: stock.id },
             data: { quantity: newQty, availableQuantity: newQty },
@@ -536,25 +558,25 @@ export class InvoicesService {
       throw new ConflictException('Company context is required');
     }
 
-    let prefix = 'INV';
-    let docType = 'INVOICE';
+    const docType = (type || 'TAX_INVOICE').toUpperCase();
+    const typePrefixes: Record<string, string> = {
+      TAX_INVOICE: 'INV',
+      INVOICE: 'INV',
+      BILL_OF_SUPPLY: 'BOS',
+      RETAIL_INVOICE: 'RET',
+      PROFORMA: 'PI',
+      PROFORMA_INVOICE: 'PI',
+      QUOTATION: 'QT',
+      ESTIMATE: 'EST',
+      CREDIT_NOTE: 'CN',
+      DEBIT_NOTE: 'DN',
+      DELIVERY_CHALLAN: 'DC',
+      FEE_RECEIPT: 'FEE',
+      PAYMENT_RECEIPT: 'REC',
+      OTHER_RECEIPT: 'OREC',
+    };
 
-    if (type === 'PROFORMA') {
-      prefix = 'PF';
-      docType = 'PROFORMA_INVOICE';
-    } else if (type === 'QUOTATION') {
-      prefix = 'QT';
-      docType = 'QUOTATION';
-    } else if (type === 'CREDIT_NOTE') {
-      prefix = 'CN';
-      docType = 'CREDIT_NOTE';
-    } else if (type === 'DEBIT_NOTE') {
-      prefix = 'DN';
-      docType = 'DEBIT_NOTE';
-    } else if (type === 'DELIVERY_CHALLAN') {
-      prefix = 'DC';
-      docType = 'DELIVERY_CHALLAN';
-    }
+    const prefix = typePrefixes[docType] || docType.substring(0, 3);
 
     const sequence = await this.prisma.documentSequence.findFirst({
       where: { companyId, documentType: docType as any },
@@ -565,6 +587,6 @@ export class InvoicesService {
     }
 
     const nextNum = sequence.currentNumber + 1;
-    return { nextNumber: `${prefix}-${String(nextNum).padStart(5, '0')}` };
+    return { nextNumber: `${prefix}-${String(nextNum).padStart(sequence.padding || 5, '0')}` };
   }
 }

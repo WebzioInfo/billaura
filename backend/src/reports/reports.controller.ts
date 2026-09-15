@@ -102,4 +102,31 @@ export class ReportsController {
     const asOf = asOfDate ? new Date(asOfDate) : new Date();
     return this.reportsService.generateCustomerAgeing(companyId, asOf);
   }
+
+  @Get("day-book")
+  async getDayBook(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new BadRequestException("Company context is required");
+
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.reportsService.generateDayBook(companyId, start, end);
+  }
+
+  @Get("general-ledger")
+  async getGeneralLedger(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+    @Query("accountId") accountId?: string,
+  ) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new BadRequestException("Company context is required");
+
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.reportsService.generateGeneralLedger(companyId, start, end, accountId);
+  }
 }
