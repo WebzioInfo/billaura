@@ -2,16 +2,10 @@
   "version": 2,
   "functions": {
     "backend/api/index.js": {
-      "includeFiles": [
-        "backend/dist/**",
-        "backend/prisma/**"
-      ]
+      "includeFiles": "{backend/dist/**,backend/prisma/**}"
     },
     "api/index.js": {
-      "includeFiles": [
-        "dist/**",
-        "prisma/**"
-      ]
+      "includeFiles": "{dist/**,prisma/**}"
     }
   },
   "headers": [
