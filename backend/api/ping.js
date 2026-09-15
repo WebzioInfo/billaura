@@ -44,6 +44,11 @@ module.exports = async (req, res) => {
   } catch (e) {
     report.files['dist'] = 'ERROR: ' + e.message;
   }
+  try {
+    report.files['dist/src'] = fs.readdirSync(path.resolve(distPath, 'src'));
+  } catch (e) {
+    report.files['dist/src'] = 'ERROR: ' + e.message;
+  }
 
   // Test individual requires
   const packagesToTest = [
@@ -69,9 +74,14 @@ module.exports = async (req, res) => {
 
   // Test loading app.module
   const candidateAppModules = [
+    path.join(distPath, 'src/app.module.js'),
     path.join(distPath, 'app.module.js'),
+    path.resolve(process.cwd(), 'dist/src/app.module.js'),
     path.resolve(process.cwd(), 'dist/app.module.js'),
-    path.resolve(process.cwd(), 'backend/dist/app.module.js')
+    path.resolve(process.cwd(), 'backend/dist/src/app.module.js'),
+    path.resolve(process.cwd(), 'backend/dist/app.module.js'),
+    path.resolve(process.cwd(), 'apps/backend/dist/src/app.module.js'),
+    path.resolve(process.cwd(), 'apps/backend/dist/app.module.js')
   ];
 
   for (const modPath of candidateAppModules) {

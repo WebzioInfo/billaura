@@ -54,10 +54,15 @@ async function bootstrap() {
   log(`Framework modules loaded (${(performance.now() - bootstrapStart).toFixed(2)} ms)`);
 
   const candidateBases = [
+    path.resolve(__dirname, '../dist/src'),
     path.resolve(__dirname, '../dist'),
+    path.resolve(__dirname, '../../dist/src'),
     path.resolve(__dirname, '../../dist'),
+    path.resolve(process.cwd(), 'dist/src'),
     path.resolve(process.cwd(), 'dist'),
+    path.resolve(process.cwd(), 'backend/dist/src'),
     path.resolve(process.cwd(), 'backend/dist'),
+    path.resolve(process.cwd(), 'apps/backend/dist/src'),
     path.resolve(process.cwd(), 'apps/backend/dist'),
   ];
 
@@ -85,15 +90,19 @@ async function bootstrap() {
   }
 
   if (!AppModule) {
-    try {
-      AppModule = require('../dist/app.module').AppModule;
-      AllExceptionsFilter = require('../dist/common/filters/all-exceptions.filter').AllExceptionsFilter;
-      ResponseEnvelopeInterceptor = require('../dist/common/interceptors/response-envelope.interceptor').ResponseEnvelopeInterceptor;
-      RequestContextInterceptor = require('../dist/common/interceptors/request-context.interceptor').RequestContextInterceptor;
-      AppLogger = require('../dist/logging/app-logger.service').AppLogger;
-      corsOptions = require('../dist/config/cors.config').corsOptions;
-    } catch (e) {
-      loadErrors.push({ fallback: '../dist/app.module', error: e.message, stack: e.stack });
+    const fallbackBases = ['../dist/src', '../dist'];
+    for (const fb of fallbackBases) {
+      try {
+        AppModule = require(`${fb}/app.module`).AppModule;
+        AllExceptionsFilter = require(`${fb}/common/filters/all-exceptions.filter`).AllExceptionsFilter;
+        ResponseEnvelopeInterceptor = require(`${fb}/common/interceptors/response-envelope.interceptor`).ResponseEnvelopeInterceptor;
+        RequestContextInterceptor = require(`${fb}/common/interceptors/request-context.interceptor`).RequestContextInterceptor;
+        AppLogger = require(`${fb}/logging/app-logger.service`).AppLogger;
+        corsOptions = require(`${fb}/config/cors.config`).corsOptions;
+        if (AppModule) break;
+      } catch (e) {
+        loadErrors.push({ fallback: `${fb}/app.module`, error: e.message, stack: e.stack });
+      }
     }
   }
 
@@ -101,6 +110,12 @@ async function bootstrap() {
     let debug = `cwd: ${process.cwd()}, __dirname: ${__dirname}`;
     try {
       debug += ` | files in parent: ${fs.readdirSync(path.resolve(__dirname, '..')).join(',')}`;
+    } catch (_) {}
+    try {
+      const distDir = path.resolve(__dirname, '../dist');
+      if (fs.existsSync(distDir)) {
+        debug += ` | files in dist: ${fs.readdirSync(distDir).join(',')}`;
+      }
     } catch (_) {}
     throw new Error(`AppModule could not be loaded. (${debug}) Errors: ${JSON.stringify(loadErrors)}`);
   }
