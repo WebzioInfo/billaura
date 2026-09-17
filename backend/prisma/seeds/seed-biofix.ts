@@ -1065,8 +1065,8 @@ async function main() {
     });
 
     if (existingInv) {
-      await prisma.invoiceItem.deleteMany({ where: { invoiceId: existingInv.id } });
-      await prisma.invoice.delete({ where: { id: existingInv.id } });
+      // Zero-Data-Loss: Preserve historical invoice and items intact
+      continue;
     }
 
     const createdInv = await prisma.invoice.create({

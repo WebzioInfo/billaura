@@ -27,7 +27,7 @@ export const DeliveryNotesList = () => {
         description="Track goods dispatched to customers"
         primaryAction={
           <Button 
-            onClick={() => {}}
+            onClick={() => navigate('/delivery-notes/new')}
             className="flex items-center gap-2 font-bold px-5"
             variant="primary"
           >
@@ -43,7 +43,7 @@ export const DeliveryNotesList = () => {
           title="No delivery notes found"
           description="Create your first delivery note to track dispatches."
           actionLabel="New Delivery Note"
-          onActionClick={() => {}}
+          onActionClick={() => navigate('/delivery-notes/new')}
         />
       ) : (
         <Card>

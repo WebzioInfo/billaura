@@ -27,7 +27,7 @@ export const SalesOrdersList = () => {
         description="Manage your customer sales orders and fulfillments"
         primaryAction={
           <Button 
-            onClick={() => {}}
+            onClick={() => navigate('/sales-orders/new')}
             className="flex items-center gap-2 font-bold px-5"
             variant="primary"
           >
@@ -43,7 +43,7 @@ export const SalesOrdersList = () => {
           title="No sales orders found"
           description="Create your first sales order to track customer orders."
           actionLabel="New Sales Order"
-          onActionClick={() => {}}
+          onActionClick={() => navigate('/sales-orders/new')}
         />
       ) : (
         <Card>

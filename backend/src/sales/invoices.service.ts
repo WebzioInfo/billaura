@@ -332,6 +332,11 @@ export class InvoicesService {
         // C. Update stock ledger if physical inventory items exist
         for (const item of itemsToCreate) {
           if (item.productId) {
+            const prod = await tx.product.findUnique({ where: { id: item.productId } });
+            if (prod && (prod.isService || !prod.isInventoryItem || !prod.isTrackStock)) {
+              continue; // Services and non-inventory items strictly bypass stock ledgers & warehouse updates
+            }
+
             const defaultWh = await tx.warehouse.findFirst({
               where: { companyId, isDefault: true },
             });

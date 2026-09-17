@@ -27,7 +27,7 @@ export const GoodsReceiptsList = () => {
         description="Manage stock incoming from vendors"
         primaryAction={
           <Button 
-            onClick={() => {}}
+            onClick={() => navigate('/goods-receipts/new')}
             className="flex items-center gap-2 font-bold px-5"
             variant="primary"
           >
@@ -43,7 +43,7 @@ export const GoodsReceiptsList = () => {
           title="No goods receipts found"
           description="Create your first goods receipt to track incoming vendor stock."
           actionLabel="New Goods Receipt"
-          onActionClick={() => {}}
+          onActionClick={() => navigate('/goods-receipts/new')}
         />
       ) : (
         <Card>

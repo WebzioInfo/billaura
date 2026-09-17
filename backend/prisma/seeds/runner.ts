@@ -69,6 +69,12 @@ async function main() {
     console.log('[SEED RUNNER] Chart of Accounts templates verified.');
   }
 
+  if (seedType === 'biofix' || seedType === 'tenant' || seedType === 'all') {
+    console.log('[SEED RUNNER] Running Biofix Tenant Master Data Reconciliation (Zero-Data-Loss)...');
+    const { reconcileBiofixData } = require('./reconcile-biofix');
+    await reconcileBiofixData();
+  }
+
   console.log(`[SEED RUNNER] Operation ${operationName} completed successfully without data loss.`);
 }
 

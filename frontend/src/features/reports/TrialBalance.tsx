@@ -17,6 +17,25 @@ export const TrialBalance = () => {
     }
   });
 
+  const handleExport = () => {
+    if (!data.length) return;
+    const headers = ['Account Name', 'Debit', 'Credit'];
+    const rows = data.map((item: any) => [
+      `"${(item.accountName || '').replace(/"/g, '""')}"`,
+      Number(item.debit || 0).toFixed(2),
+      Number(item.credit || 0).toFixed(2),
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `trial_balance_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <PageContainer maxWidth="7xl">
       <PageHeader
@@ -24,7 +43,8 @@ export const TrialBalance = () => {
         description="Real-time trial balance reporting"
         primaryAction={
           <Button 
-            onClick={() => {}}
+            onClick={handleExport}
+            disabled={!data.length || loading}
             className="flex items-center gap-2 font-bold px-5"
             variant="outline"
           >

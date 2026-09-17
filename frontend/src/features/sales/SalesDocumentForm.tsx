@@ -95,7 +95,7 @@ type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
 import { useQuery } from '@tanstack/react-query';
 
-export type SalesDocumentType = 'INVOICE' | 'BILL_OF_SUPPLY' | 'EXEMPT_SUPPLY' | 'NIL_RATED_INVOICE' | 'EXPORT_INVOICE' | 'SEZ_INVOICE' | 'PROFORMA' | 'QUOTATION' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'DELIVERY_CHALLAN';
+export type SalesDocumentType = 'INVOICE' | 'BILL_OF_SUPPLY' | 'EXEMPT_SUPPLY' | 'NIL_RATED_INVOICE' | 'EXPORT_INVOICE' | 'SEZ_INVOICE' | 'PROFORMA' | 'QUOTATION' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'DELIVERY_CHALLAN' | 'SALES_ORDER';
 
 interface SalesDocumentFormProps {
   initialDocType?: SalesDocumentType;
@@ -560,6 +560,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     <option value="CREDIT_NOTE">Credit Note</option>
                     <option value="DEBIT_NOTE">Debit Note</option>
                     <option value="DELIVERY_CHALLAN">Delivery Challan</option>
+                    <option value="SALES_ORDER">Sales Order</option>
                   </select>
                 </div>
                 
