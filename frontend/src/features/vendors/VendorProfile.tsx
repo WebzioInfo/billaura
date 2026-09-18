@@ -127,7 +127,7 @@ export const VendorProfile = () => {
     <PageContainer maxWidth="6xl">
       <div className="mb-4">
         <Breadcrumb items={[
-          { label: 'Vendors', href: '/app/vendors' },
+          { label: 'Vendors', href: '/vendors' },
           { label: displayName }
         ]} />
       </div>

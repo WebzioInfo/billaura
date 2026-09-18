@@ -127,6 +127,18 @@ export function WorkspaceTabs() {
 
   const handleClose = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    if (activeTabId === id) {
+      const tabIndex = tabs.findIndex(t => t.id === id);
+      const remainingTabs = tabs.filter(t => t.id !== id);
+      if (remainingTabs.length > 0) {
+        const nextIndex = Math.max(0, tabIndex - 1);
+        const nextTab = remainingTabs[nextIndex];
+        setActiveTab(nextTab.id);
+        navigate(nextTab.path);
+      } else {
+        navigate('/dashboard');
+      }
+    }
     closeTab(id);
   };
 

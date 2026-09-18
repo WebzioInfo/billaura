@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { useSessionStore } from '../features/auth/stores/sessionStore';
 import { authService } from '../core/api';
-import { Ribbon } from '@/shared/components/workspace/Ribbon';
 import { AiCopilot } from '@/shared/components/workspace/AiCopilot';
 
 export default function PlatformLayout() {

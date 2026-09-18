@@ -99,7 +99,7 @@ export const EmployeesList = () => {
             <Card 
               key={emp.id} 
               className="overflow-hidden hover:shadow-premium transition-all duration-300 cursor-pointer group border-border/50 hover:border-accent/30"
-              onClick={() => navigate(`/app/employees/${emp.id}`)}
+              onClick={() => navigate(`/employees/${emp.id}`)}
             >
               <div className="p-5 flex flex-col items-center text-center relative">
                 {/* Status Badge */}

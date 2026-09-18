@@ -14,7 +14,7 @@ import {
 } from "@nestjs/common";
 import { Response } from 'express';
 import { InvoicesService } from "./invoices.service";
-import { CreateInvoiceDto, InvoiceQueryDto } from "./dto/invoice.dto";
+import { CreateInvoiceDto, InvoiceQueryDto, BulkDownloadInvoicesDto } from "./dto/invoice.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 import { PdfEngineService } from "./pdf-engine.service";
@@ -30,6 +30,27 @@ export class InvoicesController {
   @Get()
   async findAll(@Query() query: InvoiceQueryDto) {
     return this.invoicesService.findAll(query);
+  }
+
+  @Get("summary")
+  async getSummary(@Query() query: InvoiceQueryDto) {
+    return this.invoicesService.getSummary(query);
+  }
+
+  @Get("export")
+  async exportCsv(@Query() query: InvoiceQueryDto, @Res() res: Response) {
+    const csvContent = await this.invoicesService.getExportData(query);
+    const today = new Date().toISOString().split('T')[0];
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="BillAura_Invoices_${today}.csv"`,
+    });
+    res.end(csvContent);
+  }
+
+  @Post("bulk-pdf")
+  async bulkDownloadPdf(@Body() dto: BulkDownloadInvoicesDto, @Req() req: any, @Res() res: Response) {
+    await this.invoicesService.bulkDownloadPdf(dto.invoiceIds, req.user.companyId, res);
   }
 
   @Get("next-number")

@@ -139,7 +139,7 @@ export const PayrollDashboard: React.FC = () => {
   }, [salarySlips, searchQuery, statusFilter, departmentFilter, sortField, sortOrder]);
 
   const handleOpenGenerate = () => {
-    window.location.href = '/app/hr/payroll/generate';
+    navigate('/hr/payroll/generate');
   };
 
   const handleApprove = async (id: string, e?: React.MouseEvent) => {

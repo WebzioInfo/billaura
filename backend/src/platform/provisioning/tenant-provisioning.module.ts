@@ -7,9 +7,7 @@ import { ChartOfAccountsSeederService } from './seeders/chart-of-accounts-seeder
 import { UserProvisioningService } from './seeders/user-provisioning.service';
 // Assuming PrismaModule is exported from database module
 // import { PrismaModule } from '../../database/prisma.module'; 
-// Wait, the project might export PrismaService globally or from a specific module.
-// In this project it seems PrismaService is in src/prisma.service.ts, so we'll just provide it directly or assume it's global.
-import { PrismaService } from '../../prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 
 @Module({
   controllers: [TenantProvisioningController],

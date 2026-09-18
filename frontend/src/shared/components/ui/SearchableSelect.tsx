@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Loader2, Check, ChevronDown } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -45,7 +45,7 @@ export const SearchableSelect = ({
   }, [searchTerm]);
 
   // Handle position
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     if (isOpen && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
@@ -63,11 +63,11 @@ export const SearchableSelect = ({
         maxHeight: `${dropdownHeight}px`,
       });
     }
-  };
+  }, [isOpen]);
 
   useLayoutEffect(() => {
     updatePosition();
-  }, [isOpen]);
+  }, [updatePosition]);
 
   useEffect(() => {
     if (!isOpen) return undefined;

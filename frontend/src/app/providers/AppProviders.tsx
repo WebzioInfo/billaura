@@ -4,7 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { queryClient } from "@/core/query/queryClient";
 import { SessionProvider } from "@/features/auth/providers/SessionProvider";
 import { ThemeProvider } from "@/features/theme/ThemeProvider";
-import { NetworkProvider } from "@/providers/NetworkProvider";
+import { NetworkProvider } from "./NetworkProvider";
 import { GlobalDialog } from "@/core/services/DialogService";
 
 export function AppProviders({ children }: PropsWithChildren) {

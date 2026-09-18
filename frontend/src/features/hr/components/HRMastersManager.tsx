@@ -20,9 +20,7 @@ export const HRMastersManager: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const subParam = searchParams.get('sub');
-  const [activeTab, setActiveTab] = useState<MasterTab>(
-    (subParam as MasterTab) || 'departments'
-  );
+  const activeTab: MasterTab = (subParam as MasterTab) || 'departments';
   
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,15 +38,7 @@ export const HRMastersManager: React.FC = () => {
     details: { employees: number; expenses: number; departments: number; count: number; message: string };
   } | null>(null);
 
-  // Sync tab with URL search parameter
-  useEffect(() => {
-    if (subParam && subParam !== activeTab) {
-      setActiveTab(subParam as MasterTab);
-    }
-  }, [subParam]);
-
   const handleTabChange = (tab: MasterTab) => {
-    setActiveTab(tab);
     setSearchQuery('');
     setSearchParams({ tab: 'masters', sub: tab });
   };

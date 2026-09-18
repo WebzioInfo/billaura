@@ -96,42 +96,112 @@ export function CommandPalette() {
 
           <Command.Group heading="Navigation" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:text-muted-foreground">
             <Command.Item 
-              onSelect={() => navigateTo('/app/dashboard', 'Dashboard', 'dashboard')}
-              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-3 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+              onSelect={() => navigateTo('/dashboard', 'Dashboard', 'dashboard')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
             >
-              <Home className="mr-3 h-4 w-4" />
-              <span>Go to Dashboard</span>
-            </Command.Item>
-            <Command.Item 
-              onSelect={() => navigateTo('/app/customers', 'Customers', 'customers')}
-              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-3 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
-            >
-              <Users className="mr-3 h-4 w-4" />
-              <span>Customers</span>
+              <Home className="mr-3 h-4 w-4 text-primary" />
+              <span>Executive Dashboard</span>
             </Command.Item>
             <Command.Item 
               onSelect={() => navigateTo('/invoices', 'Invoices', 'invoices')}
-              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-3 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
             >
-              <FileText className="mr-3 h-4 w-4" />
-              <span>Invoices</span>
+              <FileText className="mr-3 h-4 w-4 text-emerald-500" />
+              <span>Invoices & Sales Register</span>
             </Command.Item>
             <Command.Item 
-              onSelect={() => navigateTo('/app/profit-loss', 'Profit & Loss', 'profit-loss')}
-              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-3 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+              onSelect={() => navigateTo('/customers', 'Customers', 'customers')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
             >
-              <TrendingUp className="mr-3 h-4 w-4" />
-              <span>Profit & Loss Statement</span>
+              <Users className="mr-3 h-4 w-4 text-blue-500" />
+              <span>Customers Directory</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/bills', 'Bills & Expenses', 'bills')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <ShoppingCart className="mr-3 h-4 w-4 text-amber-500" />
+              <span>Bills & Purchase Register</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/vendors', 'Vendors', 'vendors')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <Users className="mr-3 h-4 w-4 text-indigo-500" />
+              <span>Vendors & Suppliers</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/products', 'Products & Items', 'products')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <FileText className="mr-3 h-4 w-4 text-teal-500" />
+              <span>Inventory & Products</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/chart-of-accounts', 'Chart of Accounts', 'coa')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <FileText className="mr-3 h-4 w-4 text-purple-500" />
+              <span>Chart of Accounts</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/journal-entries', 'Journal Entries', 'journals')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <FileText className="mr-3 h-4 w-4 text-rose-500" />
+              <span>Journal Entries & Vouchers</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/banking', 'Banking & Cash', 'banking')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <FileText className="mr-3 h-4 w-4 text-cyan-500" />
+              <span>Banking & Reconciliation</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/reports', 'Financial Reports', 'reports')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <TrendingUp className="mr-3 h-4 w-4 text-amber-600" />
+              <span>Financial Reports (P&L, Balance Sheet, Trial Balance)</span>
             </Command.Item>
           </Command.Group>
           
           <Command.Group heading="Quick Actions" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:text-muted-foreground mt-2 border-t pt-2">
             <Command.Item 
-              onSelect={() => navigateTo('/invoices/new', 'New Invoice', 'invoices')}
-              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-3 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+              onSelect={() => navigateTo('/invoices/new', 'New Invoice', 'new-invoice')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
             >
-              <ShoppingCart className="mr-3 h-4 w-4" />
-              <span>Create New Invoice</span>
+              <FileText className="mr-3 h-4 w-4 text-emerald-500" />
+              <span>Create New Tax Invoice</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/customers/new', 'New Customer', 'new-customer')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <Users className="mr-3 h-4 w-4 text-blue-500" />
+              <span>Add New Customer</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/receipts/new', 'New Receipt', 'new-receipt')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <FileText className="mr-3 h-4 w-4 text-emerald-600" />
+              <span>Record Customer Receipt</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/bills/new', 'New Bill', 'new-bill')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <ShoppingCart className="mr-3 h-4 w-4 text-amber-500" />
+              <span>Create Vendor Bill</span>
+            </Command.Item>
+            <Command.Item 
+              onSelect={() => navigateTo('/journal-entries/new', 'New Journal Voucher', 'new-journal')}
+              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted aria-selected:bg-muted aria-selected:text-foreground"
+            >
+              <FileText className="mr-3 h-4 w-4 text-rose-500" />
+              <span>New Journal Voucher</span>
             </Command.Item>
           </Command.Group>
         </Command.List>

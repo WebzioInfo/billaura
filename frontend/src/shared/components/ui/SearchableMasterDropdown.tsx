@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Loader2, Check, ChevronDown, Plus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -59,7 +59,7 @@ export const SearchableMasterDropdown = ({
   }, [searchTerm]);
 
   // Handle position
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     if (isOpen && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
@@ -77,11 +77,11 @@ export const SearchableMasterDropdown = ({
         maxHeight: `${dropdownHeight}px`,
       });
     }
-  };
+  }, [isOpen]);
 
   useLayoutEffect(() => {
     updatePosition();
-  }, [isOpen]);
+  }, [updatePosition]);
 
   useEffect(() => {
     if (!isOpen) return undefined;

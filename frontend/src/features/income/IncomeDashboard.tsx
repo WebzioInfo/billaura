@@ -22,16 +22,9 @@ type IncomeType = typeof VALID_INCOME_TYPES[number];
 
 export function IncomeDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const getQueryTab = () => searchParams.get('tab') === 'categories' ? 'categories' : 'incomes';
-  
-  const [activeTab, setActiveTab] = useState<'overview' | 'incomes' | 'categories'>(getQueryTab());
-
-  useEffect(() => {
-    setActiveTab(getQueryTab());
-  }, [searchParams]);
+  const activeTab: 'incomes' | 'categories' = searchParams.get('tab') === 'categories' ? 'categories' : 'incomes';
 
   const handleTabChange = (tab: 'incomes' | 'categories') => {
-    setActiveTab(tab);
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
       next.set('tab', tab);

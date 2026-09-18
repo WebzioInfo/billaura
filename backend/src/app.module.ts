@@ -1,7 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { CacheModule } from '@nestjs/cache-manager';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AuditModule } from "./audit/audit.module";
 import { AuthModule } from "./auth/auth.module";
 import { CommonModule } from "./common/common.module";
 import { AppConfigModule } from "./config/app-config.module";
@@ -54,7 +53,6 @@ import { InvoiceConfigModule } from './settings/invoice-config/invoice-config.mo
     CommonModule,
     DatabaseModule,
     SharedModule,
-    AuditModule,
     AuthModule,
     HealthModule,
     BranchesModule,

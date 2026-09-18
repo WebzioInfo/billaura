@@ -40,10 +40,19 @@ export class ErrorBoundary extends Component<Props, State> {
                 {this.state.error?.message || 'Unknown Error'}
               </div>
             </div>
-            <div className="pt-4">
+            <div className="pt-4 flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: undefined });
+                  window.location.href = '/dashboard';
+                }}
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors w-full cursor-pointer"
+              >
+                Go to Dashboard
+              </button>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 transition-colors w-full cursor-pointer"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors w-full cursor-pointer"
               >
                 Reload Page
               </button>

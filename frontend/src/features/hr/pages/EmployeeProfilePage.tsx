@@ -78,7 +78,7 @@ export const EmployeeProfilePage = () => {
         {/* Navigation / Actions */}
         <div className="flex items-center justify-between">
           <Breadcrumb items={[
-            { label: 'Employees Directory', href: '/app/employees' },
+            { label: 'Employees Directory', href: '/employees' },
             { label: employee.name || 'Workspace' }
           ]} />
           {/* Smart Action Bar */}

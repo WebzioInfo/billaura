@@ -8,10 +8,8 @@ interface PermissionGuardProps extends PropsWithChildren {
 }
 
 export function PermissionGuard({ permissions, fallback = null, children }: PermissionGuardProps) {
-  const { permissions: granted, user } = useSessionStore((state) => ({
-    permissions: state.permissions,
-    user: state.user
-  }));
+  const granted = useSessionStore((state) => state.permissions);
+  const user = useSessionStore((state) => state.user);
   
   const hasAccess = 
     user?.globalRole === 'SUPER_ADMIN' || 

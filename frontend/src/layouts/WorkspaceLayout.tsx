@@ -1,33 +1,51 @@
-import React, { useEffect } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { TopBar } from '@/shared/components/workspace/TopBar';
-import { Ribbon } from '@/shared/components/workspace/Ribbon';
+import React, { useState, useEffect } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
+import { AppSidebar } from '@/shared/components/layout/AppSidebar';
+import { AppHeader } from '@/shared/components/layout/AppHeader';
 import { WorkspaceTabs } from '@/shared/components/workspace/WorkspaceTabs';
 import { TopProgressBar } from '@/shared/components/ui';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { CommandPalette } from '@/shared/components/workspace/CommandPalette';
+import { useWorkspaceStore } from '@/shared/stores/workspaceStore';
 import { useGlobalShortcuts } from '@/shared/hooks/useGlobalShortcuts';
+import { cn } from '@/lib/utils';
 
 export function WorkspaceLayout() {
-  const { tabs, activeTabId } = useWorkspaceStore();
+  const hasTabs = useWorkspaceStore(state => state.tabs.length > 0);
   const location = useLocation();
-  const navigate = useNavigate();
   useGlobalShortcuts();
 
   const [isNavigating, setIsNavigating] = React.useState(false);
+
+  // Persistent sidebar collapse state
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return localStorage.getItem('billaura_sidebar_collapsed') === 'true';
+  });
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const toggleSidebarCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('billaura_sidebar_collapsed', String(next));
+      return next;
+    });
+  };
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [location.pathname]);
 
   // Trigger top progress animation on route transition
   useEffect(() => {
     setIsNavigating(true);
     const timer = setTimeout(() => {
       setIsNavigating(false);
-    }, 200);
+    }, 180);
     return () => clearTimeout(timer);
   }, [location.pathname, location.search]);
 
   // Keep tabs list in sync when the browser URL pathname or search changes directly (clicks, page loads)
   useEffect(() => {
-    const currentPath = location.pathname + location.search;
-
     // Skip sync for non-workspace paths
     if (
       location.pathname.startsWith('/auth') || 
@@ -38,16 +56,24 @@ export function WorkspaceLayout() {
       return;
     }
 
+    const currentFullPath = location.pathname + location.search;
+    const baseRoute = location.pathname;
+
     const state = useWorkspaceStore.getState();
 
+    // Match existing tab by stable base route or id
     const existingTab = state.tabs.find(t => {
-      const expected = t.path.startsWith('/app/') ? t.path.replace('/app', '') : t.path;
-      return expected === currentPath;
+      const tabBase = t.path.split('?')[0].replace(/^\/app/, '');
+      const expectedBase = baseRoute.replace(/^\/app/, '');
+      return t.id === expectedBase || tabBase === expectedBase;
     });
 
     if (existingTab) {
       if (existingTab.id !== state.activeTabId) {
         state.setActiveTab(existingTab.id);
+      }
+      if (existingTab.path !== currentFullPath) {
+        state.updateTabPath(existingTab.id, currentFullPath);
       }
     } else {
       // Auto-register a new tab for direct navigation/link clicks
@@ -84,41 +110,54 @@ export function WorkspaceLayout() {
         }
       }
 
+      const stableId = baseRoute.replace(/^\/app/, '');
       state.openTab({
-        id: currentPath,
+        id: stableId,
         title,
-        path: currentPath,
+        path: currentFullPath,
       });
     }
   }, [location.pathname, location.search]);
 
-  // Keep browser URL pathname & search in sync when activeTabId changes (e.g. clicking a tab or closing one)
-  useEffect(() => {
-    const state = useWorkspaceStore.getState();
-    const currentActiveTabId = state.activeTabId;
-    const activeTab = state.tabs.find(t => t.id === currentActiveTabId);
-    if (activeTab) {
-      const expectedPath = activeTab.path.startsWith('/app/') ? activeTab.path.replace('/app', '') : activeTab.path;
-      if (expectedPath !== (location.pathname + location.search)) {
-        navigate(expectedPath);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTabId, navigate]);
-
   return (
-    <div className="flex flex-col h-screen w-full bg-background overflow-hidden font-sans">
-      <TopProgressBar isAnimating={isNavigating} />
-      <TopBar />
-      <Ribbon />
-      
-      {tabs.length > 0 && <WorkspaceTabs />}
-      
-      <main className="flex-1 overflow-auto relative">
-        <div className="absolute inset-0">
+    <div className="flex h-screen w-full bg-background overflow-hidden font-sans text-foreground">
+      {/* 1. Left Persistent & Responsive Modern Sidebar */}
+      <AppSidebar
+        isCollapsed={isCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
+        isMobileOpen={isMobileOpen}
+        onMobileClose={() => setIsMobileOpen(false)}
+      />
+
+      {/* 2. Main Executive Viewport */}
+      <div
+        className={cn(
+          "flex-1 flex flex-col h-full min-w-0 overflow-hidden transition-all duration-300 ease-in-out",
+          isCollapsed ? "lg:pl-[68px]" : "lg:pl-[260px]"
+        )}
+      >
+        <TopProgressBar isAnimating={isNavigating} />
+
+        {/* Global Executive Header */}
+        <AppHeader
+          onMobileMenuToggle={() => setIsMobileOpen(true)}
+        />
+
+        {/* Workspace Open Tabs */}
+        {hasTabs && (
+          <div className="bg-muted/20 border-b border-border/60 px-2 pt-1 flex items-center overflow-x-auto shrink-0 select-none">
+            <WorkspaceTabs />
+          </div>
+        )}
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden relative bg-background/60 p-4 sm:p-6 lg:p-8">
           <Outlet />
-        </div>
-      </main>
+        </main>
+      </div>
+
+      {/* Global Command Palette Trigger */}
+      <CommandPalette />
     </div>
   );
 }

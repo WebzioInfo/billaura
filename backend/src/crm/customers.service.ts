@@ -14,7 +14,12 @@ export class CustomersService {
   async findAll(companyId: string, search?: string) {
     const where: any = { companyId, deletedAt: null, bpType: "CUSTOMER" };
     if (search) {
-      where.name = { contains: search };
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { tradeName: { contains: search, mode: "insensitive" } },
+        { phone: { contains: search, mode: "insensitive" } },
+        { gstin: { contains: search, mode: "insensitive" } },
+      ];
     }
     const items = await this.prisma.businessPartner.findMany({ 
       where,

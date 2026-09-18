@@ -6,6 +6,8 @@ import {
   ValidateNested,
   IsNumber,
   IsDateString,
+  ArrayMinSize,
+  ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
@@ -213,4 +215,38 @@ export class InvoiceQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   invoiceType?: string;
+
+  @IsOptional()
+  @IsString()
+  taxMode?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsString()
+  toDate?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  minAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  maxAmount?: number;
+}
+
+export class BulkDownloadInvoicesDto {
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  invoiceIds: string[];
 }

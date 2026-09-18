@@ -71,7 +71,7 @@ export const CustomerProfile = () => {
     try {
       await apiClient.delete(`/customers/${id}`);
       notification.success("Customer deleted successfully");
-      navigate("/app/customers");
+      navigate("/customers");
     } catch (e: any) {
       notification.error(e.response?.data?.message || "Failed to delete customer");
     }
@@ -136,17 +136,17 @@ export const CustomerProfile = () => {
     <PageContainer maxWidth="7xl" className="space-y-4">
       <div className="flex items-center justify-between mb-2">
         <Breadcrumb items={[
-          { label: 'Customers', href: '/app/customers' },
+          { label: 'Customers', href: '/customers' },
           { label: customer.name }
         ]} />
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate(`/app/customers/${id}/edit`)}>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/customers/${id}/edit`)}>
             <Edit className="w-4 h-4 mr-1.5" /> Edit
           </Button>
-          <Button variant="primary" size="sm" onClick={() => navigate(`/app/invoices/new?customer=${id}`)}>
+          <Button variant="primary" size="sm" onClick={() => navigate(`/invoices/new?customer=${id}`)}>
             <FileText className="w-4 h-4 mr-1.5" /> New Invoice
           </Button>
-          <Button variant="primary" size="sm" onClick={() => navigate(`/app/receipts/new?customer=${id}`)}>
+          <Button variant="primary" size="sm" onClick={() => navigate(`/receipts/new?customer=${id}`)}>
             <IndianRupee className="w-4 h-4 mr-1.5" /> Receive Payment
           </Button>
         </div>

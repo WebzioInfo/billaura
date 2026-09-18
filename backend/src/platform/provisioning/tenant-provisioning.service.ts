@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 import { CompanySeederService } from './seeders/company-seeder.service';
 import { MasterDataSeederService } from './seeders/master-data-seeder.service';
 import { UserProvisioningService } from './seeders/user-provisioning.service';
@@ -25,7 +25,7 @@ export class TenantProvisioningService {
 
     // Execute everything in a single, robust transaction
     // Interactive transaction with increased timeout since we are seeding a lot of data
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx: any) => {
       // Step 1-5: Company, Branch, Warehouse, Financial Year
       const { company } = await this.companySeeder.seedCompanyAndDefaults(tx, dto);
 

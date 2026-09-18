@@ -253,7 +253,7 @@ export const BusinessPartnerForm = () => {
       notification.success(isEditMode ? 'Customer updated successfully' : 'Customer created successfully');
       
       const newId = isEditMode ? id : (res.data?.id || res.data?.data?.id);
-      navigate(newId ? `/app/${entityPath}/${newId}` : `/app/${entityPath}`);
+      navigate(newId ? `/${entityPath}/${newId}` : `/${entityPath}`);
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to save customer');
@@ -279,7 +279,7 @@ export const BusinessPartnerForm = () => {
         <PageHeader 
           title={isEditMode ? `Edit ${entityLabel}` : `New ${entityLabel}`}
           breadcrumbs={[
-            { label: entityLabel + "s", href: `/app/${entityPath}` },
+            { label: entityLabel + "s", href: `/${entityPath}` },
             { label: isEditMode ? (customer ? displayName : `Edit ${entityLabel}`) : `New ${entityLabel}` }
           ]}
           primaryAction={

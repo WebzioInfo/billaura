@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Response } from 'express';
 import { PrismaService } from '../database/prisma.service';
-import { CreateInvoiceDto } from './dto/invoice.dto';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { CreateInvoiceDto, InvoiceQueryDto } from './dto/invoice.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import { GSTEngine } from '../common/utils/gst-engine.util';
@@ -9,6 +9,7 @@ import type { Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import { SequenceService } from '../shared/sequence/sequence.service';
+import { PdfEngineService } from './pdf-engine.service';
 
 @Injectable()
 export class InvoicesService {
@@ -16,30 +17,127 @@ export class InvoicesService {
     private readonly prisma: PrismaService,
     private readonly accountingEngine: AccountingEngineService,
     private readonly commissionsService: CommissionsService,
-    private readonly sequenceService: SequenceService
+    private readonly sequenceService: SequenceService,
+    private readonly pdfEngineService: PdfEngineService,
   ) { }
 
-  async findAll(query: PaginationQueryDto) {
+  private buildInvoiceWhere(companyId: string, query: InvoiceQueryDto): Prisma.InvoiceWhereInput {
+    const where: Prisma.InvoiceWhereInput = {
+      companyId,
+      deletedAt: null,
+    };
+
+    // 1. Full-text search across invoice number, customer name, phone, and GSTIN
+    if (query.search && query.search.trim()) {
+      const term = query.search.trim();
+      where.OR = [
+        { invoiceNo: { contains: term, mode: 'insensitive' } },
+        { businessPartner: { name: { contains: term, mode: 'insensitive' } } },
+        { businessPartner: { phone: { contains: term, mode: 'insensitive' } } },
+        { businessPartner: { gstin: { contains: term, mode: 'insensitive' } } },
+      ];
+    }
+
+    // 2. Specific customer filter
+    if (query.customerId && query.customerId.trim()) {
+      where.businessPartnerId = query.customerId.trim();
+    }
+
+    // 3. Document / Invoice type filter
+    const docType = query.invoiceType || query.documentType;
+    if (docType && docType.trim()) {
+      where.invoiceType = docType.trim() as any;
+    }
+
+    // 4. Tax mode filter
+    if (query.taxMode && query.taxMode.trim()) {
+      where.taxMode = query.taxMode.trim() as any;
+    }
+
+    // 5. Document status filter
+    if (query.status && query.status.trim()) {
+      where.status = query.status.trim() as any;
+    }
+
+    // 6. Payment status filter
+    if (query.paymentStatus && query.paymentStatus.trim()) {
+      const ps = query.paymentStatus.trim().toUpperCase();
+      const now = new Date();
+      if (ps === 'PAID') {
+        where.status = 'PAID';
+      } else if (ps === 'PARTIAL' || ps === 'PARTIALLY_PAID') {
+        where.status = 'PARTIAL';
+      } else if (ps === 'UNPAID') {
+        where.amountPaid = 0;
+        where.status = { notIn: ['PAID', 'CANCELLED'] as any };
+      } else if (ps === 'OVERDUE') {
+        where.dueDate = { lt: now };
+        where.status = { notIn: ['PAID', 'CANCELLED'] as any };
+      }
+    }
+
+    // 7. Date range filter
+    if (query.fromDate || query.toDate) {
+      where.date = {};
+      if (query.fromDate) {
+        where.date.gte = new Date(`${query.fromDate}T00:00:00.000Z`);
+      }
+      if (query.toDate) {
+        where.date.lte = new Date(`${query.toDate}T23:59:59.999Z`);
+      }
+    }
+
+    // 8. Amount range filter
+    if (query.minAmount !== undefined || query.maxAmount !== undefined) {
+      where.grandTotal = {};
+      if (query.minAmount !== undefined && !isNaN(Number(query.minAmount))) {
+        where.grandTotal.gte = Number(query.minAmount);
+      }
+      if (query.maxAmount !== undefined && !isNaN(Number(query.maxAmount))) {
+        where.grandTotal.lte = Number(query.maxAmount);
+      }
+    }
+
+    return where;
+  }
+
+  private buildInvoiceOrderBy(query: InvoiceQueryDto): Prisma.InvoiceOrderByWithRelationInput {
+    const sortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
+    const sortBy = query.sortBy || 'date';
+
+    switch (sortBy) {
+      case 'invoiceNo':
+        return { invoiceNo: sortOrder };
+      case 'customer':
+      case 'customerName':
+        return { businessPartner: { name: sortOrder } };
+      case 'subTotal':
+        return { subTotal: sortOrder };
+      case 'taxTotal':
+        return { taxTotal: sortOrder };
+      case 'grandTotal':
+        return { grandTotal: sortOrder };
+      case 'dueDate':
+        return { dueDate: sortOrder };
+      case 'status':
+        return { status: sortOrder };
+      case 'createdAt':
+        return { createdAt: sortOrder };
+      case 'date':
+      default:
+        return { date: sortOrder };
+    }
+  }
+
+  async findAll(query: InvoiceQueryDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
 
     const { skip, take } = getPagination(query);
-
-    const where: Prisma.InvoiceWhereInput = {
-      companyId,
-      ...(query.search
-        ? {
-          OR: [
-            { invoiceNo: { contains: query.search } },
-            { businessPartner: { name: { contains: query.search } } },
-          ],
-        }
-        : {}),
-      ...((query as any).customerId ? { businessPartnerId: (query as any).customerId } : {}),
-      ...((query as any).status ? { status: (query as any).status } : {}),
-    };
+    const where = this.buildInvoiceWhere(companyId, query);
+    const orderBy = this.buildInvoiceOrderBy(query);
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.invoice.findMany({
@@ -47,12 +145,198 @@ export class InvoicesService {
         skip,
         take,
         include: { businessPartner: true, items: { include: { product: true } } },
-        orderBy: { date: 'desc' },
+        orderBy,
       }),
       this.prisma.invoice.count({ where }),
     ]);
 
     return toPaginatedResult(data, total, query);
+  }
+
+  async getSummary(query: InvoiceQueryDto) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const where = this.buildInvoiceWhere(companyId, query);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where,
+      select: {
+        id: true,
+        grandTotal: true,
+        amountPaid: true,
+        dueDate: true,
+        status: true,
+      },
+    });
+
+    const now = new Date();
+    let totalInvoices = invoices.length;
+    let totalAmount = 0;
+    let paidAmount = 0;
+    let unpaidAmount = 0;
+    let overdueCount = 0;
+
+    for (const inv of invoices) {
+      const g = Number(inv.grandTotal || 0);
+      const p = Number(inv.amountPaid || 0);
+      const balance = Math.max(0, g - p);
+
+      totalAmount += g;
+      paidAmount += p;
+      unpaidAmount += balance;
+
+      if (inv.status !== 'PAID' && inv.status !== 'CANCELLED' && inv.dueDate && new Date(inv.dueDate) < now) {
+        overdueCount++;
+      }
+    }
+
+    return {
+      totalInvoices,
+      totalAmount: Math.round(totalAmount * 100) / 100,
+      paidAmount: Math.round(paidAmount * 100) / 100,
+      unpaidAmount: Math.round(unpaidAmount * 100) / 100,
+      overdueCount,
+    };
+  }
+
+  async getExportData(query: InvoiceQueryDto) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const where = this.buildInvoiceWhere(companyId, query);
+    const orderBy = this.buildInvoiceOrderBy(query);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where,
+      include: { businessPartner: true },
+      orderBy,
+      take: 2000,
+    });
+
+    const headers = [
+      'Invoice No',
+      'Date',
+      'Customer Name',
+      'Customer Phone',
+      'Customer GSTIN',
+      'Document Type',
+      'Tax Mode',
+      'Subtotal (INR)',
+      'Tax Total (INR)',
+      'Grand Total (INR)',
+      'Amount Paid (INR)',
+      'Balance Due (INR)',
+      'Status',
+      'Due Date',
+    ];
+
+    const escapeCsv = (val: any) => {
+      if (val == null) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = invoices.map((inv) => {
+      const g = Number(inv.grandTotal || 0);
+      const p = Number(inv.amountPaid || 0);
+      const balance = Math.max(0, g - p);
+      const dateStr = inv.date ? new Date(inv.date).toISOString().split('T')[0] : '';
+      const dueStr = inv.dueDate ? new Date(inv.dueDate).toISOString().split('T')[0] : '';
+
+      return [
+        escapeCsv(inv.invoiceNo),
+        escapeCsv(dateStr),
+        escapeCsv(inv.businessPartner?.name || ''),
+        escapeCsv(inv.businessPartner?.phone || ''),
+        escapeCsv(inv.businessPartner?.gstin || ''),
+        escapeCsv(inv.invoiceType),
+        escapeCsv(inv.taxMode),
+        escapeCsv(Number(inv.subTotal || 0).toFixed(2)),
+        escapeCsv(Number(inv.taxTotal || 0).toFixed(2)),
+        escapeCsv(g.toFixed(2)),
+        escapeCsv(p.toFixed(2)),
+        escapeCsv(balance.toFixed(2)),
+        escapeCsv(inv.status),
+        escapeCsv(dueStr),
+      ].join(',');
+    });
+
+    // Return with UTF-8 BOM for Microsoft Excel compatibility
+    return '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+  }
+
+  async bulkDownloadPdf(invoiceIds: string[], companyId: string, res: Response) {
+    if (!invoiceIds || invoiceIds.length === 0) {
+      throw new BadRequestException('At least one invoice ID must be specified');
+    }
+    if (invoiceIds.length > 100) {
+      throw new BadRequestException('Maximum 100 invoices can be exported in a single bulk request');
+    }
+
+    // Tenant isolation: fetch only invoices belonging to the authenticated companyId
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        id: { in: invoiceIds },
+        companyId,
+        deletedAt: null,
+      },
+      select: { id: true, invoiceNo: true },
+    });
+
+    if (invoices.length === 0) {
+      throw new NotFoundException('No valid invoices found for current tenant');
+    }
+
+    // Single invoice download: direct PDF stream
+    if (invoices.length === 1) {
+      const inv = invoices[0];
+      const pdfBuffer = await this.pdfEngineService.generateInvoicePdf(inv.id, companyId);
+      const safeNo = (inv.invoiceNo || inv.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="Invoice_${safeNo}.pdf"`,
+        'Content-Length': String(pdfBuffer.length),
+      });
+      res.end(pdfBuffer);
+      return;
+    }
+
+    // Multiple invoices: stream ZIP archive
+    const archiverModule: any = await import('archiver');
+    const archiverFactory = archiverModule.default || archiverModule;
+    const archive = archiverFactory('zip', { zlib: { level: 6 } });
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="BillAura_Invoices_${todayStr}.zip"`,
+    });
+
+    archive.pipe(res);
+
+    archive.on('error', (err: any) => {
+      console.error('Error during ZIP generation:', err);
+      if (!res.headersSent) {
+        res.status(500).send({ success: false, message: 'Failed to generate ZIP archive' });
+      }
+    });
+
+    for (const inv of invoices) {
+      try {
+        const pdfBuffer = await this.pdfEngineService.generateInvoicePdf(inv.id, companyId);
+        const safeNo = (inv.invoiceNo || inv.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+        archive.append(pdfBuffer, { name: `Invoice_${safeNo}.pdf` });
+      } catch (err) {
+        console.error(`Failed to generate PDF for invoice ${inv.id}:`, err);
+      }
+    }
+
+    await archive.finalize();
   }
 
   async findOne(id: string) {
