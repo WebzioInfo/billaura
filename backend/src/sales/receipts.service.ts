@@ -251,12 +251,12 @@ export class ReceiptsService {
           if (!inv) throw new NotFoundException(`Invoice with ID ${alloc.invoiceId} not found`);
 
           const unpaid = Number(inv.grandTotal) - Number(inv.amountPaid);
-          if (alloc.amount > unpaid) {
-            throw new BadRequestException(`Allocation amount ${alloc.amount} exceeds unpaid invoice balance ${unpaid}`);
+          if (alloc.amount > unpaid + 0.01) {
+            throw new BadRequestException(`Payment amount ₹${Number(alloc.amount).toFixed(2)} exceeds remaining balance of ₹${unpaid.toFixed(2)} on Invoice ${inv.invoiceNo}.`);
           }
 
           const newPaid = Number(inv.amountPaid) + alloc.amount;
-          const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIALLY_PAID';
+          const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIAL';
 
           await tx.invoice.update({
             where: { id: inv.id },
@@ -290,7 +290,7 @@ export class ReceiptsService {
 
           if (allocate > 0) {
             const newPaid = Number(inv.amountPaid) + allocate;
-            const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIALLY_PAID';
+            const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIAL';
 
             await tx.invoice.update({
               where: { id: inv.id },

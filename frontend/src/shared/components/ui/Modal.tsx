@@ -1,15 +1,18 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
+  footer?: React.ReactNode;
 }
 
-export const Modal = ({ isOpen, onClose, title, children, maxWidth = 'md' }: ModalProps) => {
+export const Modal = ({ isOpen, onClose, title, subtitle, children, maxWidth = 'md', footer }: ModalProps) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -36,33 +39,51 @@ export const Modal = ({ isOpen, onClose, title, children, maxWidth = 'md' }: Mod
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity duration-200 animate-in fade-in"
         onClick={onClose}
       />
       
-      {/* Modal Dialog */}
+      {/* Modal Dialog Container */}
       <div 
-        className={`relative w-full ${maxWidthClasses[maxWidth]} bg-surface border border-border rounded-lg shadow-premium overflow-hidden animate-in fade-in zoom-in-95 duration-200`}
+        className={cn(
+          'relative w-full bg-surface border border-border/80 rounded-2xl shadow-2xl overflow-hidden',
+          'animate-in zoom-in-95 fade-in duration-200 ease-out',
+          maxWidthClasses[maxWidth]
+        )}
         role="dialog"
         aria-modal="true"
       >
-        <div className="px-4 py-2.5 border-b border-border flex justify-between items-center bg-background/50">
-          <h2 className="font-bold text-base text-foreground tracking-tight">{title}</h2>
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-border/80 flex justify-between items-start bg-slate-50/50 dark:bg-slate-900/50">
+          <div>
+            <h2 className="font-semibold text-base text-foreground tracking-tight">{title}</h2>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          </div>
           <button 
             onClick={onClose} 
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-background rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-accent"
+            className="p-1.5 -mr-1.5 text-muted-foreground hover:text-foreground hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-accent/40"
+            aria-label="Close dialog"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
         
-        <div className="p-4 overflow-y-auto max-h-[80vh]">
+        {/* Main Content */}
+        <div className="p-6 overflow-y-auto max-h-[75vh]">
           {children}
         </div>
+
+        {/* Optional Footer */}
+        {footer && (
+          <div className="px-6 py-3.5 border-t border-border/80 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-end gap-2">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
 };
+

@@ -13,10 +13,20 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       map((data) => {
+        // If response headers are already sent or Content-Type is application/pdf / binary, or data is Buffer, pass through untouched
+        if (
+          response.headersSent ||
+          response.getHeader('content-type')?.toString().includes('application/pdf') ||
+          Buffer.isBuffer(data)
+        ) {
+          return data;
+        }
+
         // If the response is already enveloped (e.g. from an exception filter or custom logic)
         if (data && typeof data === "object" && "success" in data) {
           return data;
         }
+
 
         // Flatten paginated results or objects that already provide data and meta
         if (

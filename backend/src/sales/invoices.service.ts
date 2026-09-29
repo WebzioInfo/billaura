@@ -278,6 +278,9 @@ export class InvoicesService {
       throw new BadRequestException('Maximum 100 invoices can be exported in a single bulk request');
     }
 
+    const company = await this.prisma.company.findUnique({ where: { id: companyId } });
+    const companyFolder = (company?.companyName || 'Company').replace(/[\\/:*?"<>|]/g, '').trim() || 'Company';
+
     // Tenant isolation: fetch only invoices belonging to the authenticated companyId
     const invoices = await this.prisma.invoice.findMany({
       where: {
@@ -285,7 +288,7 @@ export class InvoicesService {
         companyId,
         deletedAt: null,
       },
-      select: { id: true, invoiceNo: true },
+      include: { businessPartner: true },
     });
 
     if (invoices.length === 0) {
@@ -296,17 +299,18 @@ export class InvoicesService {
     if (invoices.length === 1) {
       const inv = invoices[0];
       const pdfBuffer = await this.pdfEngineService.generateInvoicePdf(inv.id, companyId);
-      const safeNo = (inv.invoiceNo || inv.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeNo = (inv.invoiceNo || inv.id).replace(/[\\/:*?"<>|]/g, '_').trim();
+      const safeCustomer = (inv.businessPartner?.name || 'Customer').replace(/[\\/:*?"<>|]/g, '_').trim();
       res.set({
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Invoice_${safeNo}.pdf"`,
+        'Content-Disposition': `attachment; filename="${safeNo} - ${safeCustomer}.pdf"`,
         'Content-Length': String(pdfBuffer.length),
       });
       res.end(pdfBuffer);
       return;
     }
 
-    // Multiple invoices: stream ZIP archive
+    // Multiple invoices: stream ZIP archive with folder structure <CompanyName>/Invoices/<InvoiceNo - CustomerName>.pdf
     const archiverModule: any = await import('archiver');
     const archiverFactory = archiverModule.default || archiverModule;
     const archive = archiverFactory('zip', { zlib: { level: 6 } });
@@ -314,7 +318,7 @@ export class InvoicesService {
     const todayStr = new Date().toISOString().split('T')[0];
     res.set({
       'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="BillAura_Invoices_${todayStr}.zip"`,
+      'Content-Disposition': `attachment; filename="${companyFolder}_Invoices_${todayStr}.zip"`,
     });
 
     archive.pipe(res);
@@ -329,8 +333,10 @@ export class InvoicesService {
     for (const inv of invoices) {
       try {
         const pdfBuffer = await this.pdfEngineService.generateInvoicePdf(inv.id, companyId);
-        const safeNo = (inv.invoiceNo || inv.id).replace(/[^a-zA-Z0-9_-]/g, '_');
-        archive.append(pdfBuffer, { name: `Invoice_${safeNo}.pdf` });
+        const safeNo = (inv.invoiceNo || inv.id).replace(/[\\/:*?"<>|]/g, '_').trim();
+        const safeCustomer = (inv.businessPartner?.name || 'Customer').replace(/[\\/:*?"<>|]/g, '_').trim();
+        const entryPath = `${companyFolder}/Invoices/${safeNo} - ${safeCustomer}.pdf`;
+        archive.append(pdfBuffer, { name: entryPath });
       } catch (err) {
         console.error(`Failed to generate PDF for invoice ${inv.id}:`, err);
       }

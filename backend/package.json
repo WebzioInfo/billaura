@@ -35,6 +35,8 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^6.19.3",
+    "@react-pdf/renderer": "^4.9.0",
+    "@types/react": "^19.3.0",
     "archiver": "^6.0.2",
     "bcrypt": "^6.0.0",
     "cache-manager": "^7.2.9",
@@ -52,6 +54,7 @@
     "passport-jwt": "^4.0.1",
     "pg": "^8.22.0",
     "puppeteer": "^25.4.0",
+    "react": "^19.3.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },

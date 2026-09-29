@@ -3,49 +3,84 @@
 
 :root {
   color-scheme: light;
-  --background: #f3f4f6;
+  --background: #f8fafc;
   --surface: #ffffff;
-  --foreground: #111827;
-  --muted-foreground: #4b5563;
-  --border: #d1d5db;
+  --foreground: #0f172a;
+  --muted-foreground: #475569;
+  --border: #e2e8f0;
 
-  /* Brand/Accent colors */
-  --primary: #1f2937;
-  /* Dark gray */
+  /* Brand / Primary colors */
+  --primary: #0f172a;
   --primary-foreground: #ffffff;
-  --accent: #2563eb;
-  /* Blue for active tabs/links */
-  --accent-muted: #eff6ff;
+  --primary-muted: #64748b;
+
+  /* Accent colors (Indigo highlight) */
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-muted: #eef2ff;
+  --accent-foreground: #ffffff;
+
+  /* Secondary surface */
+  --secondary: #f1f5f9;
+  --secondary-foreground: #1e293b;
+
+  /* Status Tokens */
+  --success: #059669;
+  --success-bg: #ecfdf5;
+  --warning: #d97706;
+  --warning-bg: #fffbeb;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --info: #2563eb;
+  --info-bg: #eff6ff;
+
+  /* Elevation Shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.07), 0 2px 4px -2px rgb(15 23 42 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.04);
 
   /* Density Spacing Tokens */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
   --spacing-lg: 16px;
-  --spacing-xl: 20px;
+  --spacing-xl: 24px;
 }
 
 :root.dark {
   color-scheme: dark;
   /* Enterprise Dark Theme */
-  --background: #111827;
-  --surface: #1f2937;
-  --foreground: #f9fafb;
-  --muted-foreground: #9ca3af;
-  --border: #374151;
+  --background: #090d16;
+  --surface: #0f172a;
+  --foreground: #f8fafc;
+  --muted-foreground: #94a3b8;
+  --border: #1e293b;
 
-  /* Brand/Accent colors */
-  --primary: #f3f4f6;
-  --primary-foreground: #111827;
-  --accent: #3b82f6;
-  --accent-muted: #1e3a8a;
+  /* Brand / Primary colors */
+  --primary: #f8fafc;
+  --primary-foreground: #0f172a;
+  --primary-muted: #64748b;
 
-  /* Density Spacing Tokens */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 12px;
-  --spacing-lg: 16px;
-  --spacing-xl: 20px;
+  /* Accent colors */
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-muted: #1e1b4b;
+  --accent-foreground: #ffffff;
+
+  /* Secondary surface */
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+
+  /* Status Tokens */
+  --success: #10b981;
+  --success-bg: #064e3b;
+  --warning: #f59e0b;
+  --warning-bg: #78350f;
+  --danger: #ef4444;
+  --danger-bg: #7f1d1d;
+  --info: #3b82f6;
+  --info-bg: #1e3a8a;
 }
 
 @theme {
@@ -56,70 +91,25 @@
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-muted: var(--primary-muted);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-muted: var(--accent-muted);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
 
-
-  /* Border Radii Override */
-  --radius-2xl: 8px;
-  --radius-xl: 6px;
-  --radius-lg: 4px;
+  /* Border Radii Architecture */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
 }
 
-/* Global Table Spacing & Density Overrides */
-table {
-  border-collapse: collapse !important;
-}
-
-table th {
-  padding: 8px 8px !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
-  height: 38px !important;
-  vertical-align: middle !important;
-}
-
-table td {
-  padding: 6px 8px !important;
-  font-size: 13px !important;
-  height: 34px !important;
-  vertical-align: middle !important;
-}
-
-/* Global Card Padding Compression */
-.glass-panel.p-6,
-.bg-surface.border.p-6,
-.bg-white.border.p-6,
-.bg-surface.p-6,
-.bg-surface.border.rounded-2xl.p-6 {
-  padding: 12px !important;
-}
-
-.glass-panel.p-8,
-.bg-surface.border.p-8,
-.bg-white.border.p-8,
-.bg-surface.p-8,
-.bg-surface.border.rounded-2xl.p-8 {
-  padding: 16px !important;
-}
-
-.glass-panel.p-12,
-.bg-surface.border.p-12,
-.bg-white.border.p-12,
-.bg-surface.p-12,
-.bg-surface.border.rounded-2xl.p-12 {
-  padding: 24px !important;
-}
-
-/* Reduce standard skeleton / loading heights */
-.h-32.animate-pulse {
-  height: 76px !important;
-}
-
-.h-96 {
-  height: 320px !important;
+/* Global Typography & Compact Root Density */
+html {
+  font-size: 93.75%; /* 1rem = 15px compact SaaS scaling */
+  scroll-behavior: smooth;
 }
 
 html,
@@ -131,25 +121,66 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Inter', 'Segoe UI', 'IBM Plex Sans', -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   font-size: 13px;
-  /* Dense UI */
+  line-height: 1.5;
   background-color: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Reset default focus outlines */
+/* Headings font styling */
+h1, h2, h3, h4, .font-heading {
+  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+}
+
+/* Global Table Spacing & Density Overrides */
+table {
+  border-collapse: collapse !important;
+  width: 100%;
+}
+
+table th {
+  padding: 9px 12px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  height: 38px !important;
+  vertical-align: middle !important;
+  color: var(--muted-foreground) !important;
+}
+
+table td {
+  padding: 8px 12px !important;
+  font-size: 13px !important;
+  height: 40px !important;
+  vertical-align: middle !important;
+}
+
+/* Glass Panel / Card Utilities */
+.glass-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.glass-panel:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+/* Focus Ring Customization */
 *:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-/* Scrollbar styling for a cleaner look */
+/* Custom Sleek Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -158,7 +189,7 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: 4px;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -166,8 +197,6 @@ body {
 }
 
 @media print {
-
-  /* Hide UI elements that shouldn't be printed */
   header,
   nav,
   aside,
@@ -202,4 +231,4 @@ body {
     margin: 1.5cm;
     size: auto;
   }
-}
+}

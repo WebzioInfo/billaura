@@ -32,9 +32,9 @@ import {
 } from "./dto/onboard.dto";
 import { UpdateCompanyDto } from "./dto/update-company.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { RefreshTokenDto } from "./dto/refresh.dto";
-
 import { ConfigService } from "@nestjs/config";
 
 @Controller("auth")
@@ -182,53 +182,53 @@ export class AuthController {
     return { success: true, message: "Device session revoked" };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Post("onboard/business")
   @HttpCode(HttpStatus.OK)
   async onboardBusiness(@Request() req: any, @Body() dto: BusinessDetailsDto) {
-    return this.authService.onboardBusinessDetails(req.user.tenantId, dto);
+    return this.authService.onboardBusinessDetails(req.user.companyId || req.user.tenantId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Post("onboard/tax")
   @HttpCode(HttpStatus.OK)
   async onboardTax(@Request() req: any, @Body() dto: TaxDetailsDto) {
-    return this.authService.onboardTaxDetails(req.user.tenantId, dto);
+    return this.authService.onboardTaxDetails(req.user.companyId || req.user.tenantId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Post("onboard/branch")
   @HttpCode(HttpStatus.OK)
   async onboardBranch(@Request() req: any, @Body() dto: BranchSetupDto) {
-    return this.authService.onboardBranchSetup(req.user.tenantId, dto);
+    return this.authService.onboardBranchSetup(req.user.companyId || req.user.tenantId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Post("onboard/subscription")
   @HttpCode(HttpStatus.OK)
   async onboardSubscription(@Request() req: any, @Body() dto: SubscriptionDto) {
-    return this.authService.onboardSubscription(req.user.tenantId, dto);
+    return this.authService.onboardSubscription(req.user.companyId || req.user.tenantId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Get("onboard/status")
   async getOnboardStatus(@Request() req: any) {
-    return this.authService.getOnboardingStatus(req.user.tenantId);
+    return this.authService.getOnboardingStatus(req.user.companyId || req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Get("me")
   async getProfile(@Request() req: any) {
     return this.authService.getProfileWithCompany(
       req.user.userId,
-      req.user.tenantId,
+      req.user.companyId || req.user.tenantId,
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Patch("company")
   async updateCompany(@Request() req: any, @Body() dto: UpdateCompanyDto) {
-    return this.authService.updateCompany(req.user.tenantId, dto);
+    return this.authService.updateCompany(req.user.companyId || req.user.tenantId, dto);
   }
 
   @Post("resend-otp")

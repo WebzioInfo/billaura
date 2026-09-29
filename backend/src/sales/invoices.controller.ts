@@ -10,7 +10,8 @@ import {
   HttpStatus,
   HttpCode,
   Req,
-  Res
+  Res,
+  BadRequestException,
 } from "@nestjs/common";
 import { Response } from 'express';
 import { InvoicesService } from "./invoices.service";
@@ -18,13 +19,15 @@ import { CreateInvoiceDto, InvoiceQueryDto, BulkDownloadInvoicesDto } from "./dt
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 import { PdfEngineService } from "./pdf-engine.service";
+import { ReceiptsService } from "./receipts.service";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller("sales/invoices")
 export class InvoicesController {
   constructor(
     private readonly invoicesService: InvoicesService,
-    private readonly pdfEngineService: PdfEngineService
+    private readonly pdfEngineService: PdfEngineService,
+    private readonly receiptsService: ReceiptsService,
   ) {}
 
   @Get()
@@ -66,6 +69,62 @@ export class InvoicesController {
   @Post()
   async create(@Body() dto: CreateInvoiceDto) {
     return this.invoicesService.create(dto);
+  }
+
+  @Post(":id/payments")
+  async receivePayment(
+    @Param("id") id: string,
+    @Body() dto: any,
+    @Req() req: any
+  ) {
+    const invoice = await this.invoicesService.findOne(id);
+    const balanceDue = Math.max(0, Number(invoice.grandTotal) - Number(invoice.amountPaid));
+    const amount = Number(dto.amount || 0);
+
+    if (amount <= 0) {
+      throw new BadRequestException("Payment amount must be greater than zero.");
+    }
+    if (amount > balanceDue + 0.01) {
+      throw new BadRequestException(`Payment amount ₹${amount.toFixed(2)} exceeds remaining balance of ₹${balanceDue.toFixed(2)}.`);
+    }
+
+    const receiptDto = {
+      date: dto.date || new Date().toISOString(),
+      businessPartnerId: invoice.businessPartnerId,
+      amount,
+      paymentMethod: dto.paymentMethod || 'BANK_TRANSFER',
+      referenceNo: dto.referenceNo || null,
+      notes: dto.notes || null,
+      accountId: dto.accountId || undefined,
+      allocations: [
+        {
+          invoiceId: invoice.id,
+          amount,
+        },
+      ],
+      splitPayments: dto.splitPayments && dto.splitPayments.length > 0 ? dto.splitPayments : [
+        {
+          paymentMethod: dto.paymentMethod || 'BANK_TRANSFER',
+          amount,
+          accountId: dto.accountId || undefined,
+          referenceNo: dto.referenceNo || null,
+        }
+      ]
+    };
+
+    const receipt = await this.receiptsService.create(receiptDto, req.user.userId);
+    return {
+      success: true,
+      message: "Payment recorded successfully",
+      data: {
+        receiptId: receipt.id,
+        receiptNo: receipt.receiptNo,
+        amountReceived: amount,
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        remainingBalance: Math.max(0, balanceDue - amount),
+      },
+    };
   }
 
   @Delete(":id")

@@ -23,10 +23,21 @@ export class AuditInterceptor implements NestInterceptor {
           const finalUserId = user?.userId || user?.id || data?.user?.id || data?.id || null;
           const finalCompanyId = req.headers['x-company-id'] || user?.companyId || data?.tenant?.id || data?.user?.companyId || data?.companyId || null;
 
+          const statusCode = req.res?.statusCode || 200;
+          const isError = statusCode >= 400;
+          const statusText = isError ? `FAILED (${statusCode})` : 'SUCCESS';
+
           // 1. Console Developer Logging
-          this.logger.log(
-            `[${method}] ${url} - Status: SUCCESS - Duration: ${duration}ms - User: ${finalUserId || 'Anonymous'} - Company: ${finalCompanyId || 'None'}`
-          );
+          if (isError) {
+            this.logger.warn(
+              `[${method}] ${url} - Status: ${statusText} - Duration: ${duration}ms - User: ${finalUserId || 'Anonymous'} - Company: ${finalCompanyId || 'None'}`
+            );
+          } else {
+            this.logger.log(
+              `[${method}] ${url} - Status: ${statusText} - Duration: ${duration}ms - User: ${finalUserId || 'Anonymous'} - Company: ${finalCompanyId || 'None'}`
+            );
+          }
+
 
           // 2. DB Auditing - mutative only
           if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {

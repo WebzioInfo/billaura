@@ -510,40 +510,39 @@ export class AuthService {
   }
 
   async updateCompany(companyId: string, data: UpdateCompanyDto) {
+    const settingsPayload: Record<string, any> = {};
+    if (data.logoBase64 !== undefined) settingsPayload.logoBase64 = data.logoBase64;
+    if (data.invoiceConfig !== undefined) settingsPayload.invoiceSettings = data.invoiceConfig;
+
+    const hasSettingsUpdate = Object.keys(settingsPayload).length > 0;
+
     return this.prisma.company.update({
       where: { id: companyId },
       data: {
-        companyName: data.companyName,
-        legalName: data.legalName,
-        gstin: data.gstin,
-        pan: data.pan,
-        email: data.email,
-        phone: data.phone,
-        address: data.address,
-        pinCode: data.pinCode,
-        state: data.state,
-        country: data.country,
-        currency: data.currency,
-        settings: {
-          upsert: {
-            create: {
-              ...(data.logoBase64 !== undefined && { logoBase64: data.logoBase64 }),
-              ...(data.digitalSignatureUrl !== undefined && { digitalSignatureUrl: data.digitalSignatureUrl }),
-              ...(data.companySealUrl !== undefined && { companySealUrl: data.companySealUrl }),
-              ...(data.invoiceConfig !== undefined && { invoiceConfig: data.invoiceConfig }),
+        ...(data.companyName !== undefined && { companyName: data.companyName }),
+        ...(data.legalName !== undefined && { legalName: data.legalName }),
+        ...(data.gstin !== undefined && { gstin: data.gstin }),
+        ...(data.pan !== undefined && { pan: data.pan }),
+        ...(data.email !== undefined && { email: data.email }),
+        ...(data.phone !== undefined && { phone: data.phone }),
+        ...(data.address !== undefined && { address: data.address }),
+        ...(data.pinCode !== undefined && { pinCode: data.pinCode }),
+        ...(data.state !== undefined && { state: data.state }),
+        ...(data.country !== undefined && { country: data.country }),
+        ...(data.currency !== undefined && { currency: data.currency }),
+        ...(hasSettingsUpdate && {
+          settings: {
+            upsert: {
+              create: settingsPayload,
+              update: settingsPayload,
             },
-            update: {
-              ...(data.logoBase64 !== undefined && { logoBase64: data.logoBase64 }),
-              ...(data.digitalSignatureUrl !== undefined && { digitalSignatureUrl: data.digitalSignatureUrl }),
-              ...(data.companySealUrl !== undefined && { companySealUrl: data.companySealUrl }),
-              ...(data.invoiceConfig !== undefined && { invoiceConfig: data.invoiceConfig }),
-            },
-          }
-        }
+          },
+        }),
       },
-      include: { settings: true }
+      include: { settings: true },
     });
   }
+
 
   async resendVerificationOtp(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });

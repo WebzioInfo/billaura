@@ -52,23 +52,18 @@ export class ExportService {
   }
 
   /**
-   * Downloads a generated PDF document from a blob.
+   * Downloads a generated PDF document using automatic directory organization or browser fallback.
    */
-  static downloadPdfBlob(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    
-    if ((navigator as any).msSaveBlob) {
-      (navigator as any).msSaveBlob(blob, filename);
-    } else {
-      link.setAttribute('href', url);
-      link.setAttribute('download', filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+  static async downloadPdfBlob(blob: Blob, filename: string, docType?: string, docTitle?: string) {
+    const { DownloadDirectoryManager } = await import('@/shared/utils/downloadDirectoryManager');
+    return DownloadDirectoryManager.saveDocument({
+      blob,
+      filename,
+      docType,
+      docTitle,
+    });
   }
+
 
   /**
    * Opens a PDF blob in a new tab for preview or printing.

@@ -23,6 +23,7 @@ import { SharedModule } from "../shared/shared.module";
 import { CommissionsModule } from "../commissions/commissions.module";
 
 import { PdfEngineService } from "./pdf-engine.service";
+import { ReactPdfEngineService } from "../documents/pdf-engine/react-pdf-engine.service";
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { PdfEngineService } from "./pdf-engine.service";
     DeliveryNotesService,
     RecurringInvoicesService,
     PdfEngineService,
+    ReactPdfEngineService,
   ],
   exports: [
     InvoicesService,
@@ -60,9 +62,10 @@ import { PdfEngineService } from "./pdf-engine.service";
     QuotationsService,
     ReceiptsService,
     SalesOrdersService,
-    SalesOrdersService,
     DeliveryNotesService,
     RecurringInvoicesService,
+    PdfEngineService,
+    ReactPdfEngineService,
   ],
 })
 export class SalesModule {}

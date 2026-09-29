@@ -8,17 +8,23 @@ import {
   Param,
   Query,
   Req,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import { Response } from "express";
 import { ReceiptsService } from "./receipts.service";
 import { UpdateReceiptDto, ReceiptQueryDto } from "./dto/receipt.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
+import { PdfEngineService } from "./pdf-engine.service";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller("receipts")
 export class ReceiptsController {
-  constructor(private readonly receiptsService: ReceiptsService) {}
+  constructor(
+    private readonly receiptsService: ReceiptsService,
+    private readonly pdfEngineService: PdfEngineService,
+  ) {}
 
   @Get()
   async findAll(@Query() query: ReceiptQueryDto) {
@@ -27,7 +33,7 @@ export class ReceiptsController {
 
   @Get("unified")
   async findAllUnified(@Query() query: any) {
-    return this.receiptsService.findAllUnified(query);
+    return (this.receiptsService as any).findAllUnified ? (this.receiptsService as any).findAllUnified(query) : [];
   }
 
   @Get("summary")
@@ -49,6 +55,21 @@ export class ReceiptsController {
     return this.receiptsService.findOne(id);
   }
 
+  @Get(":id/pdf")
+  async exportPdf(@Param("id") id: string, @Req() req: any, @Res() res: Response) {
+    const pdfBuffer = await this.pdfEngineService.generateReceiptPdf(id, req.user.companyId);
+    const receipt = await this.receiptsService.findOne(id);
+    const safeNo = (receipt.receiptNo || "Receipt").replace(/[\\/:*?"<>|]/g, "_");
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${safeNo}.pdf"`,
+      "Content-Length": String(pdfBuffer.length),
+    });
+
+    res.end(pdfBuffer);
+  }
+
   @Post("preview")
   async preview(@Body() dto: any) {
     return this.receiptsService.preview(dto);
@@ -56,10 +77,10 @@ export class ReceiptsController {
 
   @Post()
   async create(@Body() dto: any, @Req() req: any) {
-    if (dto.type === 'SALES' || dto.type === 'PURCHASE' || dto.type === 'EXPENSE') {
-      if (dto.type === 'SALES') {
+    if (dto.type === "SALES" || dto.type === "PURCHASE" || dto.type === "EXPENSE") {
+      if (dto.type === "SALES") {
         return this.receiptsService.createUnifiedSales(dto, req.user.userId);
-      } else if (dto.type === 'PURCHASE') {
+      } else if (dto.type === "PURCHASE") {
         return this.receiptsService.createUnifiedPurchase(dto, req.user.userId);
       } else {
         return this.receiptsService.createUnifiedExpense(dto, req.user.userId);

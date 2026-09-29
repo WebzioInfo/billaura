@@ -27,14 +27,15 @@ export function DocumentPreviewModal({
       const fetchPdf = async () => {
         try {
           setLoading(true);
-          const response = await apiClient.post('/documents/standard/export', data, {
+          const response: any = await apiClient.post('/documents/standard/export', data, {
             responseType: 'blob'
           });
-          const url = URL.createObjectURL(response.data);
+          const blob = response instanceof Blob ? response : new Blob([response], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
           setPdfUrl(url);
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to generate preview:', error);
-          notification.error('Failed to generate preview');
+          notification.error(error?.response?.data?.message || 'Failed to generate document preview');
         } finally {
           setLoading(false);
         }
@@ -50,76 +51,96 @@ export function DocumentPreviewModal({
 
   if (!isOpen) return null;
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!pdfUrl) return;
-    const link = document.createElement('a');
-    link.href = pdfUrl;
-    link.download = filename;
-    link.click();
+    try {
+      const response = await fetch(pdfUrl);
+      const blob = await response.blob();
+      const { DownloadDirectoryManager } = await import('@/shared/utils/downloadDirectoryManager');
+      const result = await DownloadDirectoryManager.saveDocument({
+        blob,
+        docTitle: data?.document?.title || title,
+        docType: (data as any)?.document?.type || data?.document?.title,
+        filename: filename || 'document.pdf',
+      });
+      if (result.mode === 'filesystem') {
+        notification.success(`PDF saved to ${result.relativePath}`);
+      } else {
+        notification.success('PDF downloaded successfully');
+      }
+    } catch (_) {
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
+
 
   const handlePrint = () => {
     if (!pdfUrl) return;
-    const printWindow = window.open(pdfUrl, '_blank');
+    window.open(pdfUrl, '_blank');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/50 backdrop-blur-sm sm:p-4 md:p-6 lg:p-8">
-      <div className="flex flex-col h-full bg-white rounded-xl shadow-2xl overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/60 backdrop-blur-md sm:p-4 md:p-6 lg:p-8 animate-in fade-in">
+      <div className="flex flex-col h-full bg-surface rounded-2xl shadow-2xl overflow-hidden border border-border">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-b border-border">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-            <p className="text-sm text-slate-500">{filename}</p>
+            <h2 className="text-base font-bold text-foreground">{title}</h2>
+            <p className="text-xs text-muted-foreground">{filename}</p>
           </div>
           
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
               disabled={loading || !pdfUrl}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-foreground bg-surface border border-border rounded-lg hover:bg-slate-100 disabled:opacity-50 transition-colors cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-3.5 h-3.5 text-muted-foreground" />
               <span className="hidden sm:inline">Print</span>
             </button>
             
             <button
               onClick={handleDownload}
               disabled={loading || !pdfUrl}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors cursor-pointer"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Download</span>
             </button>
             
-            <div className="w-px h-6 bg-slate-300 mx-2" />
+            <div className="w-px h-5 bg-border mx-1" />
             
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 bg-slate-100/50 p-4 overflow-hidden relative">
+        <div className="flex-1 bg-slate-100/50 dark:bg-slate-950/50 p-4 overflow-hidden relative">
           {loading ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50">
-              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
-              <p className="text-sm font-medium text-slate-600 animate-pulse">Generating Enterprise Document...</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
+              <p className="text-xs font-semibold text-muted-foreground animate-pulse">Generating Document PDF...</p>
             </div>
           ) : pdfUrl ? (
             <iframe
               src={pdfUrl}
-              className="w-full h-full rounded-lg shadow-sm border border-slate-200 bg-white"
+              className="w-full h-full rounded-xl shadow-xs border border-border bg-white"
               title={title}
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-red-500">
-              Failed to load preview
+            <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-rose-500">
+              Failed to load preview document
             </div>
           )}
         </div>

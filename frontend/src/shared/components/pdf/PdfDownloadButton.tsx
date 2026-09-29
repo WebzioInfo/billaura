@@ -62,7 +62,7 @@ interface PdfDownloadButtonProps {
 
 export const PdfDownloadButton: React.FC<PdfDownloadButtonProps> = ({
   data,
-  filename = 'document.pdf',
+  filename,
   className = ''
 }) => {
   const [loading, setLoading] = useState(false);
@@ -71,41 +71,64 @@ export const PdfDownloadButton: React.FC<PdfDownloadButtonProps> = ({
     try {
       setLoading(true);
       notification.loading('Generating PDF...', { id: 'pdf-gen' });
-      
-      const response = await apiClient.post('/documents/standard/export', data, {
+
+      const response: any = await apiClient.post('/documents/standard/export', data, {
         responseType: 'blob'
       });
-      
-      const url = URL.createObjectURL(response.data);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.click();
-      
-      notification.success('PDF generated successfully', { id: 'pdf-gen' });
-    } catch (error) {
+
+      if (response && response.type === 'application/json') {
+        const text = await response.text();
+        let jsonMsg = 'Failed to generate PDF';
+        try {
+          const parsed = JSON.parse(text);
+          jsonMsg = parsed.message || jsonMsg;
+        } catch (_) {}
+        throw new Error(jsonMsg);
+      }
+
+      const blob = response instanceof Blob ? response : new Blob([response], { type: 'application/pdf' });
+      const safeDocNo = (data.document?.documentNo || 'Document');
+      const finalFileName = filename || `${safeDocNo}.pdf`;
+
+      const { DownloadDirectoryManager } = await import('@/shared/utils/downloadDirectoryManager');
+      const result = await DownloadDirectoryManager.saveDocument({
+        blob,
+        docTitle: data.document?.title,
+        docType: (data as any)?.document?.type || data.document?.title,
+        filename: finalFileName,
+      });
+
+      if (result.mode === 'filesystem') {
+        notification.success(`PDF saved to ${result.relativePath}`, { id: 'pdf-gen' });
+      } else {
+        notification.success('PDF downloaded successfully', { id: 'pdf-gen' });
+      }
+
+    } catch (error: any) {
       console.error('Failed to download PDF:', error);
-      notification.error('Failed to generate PDF', { id: 'pdf-gen' });
+      const errorMsg = error?.response?.data?.message || error?.message || 'Failed to generate PDF';
+      notification.error(errorMsg, { id: 'pdf-gen' });
     } finally {
       setLoading(false);
     }
   };
 
+
   return (
     <button
       onClick={handleDownload}
       disabled={loading}
-      className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+      className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all shadow-2xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${className}`}
     >
       {loading ? (
         <>
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Generating...
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span>Generating...</span>
         </>
       ) : (
         <>
-          <Download className="w-4 h-4" />
-          Download PDF
+          <Download className="w-3.5 h-3.5 text-gray-800" />
+          <span className='text-gray-800'>Download PDF</span>
         </>
       )}
     </button>

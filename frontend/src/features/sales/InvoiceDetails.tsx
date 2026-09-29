@@ -328,7 +328,7 @@ export const InvoiceDetails = () => {
               </Button>
               {outstanding > 0 && invoice.status !== 'CANCELLED' && (
                 <Button
-                  onClick={() => navigate(`/receipts/new?invoiceId=${invoice.id}&customerId=${invoice.businessPartnerId}`)}
+                  onClick={() => setIsRecordPaymentOpen(true)}
                   variant="primary"
                   size="sm"
                   className="flex items-center gap-1.5 h-9 cursor-pointer"
