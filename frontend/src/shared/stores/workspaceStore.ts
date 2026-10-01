@@ -33,17 +33,31 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       openTab: (newTab) => {
         set((state) => {
-          // If tab already exists, update its path and make it active
-          const existingIndex = state.tabs.findIndex(t => t.id === newTab.id);
+          const cleanNewId = newTab.id.replace(/^\/+/, '') || 'dashboard';
+          const cleanNewPath = newTab.path.split('?')[0].replace(/^\/app/, '').replace(/^\/+/, '') || 'dashboard';
+
+          // If tab already exists by ID or path, update its path and make it active
+          const existingIndex = state.tabs.findIndex(t => {
+            const cleanId = t.id.replace(/^\/+/, '') || 'dashboard';
+            const cleanPath = t.path.split('?')[0].replace(/^\/app/, '').replace(/^\/+/, '') || 'dashboard';
+            return cleanId === cleanNewId || cleanPath === cleanNewPath;
+          });
+
           if (existingIndex !== -1) {
             const updatedTabs = [...state.tabs];
-            updatedTabs[existingIndex] = { ...updatedTabs[existingIndex], path: newTab.path, title: newTab.title || updatedTabs[existingIndex].title };
-            return { tabs: updatedTabs, activeTabId: newTab.id };
+            updatedTabs[existingIndex] = {
+              ...updatedTabs[existingIndex],
+              id: cleanNewId,
+              path: newTab.path,
+              title: newTab.title || updatedTabs[existingIndex].title,
+            };
+            return { tabs: updatedTabs, activeTabId: cleanNewId };
           }
-          // Otherwise add it
+
+          // Otherwise add it with clean ID
           return {
-            tabs: [...state.tabs, { ...newTab, isPinned: false }],
-            activeTabId: newTab.id,
+            tabs: [...state.tabs, { ...newTab, id: cleanNewId, isPinned: false }],
+            activeTabId: cleanNewId,
           };
         });
       },

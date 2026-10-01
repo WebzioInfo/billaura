@@ -6,6 +6,11 @@ import { apiClient as api } from '../../core/api/apiClient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExportService } from '@/core/services/ExportService';
 import { DocumentEngine } from '@/core/reporting/DocumentEngine';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Button } from '@/shared/components/ui/Button';
+import { IconButton } from '@/shared/components/ui/IconButton';
 
 // --- TYPES ---
 interface GstrRow {
@@ -202,55 +207,53 @@ export const TaxesDashboard = () => {
   };
 
   return (
-    <div className="space-y-6 text-left p-6 max-w-7xl mx-auto">
-      {/* Header Row */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Shield className="w-6 h-6 text-accent" />
-            GST Tax Return Filing Portal
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Review outward liabilities (GSTR-1), purchase input tax credits (GSTR-2), and consolidated net GST payable.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {activeTab !== 'summary' && (
-            <>
-              <button
-                onClick={handleExportExcel}
-                className="bg-surface text-foreground hover:bg-opacity-90 border border-border px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                Export XLSX
-              </button>
-              <button
-                onClick={handleExportCsv}
-                className="bg-surface text-foreground hover:bg-opacity-90 border border-border px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                Export CSV
-              </button>
-              <button
-                onClick={handlePrint}
-                className="bg-surface text-foreground hover:bg-opacity-90 border border-border px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                Print List
-              </button>
-            </>
-          )}
-          <button
-            onClick={refetchData}
-            className="p-2.5 rounded-xl border border-border hover:bg-surface cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Taxes & GST"
+        secondaryActions={
+          <div className="flex items-center gap-2">
+            {activeTab !== 'summary' && (
+              <>
+                <Button
+                  onClick={handleExportExcel}
+                  variant="secondary"
+                  size="sm"
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                  Export XLSX
+                </Button>
+                <Button
+                  onClick={handleExportCsv}
+                  variant="secondary"
+                  size="sm"
+                >
+                  <Download className="w-4 h-4 mr-1.5" />
+                  Export CSV
+                </Button>
+                <Button
+                  onClick={handlePrint}
+                  variant="secondary"
+                  size="sm"
+                >
+                  <Printer className="w-4 h-4 mr-1.5" />
+                  Print
+                </Button>
+              </>
+            )}
+            <IconButton
+              icon={<RefreshCw className="w-4 h-4" />}
+              aria-label="Refresh tax records"
+              tooltip="Refresh records"
+              variant="secondary"
+              size="sm"
+              onClick={refetchData}
+            />
+          </div>
+        }
+      />
 
       {/* Tabs */}
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border shrink-0">
         <button
           onClick={() => setActiveTab('summary')}
           className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
@@ -355,9 +358,9 @@ export const TaxesDashboard = () => {
         </div>
       ) : (
         // GSTR-1 / GSTR-2 Grids
-        <div className="bg-surface rounded-2xl border border-border shadow-premium overflow-hidden">
+        <div className="space-y-4">
           {/* Simple query filter */}
-          <div className="p-4 border-b border-border bg-background bg-opacity-35 flex gap-4">
+          <div className="flex gap-4">
             <div className="relative flex-1 max-w-md">
               <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
               <input 
@@ -370,41 +373,72 @@ export const TaxesDashboard = () => {
             </div>
           </div>
 
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-background bg-opacity-35 border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                <th className="py-4 px-6">Ref No</th>
-                <th className="py-4 px-6">Party Name</th>
-                <th className="py-4 px-6">GSTIN</th>
-                <th className="py-4 px-6 text-right">Taxable Value</th>
-                <th className="py-4 px-6 text-right">CGST</th>
-                <th className="py-4 px-6 text-right">SGST</th>
-                <th className="py-4 px-6 text-right">IGST</th>
-                <th className="py-4 px-6 text-right">Total Invoice</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(activeTab === 'gstr1' ? gstr1List : gstr2List)
-                .filter(row => 
-                  (row.invoiceNo || row.purchaseNo || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  (row.customerName || row.vendorName || '').toLowerCase().includes(searchQuery.toLowerCase())
-                )
-                .map((row, idx) => (
-                  <tr key={idx} className="border-b border-border/50 hover:bg-background/20 transition-colors text-xs">
-                    <td className="py-4 px-6 font-bold text-foreground">{row.invoiceNo || row.purchaseNo}</td>
-                    <td className="py-4 px-6 text-foreground font-semibold">{row.customerName || row.vendorName}</td>
-                    <td className="py-4 px-6 font-mono">{row.gstin}</td>
-                    <td className="py-4 px-6 text-right font-semibold text-foreground">{formatCurrency(row.taxableValue)}</td>
-                    <td className="py-4 px-6 text-right text-foreground">{formatCurrency(row.cgst)}</td>
-                    <td className="py-4 px-6 text-right text-foreground">{formatCurrency(row.sgst)}</td>
-                    <td className="py-4 px-6 text-right text-foreground">{formatCurrency(row.igst)}</td>
-                    <td className="py-4 px-6 text-right font-bold text-accent">{formatCurrency(row.totalValue)}</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Ref No</TableHead>
+                <TableHead>Party Name</TableHead>
+                <TableHead>GSTIN</TableHead>
+                <TableHead className="text-right">Taxable Value</TableHead>
+                <TableHead className="text-right">CGST</TableHead>
+                <TableHead className="text-right">SGST</TableHead>
+                <TableHead className="text-right">IGST</TableHead>
+                <TableHead className="text-right">Total Invoice</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(() => {
+                const filtered = (activeTab === 'gstr1' ? gstr1List : gstr2List)
+                  .filter(row => 
+                    (row.invoiceNo || row.purchaseNo || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (row.customerName || row.vendorName || '').toLowerCase().includes(searchQuery.toLowerCase())
+                  );
+
+                if (filtered.length === 0) {
+                  return (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-8 text-center text-muted-foreground text-sm">
+                        No transactions found matching your criteria.
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+
+                const totalTaxable = filtered.reduce((s, r) => s + (Number(r.taxableValue) || 0), 0);
+                const totalCgst = filtered.reduce((s, r) => s + (Number(r.cgst) || 0), 0);
+                const totalSgst = filtered.reduce((s, r) => s + (Number(r.sgst) || 0), 0);
+                const totalIgst = filtered.reduce((s, r) => s + (Number(r.igst) || 0), 0);
+                const totalInvoiceVal = filtered.reduce((s, r) => s + (Number(r.totalValue) || 0), 0);
+
+                return (
+                  <>
+                    {filtered.map((row, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium text-foreground">{row.invoiceNo || row.purchaseNo}</TableCell>
+                        <TableCell className="text-foreground">{row.customerName || row.vendorName}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{row.gstin}</TableCell>
+                        <TableCell className="text-right font-medium text-foreground tabular-nums">{formatCurrency(row.taxableValue)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground tabular-nums">{formatCurrency(row.cgst)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground tabular-nums">{formatCurrency(row.sgst)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground tabular-nums">{formatCurrency(row.igst)}</TableCell>
+                        <TableCell className="text-right font-semibold text-foreground tabular-nums">{formatCurrency(row.totalValue)}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow isTotalRow>
+                      <TableCell className="font-semibold text-foreground" colSpan={3}>Total</TableCell>
+                      <TableCell className="text-right font-semibold text-foreground tabular-nums">{formatCurrency(totalTaxable)}</TableCell>
+                      <TableCell className="text-right font-semibold text-foreground tabular-nums">{formatCurrency(totalCgst)}</TableCell>
+                      <TableCell className="text-right font-semibold text-foreground tabular-nums">{formatCurrency(totalSgst)}</TableCell>
+                      <TableCell className="text-right font-semibold text-foreground tabular-nums">{formatCurrency(totalIgst)}</TableCell>
+                      <TableCell className="text-right font-bold text-foreground tabular-nums">{formatCurrency(totalInvoiceVal)}</TableCell>
+                    </TableRow>
+                  </>
+                );
+              })()}
+            </TableBody>
+          </Table>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 };

@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
-import { PageContainer, EmptyState, LoadingState } from '@/shared/components/ui/LayoutComponents';
+import { IconButton } from '@/shared/components/ui/IconButton';
+import { Pagination } from '@/shared/components/ui/Pagination';
+import { usePagination } from '@/shared/hooks/usePagination';
+import { EmptyState, LoadingState } from '@/shared/components/ui/LayoutComponents';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Users, Search, Filter, Download, Upload, Mail, Phone, Briefcase, Building } from 'lucide-react';
+import { Plus, Users, Search, Download, Upload, Mail, Phone, Briefcase, Building } from 'lucide-react';
 import { EmployeeModal } from './components/EmployeeModal';
 import { Badge } from '@/shared/components/ui/Badge';
 
@@ -31,57 +35,58 @@ export const EmployeesList = () => {
     return matchesQuery;
   });
 
+  // TODO: Endpoint /hr/employees should support server-side pagination (?page=&limit=)
+  const {
+    page,
+    limit,
+    paginatedData,
+    totalPages,
+    totalItems,
+    setPage,
+    setLimit,
+  } = usePagination({
+    data: filteredEmployees,
+    tableKey: 'employees_list',
+    defaultLimit: 25,
+  });
+
   return (
-    <PageContainer maxWidth="7xl">
+    <PageLayout>
       <PageHeader
-        title="Employee Directory"
-        description="Manage your workforce, access employee 360 workspaces, and handle HR lifecycle"
+        title="Employees"
+        count={employees.length}
         primaryAction={
-          <div className="flex items-center gap-3">
-            <Button variant="outline" className="flex items-center gap-2">
-              <Upload className="w-4 h-4" /> Import
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" className="flex items-center gap-1.5">
+              <Upload className="w-3.5 h-3.5" /> Import
             </Button>
-            <Button variant="outline" className="flex items-center gap-2">
-              <Download className="w-4 h-4" /> Export
+            <Button variant="secondary" size="sm" className="flex items-center gap-1.5">
+              <Download className="w-3.5 h-3.5" /> Export
             </Button>
             <Button 
               onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 font-bold px-5"
               variant="primary"
+              size="sm"
             >
-              <Plus className="w-4 h-4" /> Add Employee
+              <Plus className="w-4 h-4 mr-1.5" /> Add Employee
             </Button>
           </div>
         }
       />
 
       {/* Directory Toolbar */}
-      <Card className="p-4 mb-6 flex flex-col sm:flex-row gap-4 justify-between items-center bg-card/50 backdrop-blur-sm border-border">
-        <div className="relative w-full sm:w-96">
+      <div className="flex flex-col sm:flex-row gap-3 justify-between items-center shrink-0">
+        <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input 
             type="text" 
-            placeholder="Search by name, code, or designation..." 
+            placeholder="Search employees..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+            className="w-full pl-9 pr-4 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </div>
-        <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-          <select className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 min-w-[130px]">
-            <option value="">All Departments</option>
-          </select>
-          <select className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 min-w-[130px]">
-            <option value="">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="ON_LEAVE">On Leave</option>
-            <option value="TERMINATED">Terminated</option>
-          </select>
-          <Button variant="outline" className="flex items-center gap-2 shrink-0">
-            <Filter className="w-4 h-4" /> More Filters
-          </Button>
-        </div>
-      </Card>
+      </div>
 
       {isLoading ? (
         <LoadingState variant="card" />
@@ -94,68 +99,74 @@ export const EmployeesList = () => {
           onActionClick={() => setIsModalOpen(true)}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredEmployees.map((emp: any) => (
-            <Card 
-              key={emp.id} 
-              className="overflow-hidden hover:shadow-premium transition-all duration-300 cursor-pointer group border-border/50 hover:border-accent/30"
-              onClick={() => navigate(`/employees/${emp.id}`)}
-            >
-              <div className="p-5 flex flex-col items-center text-center relative">
-                {/* Status Badge */}
-                <div className="absolute top-4 right-4">
-                  <Badge variant={emp.status === 'INACTIVE' ? "default" : "success"} className="text-[10px] px-2 py-0.5">
-                    {emp.status || (emp.isActive === false ? 'INACTIVE' : 'ACTIVE')}
-                  </Badge>
-                </div>
+        <div className="flex-1 min-h-0 flex flex-col justify-between mt-3 overflow-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-4">
+            {paginatedData.map((emp: any) => (
+              <Card 
+                key={emp.id} 
+                className="overflow-hidden hover:shadow-xs transition-all duration-200 cursor-pointer group border-border/70 flex flex-col justify-between"
+                onClick={() => navigate(`/employees/${emp.id}`)}
+              >
+                <div className="p-4 flex flex-col items-center text-center relative">
+                  <div className="absolute top-3 right-3">
+                    <Badge variant={emp.status === 'INACTIVE' ? "default" : "success"} className="text-[10px] px-2 py-0.5">
+                      {emp.status || (emp.isActive === false ? 'INACTIVE' : 'ACTIVE')}
+                    </Badge>
+                  </div>
 
-                {/* Avatar */}
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center text-accent font-bold text-2xl border-2 border-background shadow-sm mb-4 group-hover:scale-105 transition-transform duration-300">
-                  {emp.name?.[0]}{emp.name?.split(' ')?.[1]?.[0] || ''}
-                </div>
+                  <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center text-accent font-semibold text-lg border border-border mb-3">
+                    {emp.name?.[0]}{emp.name?.split(' ')?.[1]?.[0] || ''}
+                  </div>
 
-                {/* Info */}
-                <h3 className="font-bold text-lg text-foreground line-clamp-1">{emp.name}</h3>
-                <p className="text-xs text-muted-foreground font-mono mb-2">{emp.employeeCode}</p>
+                  <h3 className="font-semibold text-sm text-foreground line-clamp-1">{emp.name}</h3>
+                  <p className="text-xs text-muted-foreground tabular-nums mb-2">{emp.employeeCode}</p>
+                  
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/80 mb-1">
+                    <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="line-clamp-1">{emp.designation?.name || 'Unassigned Role'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Building className="w-3.5 h-3.5" />
+                    <span className="line-clamp-1">{emp.department?.name || 'Unassigned Dept'}</span>
+                  </div>
+                </div>
                 
-                <div className="flex items-center gap-1.5 text-sm font-medium text-foreground/80 mb-1">
-                  <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="line-clamp-1">{emp.designation?.name || 'Unassigned Role'}</span>
+                <div className="bg-muted/20 px-3 py-2 flex justify-between items-center border-t border-border">
+                  <div className="flex gap-1">
+                    <IconButton
+                      icon={Mail}
+                      aria-label="Email"
+                      tooltip="Email"
+                      size="dense"
+                      onClick={(e) => { e.stopPropagation(); window.location.href=`mailto:${emp.email || ''}`; }}
+                    />
+                    <IconButton
+                      icon={Phone}
+                      aria-label="Call"
+                      tooltip="Call"
+                      size="dense"
+                      onClick={(e) => { e.stopPropagation(); window.location.href=`tel:${emp.mobile || ''}`; }}
+                    />
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs font-medium px-2">
+                    View 360
+                  </Button>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4">
-                  <Building className="w-3.5 h-3.5" />
-                  <span className="line-clamp-1">{emp.department?.name || 'Unassigned Dept'}</span>
-                </div>
+              </Card>
+            ))}
+          </div>
 
-                {/* Quick Stats Grid */}
-                <div className="w-full grid grid-cols-2 gap-2 border-t border-border pt-4 mt-auto">
-                  <div className="text-left">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Attendance</p>
-                    <p className="text-sm font-semibold text-green-600">98%</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Payroll</p>
-                    <p className="text-sm font-semibold">Processed</p>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Quick Actions Hover */}
-              <div className="bg-muted/30 px-4 py-3 flex justify-between items-center border-t border-border opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <div className="flex gap-2">
-                  <button className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded transition-colors" title="Email" onClick={(e) => { e.stopPropagation(); window.location.href=`mailto:${emp.email || ''}`; }}>
-                    <Mail className="w-4 h-4" />
-                  </button>
-                  <button className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded transition-colors" title="Call" onClick={(e) => { e.stopPropagation(); window.location.href=`tel:${emp.mobile || ''}`; }}>
-                    <Phone className="w-4 h-4" />
-                  </button>
-                </div>
-                <Button variant="ghost" size="sm" className="h-7 text-xs font-semibold px-2 hover:bg-accent/10 hover:text-accent">
-                  View 360
-                </Button>
-              </div>
-            </Card>
-          ))}
+          <div className="border-t border-border pt-2 shrink-0">
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              pageSize={limit}
+              onPageChange={setPage}
+              onPageSizeChange={setLimit}
+              itemLabel="employees"
+            />
+          </div>
         </div>
       )}
       
@@ -164,6 +175,6 @@ export const EmployeesList = () => {
         onClose={() => setIsModalOpen(false)} 
         initialData={null}
       />
-    </PageContainer>
+    </PageLayout>
   );
 };

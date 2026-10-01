@@ -1,9 +1,12 @@
-﻿import React from 'react';
+import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { KpiCard, Button, StatusBadge, CurrencyCell, Pagination } from '@/shared/components/ui';
+import { usePagination } from '@/shared/hooks/usePagination';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export const BankingDashboard = () => {
   const { data: stats, isLoading: loadingStats } = useQuery({
@@ -23,73 +26,126 @@ export const BankingDashboard = () => {
     }
   });
 
+  // TODO: Endpoint /finance/bank/accounts should support server-side pagination (?page=&limit=)
+  const {
+    page,
+    limit,
+    paginatedData,
+    totalPages,
+    totalItems,
+    setPage,
+    setLimit,
+  } = usePagination({
+    data: accounts,
+    tableKey: 'bank_accounts',
+    defaultLimit: 25,
+  });
+
   return (
-    <div className="p-8 max-w-[1600px] mx-auto space-y-6">
+    <PageLayout>
       <PageHeader
-        title="Banking Dashboard"
-        description="Manage your bank accounts and monitor liquidity"
+        title="Cash & Bank"
+        count={accounts.length}
         primaryAction={
-          <button className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm">
-            <Plus className="w-4 h-4" /> Add Bank Account
-          </button>
+          <Button variant="primary">
+            <Plus className="w-4 h-4 mr-1.5" /> Add Bank Account
+          </Button>
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="p-6 bg-white border rounded-lg shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-blue-100 text-blue-600 rounded-full">
-            <Building2 className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Total Balance</p>
-            <p className="text-2xl font-bold">₹${loadingStats ? '...' : Number(stats?.totalBalance || 0).toFixed(2)}</p>
-          </div>
-        </div>
-        <div className="p-6 bg-white border rounded-lg shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-green-100 text-green-600 rounded-full">
-            <Building2 className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Active Accounts</p>
-            <p className="text-2xl font-bold">{loadingStats ? '...' : stats?.activeAccounts || 0}</p>
-          </div>
-        </div>
+      {/* KPI Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
+        <KpiCard
+          label="Total Balance"
+          value={
+            loadingStats
+              ? '...'
+              : `₹${Number(stats?.totalBalance || 0).toLocaleString('en-IN', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`
+          }
+          indicatorDot="collected"
+          isLoading={loadingStats}
+        />
+        <KpiCard
+          label="Active Accounts"
+          value={loadingStats ? '...' : String(stats?.activeAccounts || 0)}
+          indicatorDot="outstanding"
+          isLoading={loadingStats}
+        />
       </div>
 
-      <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Account Name</TableHead>
-              <TableHead>Bank</TableHead>
-              <TableHead>Account No</TableHead>
-              <TableHead>Current Balance</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loadingAccounts ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-4">Loading accounts...</TableCell></TableRow>
-            ) : accounts.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-4 text-gray-500">No bank accounts found.</TableCell></TableRow>
-            ) : (
-              accounts.map((account: any) => (
-                <TableRow key={account.id}>
-                  <TableCell className="font-medium">{account.name}</TableCell>
-                  <TableCell>{account.bankName || 'N/A'}</TableCell>
-                  <TableCell>{account.accountNumber || 'N/A'}</TableCell>
-                  <TableCell className="font-semibold">₹${Number(account.currentBalance).toFixed(2)}</TableCell>
-                  <TableCell>
-                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">{account.status}</span>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+      {/* Table Card (The single card, fully dark-theme aware) */}
+      <div className="flex-1 min-h-0 flex flex-col bg-surface dark:bg-[#17161C] border border-border rounded-xl shadow-xs overflow-hidden mt-3">
+        <div className="flex-1 min-h-0 overflow-auto scrollbar-overlay">
+          <table className="w-full text-left border-collapse text-[14px]">
+            <thead className="sticky top-0 z-20 bg-[#34303F] dark:bg-[#1E1C26] text-white font-medium select-none shadow-xs h-12">
+              <tr>
+                <th className="pl-6 pr-4 py-3 text-white font-medium text-[14px]">Account Name</th>
+                <th className="px-4 py-3 text-white font-medium text-[14px]">Bank</th>
+                <th className="px-4 py-3 text-white font-medium text-[14px]">Account No</th>
+                <th className="px-4 py-3 text-white font-medium text-[14px] text-right">Current Balance</th>
+                <th className="pr-6 pl-4 py-3 text-white font-medium text-[14px] text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-none text-[14px]">
+              {loadingAccounts ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-muted-foreground">
+                    Loading accounts...
+                  </td>
+                </tr>
+              ) : accounts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-muted-foreground">
+                    No bank accounts found.
+                  </td>
+                </tr>
+              ) : (
+                paginatedData.map((account: any, idx: number) => {
+                  const isEven = idx % 2 === 1;
+                  return (
+                    <tr
+                      key={account.id}
+                      className={cn(
+                        'h-[52px] border-b border-border/30 transition-colors duration-120',
+                        isEven
+                          ? 'bg-[#F9FAFB] dark:bg-[#1C1B22] hover:bg-[#F3F4F6] dark:hover:bg-[#24232C]'
+                          : 'bg-white dark:bg-[#17161C] hover:bg-[#F3F4F6] dark:hover:bg-[#24232C]'
+                      )}
+                    >
+                      <td className="pl-6 pr-4 py-2 font-medium text-foreground">{account.name}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{account.bankName || '—'}</td>
+                      <td className="px-4 py-2 tabular-nums text-muted-foreground">
+                        {account.accountNumber || '—'}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <CurrencyCell
+                          amount={Number(account.currentBalance || 0)}
+                          className="tabular-nums font-semibold text-foreground"
+                        />
+                      </td>
+                      <td className="pr-6 pl-4 py-2 text-center">
+                        <StatusBadge status={account.status || 'ACTIVE'} />
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={limit}
+          onPageChange={setPage}
+          onPageSizeChange={setLimit}
+          entityName="bank accounts"
+        />
       </div>
-    </div>
+    </PageLayout>
   );
 };
-
-

@@ -12,6 +12,8 @@ import {
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { SearchableSelect } from '@/shared/components/ui/SearchableSelect';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { StatusBadge } from '@/shared/components/ui/StatusBadge';
 
 type MasterTab = 'departments' | 'designations' | 'cost-centres' | 'employment-types' | 'leave-types' | 'salary-components' | 'shifts' | 'holidays';
 
@@ -381,117 +383,109 @@ export const HRMastersManager: React.FC = () => {
             No records found. Click "Add Master" to create your first config.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-background bg-opacity-35 border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                  {activeTab !== 'shifts' && activeTab !== 'holidays' && <th className="py-3 px-4">Code</th>}
-                  <th className="py-3 px-4">Name</th>
-                  {activeTab === 'departments' && <th className="py-3 px-4">Manager</th>}
-                  {activeTab === 'departments' && <th className="py-3 px-4">Cost Center</th>}
-                  {activeTab === 'designations' && <th className="py-3 px-4">Level</th>}
-                  {activeTab === 'cost-centres' && <th className="py-3 px-4">Manager</th>}
-                  {activeTab === 'cost-centres' && <th className="py-3 px-4">Budget (Mo/Yr)</th>}
+          <Table embedded={true}>
+            <TableHeader>
+              <TableRow>
+                {activeTab !== 'shifts' && activeTab !== 'holidays' && <TableHead>Code</TableHead>}
+                <TableHead>Name</TableHead>
+                {activeTab === 'departments' && <TableHead>Manager</TableHead>}
+                {activeTab === 'departments' && <TableHead>Cost Center</TableHead>}
+                {activeTab === 'designations' && <TableHead>Level</TableHead>}
+                {activeTab === 'cost-centres' && <TableHead>Manager</TableHead>}
+                {activeTab === 'cost-centres' && <TableHead className="text-right">Budget (Mo/Yr)</TableHead>}
+                {activeTab === 'shifts' && (
+                  <>
+                    <TableHead>Start Time</TableHead>
+                    <TableHead>End Time</TableHead>
+                  </>
+                )}
+                {activeTab === 'holidays' && <TableHead>Date</TableHead>}
+                {activeTab === 'salary-components' && <TableHead>Type</TableHead>}
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMasters.map((item: any) => (
+                <TableRow key={item.id} className={item.deletedAt ? 'opacity-60 bg-muted/5' : ''}>
+                  {activeTab !== 'shifts' && activeTab !== 'holidays' && (
+                    <TableCell className="font-mono text-xs font-medium text-foreground">{item.code || '-'}</TableCell>
+                  )}
+                  <TableCell className="font-medium text-foreground">
+                    {item.name}
+                    {item.description && (
+                      <p className="text-[11px] text-muted-foreground font-normal mt-0.5">{item.description}</p>
+                    )}
+                  </TableCell>
+                  {activeTab === 'departments' && (
+                    <TableCell className="text-muted-foreground">{item.manager?.name || 'Unassigned'}</TableCell>
+                  )}
+                  {activeTab === 'departments' && (
+                    <TableCell className="text-muted-foreground">{item.costCenter?.name || 'Unassigned'}</TableCell>
+                  )}
+                  {activeTab === 'designations' && (
+                    <TableCell className="text-muted-foreground">{item.level}</TableCell>
+                  )}
+                  {activeTab === 'cost-centres' && (
+                    <TableCell className="text-muted-foreground">{item.manager?.name || 'Unassigned'}</TableCell>
+                  )}
+                  {activeTab === 'cost-centres' && (
+                    <TableCell className="text-right text-xs font-mono text-foreground tabular-nums">
+                      Mo: ₹{Number(item.monthlyBudget || 0).toLocaleString()}<br />
+                      Yr: ₹{Number(item.annualBudget || 0).toLocaleString()}
+                    </TableCell>
+                  )}
                   {activeTab === 'shifts' && (
                     <>
-                      <th className="py-3 px-4">Start Time</th>
-                      <th className="py-3 px-4">End Time</th>
+                      <TableCell className="text-muted-foreground">{item.startTime}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.endTime}</TableCell>
                     </>
                   )}
-                  {activeTab === 'holidays' && <th className="py-3 px-4">Date</th>}
-                  {activeTab === 'salary-components' && <th className="py-3 px-4">Type</th>}
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMasters.map((item: any) => (
-                  <tr key={item.id} className={`border-b border-border/50 hover:bg-background/20 transition-colors ${item.deletedAt ? 'opacity-60 bg-muted/5' : ''}`}>
-                    {activeTab !== 'shifts' && activeTab !== 'holidays' && (
-                      <td className="py-3.5 px-4 font-bold text-foreground">{item.code || '-'}</td>
-                    )}
-                    <td className="py-3.5 px-4 text-sm font-semibold text-foreground">
-                      {item.name}
-                      {item.description && (
-                        <p className="text-[11px] text-muted-foreground font-normal mt-0.5">{item.description}</p>
-                      )}
-                    </td>
-                    {activeTab === 'departments' && (
-                      <td className="py-3.5 px-4 text-sm text-foreground">{item.manager?.name || 'Unassigned'}</td>
-                    )}
-                    {activeTab === 'departments' && (
-                      <td className="py-3.5 px-4 text-sm text-foreground">{item.costCenter?.name || 'Unassigned'}</td>
-                    )}
-                    {activeTab === 'designations' && (
-                      <td className="py-3.5 px-4 text-sm text-foreground">{item.level}</td>
-                    )}
-                    {activeTab === 'cost-centres' && (
-                      <td className="py-3.5 px-4 text-sm text-foreground">{item.manager?.name || 'Unassigned'}</td>
-                    )}
-                    {activeTab === 'cost-centres' && (
-                      <td className="py-3.5 px-4 text-xs font-mono text-foreground">
-                        Mo: ₹{Number(item.monthlyBudget || 0).toLocaleString()}<br />
-                        Yr: ₹{Number(item.annualBudget || 0).toLocaleString()}
-                      </td>
-                    )}
-                    {activeTab === 'shifts' && (
-                      <>
-                        <td className="py-3.5 px-4 text-sm text-foreground">{item.startTime}</td>
-                        <td className="py-3.5 px-4 text-sm text-foreground">{item.endTime}</td>
-                      </>
-                    )}
-                    {activeTab === 'holidays' && (
-                      <td className="py-3.5 px-4 text-sm text-foreground">{item.date?.split('T')[0]}</td>
-                    )}
-                    {activeTab === 'salary-components' && (
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${item.type === 'EARNING' ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
-                          {item.type}
-                        </span>
-                      </td>
-                    )}
-                    <td className="py-3.5 px-4 font-semibold text-xs">
+                  {activeTab === 'holidays' && (
+                    <TableCell className="text-muted-foreground">{item.date?.split('T')[0]}</TableCell>
+                  )}
+                  {activeTab === 'salary-components' && (
+                    <TableCell>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${item.type === 'EARNING' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'}`}>
+                        {item.type}
+                      </span>
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <StatusBadge status={item.deletedAt ? 'archived' : (item.isActive ?? true) ? 'active' : 'inactive'} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
                       {item.deletedAt ? (
-                        <span className="text-amber-500">Archived</span>
-                      ) : (item.isActive ?? true) ? (
-                        <span className="text-green-500">Active</span>
+                        <button
+                          onClick={() => handleRestore(item.id)}
+                          title="Restore"
+                          className="w-7 h-7 inline-flex items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
                       ) : (
-                        <span className="text-red-500">Inactive</span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        {item.deletedAt ? (
+                        <>
                           <button
-                            onClick={() => handleRestore(item.id)}
-                            title="Restore"
-                            className="p-1.5 hover:bg-green-500/10 rounded-lg text-green-600 transition-colors cursor-pointer"
+                            onClick={() => handleOpenEdit(item)}
+                            className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                           >
-                            <RotateCcw className="w-4 h-4" />
+                            <Edit className="w-3.5 h-3.5" />
                           </button>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => handleOpenEdit(item)}
-                              className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteClick(item)}
-                              className="p-1.5 hover:bg-red-500/10 rounded-lg text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          <button
+                            onClick={() => handleDeleteClick(item)}
+                            className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </Card>
 

@@ -7,6 +7,7 @@ import {
 import apiClient from '@/core/api';
 import { Card } from '@/shared/components/ui/Card';
 import { TableLoader } from '@/shared/components/ui/LoadingSystem';
+import { StatusBadge } from '@/shared/components/ui';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import notification from '@/core/services/NotificationService';
 import { ExportService } from '@/core/services/ExportService';
@@ -466,7 +467,7 @@ export function LedgerInquiry() {
               ) : (
                 <div className="flex-1 overflow-auto">
                   <table className="w-full border-collapse text-left table-fixed">
-                    <thead className="bg-muted/10 border-b border-border text-[10px] select-none sticky top-0 bg-surface z-10 h-[34px]">
+                    <thead className="bg-[#34303F] text-white text-[12px] select-none sticky top-0 z-10 h-[38px]">
                       <tr>
                         {[
                           { id: 'date', label: 'Date' },
@@ -478,13 +479,13 @@ export function LedgerInquiry() {
                           { id: 'credit', label: 'Credit (Cr)' },
                           { id: 'balance', label: 'Running Balance' },
                           { id: 'status', label: 'Status' }
-                        ].map(col => (
+                        ].map((col, idx) => (
                           <th 
                             key={col.id} 
                             style={{ width: colWidths[col.id] || 120 }}
-                            className="p-1 font-bold relative group border-r border-border/40 align-middle h-8"
+                            className={`p-2 font-medium text-white relative group align-middle h-[38px] ${idx === 0 ? 'pl-4' : ''} ${col.id === 'debit' || col.id === 'credit' || col.id === 'balance' ? 'text-right' : col.id === 'status' ? 'text-center' : 'text-left'}`}
                           >
-                            <div className="flex items-center justify-between gap-1 cursor-pointer" onClick={() => {
+                            <div className={`flex items-center gap-1 cursor-pointer ${col.id === 'debit' || col.id === 'credit' || col.id === 'balance' ? 'justify-end' : col.id === 'status' ? 'justify-center' : 'justify-between'}`} onClick={() => {
                               if (sortField === col.id) {
                                 setSortAsc(!sortAsc);
                               } else {
@@ -493,24 +494,27 @@ export function LedgerInquiry() {
                               }
                             }}>
                               <span>{col.label}</span>
-                              <ArrowUpDown className="w-2 h-2 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ArrowUpDown className="w-2.5 h-2.5 text-white/60 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </div>
                             <div 
                               onMouseDown={e => {
                                 e.preventDefault();
                                 handleResize(col.id, colWidths[col.id] || 120, e.clientX);
                               }}
-                              className="absolute right-0 top-0 bottom-0 w-1 bg-border/80 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute right-0 top-0 bottom-0 w-1 bg-white/20 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity"
                             />
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border text-[10px]">
+                    <tbody className="text-[12px]">
                       {sortedTransactions.map((tx: any, idx: number) => (
-                        <tr key={tx.id || idx} className="hover:bg-muted/40 transition-colors h-[34px]">
-                          <td className="p-1 border-r border-border/30 truncate">{new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
-                          <td className="p-1 border-r border-border/30 font-mono font-bold text-accent truncate">
+                        <tr 
+                          key={tx.id || idx} 
+                          className={`transition-colors h-[38px] border-b border-[#E8E8EC] dark:border-neutral-800 ${idx % 2 === 1 ? 'bg-[#F5F5F5] dark:bg-[#1A1A1E]' : 'bg-white dark:bg-[#121214]'} hover:bg-[#EFEFF1] dark:hover:bg-[#25252A]`}
+                        >
+                          <td className="p-2 pl-4 truncate text-[#555555] dark:text-[#A1A1AA]">{new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
+                          <td className="p-2 font-mono font-medium text-foreground truncate">
                             <button 
                               onClick={() => setPreviewDoc(tx)}
                               className="hover:underline cursor-pointer text-left w-full truncate"
@@ -518,17 +522,17 @@ export function LedgerInquiry() {
                               {tx.voucherNo}
                             </button>
                           </td>
-                          <td className="p-1 border-r border-border/30 truncate">{tx.voucherType}</td>
-                          <td className="p-1 border-r border-border/30 truncate font-mono">{tx.reference || '-'}</td>
-                          <td className="p-1 border-r border-border/30 truncate text-muted-foreground">{tx.description}</td>
-                          <td className="p-1 border-r border-border/30 text-right text-blue-600 font-semibold">{tx.debit > 0 ? formatCurrency(tx.debit) : '-'}</td>
-                          <td className="p-1 border-r border-border/30 text-right text-amber-600 font-semibold">{tx.credit > 0 ? formatCurrency(tx.credit) : '-'}</td>
-                          <td className="p-1 border-r border-border/30 text-right font-black text-foreground">
+                          <td className="p-2 truncate text-[#555555] dark:text-[#A1A1AA]">{tx.voucherType}</td>
+                          <td className="p-2 truncate font-mono text-xs text-muted-foreground">{tx.reference || '—'}</td>
+                          <td className="p-2 truncate text-[#555555] dark:text-[#A1A1AA]">{tx.description || '—'}</td>
+                          <td className="p-2 text-right tabular-nums text-foreground font-medium">{tx.debit > 0 ? formatCurrency(tx.debit) : '—'}</td>
+                          <td className="p-2 text-right tabular-nums text-foreground font-medium">{tx.credit > 0 ? formatCurrency(tx.credit) : '—'}</td>
+                          <td className="p-2 text-right tabular-nums font-semibold text-foreground">
                             {formatCurrency(Math.abs(tx.runningBalance))}
-                            <span className="text-[8px] font-bold text-muted-foreground ml-0.5">{tx.runningBalance >= 0 ? 'Dr' : 'Cr'}</span>
+                            <span className="text-[10px] font-bold text-muted-foreground ml-1">{tx.runningBalance >= 0 ? 'Dr' : 'Cr'}</span>
                           </td>
-                          <td className="p-1 border-r border-border/30 select-none text-center">
-                            <span className="px-1 py-0.2 rounded text-[8px] font-bold uppercase bg-green-500/10 text-green-600 border border-green-500/20">{tx.status}</span>
+                          <td className="p-2 select-none text-center">
+                            <StatusBadge status={tx.status || 'POSTED'} />
                           </td>
                         </tr>
                       ))}

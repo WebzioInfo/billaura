@@ -1,80 +1,115 @@
-import React from 'react';
-import { ChevronRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { BackNavigation } from './LayoutComponents';
+import { IconButton } from './IconButton';
 
-interface BreadcrumbItem {
-  label: string;
-  href?: string;
-}
-
-interface PageHeaderProps {
+export interface PageHeaderProps {
   title: string;
-  description?: string;
-  breadcrumbs?: BreadcrumbItem[];
+  count?: number | string | null;
+  description?: string; // Kept for contract compatibility, rendered as info tooltip if needed
+  info?: string;
+  breadcrumbs?: Array<{ label: string; href?: string }>; // Ignored per standard (already in top bar)
   primaryAction?: React.ReactNode;
   secondaryAction?: React.ReactNode;
+  secondaryActions?: React.ReactNode;
+  actions?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
+  status?: React.ReactNode;
   backTo?: {
-    label: string;
+    label?: string;
     path?: string;
-  };
+  } | string;
 }
 
-export const PageHeader = ({
+export const PageHeader: React.FC<PageHeaderProps> = ({
   title,
+  count,
   description,
-  breadcrumbs,
+  info,
   primaryAction,
   secondaryAction,
+  secondaryActions,
+  actions,
   children,
-  className,
+  className = '',
+  status,
   backTo,
-}: PageHeaderProps) => {
+}) => {
+  const navigate = useNavigate();
+
+  // Set document title to "<Title> - Bill Aura"
+  useEffect(() => {
+    if (title) {
+      document.title = `${title} - Bill Aura`;
+    }
+  }, [title]);
+
+  const helpText = info || description;
+
+  const handleBack = () => {
+    if (typeof backTo === 'string') {
+      navigate(backTo);
+    } else if (backTo && backTo.path) {
+      navigate(backTo.path);
+    } else {
+      navigate(-1);
+    }
+  };
+
   return (
-    <div className={cn("mb-6 pb-4 border-b border-border/60", className)}>
-      {backTo && (
-        <BackNavigation label={backTo.label} to={backTo.path} className="mb-2" />
+    <div
+      className={cn(
+        'h-12 w-full flex items-center justify-between shrink-0 select-none transition-colors mb-3',
+        className
       )}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex flex-col">
-          {breadcrumbs && breadcrumbs.length > 0 && (
-            <nav aria-label="Breadcrumb" className="flex items-center space-x-1 text-xs text-muted-foreground mb-1">
-              {breadcrumbs.map((item, index) => (
-                <React.Fragment key={index}>
-                  {index > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                  {item.href && index !== breadcrumbs.length - 1 ? (
-                    <Link to={item.href} className="hover:text-foreground transition-colors font-medium">
-                      {item.label}
-                    </Link>
-                  ) : (
-                    <span className="font-medium text-foreground">{item.label}</span>
-                  )}
-                </React.Fragment>
-              ))}
-            </nav>
-          )}
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-            {description && (
-              <span className="hidden md:inline text-xs text-muted-foreground font-normal border-l border-border/80 pl-3">
-                {description}
-              </span>
-            )}
-          </div>
-          {description && (
-            <p className="md:hidden text-xs text-muted-foreground mt-1">{description}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2.5 shrink-0">
-          {secondaryAction}
-          {primaryAction}
-        </div>
+    >
+      {/* Left: Back button (if detail page) + Title + Count Chip + Status + Optional Help Info */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        {backTo && (
+          <IconButton
+            icon={ArrowLeft}
+            aria-label="Back"
+            tooltip={typeof backTo === 'object' && backTo?.label ? backTo.label : 'Go back'}
+            onClick={handleBack}
+            size="dense"
+            variant="ghost"
+            className="mr-0.5"
+          />
+        )}
+
+        <h1 className="text-[20px] leading-[28px] font-semibold tracking-[-0.01em] text-[#111827] dark:text-[#EDEDED] truncate">
+          {title}
+        </h1>
+
+        {count !== undefined && count !== null && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-medium leading-[16px] bg-[#F3F4F6] text-[#4B5563] dark:bg-[#26262C] dark:text-[#A1A1AA] tabular-nums shrink-0">
+            {count}
+          </span>
+        )}
+
+        {status && <div className="ml-1 shrink-0">{status}</div>}
+
+        {helpText && (
+          <span
+            title={helpText}
+            className="text-[#6B7280] dark:text-[#9CA3AF] hover:text-[#111827] dark:hover:text-white cursor-pointer ml-0.5 transition-colors"
+            aria-label={helpText}
+          >
+            <Info className="w-3.5 h-3.5 opacity-70 hover:opacity-100" />
+          </span>
+        )}
       </div>
-      {children}
+
+      {/* Right: Actions Group */}
+      <div className="flex items-center gap-2 shrink-0">
+        {secondaryAction}
+        {secondaryActions}
+        {actions}
+        {children}
+        {primaryAction}
+      </div>
     </div>
   );
 };
-

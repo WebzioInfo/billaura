@@ -1,7 +1,7 @@
-﻿import React from 'react';
+import React from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, CurrencyCell } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 
@@ -29,28 +29,32 @@ export const BomList = () => {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Recipe Name</TableHead>
+            <TableHead className="pl-6 pr-4">Recipe Name</TableHead>
             <TableHead>Output Product</TableHead>
-            <TableHead>Items Count</TableHead>
-            <TableHead>Total Cost</TableHead>
+            <TableHead align="right">Items Count</TableHead>
+            <TableHead align="right" className="pr-6 pl-4">Total Cost</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center py-4">Loading BOMs...</TableCell>
+              <TableCell colSpan={4} className="p-0">
+                <TableLoader rows={4} />
+              </TableCell>
             </TableRow>
           ) : data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">No Bill of Materials found.</TableCell>
+              <TableCell colSpan={4} className="text-center py-12 text-sm text-muted-foreground">
+                No Bill of Materials found.
+              </TableCell>
             </TableRow>
           ) : (
             data.map((bom: any) => (
               <TableRow key={bom.id}>
-                <TableCell className="font-medium">{bom.name}</TableCell>
-                <TableCell>{bom.product?.name || 'N/A'}</TableCell>
-                <TableCell>{bom.items?.length || 0}</TableCell>
-                <TableCell>₹${Number(bom.totalCost || 0).toFixed(2)}</TableCell>
+                <TableCell className="pl-6 pr-4 font-semibold text-foreground">{bom.name}</TableCell>
+                <TableCell className="text-foreground">{bom.product?.name || '—'}</TableCell>
+                <TableCell align="right" className="tabular-nums font-mono text-muted-foreground">{bom.items?.length || 0}</TableCell>
+                <CurrencyCell amount={Number(bom.totalCost || 0)} className="pr-6 pl-4 font-semibold text-foreground" />
               </TableRow>
             ))
           )}

@@ -1,10 +1,29 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 @import "./print.css";
 
 :root {
   color-scheme: light;
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --page-gutter: 20px;
+
+  /* Responsive page gutter */
+  @media (max-width: 1279px) {
+    --page-gutter: 16px;
+  }
+  @media (max-width: 767px) {
+    --page-gutter: 12px;
+  }
+
+  /* Standard text tokens */
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-tertiary: #6B7280;
+
   --background: #f8fafc;
   --surface: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
   --foreground: #0f172a;
   --muted-foreground: #475569;
   --border: #e2e8f0;
@@ -34,11 +53,69 @@
   --info: #2563eb;
   --info-bg: #eff6ff;
 
-  /* Elevation Shadows */
-  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
-  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04);
-  --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.07), 0 2px 4px -2px rgb(15 23 42 / 0.05);
-  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.04);
+  /* Invoice & Document Status Tokens (Light: Table V01 Soft Pills) */
+  --status-paid-bg: #dcfce7;
+  --status-paid-text: #166534;
+  --status-paid-dot: #22c55e;
+
+  --status-overdue-bg: #fee2e2;
+  --status-overdue-text: #991b1b;
+  --status-overdue-dot: #ef4444;
+
+  --status-partial-bg: #fef3c7;
+  --status-partial-text: #92400e;
+  --status-partial-dot: #f59e0b;
+
+  --status-issued-bg: #dbeafe;
+  --status-issued-text: #1e40af;
+  --status-issued-dot: #3b82f6;
+
+  --status-draft-bg: #f3f4f6;
+  --status-draft-text: #4b5563;
+  --status-draft-dot: #9ca3af;
+
+  --status-cancelled-bg: #f3f4f6;
+  --status-cancelled-text: #6b7280;
+  --status-cancelled-dot: #9ca3af;
+
+  --status-violet-bg: #f3e8ff;
+  --status-violet-text: #6b21a8;
+  --status-violet-dot: #a855f7;
+
+  /* Document Type Tokens (Light: 1px outline soft pills) */
+  --doctype-tax-bg: transparent;
+  --doctype-tax-text: #374151;
+  --doctype-tax-border: #d1d5db;
+
+  --doctype-supply-bg: #f5f3ff;
+  --doctype-supply-text: #6d28d9;
+  --doctype-supply-border: #ddd6fe;
+
+  --doctype-credit-bg: #fffbeb;
+  --doctype-credit-text: #b45309;
+  --doctype-credit-border: #fde68a;
+
+  --doctype-proforma-bg: #f0fdfa;
+  --doctype-proforma-text: #0f766e;
+  --doctype-proforma-border: #99f6e4;
+
+  /* Table V01 Reference Style Tokens (Light) */
+  --table-header-bg: #34303f;
+  --table-header-text: #ffffff;
+  --table-zebra-even: #f5f5f5;
+  --table-zebra-odd: #ffffff;
+  --table-row-hover: #efeff1;
+  --table-row-selected: #ececf1;
+  --table-container-border: #e8e8ec;
+  --table-text-muted: #555555;
+  --table-text-ink: #1f2937;
+  --table-text-bold: #111827;
+
+  /* Elevation Shadows (Soft shadow for container) */
+  --shadow-xs: none;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
 
   /* Density Spacing Tokens */
   --spacing-xs: 4px;
@@ -46,13 +123,32 @@
   --spacing-md: 12px;
   --spacing-lg: 16px;
   --spacing-xl: 24px;
+
+  /* Sidebar Tokens (Light) */
+  --sidebar-bg: #ffffff;
+  --sidebar-border: #e5e7eb;
+  --sidebar-group-text: #374151;
+  --sidebar-item-text: #4b5563;
+  --sidebar-item-hover: #f3f4f6;
+  --sidebar-active-bg: #34303f;
+  --sidebar-active-text: #ffffff;
+  --sidebar-guide: #e5e7eb;
+  --sidebar-guide-active: #34303f;
 }
 
-:root.dark {
+:root.dark,
+.dark {
   color-scheme: dark;
+  /* Standard text tokens (Dark) */
+  --text-primary: #F3F4F6;
+  --text-secondary: #D1D5DB;
+  --text-tertiary: #9CA3AF;
+
   /* Enterprise Dark Theme */
   --background: #090d16;
   --surface: #0f172a;
+  --card: #17161c;
+  --card-foreground: #f8fafc;
   --foreground: #f8fafc;
   --muted-foreground: #94a3b8;
   --border: #1e293b;
@@ -81,11 +177,94 @@
   --danger-bg: #7f1d1d;
   --info: #3b82f6;
   --info-bg: #1e3a8a;
+
+  /* Invoice & Document Status Tokens (Dark: Table V01 Soft Pills) */
+  --status-paid-bg: rgba(20, 83, 45, 0.4);
+  --status-paid-text: #4ade80;
+  --status-paid-dot: #22c55e;
+
+  --status-overdue-bg: rgba(127, 29, 29, 0.4);
+  --status-overdue-text: #f87171;
+  --status-overdue-dot: #ef4444;
+
+  --status-partial-bg: rgba(120, 53, 15, 0.4);
+  --status-partial-text: #fbbf24;
+  --status-partial-dot: #f59e0b;
+
+  --status-issued-bg: rgba(30, 58, 138, 0.4);
+  --status-issued-text: #60a5fa;
+  --status-issued-dot: #3b82f6;
+
+  --status-draft-bg: rgba(55, 65, 81, 0.4);
+  --status-draft-text: #9ca3af;
+  --status-draft-dot: #9ca3af;
+
+  --status-cancelled-bg: rgba(55, 65, 81, 0.4);
+  --status-cancelled-text: #9ca3af;
+  --status-cancelled-dot: #9ca3af;
+
+  /* Document Type Tokens (Dark) */
+  --doctype-tax-bg: transparent;
+  --doctype-tax-text: #d1d5db;
+  --doctype-tax-border: #4b5563;
+
+  --doctype-supply-bg: rgba(46, 16, 101, 0.3);
+  --doctype-supply-text: #c4b5fd;
+  --doctype-supply-border: #5b21b6;
+
+  --doctype-credit-bg: rgba(69, 26, 3, 0.3);
+  --doctype-credit-text: #fbbf24;
+  --doctype-credit-border: #78350f;
+
+  --doctype-proforma-bg: rgba(4, 47, 46, 0.3);
+  --doctype-proforma-text: #5eead4;
+  --doctype-proforma-border: #115e59;
+
+  /* Table Tokens (Dark Reference Style) */
+  --table-header-bg: #1e1c26;
+  --table-header-text: #ffffff;
+  --table-zebra-even: #1c1b22;
+  --table-zebra-odd: #17161c;
+  --table-row-hover: #24232c;
+  --table-row-selected: #2b2a36;
+  --table-container-border: #26262a;
+  --table-text-muted: #a1a1aa;
+  --table-text-ink: #ededed;
+  --table-text-bold: #f3f4f6;
+
+  /* Sidebar Tokens (Dark) */
+  --sidebar-bg: #131217;
+  --sidebar-border: #26252c;
+  --sidebar-group-text: #d1d5db;
+  --sidebar-item-text: #9ca3af;
+  --sidebar-item-hover: #1e1d24;
+  --sidebar-active-bg: #2f2b3d;
+  --sidebar-active-text: #ffffff;
+  --sidebar-guide: #2a2933;
+  --sidebar-guide-active: #818cf8;
+}
+
+@media (max-width: 1279px) {
+  :root {
+    --page-gutter: 16px;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --page-gutter: 12px;
+  }
 }
 
 @theme {
+  --font-sans: var(--font-sans);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
   --color-foreground: var(--foreground);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
@@ -97,6 +276,15 @@
   --color-accent-muted: var(--accent-muted);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-group-text: var(--sidebar-group-text);
+  --color-sidebar-item-text: var(--sidebar-item-text);
+  --color-sidebar-item-hover: var(--sidebar-item-hover);
+  --color-sidebar-active-bg: var(--sidebar-active-bg);
+  --color-sidebar-active-text: var(--sidebar-active-text);
+  --color-sidebar-guide: var(--sidebar-guide);
+  --color-sidebar-guide-active: var(--sidebar-guide-active);
 
   /* Border Radii Architecture */
   --radius-sm: 4px;
@@ -106,9 +294,9 @@
   --radius-2xl: 16px;
 }
 
-/* Global Typography & Compact Root Density */
+/* Global Typography & SaaS Density */
 html {
-  font-size: 93.75%; /* 1rem = 15px compact SaaS scaling */
+  font-size: 16px;
   scroll-behavior: smooth;
 }
 
@@ -121,43 +309,105 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
   background-color: var(--background);
-  color: var(--foreground);
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Headings font styling */
-h1, h2, h3, h4, .font-heading {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+/* Ensure all form controls and buttons strictly inherit font */
+input, select, textarea, button {
+  font-family: inherit;
 }
 
-/* Global Table Spacing & Density Overrides */
-table {
-  border-collapse: collapse !important;
-  width: 100%;
+/* Headings font styling strictly Inter */
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: var(--font-sans);
 }
 
-table th {
-  padding: 9px 12px !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.04em !important;
-  height: 38px !important;
-  vertical-align: middle !important;
-  color: var(--muted-foreground) !important;
+/* Standard App-Wide Typography Scale */
+.text-title-display {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-table td {
-  padding: 8px 12px !important;
-  font-size: 13px !important;
-  height: 40px !important;
-  vertical-align: middle !important;
+.text-title-page {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
+
+.text-title-section {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.text-body-default {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.text-table-cell {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.text-table-header {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.text-label-form {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.text-caption {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+
+.text-kpi-val {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.text-kpi-lbl {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.text-button {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.text-button-sm {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
 
 /* Glass Panel / Card Utilities */
 .glass-panel {
@@ -194,6 +444,34 @@ table td {
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--muted-foreground);
+}
+
+/* Custom overlay scrollbar for sidebar and slim panels (6px, transparent track, thumb visible on hover/scroll) */
+.scrollbar-overlay {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+.scrollbar-overlay:hover {
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+.scrollbar-overlay::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-overlay::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-overlay::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+.scrollbar-overlay:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+}
+.scrollbar-overlay::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(107, 114, 128, 0.8);
 }
 
 @media print {

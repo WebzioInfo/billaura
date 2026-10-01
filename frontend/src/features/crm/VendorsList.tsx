@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 
@@ -29,23 +29,31 @@ export const VendorsList = () => {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
+            <TableHead className="pl-6 pr-4">Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Phone</TableHead>
-            <TableHead>Company</TableHead>
+            <TableHead className="pr-6 pl-4">Company</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
-            <TableRow><TableCell colSpan={4}><div className="text-center py-8">Loading...</div></TableCell></TableRow>
+            <TableRow>
+              <TableCell colSpan={4} className="p-0">
+                <TableLoader rows={5} />
+              </TableCell>
+            </TableRow>
           ) : vendors.length === 0 ? (
-            <TableRow><TableCell colSpan={4}><div className="text-center py-8">No vendors found</div></TableCell></TableRow>
-          ) : vendors.map((c) => (
+            <TableRow>
+              <TableCell colSpan={4} className="text-center py-12 text-muted-foreground text-sm">
+                No vendors found
+              </TableCell>
+            </TableRow>
+          ) : vendors.map((c: any) => (
             <TableRow key={c.id}>
-              <TableCell>{c.name}</TableCell>
-              <TableCell>{c.email}</TableCell>
-              <TableCell>{c.phone}</TableCell>
-              <TableCell>{c.companyName}</TableCell>
+              <TableCell className="pl-6 pr-4 font-medium text-foreground">{c.name}</TableCell>
+              <TableCell className="text-muted-foreground text-sm">{c.email || '—'}</TableCell>
+              <TableCell className="text-muted-foreground text-sm">{c.phone || '—'}</TableCell>
+              <TableCell className="pr-6 pl-4 text-foreground">{c.companyName || '—'}</TableCell>
             </TableRow>
           ))}
         </TableBody>

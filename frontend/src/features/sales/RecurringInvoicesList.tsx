@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Edit, Trash2, Search, Filter, Download, Repeat } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
-import { TableLoader } from '@/shared/components/ui/LoadingSystem';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableSkeleton, StatusBadge, CurrencyCell, DateCell } from '@/shared/components/ui';
 import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -110,7 +109,7 @@ export const RecurringInvoicesList = () => {
       </div>
 
       {isLoading ? (
-        <TableLoader cols={6} rows={5} className="mt-6 border border-border/80 bg-surface rounded-2xl" />
+        <TableSkeleton rows={8} cols={6} className="mt-6" />
       ) : invoices.length === 0 ? (
         <div className="mt-6 bg-surface rounded-xl border border-border shadow-sm overflow-hidden">
           <EmptyState
@@ -124,43 +123,51 @@ export const RecurringInvoicesList = () => {
         <div className="border border-border/80 bg-surface rounded-2xl overflow-hidden mt-6 shadow-sm">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/10 border-b border-border">
-                <TableHead className="font-bold">Next Run</TableHead>
-                <TableHead className="font-bold">Customer</TableHead>
-                <TableHead className="font-bold text-right">Amount</TableHead>
-                <TableHead className="font-bold">Frequency</TableHead>
-                <TableHead className="font-bold text-center">Status</TableHead>
-                <TableHead className="font-bold text-right">Actions</TableHead>
-              </TableRow>
+              <tr>
+                <TableHead className="pl-6 pr-4">Next Run</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead align="right">Amount</TableHead>
+                <TableHead>Frequency</TableHead>
+                <TableHead align="center">Status</TableHead>
+                <TableHead align="right" className="pr-6 pl-4">Actions</TableHead>
+              </tr>
             </TableHeader>
             <TableBody>
               {invoices.map((inv: any) => (
-                <TableRow key={inv.id} className="hover:bg-muted/50 border-b border-border transition-colors">
-                  <TableCell className="text-muted-foreground">
-                    {new Date(inv.nextRunDate).toLocaleDateString()}
+                <TableRow key={inv.id} className="group">
+                  <TableCell className="pl-6 pr-4">
+                    <DateCell value={inv.nextRunDate} />
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium text-foreground">{inv.businessPartner?.name || 'Unknown'}</div>
+                    <div className="font-medium text-[#1F2937] dark:text-[#EDEDED] truncate max-w-xs">{inv.businessPartner?.name || '—'}</div>
                   </TableCell>
-                  <TableCell className="text-right font-medium">
-                    ₹{Number(inv.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <TableCell align="right">
+                    <CurrencyCell value={inv.grandTotal} isBold />
                   </TableCell>
                   <TableCell>
-                    <span className="text-muted-foreground">{inv.frequency}</span>
+                    <span className="text-[#555555] dark:text-[#A1A1AA] text-xs font-medium">{inv.frequency}</span>
                   </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={inv.status === 'ACTIVE' ? 'success' : 'default'}>
-                      {inv.status}
-                    </Badge>
+                  <TableCell align="center">
+                    <StatusBadge status={inv.status || 'ACTIVE'} />
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="outline" size="sm" className="px-2" onClick={() => handleEdit(inv)}>
+                  <TableCell align="right" className="pr-6 pl-4">
+                    <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-120">
+                      <button
+                        type="button"
+                        className="w-[30px] h-[30px] rounded-[6px] text-[#6B7280] hover:text-[#111827] dark:hover:text-[#EDEDED] hover:bg-[#E5E7EB] dark:hover:bg-[#374151] flex items-center justify-center cursor-pointer transition-colors"
+                        title="Edit Profile"
+                        onClick={() => handleEdit(inv)}
+                      >
                         <Edit className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="outline" size="sm" className="px-2 text-destructive" onClick={() => handleDeleteRequest(inv)}>
+                      </button>
+                      <button
+                        type="button"
+                        className="w-[30px] h-[30px] rounded-[6px] text-[#6B7280] hover:text-[#DC2626] hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center justify-center cursor-pointer transition-colors"
+                        title="Cancel Recurring Invoice"
+                        onClick={() => handleDeleteRequest(inv)}
+                      >
                         <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      </button>
                     </div>
                   </TableCell>
                 </TableRow>

@@ -8,6 +8,7 @@ import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponen
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Badge } from '@/shared/components/ui/Badge';
+import { StatusBadge, DateCell } from '@/shared/components/ui';
 import { ConfirmDialog } from '@/shared/components/ui/action-system/ConfirmDialog';
 import { BrandFormModal } from './BrandFormModal';
 import apiClient from '@/core/api';
@@ -178,89 +179,62 @@ export const BrandsList = () => {
           />
         </div>
       ) : (
-        <div className="border border-border/80 bg-surface rounded-2xl overflow-hidden mt-6 shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/10 border-b border-border">
-                <TableHead className="font-bold w-[250px]">Brand Info</TableHead>
-                <TableHead className="font-bold">Code</TableHead>
-                <TableHead className="font-bold text-center">Products</TableHead>
-                <TableHead className="font-bold">Status</TableHead>
-                <TableHead className="font-bold">Created</TableHead>
-                <TableHead className="font-bold text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {brands.map((brand: any) => (
-                <TableRow key={brand.id} className="hover:bg-muted/50 border-b border-border transition-colors">
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border overflow-hidden">
-                        {brand.logoUrl ? (
-                          <img src={brand.logoUrl} alt={brand.brandName} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-lg font-bold text-muted-foreground">
-                            {brand.brandName?.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <div className="font-medium text-foreground">{brand.brandName}</div>
-                        <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                          {brand.description || (brand.website ? <a href={brand.website} target="_blank" rel="noreferrer" className="hover:underline flex items-center gap-1">{brand.website} <ArrowUpRight className="w-3 h-3" /></a> : 'No description')}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono text-xs bg-muted px-2 py-1 rounded border border-border/50">
-                      {brand.brandCode}
+        <Table className="mt-6">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-6 pr-4 w-[250px]">Brand Info</TableHead>
+              <TableHead>Code</TableHead>
+              <TableHead align="right">Products</TableHead>
+              <TableHead align="center">Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead align="right" className="pr-6 pl-4">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {brands.map((brand: any) => (
+              <TableRow key={brand.id}>
+                <TableCell className="pl-6 pr-4">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-foreground">{brand.brandName}</span>
+                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                      {brand.description || (brand.website ? <a href={brand.website} target="_blank" rel="noreferrer" className="hover:underline flex items-center gap-1">{brand.website} <ArrowUpRight className="w-3 h-3" /></a> : '—')}
                     </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="info">{brand._count?.products || 0}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {brand.status === 'ACTIVE' ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Inactive
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(brand.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="px-2"
-                        title="Edit"
-                        onClick={() => handleEdit(brand)}
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Deactivate"
-                        onClick={() => handleDeleteRequest(brand)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {brand.brandCode || '—'}
+                  </span>
+                </TableCell>
+                <TableCell align="right" className="tabular-nums font-medium text-foreground">
+                  {brand._count?.products || 0}
+                </TableCell>
+                <TableCell align="center">
+                  <StatusBadge status={brand.status || 'ACTIVE'} />
+                </TableCell>
+                <DateCell date={brand.createdAt} />
+                <TableCell align="right" className="pr-6 pl-4">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
+                      title="Edit Brand"
+                      onClick={() => handleEdit(brand)}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-rose-600 hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
+                      title="Deactivate Brand"
+                      onClick={() => handleDeleteRequest(brand)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
 
       {/* Forms & Dialogs */}

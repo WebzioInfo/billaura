@@ -1,7 +1,12 @@
 import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Button } from '@/shared/components/ui/Button';
 import { AmountText } from '@/shared/components/ui';
+import { DateCell } from '@/shared/components/ui/data-table/cells';
+import { Pagination } from '@/shared/components/ui/Pagination';
+import { usePagination } from '@/shared/hooks/usePagination';
 import apiClient from '@/core/api';
 import { Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -16,51 +21,78 @@ export const DayBook = () => {
     }
   });
 
+  // TODO: Endpoint /reports/day-book should support server-side pagination (?page=&limit=)
+  const {
+    page,
+    limit,
+    paginatedData,
+    totalPages,
+    totalItems,
+    setPage,
+    setLimit,
+  } = usePagination({
+    data,
+    tableKey: 'day_book',
+    defaultLimit: 25,
+  });
+
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <PageLayout>
       <PageHeader
         title="Day Book"
-        description="Daily transaction register for all accounting entries"
+        count={data.length}
         primaryAction={
-          <button className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm">
+          <Button variant="secondary" className="flex items-center gap-2">
             <Download className="w-4 h-4" /> Export
-          </button>
+          </Button>
         }
       />
-      <div className="glass-panel rounded-2xl border border-border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Voucher No</TableHead>
-              <TableHead>Voucher Type</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead className="text-right">Debit</TableHead>
-              <TableHead className="text-right">Credit</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={6}><div className="text-center py-8 text-muted-foreground">Loading...</div></TableCell></TableRow>
-            ) : data.length === 0 ? (
-              <TableRow><TableCell colSpan={6}><div className="text-center py-8 text-muted-foreground">No entries for today</div></TableCell></TableRow>
-            ) : data.map((item: any, i) => (
-              <TableRow key={i}>
-                <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                <TableCell className="font-medium text-accent">{item.voucherNo}</TableCell>
-                <TableCell>{item.voucherType}</TableCell>
-                <TableCell>{item.accountName}</TableCell>
-                <TableCell className="text-right">
-                  <AmountText value={item.debit} className={Number(item.debit) > 0 ? "text-green-600" : "text-muted-foreground opacity-30 font-normal"} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <AmountText value={item.credit} className={Number(item.credit) > 0 ? "text-red-500" : "text-muted-foreground opacity-30 font-normal"} />
-                </TableCell>
+
+      <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-card border border-border rounded-xl shadow-xs overflow-hidden mt-3">
+        <div className="flex-1 min-h-0 overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-[#34303F] hover:bg-[#34303F] text-white border-none">
+                <TableHead className="pl-6 pr-4 text-white font-medium">Date</TableHead>
+                <TableHead className="text-white font-medium">Voucher No</TableHead>
+                <TableHead className="text-white font-medium">Voucher Type</TableHead>
+                <TableHead className="text-white font-medium">Account</TableHead>
+                <TableHead align="right" className="text-white font-medium">Debit</TableHead>
+                <TableHead align="right" className="pr-6 pl-4 text-white font-medium">Credit</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+              ) : data.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No entries for today</TableCell></TableRow>
+              ) : paginatedData.map((item: any, i: number) => (
+                <TableRow key={i} className="hover:bg-muted/30 transition-colors">
+                  <TableCell className="pl-6 pr-4"><DateCell value={item.date} /></TableCell>
+                  <TableCell className="tabular-nums font-medium text-foreground">{item.voucherNo}</TableCell>
+                  <TableCell className="text-muted-foreground">{item.voucherType}</TableCell>
+                  <TableCell className="text-foreground">{item.accountName}</TableCell>
+                  <TableCell align="right" className="tabular-nums">
+                    <AmountText value={item.debit} className={Number(item.debit) > 0 ? "text-foreground font-semibold" : "text-muted-foreground opacity-30 font-normal"} />
+                  </TableCell>
+                  <TableCell align="right" className="pr-6 pl-4 tabular-nums">
+                    <AmountText value={item.credit} className={Number(item.credit) > 0 ? "text-foreground font-semibold" : "text-muted-foreground opacity-30 font-normal"} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={limit}
+          onPageChange={setPage}
+          onPageSizeChange={setLimit}
+          itemLabel="transactions"
+        />
       </div>
-    </div>
+    </PageLayout>
   );
 };

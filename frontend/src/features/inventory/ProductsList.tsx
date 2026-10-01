@@ -1,14 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { Plus, Edit, Trash2, Search, Filter, Layers, Package, AlertTriangle, TrendingUp, Columns, Eye, ChevronDown, Check, Box, Wrench, Globe, Archive, Server, FileText, Ban } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/shared/components/ui';
-import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, CurrencyCell, Button, IconButton } from '@/shared/components/ui';
+import { EmptyState } from '@/shared/components/ui/LayoutComponents';
+import { Pagination } from '@/shared/components/ui/Pagination';
+import { usePagination } from '@/shared/hooks/usePagination';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { dialog } from '@/core/services/DialogService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/shared/components/ui';
 import ProductFormModal from './ProductFormModal';
 import { ProductDetailsDrawer } from './ProductDetailsDrawer';
 
@@ -196,39 +199,56 @@ export const ProductsList = () => {
 
   const isColVisible = (colId: string) => columns.find(c => c.id === colId)?.visible ?? true;
 
-  return (
-    <PageContainer maxWidth="7xl">
-      {/* UNIFIED COMMAND TOOLBAR HEADER */}
-      <div className="sticky top-0 z-20 bg-surface/95 backdrop-blur-md border border-border rounded-2xl p-4 shadow-sm space-y-3">
-        {/* ROW 1: Title, Global Search (500px+), Controls & Add Button */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Title & Subtitle */}
-          <div className="shrink-0">
-            <h1 className="text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
-              <Package className="w-5 h-5 text-accent" /> Products
-            </h1>
-            <p className="text-[11px] text-muted-foreground">Product Intelligence & Master Catalog</p>
-          </div>
+  // TODO: Endpoint /products should support server-side pagination (?page=&limit=)
+  const {
+    page,
+    limit,
+    paginatedData: paginatedProducts,
+    totalPages,
+    totalItems,
+    setPage,
+    setLimit,
+  } = usePagination({
+    data: filteredProducts,
+    tableKey: 'products_list',
+    defaultLimit: 25,
+  });
 
-          {/* Center Search (Expandable, min-w-[450px]) */}
-          <div className="relative flex-1 max-w-xl min-w-[320px]">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+  return (
+    <PageLayout>
+      <PageHeader
+        title="Products"
+        count={filteredProducts.length}
+        primaryAction={
+          <Button
+            onClick={openNewModal}
+            variant="primary"
+          >
+            <Plus className="w-4 h-4 mr-1.5" /> Add Product
+          </Button>
+        }
+      />
+
+      {/* COMMAND TOOLBAR */}
+      <div className="bg-surface border border-border rounded-xl p-3 shadow-xs space-y-2 shrink-0">
+        {/* ROW 1: Search and Filters */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="relative flex-1 min-w-[280px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search by Product Name, SKU, Barcode, HSN, Category..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-xl text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
+              className="w-full pl-9 pr-4 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent transition-all"
             />
           </div>
 
-          {/* Right Action Controls */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* Type Dropdown */}
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
-              className="px-3 py-2 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none"
+              className="px-2.5 py-1.5 bg-background border border-border rounded-lg text-xs font-medium text-foreground focus:outline-none"
             >
               <option value="ALL">All Types</option>
               <option value="FINISHED_GOOD">Finished Goods</option>
@@ -240,11 +260,10 @@ export const ProductsList = () => {
               <option value="EXPENSE">Expense</option>
             </select>
 
-            {/* Category Dropdown */}
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-2 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none"
+              className="px-2.5 py-1.5 bg-background border border-border rounded-lg text-xs font-medium text-foreground focus:outline-none"
             >
               <option value="ALL">All Categories</option>
               {categories.map((c: any) => (
@@ -254,12 +273,14 @@ export const ProductsList = () => {
 
             {/* Column Chooser Button */}
             <div className="relative">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setIsColumnChooserOpen(!isColumnChooserOpen)}
-                className="px-3 py-2 bg-background border border-border rounded-xl text-xs font-semibold text-foreground flex items-center gap-1.5 hover:bg-muted transition-colors cursor-pointer"
+                className="flex items-center gap-1.5"
               >
-                <Columns className="w-3.5 h-3.5 text-accent" /> Columns <ChevronDown className="w-3 h-3" />
-              </button>
+                <Columns className="w-3.5 h-3.5" /> Columns <ChevronDown className="w-3 h-3" />
+              </Button>
 
               {isColumnChooserOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-surface border border-border rounded-xl shadow-xl z-30 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
@@ -277,15 +298,6 @@ export const ProductsList = () => {
                 </div>
               )}
             </div>
-
-            {/* Primary Add Button */}
-            <Button
-              onClick={openNewModal}
-              variant="primary"
-              className="flex items-center gap-1.5 text-xs px-3.5 py-2 shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add Product
-            </Button>
           </div>
         </div>
 
@@ -394,169 +406,155 @@ export const ProductsList = () => {
           />
         </div>
       ) : (
-        <div className="border border-border/80 bg-surface rounded-2xl overflow-hidden mt-6 shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/20 border-b border-border">
-                {isColVisible('sku') && <TableHead className="font-bold text-xs uppercase">SKU / Code</TableHead>}
-                {isColVisible('name') && <TableHead className="font-bold text-xs uppercase">Product</TableHead>}
-                {isColVisible('itemType') && <TableHead className="font-bold text-xs uppercase">Type</TableHead>}
-                {isColVisible('category') && <TableHead className="font-bold text-xs uppercase">Category</TableHead>}
-                {isColVisible('brand') && <TableHead className="font-bold text-xs uppercase">Brand</TableHead>}
-                {isColVisible('unit') && <TableHead className="font-bold text-xs uppercase">Unit</TableHead>}
-                {isColVisible('sellingPrice') && <TableHead className="font-bold text-xs uppercase text-right">Sell Rate</TableHead>}
-                {isColVisible('purchasePrice') && <TableHead className="font-bold text-xs uppercase text-right">Purchase Cost</TableHead>}
-                {isColVisible('margin') && <TableHead className="font-bold text-xs uppercase text-right">Margin %</TableHead>}
-                {isColVisible('stock') && <TableHead className="font-bold text-xs uppercase text-right">Stock Level</TableHead>}
-                {isColVisible('status') && <TableHead className="font-bold text-xs uppercase text-center">Status</TableHead>}
-                <TableHead className="font-bold text-xs uppercase text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredProducts.map((p: any) => {
-                const totalStock = p.stocks ? p.stocks.reduce((acc: number, curr: any) => acc + Number(curr.quantity || 0), 0) : 0;
-                const sellingPrice = Number(p.sellingPrice || 0);
-                const purchasePrice = Number(p.purchasePrice || 0);
-                const margin = sellingPrice > 0 ? (((sellingPrice - purchasePrice) / sellingPrice) * 100).toFixed(1) : '0';
+        <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-card border border-border rounded-xl shadow-xs overflow-hidden mt-3">
+          <div className="flex-1 min-h-0 overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-[#34303F] hover:bg-[#34303F] text-white border-none">
+                  {isColVisible('sku') && <TableHead className="pl-6 pr-4 text-white font-medium">SKU / Code</TableHead>}
+                  {isColVisible('name') && <TableHead className={cn("text-white font-medium", !isColVisible('sku') && "pl-6 pr-4")}>Product</TableHead>}
+                  {isColVisible('itemType') && <TableHead className="text-white font-medium">Type</TableHead>}
+                  {isColVisible('category') && <TableHead className="text-white font-medium">Category</TableHead>}
+                  {isColVisible('brand') && <TableHead className="text-white font-medium">Brand</TableHead>}
+                  {isColVisible('unit') && <TableHead className="text-white font-medium">Unit</TableHead>}
+                  {isColVisible('sellingPrice') && <TableHead align="right" className="text-white font-medium">Sell Rate</TableHead>}
+                  {isColVisible('purchasePrice') && <TableHead align="right" className="text-white font-medium">Purchase Cost</TableHead>}
+                  {isColVisible('margin') && <TableHead align="right" className="text-white font-medium">Margin %</TableHead>}
+                  {isColVisible('stock') && <TableHead align="right" className="text-white font-medium">Stock Level</TableHead>}
+                  {isColVisible('status') && <TableHead align="center" className="text-white font-medium">Status</TableHead>}
+                  <TableHead align="right" className="pr-6 pl-4 text-white font-medium">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedProducts.map((p: any) => {
+              const totalStock = p.stocks ? p.stocks.reduce((acc: number, curr: any) => acc + Number(curr.quantity || 0), 0) : 0;
+              const sellingPrice = Number(p.sellingPrice || 0);
+              const purchasePrice = Number(p.purchasePrice || 0);
+              const margin = sellingPrice > 0 ? (((sellingPrice - purchasePrice) / sellingPrice) * 100).toFixed(1) : '0';
 
-                return (
-                  <TableRow
-                    key={p.id}
-                    onClick={() => setInspectProductId(p.id)}
-                    className="hover:bg-muted/40 border-b border-border/60 transition-colors cursor-pointer group"
-                  >
-                    {isColVisible('sku') && (
-                      <TableCell className="font-mono text-xs text-muted-foreground font-semibold">
-                        {p.sku || '-'}
-                      </TableCell>
-                    )}
+              return (
+                <TableRow
+                  key={p.id}
+                  onClick={() => setInspectProductId(p.id)}
+                  className="cursor-pointer group"
+                >
+                  {isColVisible('sku') && (
+                    <TableCell className="pl-6 pr-4 font-mono font-medium text-foreground">
+                      {p.sku || '—'}
+                    </TableCell>
+                  )}
 
-                    {isColVisible('name') && (
-                      <TableCell className="font-semibold text-foreground">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center text-accent shrink-0">
-                            {p.imageUrl ? (
-                              <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover rounded-lg" />
-                            ) : (
-                              <Package className="w-4 h-4" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold text-foreground group-hover:text-accent transition-colors">{p.name}</div>
-                            {p.alias && <div className="text-[10px] text-muted-foreground">Alias: {p.alias}</div>}
-                          </div>
-                        </div>
-                      </TableCell>
-                    )}
-
-                    {isColVisible('itemType') && (
-                      <TableCell>
-                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border">
-                          {p.itemType ? p.itemType.replace('_', ' ') : 'FINISHED GOOD'}
-                        </span>
-                      </TableCell>
-                    )}
-
-                    {isColVisible('category') && (
-                      <TableCell className="text-xs text-foreground font-medium">
-                        {p.category?.categoryName || p.category?.name || '-'}
-                      </TableCell>
-                    )}
-
-                    {isColVisible('brand') && (
-                      <TableCell className="text-xs text-muted-foreground">
-                        {p.brand?.name || '-'}
-                      </TableCell>
-                    )}
-
-                    {isColVisible('unit') && (
-                      <TableCell className="text-xs font-semibold text-foreground">
-                        {p.unit || 'PCS'}
-                      </TableCell>
-                    )}
-
-                    {isColVisible('sellingPrice') && (
-                      <TableCell className="text-right font-bold text-sm text-foreground">
-                        ₹{sellingPrice.toLocaleString('en-IN')}
-                      </TableCell>
-                    )}
-
-                    {isColVisible('purchasePrice') && (
-                      <TableCell className="text-right font-medium text-xs text-muted-foreground">
-                        ₹{purchasePrice.toLocaleString('en-IN')}
-                      </TableCell>
-                    )}
-
-                    {isColVisible('margin') && (
-                      <TableCell className="text-right font-bold text-xs text-emerald-500">
-                        {margin}%
-                      </TableCell>
-                    )}
-
-                    {isColVisible('stock') && (
-                      <TableCell className="text-right">
-                        {p.isInventoryItem ? (
-                          <div className="inline-flex items-center gap-1.5 font-bold text-xs">
-                            <span className={totalStock === 0 ? 'text-red-500' : totalStock <= Number(p.reorderLevel || 0) ? 'text-amber-500' : 'text-emerald-500'}>
-                              {totalStock} {p.unit || 'PCS'}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground uppercase">N/A</span>
-                        )}
-                      </TableCell>
-                    )}
-
-                    {isColVisible('status') && (
-                      <TableCell className="text-center">
-                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${p.isActive !== false ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-muted text-muted-foreground'
-                          }`}>
-                          {p.isActive !== false ? 'Active' : 'Inactive'}
-                        </span>
-                      </TableCell>
-                    )}
-
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="px-2 h-8"
-                          title="View Product Intelligence"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setInspectProductId(p.id);
-                          }}
-                        >
-                          <Eye className="w-3.5 h-3.5 text-accent" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="px-2 h-8"
-                          title="Edit"
-                          onClick={(e) => openEditModal(e, p)}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="px-2 h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          title="Delete"
-                          onClick={(e) => handleDelete(e, p.id, p.name)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                  {isColVisible('name') && (
+                    <TableCell className={cn("font-medium text-foreground", !isColVisible('sku') && "pl-6 pr-4")}>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-semibold text-foreground group-hover:underline transition-colors">{p.name}</span>
+                        {p.alias && <span className="text-[11px] text-muted-foreground">({p.alias})</span>}
                       </div>
                     </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+                  )}
+
+                  {isColVisible('itemType') && (
+                    <TableCell className="text-xs text-muted-foreground uppercase font-medium">
+                      {p.itemType ? p.itemType.replace('_', ' ') : 'FINISHED GOOD'}
+                    </TableCell>
+                  )}
+
+                  {isColVisible('category') && (
+                    <TableCell className="text-muted-foreground font-medium">
+                      {p.category?.categoryName || p.category?.name || '—'}
+                    </TableCell>
+                  )}
+
+                  {isColVisible('brand') && (
+                    <TableCell className="text-muted-foreground">
+                      {p.brand?.name || '—'}
+                    </TableCell>
+                  )}
+
+                  {isColVisible('unit') && (
+                    <TableCell className="font-medium text-foreground">
+                      {p.unit || 'PCS'}
+                    </TableCell>
+                  )}
+
+                  {isColVisible('sellingPrice') && (
+                    <CurrencyCell amount={sellingPrice} className="font-semibold text-foreground" />
+                  )}
+
+                  {isColVisible('purchasePrice') && (
+                    <CurrencyCell amount={purchasePrice} />
+                  )}
+
+                  {isColVisible('margin') && (
+                    <TableCell align="right" className="tabular-nums text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                      {margin}%
+                    </TableCell>
+                  )}
+
+                  {isColVisible('stock') && (
+                    <TableCell align="right" className="tabular-nums text-xs font-semibold">
+                      {p.isInventoryItem ? (
+                        <span className={totalStock === 0 ? 'text-red-500' : totalStock <= Number(p.reorderLevel || 0) ? 'text-amber-500' : 'text-foreground'}>
+                          {totalStock} {p.unit || 'PCS'}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground font-normal">N/A</span>
+                      )}
+                    </TableCell>
+                  )}
+
+                  {isColVisible('status') && (
+                    <TableCell align="center">
+                      <StatusBadge status={p.isActive !== false ? 'ACTIVE' : 'INACTIVE'} />
+                    </TableCell>
+                  )}
+
+                  <TableCell align="right" className="pr-6 pl-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <IconButton
+                        icon={Eye}
+                        aria-label="View Details"
+                        tooltip="View Details"
+                        size="dense"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInspectProductId(p.id);
+                        }}
+                      />
+                      <IconButton
+                        icon={Edit}
+                        aria-label="Edit Product"
+                        tooltip="Edit Product"
+                        size="dense"
+                        onClick={(e) => openEditModal(e, p)}
+                      />
+                      <IconButton
+                        icon={Trash2}
+                        aria-label="Delete Product"
+                        tooltip="Delete Product"
+                        size="dense"
+                        variant="danger-ghost"
+                        onClick={(e) => handleDelete(e, p.id, p.name)}
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        pageSize={limit}
+        onPageChange={setPage}
+        onPageSizeChange={setLimit}
+        itemLabel="products"
+      />
+    </div>
+  )}
 
       {/* Product Edit/Create Modal */}
       {isModalOpen && (
@@ -577,6 +575,6 @@ export const ProductsList = () => {
           setIsModalOpen(true);
         }}
       />
-    </PageContainer>
+    </PageLayout>
   );
 };

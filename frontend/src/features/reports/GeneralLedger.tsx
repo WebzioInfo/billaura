@@ -1,6 +1,8 @@
-﻿import React from 'react';
+import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Button } from '@/shared/components/ui/Button';
+import { CurrencyCell, DateCell } from '@/shared/components/ui/data-table/cells';
 import apiClient from '@/core/api';
 import { Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -21,39 +23,41 @@ export const GeneralLedger = () => {
         title="General Ledger"
         description="Detailed transaction history across all accounts"
         primaryAction={
-          <button className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm">
+          <Button variant="outline" className="flex items-center gap-2 font-medium">
             <Download className="w-4 h-4" /> Export
-          </button>
+          </Button>
         }
       />
-      <div className="glass-panel rounded-2xl border border-border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead className="text-right">Debit</TableHead>
-              <TableHead className="text-right">Credit</TableHead>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Account</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead className="text-right">Debit</TableHead>
+            <TableHead className="text-right">Credit</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+          ) : data.length === 0 ? (
+            <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No data found</TableCell></TableRow>
+          ) : data.map((item: any, i: number) => (
+            <TableRow key={i}>
+              <TableCell><DateCell value={item.date} /></TableCell>
+              <TableCell className="font-medium text-foreground">{item.accountName}</TableCell>
+              <TableCell className="text-muted-foreground">{item.description}</TableCell>
+              <TableCell className="text-right">
+                <CurrencyCell amount={Number(item.debit) || 0} />
+              </TableCell>
+              <TableCell className="text-right">
+                <CurrencyCell amount={Number(item.credit) || 0} />
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={5}><div className="text-center py-8 text-muted-foreground">Loading...</div></TableCell></TableRow>
-            ) : data.length === 0 ? (
-              <TableRow><TableCell colSpan={5}><div className="text-center py-8 text-muted-foreground">No data found</div></TableCell></TableRow>
-            ) : data.map((item: any, i) => (
-              <TableRow key={i}>
-                <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                <TableCell className="font-medium">{item.accountName}</TableCell>
-                <TableCell>{item.description}</TableCell>
-                <TableCell className="text-right text-green-600">₹${item.debit}</TableCell>
-                <TableCell className="text-right text-red-600">₹${item.credit}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 };

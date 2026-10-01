@@ -1,6 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, DateCell, CurrencyCell } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -26,40 +26,46 @@ export const FixedAssetsList = () => {
           </button>
         }
       />
-      <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="pl-6 pr-4">Asset Name</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Purchase Date</TableHead>
+            <TableHead align="right">Purchase Price</TableHead>
+            <TableHead align="right">Current Value</TableHead>
+            <TableHead align="center" className="pr-6 pl-4">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
             <TableRow>
-              <TableHead>Asset Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Purchase Date</TableHead>
-              <TableHead>Purchase Price</TableHead>
-              <TableHead>Current Value</TableHead>
-              <TableHead>Status</TableHead>
+              <TableCell colSpan={6} className="p-0">
+                <TableLoader rows={4} />
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-4">Loading assets...</TableCell></TableRow>
-            ) : assets.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-4 text-gray-500">No fixed assets found.</TableCell></TableRow>
-            ) : (
-              assets.map((asset: any) => (
-                <TableRow key={asset.id}>
-                  <TableCell className="font-medium">{asset.name}</TableCell>
-                  <TableCell>{asset.assetType}</TableCell>
-                  <TableCell>{new Date(asset.purchaseDate).toLocaleDateString()}</TableCell>
-                  <TableCell>₹${Number(asset.purchasePrice).toFixed(2)}</TableCell>
-                  <TableCell className="font-semibold">₹${Number(asset.currentValue).toFixed(2)}</TableCell>
-                  <TableCell>
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">{asset.status}</span>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+          ) : assets.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
+                No fixed assets found.
+              </TableCell>
+            </TableRow>
+          ) : (
+            assets.map((asset: any) => (
+              <TableRow key={asset.id}>
+                <TableCell className="pl-6 pr-4 font-semibold text-foreground">{asset.name}</TableCell>
+                <TableCell className="text-muted-foreground">{asset.assetType}</TableCell>
+                <DateCell date={asset.purchaseDate} />
+                <CurrencyCell amount={Number(asset.purchasePrice || 0)} />
+                <CurrencyCell amount={Number(asset.currentValue || 0)} className="font-semibold text-foreground" />
+                <TableCell align="center" className="pr-6 pl-4">
+                  <StatusBadge status={asset.status} />
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 };

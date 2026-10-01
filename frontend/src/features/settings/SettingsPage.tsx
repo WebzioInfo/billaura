@@ -16,6 +16,8 @@ import { apiClient } from '../../core/api/apiClient';
 import { useSessionStore } from '../auth/stores/sessionStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAsyncForm } from '../../shared/hooks/useAsyncForm';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -193,22 +195,11 @@ export const SettingsPage = () => {
   };
 
   return (
-    <div className="space-y-6 text-left p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Settings Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Settings className="w-7 h-7 text-accent" />
-            Administration Settings
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1.5">
-            Configure your workspace, manage branches, and control access permissions.
-          </p>
-        </div>
-      </div>
+    <PageLayout>
+      <PageHeader title="Company & Settings" />
 
       {/* Tabs Row */}
-      <div className="flex border-b border-border overflow-x-auto hide-scrollbar">
+      <div className="flex border-b border-border overflow-x-auto hide-scrollbar shrink-0">
         <button
           onClick={() => setActiveTab('branches')}
           className={`px-4 sm:px-6 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -532,6 +523,6 @@ export const SettingsPage = () => {
           )
         )}
       </div>
-    </div>
+    </PageLayout>
   );
 };

@@ -2,9 +2,9 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../../shared/components/ui/PageHeader';
 import { Button } from '../../../shared/components/ui/Button';
-import { Table } from '../../../shared/components/ui/Table';
-import { Badge } from '../../../shared/components/ui/Badge';
-import { Plus, Edit, Eye, Trash, LogIn, Power } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/Table';
+import { StatusBadge } from '../../../shared/components/ui/StatusBadge';
+import { Plus, Eye, LogIn, Power } from 'lucide-react';
 
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/core/api';
@@ -26,69 +26,85 @@ export const CompaniesList = () => {
         title="Companies"
         description="Manage tenants and their subscription environments"
         primaryAction={
-          <Button onClick={() => navigate('/platform/companies/new')}>
-            <Plus className="w-4 h-4 mr-2" />
+          <Button onClick={() => navigate('/platform/companies/new')} className="flex items-center gap-2">
+            <Plus className="w-4 h-4" />
             Provision Tenant
           </Button>
         }
       />
 
-      <div className="bg-white rounded-lg shadow border border-slate-200">
-        <Table>
-          <thead>
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-600">Company</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-600">Tenant Code</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-600">Subscription</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-600">Status</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold text-slate-600">Usage</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold text-slate-600">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {companies.map((c: any) => (
-              <tr key={c.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center space-x-3">
-                    <img src={c.logo} alt={c.companyName} className="w-8 h-8 rounded bg-slate-200 object-cover" />
-                    <div>
-                      <div className="font-medium text-slate-900">{c.companyName}</div>
-                      <div className="text-xs text-slate-500">Created: {new Date(c.createdAt).toLocaleDateString()}</div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Company</TableHead>
+            <TableHead>Tenant Code</TableHead>
+            <TableHead>Subscription</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Usage</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            <TableRow>
+              <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                Loading tenants...
+              </TableCell>
+            </TableRow>
+          ) : companies.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                No companies found. Create one to get started.
+              </TableCell>
+            </TableRow>
+          ) : (
+            companies.map((c: any) => (
+              <TableRow key={c.id}>
+                <TableCell className="font-medium text-foreground">
+                  <div>
+                    <div className="font-medium text-foreground">{c.companyName}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Created: {new Date(c.createdAt).toLocaleDateString()}
                     </div>
                   </div>
-                </td>
-                <td className="px-4 py-3 text-sm text-slate-600">{c.tenantCode}</td>
-                <td className="px-4 py-3 text-sm text-slate-600">{c.subscription}</td>
-                <td className="px-4 py-3">
-                  <Badge variant={c.status === 'ACTIVE' ? 'success' : 'default'}>{c.status}</Badge>
-                </td>
-                <td className="px-4 py-3 text-sm text-slate-600">
-                  <div>{c.branchesCount} Branches | {c.usersCount} Users</div>
-                  <div className="text-xs text-slate-500">{c.storageUsed} Storage</div>
-                </td>
-                <td className="px-4 py-3 text-right space-x-2">
-                  <Button variant="ghost" size="sm" onClick={() => navigate(`/platform/companies/${c.id}`)}>
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <LogIn className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50">
-                    <Power className="w-4 h-4" />
-                  </Button>
-                </td>
-              </tr>
-            ))}
-            {companies.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                  No companies found. Create one to get started.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </Table>
-      </div>
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{c.tenantCode}</TableCell>
+                <TableCell className="text-foreground">{c.subscription}</TableCell>
+                <TableCell>
+                  <StatusBadge status={c.status} />
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  <div className="text-foreground">{c.branchesCount} Branches | {c.usersCount} Users</div>
+                  <div className="text-[11px] text-muted-foreground">{c.storageUsed} Storage</div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => navigate(`/platform/companies/${c.id}`)}
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                      title="View Tenant"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                      title="Impersonate Tenant"
+                    >
+                      <LogIn className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer"
+                      title="Power Toggle"
+                    >
+                      <Power className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 };

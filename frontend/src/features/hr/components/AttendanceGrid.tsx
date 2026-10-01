@@ -57,19 +57,19 @@ export const AttendanceGrid: React.FC<AttendanceGridProps> = ({
   };
 
   return (
-    <div className="border border-border/80 bg-surface rounded-2xl shadow-sm h-[600px] overflow-auto">
+    <div className="rounded-xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-neutral-200 dark:border-neutral-800 max-h-[650px] overflow-auto">
       <Table className="whitespace-nowrap relative">
-        <TableHeader className="sticky top-0 bg-surface z-10 shadow-sm">
-          <TableRow className="bg-muted/10 border-b border-border/80">
-            <TableHead className="w-12 text-center sticky left-0 bg-surface z-20">
+        <TableHeader className="sticky top-0 z-20">
+          <TableRow>
+            <TableHead className="w-12 text-center sticky left-0 bg-[#34303F] z-30">
               <input 
                 type="checkbox"
-                className="w-4 h-4 rounded border-border cursor-pointer"
+                className="w-4 h-4 rounded border-border cursor-pointer accent-[#34303F]"
                 checked={allSelected} 
                 onChange={(e) => onSelectAll(e.target.checked)} 
               />
             </TableHead>
-            <TableHead className="sticky left-12 bg-surface z-20 w-64 border-r border-border/30">Employee</TableHead>
+            <TableHead className="sticky left-12 bg-[#34303F] z-30 w-64 border-r border-white/10">Employee</TableHead>
             <TableHead>Department</TableHead>
             <TableHead>Shift</TableHead>
             <TableHead className="w-48">Status</TableHead>
@@ -86,7 +86,8 @@ export const AttendanceGrid: React.FC<AttendanceGridProps> = ({
             return (
               <TableRow 
                 key={employee.id} 
-                className={`hover:bg-muted/50 transition-colors cursor-pointer ${isSelected ? 'bg-accent/5' : ''}`}
+                isSelected={isSelected}
+                className="cursor-pointer"
                 onContextMenu={(e) => handleContextMenu(e, employee)}
                 onClick={(e) => {
                   // Prevent drawer if clicking input or select or checkbox
@@ -94,23 +95,18 @@ export const AttendanceGrid: React.FC<AttendanceGridProps> = ({
                   onRowClick?.(employee);
                 }}
               >
-                <TableCell className="text-center sticky left-0 bg-surface z-10 group-hover:bg-muted/50">
+                <TableCell className="text-center sticky left-0 bg-inherit z-10">
                   <input 
                     type="checkbox"
-                    className="w-4 h-4 rounded border-border cursor-pointer"
+                    className="w-4 h-4 rounded border-border cursor-pointer accent-[#34303F]"
                     checked={isSelected} 
                     onChange={() => onSelectToggle(employee.id)} 
                   />
                 </TableCell>
-                <TableCell className="sticky left-12 bg-surface z-10 border-r border-border/30 group-hover:bg-muted/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold text-xs uppercase">
-                      {employee.name?.[0]}{employee.name?.split(' ')?.[1]?.[0] || ''}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-foreground">{employee.name}</div>
-                      <div className="text-[10px] text-muted-foreground">{employee.employeeCode}</div>
-                    </div>
+                <TableCell className="sticky left-12 bg-inherit z-10 border-r border-neutral-200 dark:border-neutral-800">
+                  <div>
+                    <div className="font-medium text-foreground">{employee.name}</div>
+                    <div className="text-[11px] text-muted-foreground font-mono">{employee.employeeCode}</div>
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{employee.department?.name || '-'}</TableCell>

@@ -10,6 +10,7 @@ import {
 import { apiClient } from '../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DeleteDialog } from '../../shared/components/ui';
+import { Button } from '@/shared/components/ui/Button';
 
 const branchSchema = z.object({
   name: z.string().min(2, 'Branch name must be at least 2 characters'),
@@ -156,37 +157,27 @@ export const BranchesList = () => {
 
   return (
     <>
-    <div className="space-y-6">
-      {/* Header section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-accent" />
-            Branch Management
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Configure multi-location organizational branch offices, GSTIN details, and default billing warehouse points.
-          </p>
+      <div className="space-y-4">
+        {/* Action & Filter toolbar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border w-full max-w-md focus-within:border-accent transition-colors">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input 
+            type="text" 
+            placeholder="Search by name, branch code, or GSTIN..." 
+            className="bg-transparent border-none outline-none w-full text-sm text-foreground placeholder:text-muted-foreground"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
-        <button
+        <Button
           onClick={openAddModal}
-          className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+          variant="primary"
+          size="sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 mr-1.5" />
           Add Branch Office
-        </button>
-      </div>
-
-      {/* Query Filter row */}
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-border w-full max-w-md focus-within:border-accent transition-colors">
-        <Search className="w-4 h-4 text-muted-foreground" />
-        <input 
-          type="text" 
-          placeholder="Search by name, branch code, or GSTIN..." 
-          className="bg-transparent border-none outline-none w-full text-sm text-foreground placeholder:text-muted-foreground"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+        </Button>
       </div>
 
       {/* Main Table view */}

@@ -4,6 +4,7 @@ import { apiClient as api } from '../../core/api/apiClient';
 import { Card, CardHeader, CardTitle, CardContent } from '../../shared/components/ui/Card';
 import { PageHeader } from '../../shared/components/ui/PageHeader';
 import { PageContainer, LoadingState } from '../../shared/components/ui/LayoutComponents';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/components/ui/Table';
 import { Building, Users, DollarSign, TrendingUp, TrendingDown, Clock } from 'lucide-react';
 
 export const DepartmentalReport: React.FC = () => {
@@ -90,46 +91,59 @@ export const DepartmentalReport: React.FC = () => {
           </div>
 
           {/* Department Breakdown Table */}
-          <Card className="p-6 bg-surface border border-border">
-            <h3 className="font-bold text-lg text-foreground mb-4">Department Cost Centers Breakdown</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-background bg-opacity-35 border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                    <th className="py-3 px-4">Department</th>
-                    <th className="py-3 px-4 text-center">Headcount</th>
-                    <th className="py-3 px-4 text-right">Salary Cost</th>
-                    <th className="py-3 px-4 text-right">Direct Expenses</th>
-                    <th className="py-3 px-4 text-right">Assigned Income</th>
-                    <th className="py-3 px-4 text-right">Net Profitability</th>
-                    <th className="py-3 px-4 text-center">Attendance (P/A/L)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.map((item: any) => (
-                    <tr key={item.departmentId} className="border-b border-border/50 hover:bg-background/20 transition-colors">
-                      <td className="py-3.5 px-4 font-bold text-foreground">
+          <div className="space-y-3">
+            <h3 className="font-semibold text-lg text-foreground">Department Cost Centers Breakdown</h3>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="text-center">Headcount</TableHead>
+                  <TableHead className="text-right">Salary Cost</TableHead>
+                  <TableHead className="text-right">Direct Expenses</TableHead>
+                  <TableHead className="text-right">Assigned Income</TableHead>
+                  <TableHead className="text-right">Net Profitability</TableHead>
+                  <TableHead className="text-center">Attendance (P/A/L)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {summary.map((item: any) => (
+                  <TableRow key={item.departmentId}>
+                    <TableCell className="font-medium text-foreground">
+                      <div>
                         {item.departmentName}
-                        <p className="text-[10px] text-muted-foreground font-mono font-normal mt-0.5">{item.departmentCode}</p>
-                      </td>
-                      <td className="py-3.5 px-4 text-center text-sm font-semibold text-foreground">{item.headcount}</td>
-                      <td className="py-3.5 px-4 text-right text-sm font-semibold text-foreground">{formatCurrency(item.salaryCost)}</td>
-                      <td className="py-3.5 px-4 text-right text-sm font-semibold text-foreground">{formatCurrency(item.expenseCost)}</td>
-                      <td className="py-3.5 px-4 text-right text-sm font-semibold text-foreground">{formatCurrency(item.incomeValue)}</td>
-                      <td className={`py-3.5 px-4 text-right text-sm font-bold ${item.profitability >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {formatCurrency(item.profitability)}
-                      </td>
-                      <td className="py-3.5 px-4 text-center text-xs text-muted-foreground">
-                        <span className="text-green-500 font-semibold">{item.attendance?.present}P</span> /{' '}
-                        <span className="text-red-500 font-semibold">{item.attendance?.absent}A</span> /{' '}
-                        <span className="text-amber-500 font-semibold">{item.attendance?.leave}L</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+                        <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{item.departmentCode}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center text-sm font-medium text-foreground">{item.headcount}</TableCell>
+                    <TableCell className="text-right text-sm font-medium text-foreground tabular-nums">{formatCurrency(item.salaryCost)}</TableCell>
+                    <TableCell className="text-right text-sm font-medium text-foreground tabular-nums">{formatCurrency(item.expenseCost)}</TableCell>
+                    <TableCell className="text-right text-sm font-medium text-foreground tabular-nums">{formatCurrency(item.incomeValue)}</TableCell>
+                    <TableCell className={`text-right text-sm font-semibold tabular-nums ${item.profitability >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {formatCurrency(item.profitability)}
+                    </TableCell>
+                    <TableCell className="text-center text-xs text-muted-foreground">
+                      <span className="text-green-600 dark:text-green-400 font-semibold">{item.attendance?.present || 0}P</span> /{' '}
+                      <span className="text-red-500 dark:text-red-400 font-semibold">{item.attendance?.absent || 0}A</span> /{' '}
+                      <span className="text-amber-500 dark:text-amber-400 font-semibold">{item.attendance?.leave || 0}L</span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {summary.length > 0 && (
+                  <TableRow isTotalRow>
+                    <TableCell className="font-semibold text-foreground">Total</TableCell>
+                    <TableCell className="text-center font-semibold text-foreground">{totalHeadcount}</TableCell>
+                    <TableCell className="text-right font-semibold text-foreground tabular-nums">{formatCurrency(totalSalary)}</TableCell>
+                    <TableCell className="text-right font-semibold text-foreground tabular-nums">{formatCurrency(totalExpenses)}</TableCell>
+                    <TableCell className="text-right font-semibold text-foreground tabular-nums">{formatCurrency(totalIncome)}</TableCell>
+                    <TableCell className={`text-right font-semibold tabular-nums ${totalProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {formatCurrency(totalProfit)}
+                    </TableCell>
+                    <TableCell className="text-center text-xs text-muted-foreground">-</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
           {/* Designation Grid */}
           <Card className="p-6 bg-surface border border-border">

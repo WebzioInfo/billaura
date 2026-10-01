@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, RefreshCw, Eye, Edit2, Trash2, Users, MapPin, Building2, Phone } from 'lucide-react';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { PageContainer, EmptyState, LoadingState, TableLoader, SummaryCardLoader } from '@/shared/components/ui';
-import { DataTable } from '@/shared/components/ui/data-table/DataTable';
+import { Plus, Eye, Edit2, Trash2, MapPin, Building2, Phone } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
-import { Button } from '@/shared/components/ui/Button';
-import { DeleteDialog } from '@/shared/components/ui';
+
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Button, IconButton, KpiCard, CurrencyCell, DeleteDialog } from '@/shared/components/ui';
+import { DataTable } from '@/shared/components/ui/data-table/DataTable';
+import { usePagination } from '@/shared/hooks/usePagination';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 
@@ -19,21 +20,33 @@ export const VendorsList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-
-  // Pagination
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [vendorToDelete, setVendorToDelete] = useState<any>(null);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['vendors', search, statusFilter, typeFilter, pagination.pageIndex, pagination.pageSize],
+  // Unified pagination
+  const {
+    page,
+    limit,
+    totalPages,
+    totalItems,
+    setPage,
+    setLimit,
+    resetPage,
+  } = usePagination({
+    tableKey: 'vendors',
+    defaultLimit: 25,
+    itemLabel: 'vendors',
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['vendors', search, statusFilter, typeFilter, page, limit],
     queryFn: async () => {
       const res = await apiClient.get('/vendors', {
         params: {
           search: search || undefined,
           status: statusFilter || undefined,
           customerType: typeFilter || undefined,
-          page: pagination.pageIndex + 1,
-          limit: pagination.pageSize
+          page,
+          limit,
         }
       });
       return res.data || {};
@@ -54,50 +67,78 @@ export const VendorsList = () => {
   });
 
   const vendors = data?.data?.items || data?.items || (Array.isArray(data?.data) ? data.data : []) || [];
-  const totalPages = data?.data?.totalPages || data?.meta?.totalPages || 1;
-  const totalItems = data?.data?.total || data?.data?.totalItems || data?.meta?.totalItems || vendors.length || 0;
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
-  };
+  const serverTotal = data?.data?.total || data?.data?.totalItems || data?.meta?.totalItems || vendors.length || 0;
+  const serverTotalPages = data?.data?.totalPages || data?.meta?.totalPages || Math.max(1, Math.ceil(serverTotal / limit));
 
   const columns: ColumnDef<any>[] = useMemo(() => [
     {
       accessorKey: 'bpCode',
       header: 'Vendor Code',
-      cell: ({ row }) => <span className="font-mono font-medium text-foreground">{row.original.bpCode || row.original.vendorCode}</span>
+      cell: ({ row }) => (
+        <span className="tabular-nums font-medium text-[#111827] dark:text-[#EDEDED]">
+          {row.original.bpCode || row.original.vendorCode || '—'}
+        </span>
+      )
     },
     {
       accessorKey: 'name',
       header: 'Vendor Name',
-      cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span className="font-semibold text-foreground">{row.original.name}</span>
-          {row.original.tradeName && <span className="text-xs text-muted-foreground">{row.original.tradeName}</span>}
-        </div>
-      )
+      cell: ({ row }) => {
+        const v = row.original;
+        return (
+          <div className="py-0.5">
+            <button
+              type="button"
+              onClick={() => navigate(`/vendors/${v.id}`)}
+              className="font-medium text-[#111827] dark:text-[#EDEDED] hover:underline text-left cursor-pointer transition-colors block truncate max-w-xs"
+            >
+              {v.name}
+            </button>
+            {v.tradeName && <span className="text-[12px] text-[#6B7280] dark:text-[#9CA3AF] block">{v.tradeName}</span>}
+          </div>
+        );
+      }
     },
     {
       accessorKey: 'contact',
       header: 'Contact Info',
       cell: ({ row }) => (
-        <div className="flex flex-col text-sm space-y-1 mt-1">
-          {row.original.email && <span className="text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" /> {row.original.email}</span>}
-          {row.original.phone && <span className="text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> {row.original.phone}</span>}
+        <div className="text-[13px] space-y-0.5">
+          {row.original.email && (
+            <span className="text-[#4B5563] dark:text-[#D1D5DB] flex items-center gap-1.5 truncate max-w-[180px]">
+              <Building2 className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
+              {row.original.email}
+            </span>
+          )}
+          {row.original.phone && (
+            <span className="text-[#6B7280] dark:text-[#9CA3AF] tabular-nums flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
+              {row.original.phone}
+            </span>
+          )}
         </div>
       )
     },
     {
       accessorKey: 'gstin',
       header: 'GSTIN',
-      cell: ({ row }) => <span className="font-mono text-sm uppercase">{row.original.gstin || '-'}</span>
+      cell: ({ row }) => (
+        <span className="tabular-nums text-[13px] uppercase text-[#111827] dark:text-[#EDEDED]">
+          {row.original.gstin || '—'}
+        </span>
+      )
     },
     {
       accessorKey: 'state',
       header: 'State',
       cell: ({ row }) => (
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          {row.original.state ? <><MapPin className="w-3.5 h-3.5" /> {row.original.state}</> : '-'}
+        <div className="flex items-center gap-1 text-[13px] text-[#4B5563] dark:text-[#D1D5DB]">
+          {row.original.state ? (
+            <>
+              <MapPin className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
+              {row.original.state}
+            </>
+          ) : '—'}
         </div>
       )
     },
@@ -105,9 +146,7 @@ export const VendorsList = () => {
       accessorKey: 'payableBalance',
       header: () => <div className="text-right">Outstanding</div>,
       cell: ({ row }) => (
-        <div className="text-right font-semibold text-foreground">
-          {formatCurrency(Number(row.original.payableBalance || 0))}
-        </div>
+        <CurrencyCell amount={Number(row.original.payableBalance || 0)} className="font-semibold text-foreground text-right" />
       )
     },
     {
@@ -116,34 +155,31 @@ export const VendorsList = () => {
       cell: ({ row }) => {
         const v = row.original;
         return (
-          <div className="flex items-center justify-end gap-2">
-            <Button
+          <div className="flex items-center justify-end gap-1">
+            <IconButton
+              icon={Eye}
+              aria-label="View Vendor"
+              tooltip="View Profile"
+              size="dense"
+              variant="ghost"
               onClick={() => navigate(`/vendors/${v.id}`)}
-              variant="outline"
-              size="sm"
-              title="View Profile"
-              className="h-8 flex items-center gap-1.5"
-            >
-              <Eye className="w-3.5 h-3.5" /> <span className="hidden xl:inline">View</span>
-            </Button>
-            <Button
+            />
+            <IconButton
+              icon={Edit2}
+              aria-label="Edit Vendor"
+              tooltip="Edit Vendor"
+              size="dense"
+              variant="ghost"
               onClick={() => navigate(`/vendors/${v.id}/edit`)}
-              variant="outline"
-              size="sm"
-              title="Edit Vendor"
-              className="h-8 w-8 p-0"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </Button>
-            <Button
+            />
+            <IconButton
+              icon={Trash2}
+              aria-label="Delete Vendor"
+              tooltip="Delete Vendor"
+              size="dense"
+              variant="danger-ghost"
               onClick={() => setVendorToDelete(v)}
-              variant="outline"
-              size="sm"
-              title="Delete Vendor"
-              className="h-8 w-8 p-0 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/50 dark:hover:bg-red-900/20"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
+            />
           </div>
         );
       }
@@ -151,98 +187,80 @@ export const VendorsList = () => {
   ], [navigate]);
 
   const toolbarExtras = (
-    <div className="flex flex-1 flex-wrap items-center gap-3">
-      <div className="relative max-w-sm w-[280px]">
-        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Search vendors..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPagination(prev => ({ ...prev, pageIndex: 0 }));
-          }}
-          className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent"
-        />
-      </div>
-
+    <div className="flex items-center gap-2">
       <select
         value={statusFilter}
         onChange={(e) => {
           setStatusFilter(e.target.value);
-          setPagination(prev => ({ ...prev, pageIndex: 0 }));
+          resetPage();
         }}
-        className="bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none"
+        className="h-9 text-[13px] bg-background border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] px-2.5 text-foreground focus:outline-none cursor-pointer"
+        aria-label="Filter status"
       >
         <option value="">All Statuses</option>
         <option value="ACTIVE">Active</option>
         <option value="INACTIVE">Inactive</option>
       </select>
-
-      <Button onClick={() => refetch()} variant="outline" size="sm" className="h-9 w-9 p-0 rounded-xl" title="Refresh">
-        <RefreshCw className="w-4 h-4" />
-      </Button>
-
-      <div className="ml-auto flex items-center">
-        <Button
-          onClick={() => navigate('/vendors/new')}
-          className="flex items-center gap-2 font-bold px-5 h-9 rounded-xl"
-          variant="primary"
-        >
-          <Plus className="w-4 h-4" /> New Vendor
-        </Button>
-      </div>
     </div>
   );
 
   return (
-    <>
-      <PageContainer maxWidth="7xl">
-        <PageHeader
-          title="Vendors"
-          description="Manage supplier records, purchasing relationships, and outstanding payables."
+    <PageLayout>
+      <PageHeader
+        title="Vendors"
+        count={serverTotal}
+        primaryAction={
+          <Button
+            onClick={() => navigate('/vendors/new')}
+            variant="primary"
+            size="md"
+          >
+            <Plus className="w-4 h-4" /> New Vendor
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 shrink-0 mb-3">
+        <KpiCard
+          label="Total Vendors"
+          value={isLoading ? '—' : serverTotal.toLocaleString('en-IN')}
+          helperText="Active suppliers and payees"
+          isLoading={isLoading}
         />
+      </div>
 
-        {isLoading ? (
-          <SummaryCardLoader count={1} className="grid-cols-1 md:grid-cols-3 gap-6 mb-6" />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="bg-surface border border-border p-6 rounded-2xl flex items-center gap-4 shadow-sm">
-              <div className="p-3.5 bg-blue-500/10 rounded-xl text-blue-500"><Users className="w-6 h-6" /></div>
-              <div>
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Vendors</p>
-                <h3 className="text-2xl font-bold text-foreground mt-1">{totalItems}</h3>
-              </div>
-            </div>
-          </div>
-        )}
+      <DataTable
+        columns={columns}
+        data={vendors}
+        totalItems={serverTotal}
+        manualPagination={true}
+        pageCount={serverTotalPages}
+        pagination={{
+          pageIndex: page - 1,
+          pageSize: limit,
+        }}
+        onPaginationChange={(updater: any) => {
+          const next = typeof updater === 'function' ? updater({ pageIndex: page - 1, pageSize: limit }) : updater;
+          if (next.pageIndex !== undefined) setPage(next.pageIndex + 1);
+          if (next.pageSize !== undefined) setLimit(next.pageSize);
+        }}
+        isLoading={isLoading}
+        storageKey="vendors"
+        searchPlaceholder="Search vendors by name, code, GST..."
+        globalFilter={search}
+        onGlobalFilterChange={(val) => {
+          setSearch(val);
+          resetPage();
+        }}
+        toolbarExtras={toolbarExtras}
+        exportFilename="Vendors_List"
+        itemLabel="vendors"
+        emptyText="No vendors found"
+        emptyDescription="Create your first vendor to start issuing purchase orders and recording bills."
+        emptyActionLabel="Create Vendor"
+        onEmptyAction={() => navigate('/vendors/new')}
+      />
 
-        {isLoading ? (
-          <TableLoader cols={6} rows={6} className="bg-surface border border-border rounded-xl" />
-        ) : vendors.length === 0 && !search && !statusFilter && !typeFilter ? (
-          <EmptyState
-            icon={<Users className="w-8 h-8 text-muted-foreground" />}
-            title="No vendors found"
-            description="Create your first vendor to start issuing purchase orders and recording bills."
-            actionLabel="Create Vendor"
-            onActionClick={() => navigate('/vendors/new')}
-          />
-        ) : (
-          <DataTable
-            columns={columns}
-            data={vendors}
-            toolbarExtras={toolbarExtras}
-            exportFilename="Vendors_List"
-            manualPagination={true}
-            pageCount={totalPages}
-            pagination={pagination}
-            onPaginationChange={setPagination}
-            totalItems={totalItems}
-            emptyText="No vendors match the selected filters."
-          />
-        )}
-      </PageContainer>
-      
       <DeleteDialog
         isOpen={!!vendorToDelete}
         onClose={() => setVendorToDelete(null)}
@@ -256,6 +274,6 @@ export const VendorsList = () => {
         entityId={vendorToDelete?.name}
         warningText="WARNING: Deleting a vendor will remove them from the system. Ensure there are no active purchase orders or pending bills."
       />
-    </>
+    </PageLayout>
   );
 };

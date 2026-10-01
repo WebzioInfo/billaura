@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Edit, Trash2, Search, Download, RefreshCw, BarChart2, CheckCircle2, XCircle, Package } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader } from '@/shared/components/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge } from '@/shared/components/ui';
 import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
@@ -194,64 +194,56 @@ export const CategoriesList = () => {
           />
         </div>
       ) : (
-        <div className="border border-border/80 bg-surface rounded-2xl overflow-hidden mt-4 shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/10 border-b border-border">
-                <TableHead className="font-bold">Category Name</TableHead>
-                <TableHead className="font-bold">Code</TableHead>
-                <TableHead className="font-bold">Products</TableHead>
-                <TableHead className="font-bold">Status</TableHead>
-                <TableHead className="font-bold text-right">Actions</TableHead>
+        <Table className="mt-4">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-6 pr-4">Category Name</TableHead>
+              <TableHead>Code</TableHead>
+              <TableHead align="right">Products</TableHead>
+              <TableHead align="center">Status</TableHead>
+              <TableHead align="right" className="pr-6 pl-4">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredData.map((c: any) => (
+              <TableRow key={c.id}>
+                <TableCell className="pl-6 pr-4 font-medium text-foreground">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-foreground">{c.name}</span>
+                    {c.description && <span className="text-xs text-muted-foreground">{c.description}</span>}
+                  </div>
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {c.code || '—'}
+                </TableCell>
+                <TableCell align="right" className="tabular-nums font-medium text-foreground">
+                  {c._count?.products || 0}
+                </TableCell>
+                <TableCell align="center">
+                  <StatusBadge status={c.status || 'ACTIVE'} />
+                </TableCell>
+                <TableCell align="right" className="pr-6 pl-4">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
+                      title="Edit Category"
+                      onClick={() => handleEdit(c)}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-rose-600 hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
+                      title="Delete Category"
+                      onClick={() => handleDelete(c.id, c.name)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredData.map((c: any) => (
-                <TableRow key={c.id} className="hover:bg-muted/50 border-b border-border transition-colors">
-                  <TableCell className="font-medium text-foreground">
-                    <div className="flex flex-col">
-                      <span>{c.name}</span>
-                      {c.description && <span className="text-xs text-muted-foreground">{c.description}</span>}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {c.code ? <span className="font-mono text-xs px-2 py-1 bg-muted rounded">{c.code}</span> : <span className="text-muted-foreground text-xs">-</span>}
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm font-medium">{c._count?.products || 0}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${c.status === 'ACTIVE' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-                      {c.status || 'ACTIVE'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="px-2"
-                        title="Edit"
-                        onClick={() => handleEdit(c)}
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Delete"
-                        onClick={() => handleDelete(c.id, c.name)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </PageContainer>
   );

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, DateCell } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 
@@ -29,32 +29,38 @@ export const BatchesList = () => {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Batch No</TableHead>
+            <TableHead className="pl-6 pr-4">Batch No</TableHead>
             <TableHead>Product</TableHead>
             <TableHead>Warehouse</TableHead>
             <TableHead>Mfg Date</TableHead>
             <TableHead>Exp Date</TableHead>
-            <TableHead>Quantity</TableHead>
+            <TableHead align="right" className="pr-6 pl-4">Quantity</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-4">Loading batches...</TableCell>
+              <TableCell colSpan={6} className="p-0">
+                <TableLoader rows={4} />
+              </TableCell>
             </TableRow>
           ) : data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">No batches found.</TableCell>
+              <TableCell colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
+                No batches found.
+              </TableCell>
             </TableRow>
           ) : (
             data.map((batch: any) => (
               <TableRow key={batch.id}>
-                <TableCell className="font-medium">{batch.batchNo}</TableCell>
-                <TableCell>{batch.product?.name || 'N/A'}</TableCell>
-                <TableCell>{batch.warehouse?.name || 'N/A'}</TableCell>
-                <TableCell>{batch.mfgDate ? new Date(batch.mfgDate).toLocaleDateString() : 'N/A'}</TableCell>
-                <TableCell>{batch.expDate ? new Date(batch.expDate).toLocaleDateString() : 'N/A'}</TableCell>
-                <TableCell>{Number(batch.qty).toFixed(2)}</TableCell>
+                <TableCell className="pl-6 pr-4 font-mono font-medium text-foreground">{batch.batchNo}</TableCell>
+                <TableCell className="font-semibold text-foreground">{batch.product?.name || '—'}</TableCell>
+                <TableCell className="text-muted-foreground">{batch.warehouse?.name || '—'}</TableCell>
+                <DateCell date={batch.mfgDate} />
+                <DateCell date={batch.expDate} />
+                <TableCell align="right" className="pr-6 pl-4 font-mono tabular-nums font-medium text-foreground">
+                  {Number(batch.qty || 0).toFixed(2)}
+                </TableCell>
               </TableRow>
             ))
           )}

@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Receipt, Search, Filter, Eye, Edit, Copy, DollarSign, 
   Trash2, X, Download, FileText, Calendar, Building, ListFilter,
   CheckCircle, AlertTriangle, ShieldAlert, Sparkles, Send, Briefcase, Printer, ArrowRight
 } from 'lucide-react';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, PageContainer, LoadingState, TableLoader, SummaryCardLoader } from '@/shared/components/ui';
+import { 
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, 
+  IconButton, PageHeader, KpiCard, LoadingState, TableLoader, TableSkeleton, 
+  SummaryCardLoader, StatusBadge, CurrencyCell, DateCell, RelativeDueCell 
+} from '@/shared/components/ui';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { DataTable } from '@/shared/components/ui/data-table/DataTable';
+import { usePagination } from '@/shared/hooks/usePagination';
+import { ColumnDef } from '@tanstack/react-table';
 import apiClient from '@/core/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -426,401 +433,366 @@ export const BillsList = () => {
     return { text: desc, discount: 0 };
   };
 
+  // Unified pagination (Client-side slicing for bills; TODO: endpoint should support server-side pagination)
+  const {
+    page,
+    limit,
+    totalPages,
+    totalItems,
+    setPage,
+    setLimit,
+    resetPage,
+    paginatedData,
+  } = usePagination({
+    tableKey: 'bills',
+    data: filteredBills,
+    itemLabel: 'bills',
+  });
+
+  const columns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      accessorKey: 'purchaseNo',
+      header: 'Bill Code',
+      cell: ({ row }) => (
+        <span className="tabular-nums font-medium text-[#111827] dark:text-[#EDEDED]">
+          {row.original.purchaseNo}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'vendor',
+      header: 'Vendor',
+      cell: ({ row }) => (
+        <span className="font-medium text-[#111827] dark:text-[#EDEDED]">
+          {row.original.vendor?.name || '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'date',
+      header: 'Bill Date',
+      cell: ({ row }) => <DateCell date={row.original.date} />,
+    },
+    {
+      accessorKey: 'dueDate',
+      header: 'Due Date',
+      cell: ({ row }) => (
+        <RelativeDueCell
+          dueDate={row.original.gstBreakup?.dueDate}
+          isPaid={row.original.status === 'PAID'}
+        />
+      ),
+    },
+    {
+      accessorKey: 'reference',
+      header: 'Ref / Invoice No',
+      cell: ({ row }) => (
+        <span className="text-[13px] text-[#4B5563] dark:text-[#9CA3AF] tabular-nums">
+          {row.original.reference || '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'subTotal',
+      header: () => <div className="text-right">Subtotal</div>,
+      cell: ({ row }) => <CurrencyCell amount={Number(row.original.subTotal)} />,
+    },
+    {
+      accessorKey: 'taxTotal',
+      header: () => <div className="text-right">GST Tax</div>,
+      cell: ({ row }) => <CurrencyCell amount={Number(row.original.taxTotal)} />,
+    },
+    {
+      accessorKey: 'grandTotal',
+      header: () => <div className="text-right">Total</div>,
+      cell: ({ row }) => (
+        <CurrencyCell
+          amount={Number(row.original.grandTotal)}
+          className="font-semibold text-foreground text-right"
+        />
+      ),
+    },
+    {
+      accessorKey: 'amountPaid',
+      header: () => <div className="text-right">Paid</div>,
+      cell: ({ row }) => <CurrencyCell amount={Number(row.original.amountPaid)} />,
+    },
+    {
+      accessorKey: 'balance',
+      header: () => <div className="text-right">Balance</div>,
+      cell: ({ row }) => {
+        const balance = getOutstandingBalance(row.original);
+        return (
+          <CurrencyCell
+            amount={balance}
+            className={balance > 0 ? 'font-semibold text-amber-600 dark:text-amber-400 text-right' : 'text-right'}
+          />
+        );
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ row }) => {
+        const isOverdue = isBillOverdue(row.original);
+        return (
+          <div className="text-center">
+            <StatusBadge
+              status={
+                isOverdue && row.original.status !== 'PAID'
+                  ? 'OVERDUE'
+                  : row.original.status || 'POSTED'
+              }
+            />
+          </div>
+        );
+      },
+    },
+    {
+      id: 'actions',
+      header: () => <div className="text-right">Actions</div>,
+      cell: ({ row }) => {
+        const bill = row.original;
+        const balance = getOutstandingBalance(bill);
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <IconButton
+              icon={Eye}
+              aria-label="View Audit Ledger & Details"
+              tooltip="View Audit Ledger & Details"
+              size="dense"
+              variant="ghost"
+              onClick={() => {
+                setSelectedBill(bill);
+                setIsViewModalOpen(true);
+              }}
+            />
+            <IconButton
+              icon={Edit}
+              aria-label="Edit Bill"
+              tooltip="Edit Bill Details"
+              size="dense"
+              variant="ghost"
+              disabled={bill.status === 'PAID'}
+              onClick={() => navigate(`/bills/new?edit=${bill.id}`)}
+            />
+            <IconButton
+              icon={Copy}
+              aria-label="Duplicate Bill"
+              tooltip="Duplicate Bill"
+              size="dense"
+              variant="ghost"
+              onClick={() => navigate(`/bills/new?duplicate=${bill.id}`)}
+            />
+            <IconButton
+              icon={DollarSign}
+              aria-label="Record Payment"
+              tooltip="Record Payout Allocation"
+              size="dense"
+              variant="ghost"
+              disabled={balance <= 0}
+              onClick={() => handleOpenPayment(bill)}
+            />
+            <IconButton
+              icon={X}
+              aria-label="Cancel Bill"
+              tooltip="Cancel & Reverse Entries"
+              size="dense"
+              variant="danger-ghost"
+              disabled={bill.status === 'PAID'}
+              onClick={() => setBillToCancel(bill)}
+            />
+            <IconButton
+              icon={Trash2}
+              aria-label="Delete Bill"
+              tooltip="Delete Bill"
+              size="dense"
+              variant="danger-ghost"
+              disabled={bill.status === 'PAID'}
+              onClick={() => setBillToDelete(bill)}
+            />
+          </div>
+        );
+      },
+    },
+  ], [navigate, isBillOverdue, getOutstandingBalance]);
+
   return (
     <>
-    <PageContainer maxWidth="7xl">
-      <div className="space-y-6 pb-12">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/60 pb-5">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
-              <Receipt className="w-8 h-8 text-primary" /> Bills
-            </h1>
-            <p className="text-muted-foreground mt-1">Manage vendor invoices, track purchase costs, and post accounting ledger journals.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      <PageLayout>
+        <PageHeader
+          title="Bills"
+          count={bills.length}
+          secondaryAction={
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="md" onClick={handleExport}>
+                Export
+              </Button>
+              <IconButton
+                icon={Printer}
+                aria-label="Print Bills"
+                tooltip="Print List"
+                size="md"
+                variant="secondary"
+                onClick={handlePrint}
+              />
+            </div>
+          }
+          primaryAction={
             <Button
               onClick={() => navigate('/bills/new')}
               variant="primary"
-              className="flex items-center gap-2 font-bold bg-primary hover:bg-primary/95 text-primary-foreground shadow-lg px-5 py-2.5 transition-transform active:scale-[0.98]"
+              size="md"
             >
               <Plus className="w-4 h-4" /> New Bill
             </Button>
-            <Button variant="outline" className="gap-1.5 opacity-50 cursor-not-allowed" title="Available in a future release." disabled>
-              <Download className="w-4 h-4" /> Import
-            </Button>
-            <Button variant="outline" className="gap-1.5" onClick={handleExport}>
-              Export
-            </Button>
-            <Button variant="outline" className="p-2.5" onClick={handlePrint}>
-              <Printer className="w-4.5 h-4.5" />
-            </Button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Stats Dashboard Grid */}
-        {loadingBills ? (
-          <SummaryCardLoader count={4} className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-5 border-l-4 border-l-primary relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Outstanding</div>
-              <div className="text-2xl font-black text-foreground mt-2">{formatCurrency(stats.outstandingAmt)}</div>
-              <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                <span className="font-bold text-amber-500">{stats.unpaidCount + stats.partialCount}</span> active bills
-              </div>
-              <DollarSign className="absolute right-4 bottom-4 w-12 h-12 text-primary/10" />
-            </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0 mb-3">
+          <KpiCard
+            label="Total Outstanding"
+            value={loadingBills ? '—' : formatCurrency(stats.outstandingAmt)}
+            helperText={`${stats.unpaidCount + stats.partialCount} active bills`}
+            isLoading={loadingBills}
+          />
+          <KpiCard
+            label="GST Input Credit"
+            value={loadingBills ? '—' : formatCurrency(stats.gstCredit)}
+            helperText="Accumulated input credit"
+            indicatorDot="collected"
+            isLoading={loadingBills}
+          />
+          <KpiCard
+            label="Overdue Bills"
+            value={loadingBills ? '—' : stats.overdueCount.toString()}
+            helperText="Requires payout attention"
+            indicatorDot="overdue"
+            isLoading={loadingBills}
+          />
+          <KpiCard
+            label="Purchases This Month"
+            value={loadingBills ? '—' : formatCurrency(stats.currentMonthPurchases)}
+            helperText="Current billing cycle"
+            isLoading={loadingBills}
+          />
+        </div>
 
-            <Card className="p-5 border-l-4 border-l-emerald-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">GST Input Credit</div>
-              <div className="text-2xl font-black text-emerald-500 mt-2">{formatCurrency(stats.gstCredit)}</div>
-              <div className="text-xs text-muted-foreground mt-1.5">Accumulated Input GST balances</div>
-              <Sparkles className="absolute right-4 bottom-4 w-12 h-12 text-emerald-500/10" />
-            </Card>
-
-            <Card className="p-5 border-l-4 border-l-amber-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Overdue Bills</div>
-              <div className="text-2xl font-black text-amber-500 mt-2">{stats.overdueCount}</div>
-              <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                Requires immediate payout attention
-              </div>
-              <AlertTriangle className="absolute right-4 bottom-4 w-12 h-12 text-amber-500/10" />
-            </Card>
-
-            <Card className="p-5 border-l-4 border-l-indigo-500 relative overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Purchases This Month</div>
-              <div className="text-2xl font-black text-indigo-500 mt-2">{formatCurrency(stats.currentMonthPurchases)}</div>
-              <div className="text-xs text-muted-foreground mt-1.5">Cumulative billing for current cycle</div>
-              <Briefcase className="absolute right-4 bottom-4 w-12 h-12 text-indigo-500/10" />
-            </Card>
-          </div>
-        )}
-
-        {/* Filter Toolbar */}
-        <Card className="p-4 bg-muted/20 border border-border/50">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search bills by number, vendor, reference..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-              />
-            </div>
-            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-              <Button
-                variant={isFilterPanelOpen ? 'secondary' : 'outline'}
-                onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-                className="flex items-center gap-1.5 py-2.5 text-sm"
+        {/* Expandable Filters Section */}
+        {isFilterPanelOpen && (
+          <div className="bg-surface border border-border p-3.5 rounded-xl shadow-xs shrink-0 mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Vendor</label>
+              <select
+                value={selectedVendorId}
+                onChange={e => { setSelectedVendorId(e.target.value); resetPage(); }}
+                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
               >
-                <Filter className="w-4 h-4" /> Filters
-                {(selectedVendorId || billStatus || paymentStatus || startDate || endDate || gstType || warehouseId || minAmount || maxAmount) && (
-                  <span className="w-2 h-2 rounded-full bg-primary" />
-                )}
+                <option value="">All Vendors</option>
+                {vendors.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Bill Status</label>
+              <select
+                value={billStatus}
+                onChange={e => { setBillStatus(e.target.value); resetPage(); }}
+                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
+              >
+                <option value="">All Statuses</option>
+                <option value="SENT">Approved / Posted</option>
+                <option value="OVERDUE">Overdue</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Payment Status</label>
+              <select
+                value={paymentStatus}
+                onChange={e => { setPaymentStatus(e.target.value); resetPage(); }}
+                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
+              >
+                <option value="">All Payment Statuses</option>
+                <option value="UNPAID">Unpaid</option>
+                <option value="PARTIAL">Partially Paid</option>
+                <option value="PAID">Paid</option>
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setSelectedVendorId('');
+                  setBillStatus('');
+                  setPaymentStatus('');
+                  setStartDate('');
+                  setEndDate('');
+                  setGstType('');
+                  setWarehouseId('');
+                  setMinAmount('');
+                  setMaxAmount('');
+                  setSearch('');
+                  resetPage();
+                }}
+                className="w-full h-8 text-[13px]"
+              >
+                Reset Filters
               </Button>
-              {(selectedVendorId || billStatus || paymentStatus || startDate || endDate || gstType || warehouseId || minAmount || maxAmount || search) && (
-                <Button 
-                  variant="ghost" 
-                  onClick={() => {
-                    setSearch(''); setSelectedVendorId(''); setBillStatus(''); setPaymentStatus('');
-                    setStartDate(''); setEndDate(''); setGstType(''); setWarehouseId('');
-                    setMinAmount(''); setMaxAmount('');
-                  }}
-                  className="text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10 font-bold"
-                >
-                  Clear Filters
-                </Button>
-              )}
             </div>
           </div>
-
-          {/* Advanced filters */}
-          {isFilterPanelOpen && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-border/60">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Vendor</label>
-                <select
-                  value={selectedVendorId}
-                  onChange={e => setSelectedVendorId(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">All Vendors</option>
-                  {vendors.map(v => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Bill Status</label>
-                <select
-                  value={billStatus}
-                  onChange={e => setBillStatus(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="SENT">Approved / Posted</option>
-                  <option value="OVERDUE">Overdue</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Payment Status</label>
-                <select
-                  value={paymentStatus}
-                  onChange={e => setPaymentStatus(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">All Payment Statuses</option>
-                  <option value="UNPAID">Unpaid</option>
-                  <option value="PARTIAL">Partially Paid</option>
-                  <option value="PAID">Paid</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">GST Route</label>
-                <select
-                  value={gstType}
-                  onChange={e => setGstType(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">All GST Types</option>
-                  <option value="CGST_SGST">Intrastate (CGST/SGST)</option>
-                  <option value="IGST">Interstate (IGST)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Storage Warehouse</label>
-                <select
-                  value={warehouseId}
-                  onChange={e => setWarehouseId(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">All Warehouses</option>
-                  {warehouses.map(w => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Start Billing Date</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">End Billing Date</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Amount Range</label>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="number"
-                    placeholder="Min"
-                    value={minAmount}
-                    onChange={e => setMinAmount(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <span className="text-xs text-muted-foreground">-</span>
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={maxAmount}
-                    onChange={e => setMaxAmount(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        </Card>
-
-        {/* Data Table */}
-        {loadingBills ? (
-          <TableLoader cols={8} rows={6} className="bg-card border border-border/80 rounded-2xl" />
-        ) : filteredBills.length === 0 ? (
-          <Card className="flex flex-col items-center justify-center p-12 text-center bg-card">
-            <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center text-primary mb-4">
-              <Receipt className="w-8 h-8" />
-            </div>
-            <h3 className="text-lg font-bold text-foreground">No purchase bills found</h3>
-            <p className="text-muted-foreground text-sm max-w-sm mt-1">Try tweaking your filters or search query, or record a new bill to track vendor balances.</p>
-            <Button
-              onClick={() => navigate('/bills/new')}
-              className="mt-5 font-bold flex items-center gap-1 bg-primary text-primary-foreground hover:bg-primary/95"
-            >
-              <Plus className="w-4.5 h-4.5" /> Record Vendor Bill
-            </Button>
-          </Card>
-        ) : (
-          <Card className="overflow-hidden border border-border/80 shadow-sm bg-card">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/10 border-b border-border">
-                    <TableHead className="font-bold py-3.5 px-5">Bill Code</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5">Vendor</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5">Bill Date</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5">Due Date</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5">Ref / Invoice No</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5 text-right">Subtotal</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5 text-right">GST Tax</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5 text-right">Total Amount</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5 text-right text-emerald-600">Paid</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5 text-right text-amber-600">Balance</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5">Status</TableHead>
-                    <TableHead className="font-bold py-3.5 px-5 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredBills.map((bill: Purchase) => {
-                    const balance = getOutstandingBalance(bill);
-                    const isOverdue = isBillOverdue(bill);
-                    return (
-                      <TableRow key={bill.id} className="hover:bg-muted/50 border-b border-border transition-colors">
-                        <TableCell className="font-mono font-bold py-3.5 px-5 text-foreground">{bill.purchaseNo}</TableCell>
-                        <TableCell className="py-3.5 px-5 font-semibold text-foreground">{bill.vendor?.name}</TableCell>
-                        <TableCell className="py-3.5 px-5 text-xs text-muted-foreground">{new Date(bill.date).toLocaleDateString()}</TableCell>
-                        <TableCell className="py-3.5 px-5 text-xs">
-                          {bill.gstBreakup?.dueDate ? (
-                            <span className={isOverdue ? "text-red-500 font-bold" : "text-muted-foreground"}>
-                              {new Date(bill.gstBreakup.dueDate).toLocaleDateString()}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground/50">N/A</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-3.5 px-5 text-xs text-muted-foreground font-mono">{bill.reference || 'N/A'}</TableCell>
-                        <TableCell className="py-3.5 px-5 text-right font-medium">{formatCurrency(Number(bill.subTotal))}</TableCell>
-                        <TableCell className="py-3.5 px-5 text-right text-muted-foreground text-xs">{formatCurrency(Number(bill.taxTotal))}</TableCell>
-                        <TableCell className="py-3.5 px-5 text-right font-bold text-foreground">{formatCurrency(Number(bill.grandTotal))}</TableCell>
-                        <TableCell className="py-3.5 px-5 text-right text-xs font-semibold text-emerald-500">{formatCurrency(Number(bill.amountPaid))}</TableCell>
-                        <TableCell className="py-3.5 px-5 text-right text-xs font-bold text-amber-500">{formatCurrency(balance)}</TableCell>
-                        <TableCell className="py-3.5 px-5">
-                          {bill.status === 'PAID' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-500 border border-green-500/20 uppercase tracking-wide">
-                              <CheckCircle className="w-2.5 h-2.5" /> PAID
-                            </span>
-                          ) : bill.status === 'PARTIAL' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-wide">
-                              <AlertTriangle className="w-2.5 h-2.5" /> PARTIAL
-                            </span>
-                          ) : isOverdue ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 uppercase tracking-wide">
-                              <ShieldAlert className="w-2.5 h-2.5" /> OVERDUE
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20 uppercase tracking-wide">
-                              POSTED
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-3.5 px-5 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => { setSelectedBill(bill); setIsViewModalOpen(true); }}
-                              className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                              title="View Audit Ledger & Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => navigate(`/bills/new?edit=${bill.id}`)}
-                              disabled={bill.status === 'PAID'}
-                              className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-blue-500 transition-colors disabled:opacity-20 cursor-pointer"
-                              title="Edit Bill Details"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => navigate(`/bills/new?duplicate=${bill.id}`)}
-                              className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-violet-500 transition-colors cursor-pointer"
-                              title="Duplicate Bill"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleOpenPayment(bill)}
-                              disabled={balance <= 0}
-                              className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-emerald-500 transition-colors disabled:opacity-20 cursor-pointer"
-                              title="Record Payout Allocation"
-                            >
-                              <DollarSign className="w-4 h-4" />
-                            </button>
-                            <PdfDownloadButton
-                              filename={`Bill-${bill.purchaseNo}.pdf`}
-                              data={{
-                                company: { name: companyProfile.name || '', address: companyProfile.address || '', email: companyProfile.email || '' },
-                                customer: { name: bill.vendor?.name || 'Unknown', address: bill.vendor?.state || 'N/A' },
-                                document: { title: 'Purchase Bill', documentNo: bill.purchaseNo, date: bill.date, status: bill.status },
-                                items: bill.items?.map(i => {
-                                  const parsed = parseLineDescription(i.description);
-                                  return {
-                                    id: i.id,
-                                    description: parsed.text,
-                                    qty: Number(i.qty),
-                                    rate: Number(i.rate),
-                                    taxPercent: Number(i.taxPercent || 0),
-                                    taxAmount: Number(i.taxAmount || 0),
-                                    total: Number(i.total || 0)
-                                  };
-                                }) || [],
-                                totals: {
-                                  subTotal: Number(bill.subTotal),
-                                  taxTotal: Number(bill.taxTotal),
-                                  grandTotal: Number(bill.grandTotal),
-                                  amountPaid: Number(bill.amountPaid || 0),
-                                  balance: getOutstandingBalance(bill),
-                                  currency: 'INR'
-                                }
-                              }}
-                              className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                            />
-                            <button
-                              onClick={() => setBillToCancel(bill)}
-                              disabled={bill.status === 'PAID'}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-orange-300 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10 rounded-lg transition-colors disabled:opacity-20"
-                              title="Cancel & Reverse Entries"
-                            >
-                              <X className="w-3.5 h-3.5" /> Cancel
-                            </button>
-                            <button
-                              onClick={() => setBillToDelete(bill)}
-                              disabled={bill.status === 'PAID'}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-20"
-                              title="Delete Bill"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" /> Delete
-                            </button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
         )}
-      </div>
+
+        <DataTable
+          columns={columns}
+          data={paginatedData}
+          totalItems={totalItems}
+          manualPagination={true}
+          pagination={{
+            pageIndex: page - 1,
+            pageSize: limit,
+          }}
+          onPaginationChange={(updater: any) => {
+            const next = typeof updater === 'function' ? updater({ pageIndex: page - 1, pageSize: limit }) : updater;
+            if (next.pageIndex !== undefined) setPage(next.pageIndex + 1);
+            if (next.pageSize !== undefined) setLimit(next.pageSize);
+          }}
+          isLoading={loadingBills}
+          storageKey="bills"
+          searchPlaceholder="Search bills by number, vendor, reference..."
+          globalFilter={search}
+          onGlobalFilterChange={(val) => {
+            setSearch(val);
+            resetPage();
+          }}
+          toolbarExtras={
+            <Button
+              variant={isFilterPanelOpen ? 'primary' : 'secondary'}
+              size="md"
+              onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
+              className="text-[13px]"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Filters
+              {(selectedVendorId || billStatus || paymentStatus || startDate || endDate || gstType || warehouseId || minAmount || maxAmount) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5" />
+              )}
+            </Button>
+          }
+          exportFilename="Bills_List"
+          itemLabel="bills"
+          emptyText="No purchase bills found"
+          emptyDescription="Try adjusting your filters or record a new bill to track vendor balances."
+          emptyActionLabel="Record Vendor Bill"
+          onEmptyAction={() => navigate('/bills/new')}
+        />
+      </PageLayout>
 
       {/* Record Payment Modal */}
       {isPaymentModalOpen && paymentBill && (
@@ -1195,7 +1167,6 @@ export const BillsList = () => {
           </div>
         </div>
       )}
-    </PageContainer>
       <ConfirmDialog isOpen={!!billToCancel} onClose={() => setBillToCancel(null)} onConfirm={async () => { cancelMutation.mutate(billToCancel!.id); setBillToCancel(null); }} title="Cancel Purchase Bill" message={<span>Cancel bill <strong>{billToCancel?.purchaseNo}</strong>? This will reverse ledger accounts and stock changes.</span>} confirmText="Cancel Bill" variant="danger" />
       <DeleteDialog isOpen={!!billToDelete} onClose={() => setBillToDelete(null)} onConfirm={async () => { deleteMutation.mutate(billToDelete!.id); setBillToDelete(null); }} entityName="Purchase Bill" entityId={billToDelete?.purchaseNo} warningText="This action is irreversible." />
     </>

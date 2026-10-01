@@ -9,6 +9,8 @@ import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
+import { StatusBadge, DateCell } from '@/shared/components/ui';
+
 export const GoodsReceiptsList = () => {
   const navigate = useNavigate();
   const { data = [], isLoading: loading } = useQuery({
@@ -46,34 +48,30 @@ export const GoodsReceiptsList = () => {
           onActionClick={() => navigate('/goods-receipts/new')}
         />
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/10 border-b border-border">
-                <TableHead className="font-semibold py-4 px-6">Receipt No</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Date</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Vendor</TableHead>
-                <TableHead className="font-semibold py-4 px-6 text-right">Total Items</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Status</TableHead>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-6 pr-4">Receipt No</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Vendor</TableHead>
+              <TableHead align="right">Total Items</TableHead>
+              <TableHead align="center" className="pr-6 pl-4">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((item: any) => (
+              <TableRow key={item.id}>
+                <TableCell className="pl-6 pr-4 font-mono font-medium text-foreground">{item.receiptNo}</TableCell>
+                <DateCell date={item.date} />
+                <TableCell className="font-medium text-foreground">{item.businessPartner?.name || '—'}</TableCell>
+                <TableCell align="right" className="text-muted-foreground">{item.items?.length || 0} lines</TableCell>
+                <TableCell align="center" className="pr-6 pl-4">
+                  <StatusBadge status={item.status} />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((item: any) => (
-                <TableRow key={item.id} className="hover:bg-muted/50 border-b border-border transition-colors">
-                  <TableCell className="font-semibold py-4 px-6">{item.receiptNo}</TableCell>
-                  <TableCell className="py-4 px-6">{new Date(item.date).toLocaleDateString()}</TableCell>
-                  <TableCell className="py-4 px-6 font-medium text-foreground">{item.businessPartner?.name || 'N/A'}</TableCell>
-                  <TableCell className="font-bold py-4 px-6 text-right">{item.items?.length || 0}</TableCell>
-                  <TableCell className="py-4 px-6">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${item.status === 'RECEIVED' ? 'bg-green-500/10 text-green-600' : 'bg-blue-500/10 text-blue-600'}`}>
-                      {item.status}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </PageContainer>
   );

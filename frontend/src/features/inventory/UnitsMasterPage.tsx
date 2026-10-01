@@ -21,6 +21,9 @@ import {
   Laptop
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Button } from '@/shared/components/ui/Button';
 
 export const UnitsMasterPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -161,60 +164,51 @@ export const UnitsMasterPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card border border-border p-6 rounded-3xl shadow-sm">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-accent/10 text-accent rounded-2xl">
-              <Layers className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">Enterprise Unit Master</h1>
-              <p className="text-sm text-muted-foreground">
-                Manage base measurement units, industrial units, and inventory unit conversions.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsConversionModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-muted text-foreground hover:bg-muted/80 font-semibold rounded-xl text-sm transition-all"
-          >
-            <ArrowRightLeft className="w-4 h-4 text-purple-500" />
-            Unit Conversion Rule
-          </button>
-          <button
+    <PageLayout>
+      <PageHeader
+        title="Units of Measure"
+        count={units.length}
+        primaryAction={
+          <Button
             onClick={() => setIsAddUnitModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-accent text-accent-foreground hover:bg-accent/90 font-semibold rounded-xl text-sm transition-all shadow-md"
+            variant="primary"
+            size="sm"
           >
-            <Plus className="w-4 h-4" />
-            New Custom Unit
-          </button>
-        </div>
-      </div>
+            <Plus className="w-4 h-4 mr-1.5" />
+            New Unit
+          </Button>
+        }
+        secondaryActions={
+          <Button
+            onClick={() => setIsConversionModalOpen(true)}
+            variant="secondary"
+            size="sm"
+          >
+            <ArrowRightLeft className="w-4 h-4 mr-1.5" />
+            Conversion Rule
+          </Button>
+        }
+      />
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-card border border-border p-4 rounded-2xl">
-          <p className="text-xs text-muted-foreground font-medium">Total Available Units</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{units.length}</p>
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0 mb-3">
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Available Units</p>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{units.length}</p>
         </div>
-        <div className="bg-card border border-border p-4 rounded-2xl">
-          <p className="text-xs text-muted-foreground font-medium">Unit Categories</p>
-          <p className="text-2xl font-bold text-purple-500 mt-1">{categories.length - 1}</p>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Unit Categories</p>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{categories.length - 1}</p>
         </div>
-        <div className="bg-card border border-border p-4 rounded-2xl">
-          <p className="text-xs text-muted-foreground font-medium">Custom Company Units</p>
-          <p className="text-2xl font-bold text-emerald-500 mt-1">
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Custom Units</p>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">
             {units.filter((u) => !u.isSystem).length}
           </p>
         </div>
-        <div className="bg-card border border-border p-4 rounded-2xl">
-          <p className="text-xs text-muted-foreground font-medium">Active Conversion Rules</p>
-          <p className="text-2xl font-bold text-blue-500 mt-1">{conversions.length}</p>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Active Conversions</p>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{conversions.length}</p>
         </div>
       </div>
 
@@ -566,6 +560,6 @@ export const UnitsMasterPage: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 };

@@ -45,7 +45,7 @@ export const JournalImpactView: React.FC<JournalImpactViewProps> = ({ reference 
               <p className="text-xs font-bold text-foreground">Journal Voucher: <span className="text-accent">{entry.voucherNo || entry.reference}</span></p>
               <p className="text-[10px] text-muted-foreground mt-0.5">{entry.description}</p>
             </div>
-            <p className="text-[10px] font-mono font-medium bg-background px-2 py-1 rounded border border-border shadow-xs">
+            <p className="text-[10px] tabular-nums font-medium bg-background px-2 py-1 rounded border border-border shadow-xs">
               {new Date(entry.date).toLocaleDateString()}
             </p>
           </div>
@@ -64,24 +64,24 @@ export const JournalImpactView: React.FC<JournalImpactViewProps> = ({ reference 
                   <TableCell>
                     {Number(line.credit) > 0 && <ArrowRight className="w-3 h-3 text-muted-foreground inline ml-4" />}
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-foreground font-medium py-2">
+                  <TableCell className="text-xs text-foreground font-medium py-2">
                     {line.account?.name || 'Unknown Ledger'}
                     {line.description && <span className="block text-[9px] font-sans text-muted-foreground/70 font-normal">{line.description}</span>}
                   </TableCell>
-                  <TableCell className="text-right font-mono text-xs py-2">
+                  <TableCell className="text-right tabular-nums text-xs py-2">
                     {Number(line.debit) > 0 ? formatCurrency(Number(line.debit)) : '-'}
                   </TableCell>
-                  <TableCell className="text-right font-mono text-xs py-2">
+                  <TableCell className="text-right tabular-nums text-xs py-2">
                     {Number(line.credit) > 0 ? formatCurrency(Number(line.credit)) : '-'}
                   </TableCell>
                 </TableRow>
               ))}
               <TableRow className="bg-muted/10 border-t border-border/80">
                 <TableCell colSpan={2} className="text-right text-xs font-bold text-foreground py-2">Total</TableCell>
-                <TableCell className="text-right font-mono text-xs font-black py-2">
+                <TableCell className="text-right tabular-nums text-xs font-bold py-2">
                   {formatCurrency(entry.lines?.reduce((sum: number, l: any) => sum + Number(l.debit), 0) || 0)}
                 </TableCell>
-                <TableCell className="text-right font-mono text-xs font-black py-2">
+                <TableCell className="text-right tabular-nums text-xs font-bold py-2">
                   {formatCurrency(entry.lines?.reduce((sum: number, l: any) => sum + Number(l.credit), 0) || 0)}
                 </TableCell>
               </TableRow>

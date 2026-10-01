@@ -1,6 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, DateCell, CurrencyCell } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -26,38 +26,44 @@ export const ProjectsList = () => {
           </button>
         }
       />
-      <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="pl-6 pr-4">Project Name</TableHead>
+            <TableHead>Customer</TableHead>
+            <TableHead>Start Date</TableHead>
+            <TableHead align="right">Budget</TableHead>
+            <TableHead align="center" className="pr-6 pl-4">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
             <TableRow>
-              <TableHead>Project Name</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Start Date</TableHead>
-              <TableHead>Budget</TableHead>
-              <TableHead>Status</TableHead>
+              <TableCell colSpan={5} className="p-0">
+                <TableLoader rows={4} />
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-4">Loading projects...</TableCell></TableRow>
-            ) : projects.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-4 text-gray-500">No projects found.</TableCell></TableRow>
-            ) : (
-              projects.map((proj: any) => (
-                <TableRow key={proj.id}>
-                  <TableCell className="font-medium">{proj.name}</TableCell>
-                  <TableCell>{proj.customer?.name || 'Internal'}</TableCell>
-                  <TableCell>{new Date(proj.startDate).toLocaleDateString()}</TableCell>
-                  <TableCell className="font-semibold">₹${Number(proj.budget).toFixed(2)}</TableCell>
-                  <TableCell>
-                    <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">{proj.status}</span>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+          ) : projects.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={5} className="text-center py-12 text-sm text-muted-foreground">
+                No projects found.
+              </TableCell>
+            </TableRow>
+          ) : (
+            projects.map((proj: any) => (
+              <TableRow key={proj.id}>
+                <TableCell className="pl-6 pr-4 font-semibold text-foreground">{proj.name}</TableCell>
+                <TableCell className="text-muted-foreground">{proj.customer?.name || 'Internal'}</TableCell>
+                <DateCell date={proj.startDate} />
+                <CurrencyCell amount={Number(proj.budget || 0)} className="font-semibold text-foreground" />
+                <TableCell align="center" className="pr-6 pl-4">
+                  <StatusBadge status={proj.status} />
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 };

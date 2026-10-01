@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, History, Calendar, User, Activity, FileText } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Button } from '@/shared/components/ui/Button';
 import apiClient from '@/core/api';
 import { dialog } from '@/core/services/DialogService';
 
@@ -61,88 +63,82 @@ export const AuditLogsSettings = () => {
         </div>
       </div>
 
-      <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-muted/30 border-b border-border text-xs uppercase text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">Timestamp</th>
-                <th className="px-4 py-3 font-semibold">Action</th>
-                <th className="px-4 py-3 font-semibold">Entity</th>
-                <th className="px-4 py-3 font-semibold">User & IP</th>
-                <th className="px-4 py-3 font-semibold">Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {isLoading ? (
-                <tr><td colSpan={5} className="px-4 py-4 text-center text-sm">Loading...</td></tr>
-              ) : data?.items?.length > 0 ? (
-                data.items.map((row: any) => (
-                  <tr key={row.id} className="hover:bg-muted/10">
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col">
-                        <span className="text-sm">{new Date(row.createdAt).toLocaleDateString()}</span>
-                        <span className="text-xs text-muted-foreground">{new Date(row.createdAt).toLocaleTimeString()}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border ${
-                        row.action === 'CREATE' ? 'bg-green-100 text-green-800 border-green-200' :
-                        row.action === 'DELETE' ? 'bg-red-100 text-red-800 border-red-200' :
-                        'bg-amber-100 text-amber-800 border-amber-200'
-                      }`}>
-                        {row.action}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-sm">{row.tableName}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{row.userId || 'System'}</span>
-                        <span className="text-[10px] text-muted-foreground">IP: {row.ipAddress}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button 
-                        onClick={() => dialog.alert('Audit Log Payload Details', JSON.stringify({before: row.oldValues, after: row.newValues}, null, 2))}
-                        className="text-xs font-semibold text-accent hover:underline cursor-pointer bg-accent/10 px-2 py-1 rounded"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr><td colSpan={5} className="px-4 py-4 text-center text-sm text-muted-foreground">No audit logs found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        
-        {/* Basic Pagination */}
-        <div className="p-4 border-t border-border flex justify-between items-center bg-muted/20">
-          <span className="text-sm text-muted-foreground">
-            Total Records: {data?.total || 0}
-          </span>
-          <div className="flex gap-2">
-            <button 
-              disabled={page === 1}
-              onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1 bg-background border border-border rounded text-sm disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button 
-              disabled={!data || data.items.length < 50}
-              onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1 bg-background border border-border rounded text-sm disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Timestamp</TableHead>
+            <TableHead>Action</TableHead>
+            <TableHead>Entity</TableHead>
+            <TableHead>User & IP</TableHead>
+            <TableHead className="text-right">Details</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">Loading audit records...</TableCell></TableRow>
+          ) : data?.items?.length > 0 ? (
+            data.items.map((row: any) => (
+              <TableRow key={row.id}>
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-foreground">{new Date(row.createdAt).toLocaleDateString()}</span>
+                    <span className="text-xs text-muted-foreground font-mono">{new Date(row.createdAt).toLocaleTimeString()}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold tracking-wider ${
+                    row.action === 'CREATE' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' :
+                    row.action === 'DELETE' ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' :
+                    'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                  }`}>
+                    {row.action}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="font-medium text-foreground text-sm">{row.tableName}</span>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-foreground">{row.userId || 'System'}</span>
+                    <span className="text-[11px] text-muted-foreground font-mono">IP: {row.ipAddress}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <button 
+                    onClick={() => dialog.alert('Audit Log Payload Details', JSON.stringify({before: row.oldValues, after: row.newValues}, null, 2))}
+                    className="px-2.5 py-1 text-xs font-medium rounded-md bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-foreground cursor-pointer transition-colors"
+                  >
+                    View
+                  </button>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">No audit logs found.</TableCell></TableRow>
+          )}
+        </TableBody>
+      </Table>
+      
+      {/* Pagination Footer */}
+      <div className="px-6 py-4 flex justify-between items-center text-sm text-muted-foreground">
+        <span>Total Records: {data?.total || 0}</span>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            size="sm"
+            disabled={page === 1}
+            onClick={() => setPage(p => p - 1)}
+          >
+            Previous
+          </Button>
+          <Button 
+            variant="outline"
+            size="sm"
+            disabled={!data || data.items.length < 50}
+            onClick={() => setPage(p => p + 1)}
+          >
+            Next
+          </Button>
         </div>
       </div>
     </div>

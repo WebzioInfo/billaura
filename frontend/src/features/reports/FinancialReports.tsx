@@ -1,6 +1,8 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../shared/components/ui/Card';
 import { Button } from '../../shared/components/ui/Button';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { FileText, BookOpen, Activity, Landmark, LineChart, Building } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,11 +19,8 @@ export const FinancialReports = () => {
   ];
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto p-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Financial Reports</h1>
-        <p className="text-muted-foreground">Comprehensive financial statements and accounting reports.</p>
-      </div>
+    <PageLayout>
+      <PageHeader title="Financial Reports" count={reports.length} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {reports.map((report, idx) => (
@@ -39,6 +38,6 @@ export const FinancialReports = () => {
           </Card>
         ))}
       </div>
-    </div>
+    </PageLayout>
   );
 };

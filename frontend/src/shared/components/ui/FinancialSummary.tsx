@@ -38,7 +38,7 @@ export const AmountText: React.FC<AmountTextProps> = ({
 
   return (
     <span
-      className={`tabular-nums font-mono ${sizeClass} ${colorClass} ${className}`}
+      className={`tabular-nums ${sizeClass} ${colorClass} ${className}`}
       style={{ fontVariantNumeric: 'tabular-nums' }}
     >
       {formatIndianRupee(value, minimumFractionDigits)}

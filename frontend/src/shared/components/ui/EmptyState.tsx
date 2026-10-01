@@ -1,12 +1,15 @@
 import React from 'react';
-import { Sparkles, LucideIcon } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import { Button } from './Button';
 import { cn } from '@/lib/utils';
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   title: string;
   description: string;
-  icon?: LucideIcon;
+  icon?: React.ComponentType<{ className?: string }> | React.ReactNode;
   action?: React.ReactNode;
+  actionLabel?: string;
+  onActionClick?: () => void;
   className?: string;
   variant?: 'default' | 'card' | 'inline';
 }
@@ -14,8 +17,10 @@ interface EmptyStateProps {
 export function EmptyState({ 
   title, 
   description, 
-  icon: Icon = Sparkles, 
+  icon, 
   action,
+  actionLabel,
+  onActionClick,
   className,
   variant = 'default'
 }: EmptyStateProps) {
@@ -28,38 +33,55 @@ export function EmptyState({
     );
   }
 
+  const renderIcon = () => {
+    if (!icon) {
+      return <Sparkles className={variant === 'card' ? "w-5 h-5" : "w-8 h-8"} />;
+    }
+    if (React.isValidElement(icon)) {
+      return icon;
+    }
+    const IconComponent = icon as React.ComponentType<{ className?: string }>;
+    return <IconComponent className={variant === 'card' ? "w-5 h-5" : "w-8 h-8"} />;
+  };
+
+  const actionNode = action || (actionLabel && onActionClick ? (
+    <Button onClick={onActionClick} variant="primary" size="sm" className="font-semibold px-4">
+      {actionLabel}
+    </Button>
+  ) : null);
+
   return (
     <div className={cn(
       "flex flex-col items-center justify-center text-center",
       variant === 'card' 
-        ? "min-h-[120px] rounded-lg border border-dashed border-border bg-background/40 p-6" 
-        : "min-h-[400px] p-8",
+        ? "min-h-[120px] rounded-xl border border-dashed border-border bg-background/40 p-6" 
+        : "min-h-[360px] p-8",
       className
     )}>
       <div className={cn(
-        "flex items-center justify-center rounded-full bg-accent/10 text-accent mb-4",
+        "flex items-center justify-center rounded-2xl bg-accent/10 text-accent mb-4 transition-transform duration-200 hover:scale-105",
         variant === 'card' ? "w-10 h-10" : "w-16 h-16"
       )}>
-        <Icon className={variant === 'card' ? "w-5 h-5" : "w-8 h-8"} />
+        {renderIcon()}
       </div>
       
       <h3 className={cn(
-        "font-bold text-foreground tracking-tight",
-        variant === 'card' ? "text-sm" : "text-xl"
+        "font-semibold text-foreground tracking-tight",
+        variant === 'card' ? "text-sm" : "text-lg"
       )}>
         {title}
       </h3>
       
       <p className={cn(
-        "text-muted-foreground mt-2 max-w-sm",
-        variant === 'card' ? "text-xs" : "text-sm"
+        "text-muted-foreground mt-1.5 max-w-sm text-xs leading-relaxed",
+        variant === 'card' ? "text-[11px]" : "text-sm"
       )}>
         {description}
       </p>
       
-      {action && (
-        <div className="mt-6">
-          {action}
+      {actionNode && (
+        <div className="mt-5">
+          {actionNode}
         </div>
       )}
 
@@ -73,3 +95,4 @@ export function EmptyState({
     </div>
   );
 }
+

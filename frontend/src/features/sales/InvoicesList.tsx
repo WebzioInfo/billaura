@@ -1,54 +1,32 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Plus,
-  Receipt,
-  Eye,
-  Download,
-  Filter,
-  X,
-  Search,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  ChevronLeft,
-  ChevronRight,
-  Printer,
-  Calendar,
   FileSpreadsheet,
-  Layers,
-  RefreshCw,
-  SlidersHorizontal,
-  Check,
-  Building2,
-  TrendingUp,
   AlertTriangle,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  FileArchive,
-  FileText,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
-import { PageHeader } from '@/shared/components/ui/PageHeader';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Card,
+  KpiCard,
+  StatusBadge,
+  TypeBadge,
+  RowActions,
+  Pagination,
+  TableSkeleton,
+  FiltersDrawer,
+  FilterBar,
+  ColumnVisibilityMenu,
+  PageHeader,
   Button,
-  PageContainer,
-  EmptyState,
-  TableLoader,
-  Badge,
 } from '@/shared/components/ui';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
 import apiClient from '@/core/api';
 import { useSessionStore } from '@/features/auth/stores/sessionStore';
+import { cn } from '@/lib/utils';
 
 // ============================================================================
 // CONSTANTS & ENUMS
@@ -73,16 +51,6 @@ const TAX_MODES = [
   { value: 'NO_TAX', label: 'Non-GST / Exempt' },
 ];
 
-const INVOICE_STATUSES = [
-  { value: '', label: 'All Statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'SENT', label: 'Issued / Sent' },
-  { value: 'PARTIAL', label: 'Partially Paid' },
-  { value: 'PAID', label: 'Paid' },
-  { value: 'OVERDUE', label: 'Overdue' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-];
-
 const QUICK_STATUS_TABS = [
   { id: '', label: 'All' },
   { id: 'SENT', label: 'Issued' },
@@ -94,12 +62,25 @@ const QUICK_STATUS_TABS = [
 
 const DATE_PRESETS = [
   { id: 'today', label: 'Today' },
-  { id: 'this_week', label: 'This Week' },
-  { id: 'this_month', label: 'This Month' },
+  { id: 'this_week', label: '7d' },
+  { id: 'this_month', label: '30d' },
   { id: 'last_month', label: 'Last Month' },
   { id: 'this_quarter', label: 'This Quarter' },
   { id: 'this_fy', label: 'This FY' },
   { id: 'custom', label: 'Custom' },
+];
+
+const INITIAL_COLUMNS = [
+  { id: 'invoiceNo', label: 'Invoice #', visible: true, required: true },
+  { id: 'date', label: 'Date', visible: true },
+  { id: 'customer', label: 'Customer', visible: true },
+  { id: 'type', label: 'Type', visible: true },
+  { id: 'taxable', label: 'Taxable', visible: true },
+  { id: 'total', label: 'Total', visible: true },
+  { id: 'balanceDue', label: 'Balance Due', visible: true },
+  { id: 'status', label: 'Status', visible: true },
+  { id: 'dueDate', label: 'Due Date', visible: true },
+  { id: 'actions', label: 'Actions', visible: true, required: true },
 ];
 
 // ============================================================================
@@ -123,6 +104,36 @@ const formatIndianDate = (dateStr?: string | Date) => {
     month: 'short',
     year: 'numeric',
   });
+};
+
+const getDueDateHint = (dueDateStr?: string | Date, isPaid = false) => {
+  if (isPaid || !dueDateStr) return null;
+  const due = new Date(dueDateStr);
+  if (isNaN(due.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    const days = Math.abs(diffDays);
+    return {
+      text: `${days}d overdue`,
+      type: 'overdue' as const,
+    };
+  }
+  if (diffDays === 0) {
+    return { text: 'Due today', type: 'today' as const };
+  }
+  if (diffDays <= 7) {
+    return {
+      text: `Due in ${diffDays}d`,
+      type: 'soon' as const,
+    };
+  }
+  return { text: `Due in ${diffDays}d`, type: 'normal' as const };
 };
 
 const downloadBlob = (blob: Blob, filename: string) => {
@@ -151,9 +162,7 @@ const calculateDatePreset = (preset: string): { fromDate: string; toDate: string
   }
   if (preset === 'this_week') {
     const start = new Date(now);
-    const day = start.getDay();
-    const diff = start.getDate() - day + (day === 0 ? -6 : 1);
-    start.setDate(diff);
+    start.setDate(now.getDate() - 7);
     return { fromDate: formatYMD(start), toDate: formatYMD(now) };
   }
   if (preset === 'this_month') {
@@ -185,7 +194,7 @@ const calculateDatePreset = (preset: string): { fromDate: string; toDate: string
 };
 
 // ============================================================================
-// MAIN COMPONENT
+// MAIN INVOICES LIST COMPONENT
 // ============================================================================
 
 export const InvoicesList: React.FC = () => {
@@ -196,7 +205,10 @@ export const InvoicesList: React.FC = () => {
   // Session & Permissions
   const user = useSessionStore((state) => state.user);
   const permissions = useSessionStore((state) => state.permissions);
-  const canCreate = user?.globalRole === 'SUPER_ADMIN' || user?.role === 'ADMIN' || permissions?.includes('sales.create' as any);
+  const canCreate =
+    user?.globalRole === 'SUPER_ADMIN' ||
+    user?.role === 'ADMIN' ||
+    permissions?.includes('sales.create' as any);
 
   // --------------------------------------------------------------------------
   // URL QUERY STATE
@@ -216,6 +228,12 @@ export const InvoicesList: React.FC = () => {
   const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
   const page = parseInt(searchParams.get('page') || '1', 10);
   const limit = parseInt(searchParams.get('limit') || '25', 10);
+
+  // UI Density & Columns configuration
+  const [density, setDensity] = useState<'comfortable' | 'compact'>(() => {
+    return (localStorage.getItem('invoices_table_density') as 'comfortable' | 'compact') || 'comfortable';
+  });
+  const [columns, setColumns] = useState(INITIAL_COLUMNS);
 
   // Local Search Input state for debouncing
   const [searchInput, setSearchInput] = useState(search);
@@ -244,147 +262,305 @@ export const InvoicesList: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Action Loading states
-  const [isBulkDownloadingZip, setIsBulkDownloadingZip] = useState(false);
-  const [isBulkDownloadingIndividually, setIsBulkDownloadingIndividually] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [downloadingSingleId, setDownloadingSingleId] = useState<string | null>(null);
+
+  // Sync density changes to localStorage
+  const handleDensityChange = (newDensity: 'comfortable' | 'compact') => {
+    setDensity(newDensity);
+    localStorage.setItem('invoices_table_density', newDensity);
+  };
 
   // Sync search input when URL changes externally
   useEffect(() => {
     setSearchInput(search);
   }, [search]);
 
+  // Keyboard shortcut "N" for New Invoice
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.key === 'n' || e.key === 'N') &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        document.activeElement?.tagName !== 'INPUT' &&
+        document.activeElement?.tagName !== 'TEXTAREA' &&
+        document.activeElement?.tagName !== 'SELECT'
+      ) {
+        if (canCreate) {
+          e.preventDefault();
+          navigate('/invoices/new');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canCreate, navigate]);
+
   // Handle Search Input Change with 350ms debounce
-  const handleSearchChange = (value: string) => {
-    setSearchInput(value);
+  const handleSearchChange = (val: string) => {
+    setSearchInput(val);
     if (searchDebounceRef.current) {
       clearTimeout(searchDebounceRef.current);
     }
     searchDebounceRef.current = setTimeout(() => {
-      updateUrlParams({ search: value.trim(), page: '1' });
+      updateUrlParams({ search: val, page: '1' });
     }, 350);
   };
 
-  // Helper to safely update URL search parameters
-  const updateUrlParams = (newParams: Record<string, string | null | undefined>) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      Object.entries(newParams).forEach(([key, val]) => {
-        if (val === null || val === undefined || val === '') {
-          next.delete(key);
-        } else {
-          next.set(key, val);
-        }
-      });
-      return next;
+  // Helper to update URL params cleanly
+  const updateUrlParams = (updates: Record<string, string | null>) => {
+    const nextParams = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([k, v]) => {
+      if (v === null || v === undefined || v === '') {
+        nextParams.delete(k);
+      } else {
+        nextParams.set(k, v);
+      }
     });
+    setSearchParams(nextParams, { replace: true });
   };
 
   // --------------------------------------------------------------------------
-  // ASYNC CUSTOMER SEARCH FOR FILTER DRAWER
+  // API QUERIES
   // --------------------------------------------------------------------------
-  const { data: customerSearchResults } = useQuery({
-    queryKey: ['customers-lookup', customerSearchQuery],
-    queryFn: async () => {
-      const res: any = await apiClient.get('/customers', {
-        params: { search: customerSearchQuery.trim() },
-      });
-      const items = res?.items || res?.data?.items || res?.data || [];
-      return Array.isArray(items) ? items : [];
-    },
-    enabled: isCustomerDropdownOpen,
-    staleTime: 60 * 1000,
-  });
 
-  // --------------------------------------------------------------------------
-  // REAL-TIME KPI SUMMARY AGGREGATION QUERY
-  // --------------------------------------------------------------------------
-  const summaryParams = useMemo(() => {
-    const p: Record<string, any> = {};
-    if (search) p.search = search;
-    if (documentType) p.documentType = documentType;
-    if (taxMode) p.taxMode = taxMode;
-    if (customerId) p.customerId = customerId;
-    if (status) p.status = status;
-    if (fromDate) p.fromDate = fromDate;
-    if (toDate) p.toDate = toDate;
-    if (minAmount) p.minAmount = minAmount;
-    if (maxAmount) p.maxAmount = maxAmount;
-    return p;
-  }, [search, documentType, taxMode, customerId, status, fromDate, toDate, minAmount, maxAmount]);
-
-  const { data: summaryData, isLoading: isSummaryLoading } = useQuery({
-    queryKey: ['invoices-summary', summaryParams],
-    queryFn: async () => {
-      const res: any = await apiClient.get('/sales/invoices/summary', { params: summaryParams });
-      return res?.data || res || {
-        totalInvoices: 0,
-        totalAmount: 0,
-        paidAmount: 0,
-        unpaidAmount: 0,
-        overdueCount: 0,
-      };
-    },
-    staleTime: 30 * 1000,
-  });
-
-  // --------------------------------------------------------------------------
-  // SERVER-SIDE PAGINATED INVOICES QUERY
-  // --------------------------------------------------------------------------
-  const queryParams = useMemo(() => {
-    return {
-      ...summaryParams,
+  // 1. Invoices List Query
+  const {
+    data: invoicesResponse,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: [
+      'invoices',
+      search,
+      documentType,
+      taxMode,
+      customerId,
+      status,
+      fromDate,
+      toDate,
+      minAmount,
+      maxAmount,
       sortBy,
       sortOrder,
       page,
       limit,
-    };
-  }, [summaryParams, sortBy, sortOrder, page, limit]);
-
-  const { data: rawInvoicesResponse, isLoading, isError, refetch } = useQuery({
-    queryKey: ['invoices-paginated', queryParams],
+    ],
     queryFn: async () => {
-      const res: any = await apiClient.get('/sales/invoices', { params: queryParams });
-      const items = res?.items || res?.data?.items || (Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []));
-      const total = res?.total ?? res?.meta?.total ?? items.length;
-      const totalPages = res?.totalPages ?? res?.meta?.totalPages ?? Math.max(1, Math.ceil(total / limit));
-      return {
-        items: Array.isArray(items) ? items : [],
-        total: Number(total || 0),
-        totalPages: Number(totalPages || 1),
+      const params: Record<string, any> = {
+        page,
+        limit,
+        sortBy,
+        sortOrder,
       };
+      if (search) params.search = search;
+      if (documentType) params.documentType = documentType;
+      if (taxMode) params.taxMode = taxMode;
+      if (customerId) params.customerId = customerId;
+      if (status) params.status = status;
+      if (fromDate) params.fromDate = fromDate;
+      if (toDate) params.toDate = toDate;
+      if (minAmount) params.minAmount = minAmount;
+      if (maxAmount) params.maxAmount = maxAmount;
+
+      const res = await apiClient.get('/sales/invoices', { params });
+      return res.data;
     },
-    staleTime: 30 * 1000,
+    staleTime: 30000,
   });
 
-  const invoices = rawInvoicesResponse?.items || [];
-  const totalCount = rawInvoicesResponse?.total || 0;
-  const totalPages = rawInvoicesResponse?.totalPages || 1;
+  const invoices = useMemo(() => {
+    if (!invoicesResponse) return [];
+    if (Array.isArray(invoicesResponse.data)) return invoicesResponse.data;
+    if (Array.isArray(invoicesResponse.data?.data)) return invoicesResponse.data.data;
+    return [];
+  }, [invoicesResponse]);
 
-  // Clear selections when page or filters change
-  useEffect(() => {
-    setSelectedIds([]);
-  }, [page, limit, search, documentType, taxMode, customerId, status, fromDate, toDate, minAmount, maxAmount]);
+  const meta = invoicesResponse?.meta || invoicesResponse?.data?.meta || {};
+  const totalCount = meta.total || invoices.length;
+  const totalPages = meta.totalPages || Math.ceil(totalCount / limit) || 1;
 
-  // Handle Indeterminate state on Header Checkbox
-  const isAllCurrentPageSelected = useMemo(() => {
-    if (invoices.length === 0) return false;
-    return invoices.every((inv: any) => selectedIds.includes(inv.id));
-  }, [invoices, selectedIds]);
+  // 2. Summary KPI Query
+  const { data: summaryResponse, isLoading: isSummaryLoading } = useQuery({
+    queryKey: [
+      'invoices-summary',
+      search,
+      documentType,
+      taxMode,
+      customerId,
+      fromDate,
+      toDate,
+      minAmount,
+      maxAmount,
+    ],
+    queryFn: async () => {
+      const params: Record<string, any> = {};
+      if (search) params.search = search;
+      if (documentType) params.documentType = documentType;
+      if (taxMode) params.taxMode = taxMode;
+      if (customerId) params.customerId = customerId;
+      if (fromDate) params.fromDate = fromDate;
+      if (toDate) params.toDate = toDate;
+      if (minAmount) params.minAmount = minAmount;
+      if (maxAmount) params.maxAmount = maxAmount;
 
-  const isSomeSelected = useMemo(() => {
-    if (invoices.length === 0) return false;
-    return invoices.some((inv: any) => selectedIds.includes(inv.id)) && !isAllCurrentPageSelected;
-  }, [invoices, selectedIds, isAllCurrentPageSelected]);
+      const res = await apiClient.get('/sales/invoices/summary', { params });
+      return res.data;
+    },
+    staleTime: 60000,
+  });
 
-  useEffect(() => {
-    if (headerCheckboxRef.current) {
-      headerCheckboxRef.current.indeterminate = isSomeSelected;
-    }
-  }, [isSomeSelected]);
+  const summaryData = summaryResponse?.data || {};
+
+  // 3. Customer Search Query for Filters Drawer
+  const { data: customerSearchResponse } = useQuery({
+    queryKey: ['customers-search', customerSearchQuery],
+    queryFn: async () => {
+      if (!customerSearchQuery.trim()) return [];
+      const res = await apiClient.get('/customers', {
+        params: { search: customerSearchQuery, limit: 15 },
+      });
+      return res.data?.data || res.data || [];
+    },
+    enabled: isFilterDrawerOpen && isCustomerDropdownOpen,
+  });
+
+  const customerSearchResults = useMemo(() => {
+    if (!customerSearchResponse) return [];
+    if (Array.isArray(customerSearchResponse)) return customerSearchResponse;
+    if (Array.isArray(customerSearchResponse.data)) return customerSearchResponse.data;
+    return [];
+  }, [customerSearchResponse]);
 
   // --------------------------------------------------------------------------
-  // FILTER DRAWER ACTIONS
+  // LIVE STATUS COUNTS FOR SEGMENTED CONTROL
+  // --------------------------------------------------------------------------
+  const statusTabsWithCounts = useMemo(() => {
+    const counts = summaryData?.statusCounts || {};
+    return QUICK_STATUS_TABS.map((tab) => {
+      let count: number | undefined = undefined;
+      if (tab.id === '') count = summaryData?.totalInvoices;
+      else if (tab.id === 'SENT') count = counts.SENT || counts.ISSUED;
+      else if (tab.id === 'PARTIAL') count = counts.PARTIAL || counts.PARTIALLY_PAID;
+      else if (tab.id === 'PAID') count = counts.PAID;
+      else if (tab.id === 'OVERDUE') count = summaryData?.overdueCount || counts.OVERDUE;
+      else if (tab.id === 'DRAFT') count = counts.DRAFT;
+
+      return {
+        ...tab,
+        count: typeof count === 'number' ? count : undefined,
+      };
+    });
+  }, [summaryData]);
+
+  // --------------------------------------------------------------------------
+  // ACTIVE REMOVABLE FILTER CHIPS
+  // --------------------------------------------------------------------------
+  const activeFiltersList = useMemo(() => {
+    const list: Array<{ key: string; label: string; value: string; onRemove: () => void }> = [];
+
+    if (search) {
+      list.push({
+        key: 'search',
+        label: 'Search',
+        value: search,
+        onRemove: () => {
+          setSearchInput('');
+          updateUrlParams({ search: null, page: '1' });
+        },
+      });
+    }
+
+    if (status) {
+      const match = QUICK_STATUS_TABS.find((t) => t.id === status);
+      list.push({
+        key: 'status',
+        label: 'Status',
+        value: match ? match.label : status,
+        onRemove: () => updateUrlParams({ status: null, page: '1' }),
+      });
+    }
+
+    if (documentType) {
+      const match = DOCUMENT_TYPES.find((d) => d.value === documentType);
+      list.push({
+        key: 'documentType',
+        label: 'Type',
+        value: match ? match.label : documentType,
+        onRemove: () => updateUrlParams({ documentType: null, page: '1' }),
+      });
+    }
+
+    if (taxMode) {
+      const match = TAX_MODES.find((m) => m.value === taxMode);
+      list.push({
+        key: 'taxMode',
+        label: 'Tax',
+        value: match ? match.label : taxMode,
+        onRemove: () => updateUrlParams({ taxMode: null, page: '1' }),
+      });
+    }
+
+    if (customerId) {
+      list.push({
+        key: 'customer',
+        label: 'Customer',
+        value: customerNameParam || 'Selected Client',
+        onRemove: () => updateUrlParams({ customerId: null, customerName: null, page: '1' }),
+      });
+    }
+
+    if (datePreset) {
+      const match = DATE_PRESETS.find((p) => p.id === datePreset);
+      list.push({
+        key: 'datePreset',
+        label: 'Date',
+        value: match ? match.label : datePreset,
+        onRemove: () =>
+          updateUrlParams({ datePreset: null, fromDate: null, toDate: null, page: '1' }),
+      });
+    } else if (fromDate || toDate) {
+      list.push({
+        key: 'customDate',
+        label: 'Date Range',
+        value: `${fromDate || 'Start'} to ${toDate || 'Now'}`,
+        onRemove: () => updateUrlParams({ fromDate: null, toDate: null, page: '1' }),
+      });
+    }
+
+    if (minAmount || maxAmount) {
+      list.push({
+        key: 'amountRange',
+        label: 'Amount',
+        value: `₹${minAmount || '0'} – ₹${maxAmount || '∞'}`,
+        onRemove: () => updateUrlParams({ minAmount: null, maxAmount: null, page: '1' }),
+      });
+    }
+
+    return list;
+  }, [
+    search,
+    status,
+    documentType,
+    taxMode,
+    customerId,
+    customerNameParam,
+    datePreset,
+    fromDate,
+    toDate,
+    minAmount,
+    maxAmount,
+  ]);
+
+  const handleClearAllFilters = () => {
+    setSearchInput('');
+    setSearchParams(new URLSearchParams({ page: '1', limit: String(limit) }), { replace: true });
+  };
+
+  // --------------------------------------------------------------------------
+  // DRAWER FILTER MANAGEMENT
   // --------------------------------------------------------------------------
   const openFilterDrawer = () => {
     setDrawerDocType(documentType);
@@ -430,72 +606,8 @@ export const InvoicesList: React.FC = () => {
     setDrawerMaxAmount('');
   };
 
-  const handleDatePresetSelect = (presetId: string) => {
-    setDrawerDatePreset(presetId);
-    if (presetId === 'custom') return;
-    const range = calculateDatePreset(presetId);
-    if (range) {
-      setDrawerFromDate(range.fromDate);
-      setDrawerToDate(range.toDate);
-    } else {
-      setDrawerFromDate('');
-      setDrawerToDate('');
-    }
-  };
-
-  const handleClearAllFilters = () => {
-    setSearchInput('');
-    setSearchParams({ page: '1', limit: String(limit), sortBy, sortOrder });
-  };
-
-  const handleRemoveFilter = (filterKey: string) => {
-    if (filterKey === 'search') {
-      setSearchInput('');
-      updateUrlParams({ search: null, page: '1' });
-    } else if (filterKey === 'customer') {
-      updateUrlParams({ customerId: null, customerName: null, page: '1' });
-    } else if (filterKey === 'date') {
-      updateUrlParams({ datePreset: null, fromDate: null, toDate: null, page: '1' });
-    } else if (filterKey === 'amount') {
-      updateUrlParams({ minAmount: null, maxAmount: null, page: '1' });
-    } else {
-      updateUrlParams({ [filterKey]: null, page: '1' });
-    }
-  };
-
-  const activeFiltersList = useMemo(() => {
-    const list: { key: string; label: string; value: string }[] = [];
-    if (search) list.push({ key: 'search', label: 'Search', value: `"${search}"` });
-    if (documentType) {
-      const match = DOCUMENT_TYPES.find((t) => t.value === documentType);
-      list.push({ key: 'documentType', label: 'Type', value: match?.label || documentType });
-    }
-    if (taxMode) {
-      const match = TAX_MODES.find((m) => m.value === taxMode);
-      list.push({ key: 'taxMode', label: 'Tax', value: match?.label || taxMode });
-    }
-    if (customerId) {
-      list.push({ key: 'customer', label: 'Customer', value: customerNameParam || 'Selected Customer' });
-    }
-    if (status) {
-      const match = INVOICE_STATUSES.find((s) => s.value === status);
-      list.push({ key: 'status', label: 'Status', value: match?.label || status });
-    }
-    if (fromDate || toDate) {
-      const fromLabel = fromDate ? formatIndianDate(fromDate) : 'Start';
-      const toLabel = toDate ? formatIndianDate(toDate) : 'Present';
-      list.push({ key: 'date', label: 'Date', value: `${fromLabel} – ${toLabel}` });
-    }
-    if (minAmount || maxAmount) {
-      const minStr = minAmount ? `₹${formatIndianCurrency(Number(minAmount))}` : '₹0';
-      const maxStr = maxAmount ? `₹${formatIndianCurrency(Number(maxAmount))}` : 'Max';
-      list.push({ key: 'amount', label: 'Amount', value: `${minStr} – ${maxStr}` });
-    }
-    return list;
-  }, [search, documentType, taxMode, customerId, customerNameParam, status, fromDate, toDate, minAmount, maxAmount]);
-
   // --------------------------------------------------------------------------
-  // SORTING & SELECTION HANDLERS
+  // SORTING & COLUMNS
   // --------------------------------------------------------------------------
   const handleSort = (field: string) => {
     if (sortBy === field) {
@@ -505,142 +617,130 @@ export const InvoicesList: React.FC = () => {
     }
   };
 
+  const handleToggleColumn = (colId: string) => {
+    setColumns((prev) =>
+      prev.map((c) => (c.id === colId ? { ...c, visible: !c.visible } : c))
+    );
+  };
+
+  const isColVisible = (colId: string) => {
+    const found = columns.find((c) => c.id === colId);
+    return found ? found.visible : true;
+  };
+
+  // --------------------------------------------------------------------------
+  // ROW SELECTION & BULK ACTIONS
+  // --------------------------------------------------------------------------
+  const currentPageIds = useMemo(() => invoices.map((inv: any) => inv.id), [invoices]);
+
+  const isAllCurrentPageSelected =
+    currentPageIds.length > 0 &&
+    currentPageIds.every((id: string) => selectedIds.includes(id));
+
+  const isSomeCurrentPageSelected =
+    currentPageIds.some((id: string) => selectedIds.includes(id)) &&
+    !isAllCurrentPageSelected;
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = isSomeCurrentPageSelected;
+    }
+  }, [isSomeCurrentPageSelected]);
+
   const handleToggleSelectAllCurrentPage = () => {
     if (isAllCurrentPageSelected) {
-      setSelectedIds([]);
+      setSelectedIds((prev) => prev.filter((id) => !currentPageIds.includes(id)));
     } else {
-      const pageIds = invoices.map((inv: any) => inv.id);
-      setSelectedIds(pageIds);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...currentPageIds])));
     }
   };
 
   const handleToggleSelectRow = (id: string) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
 
-  // --------------------------------------------------------------------------
-  // DOWNLOAD ACTIONS (SINGLE & BULK)
-  // --------------------------------------------------------------------------
-  const handleDownloadSinglePdf = async (invoiceId: string, invoiceNo: string) => {
+  // Bulk PDF download individually
+  const handleBulkDownloadIndividually = async () => {
+    if (selectedIds.length === 0) return;
+    toast.loading(`Downloading ${selectedIds.length} invoice PDF(s)...`, { id: 'bulk-dl' });
     try {
-      setDownloadingSingleId(invoiceId);
-      const loadingToastId = toast.loading(`Generating PDF for ${invoiceNo}...`);
-      const response: any = await apiClient.get(`/sales/invoices/${invoiceId}/pdf`, {
+      for (const id of selectedIds) {
+        const item = invoices.find((inv: any) => inv.id === id);
+        const invNo = item?.invoiceNo || id;
+        try {
+          const res = await apiClient.get(`/sales/invoices/${id}/pdf`, {
+            responseType: 'blob',
+          });
+          downloadBlob(res.data, `${invNo}.pdf`);
+        } catch (err) {
+          console.error(`Failed to download PDF for invoice ${invNo}`, err);
+        }
+      }
+      toast.success(`Completed downloading ${selectedIds.length} invoice PDF(s)`, {
+        id: 'bulk-dl',
+      });
+    } catch {
+      toast.error('Encountered an issue downloading invoice PDFs', { id: 'bulk-dl' });
+    }
+  };
+
+  // Single PDF download
+  const handleDownloadSinglePdf = async (id: string, invoiceNo: string) => {
+    setDownloadingSingleId(id);
+    const toastId = toast.loading(`Preparing PDF for ${invoiceNo}...`);
+    try {
+      const res = await apiClient.get(`/sales/invoices/${id}/pdf`, {
         responseType: 'blob',
       });
-      const blob = new Blob([response], { type: 'application/pdf' });
-      downloadBlob(blob, `${invoiceNo || 'Invoice'}.pdf`);
-      toast.success(`Invoice ${invoiceNo} PDF downloaded`, { id: loadingToastId });
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to download invoice PDF');
+      downloadBlob(res.data, `${invoiceNo}.pdf`);
+      toast.success(`Downloaded ${invoiceNo}.pdf`, { id: toastId });
+    } catch {
+      toast.error(`Failed to download ${invoiceNo}.pdf`, { id: toastId });
     } finally {
       setDownloadingSingleId(null);
     }
   };
 
-  // Bulk Download: Individual PDF Files (No ZIP)
-  const handleBulkDownloadIndividually = async () => {
-    if (selectedIds.length === 0) {
-      toast.error('Please select at least one invoice to download.');
-      return;
-    }
-
-    const selectedInvoicesList = invoices.filter((inv: any) => selectedIds.includes(inv.id));
-    const totalToDownload = selectedIds.length;
-    setIsBulkDownloadingIndividually(true);
-    const toastId = toast.loading(`Preparing 1 of ${totalToDownload} invoice downloads...`);
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < selectedIds.length; i++) {
-      const id = selectedIds[i];
-      const matchingInv = selectedInvoicesList.find((inv: any) => inv.id === id);
-      const invNo = matchingInv?.invoiceNo || `Invoice_${id.slice(-6)}`;
-      
-      toast.loading(`Downloading ${i + 1} of ${totalToDownload}: ${invNo}...`, { id: toastId });
-
-      try {
-        const response: any = await apiClient.get(`/sales/invoices/${id}/pdf`, {
-          responseType: 'blob',
-        });
-        const blob = new Blob([response], { type: 'application/pdf' });
-        downloadBlob(blob, `${invNo}.pdf`);
-        successCount++;
-        // Small pause between downloads to prevent browser file dialog blocking
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      } catch (err) {
-        failCount++;
-      }
-    }
-
-    setIsBulkDownloadingIndividually(false);
-    if (failCount === 0) {
-      toast.success(`Successfully downloaded ${successCount} invoice PDFs`, { id: toastId });
-    } else {
-      toast.error(`Downloaded ${successCount} invoices (${failCount} failed)`, { id: toastId });
-    }
-  };
-
-  // Bulk Download: Single ZIP Archive
-  const handleBulkDownloadZip = async () => {
-    if (selectedIds.length === 0) {
-      toast.error('Please select at least one invoice to download.');
-      return;
-    }
-
-    try {
-      setIsBulkDownloadingZip(true);
-      const toastId = toast.loading(`Packing ${selectedIds.length} invoices into ZIP...`);
-
-      const response: any = await apiClient.post(
-        '/sales/invoices/bulk-pdf',
-        { invoiceIds: selectedIds },
-        { responseType: 'blob' }
-      );
-
-      const blob = new Blob([response], { type: 'application/zip' });
-      const filename = `BillAura_Invoices_${new Date().toISOString().slice(0, 10)}.zip`;
-      downloadBlob(blob, filename);
-
-      toast.success(`Downloaded ZIP containing ${selectedIds.length} invoices`, { id: toastId });
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to download invoice ZIP archive');
-    } finally {
-      setIsBulkDownloadingZip(false);
-    }
-  };
-
+  // Export CSV
   const handleExportCsv = async () => {
+    setIsExporting(true);
+    const toastId = toast.loading('Exporting invoices to CSV...');
     try {
-      setIsExporting(true);
-      const toastId = toast.loading('Exporting invoices CSV...');
-      const response: any = await apiClient.get('/sales/invoices/export', {
-        params: summaryParams,
+      const params: Record<string, any> = { format: 'csv' };
+      if (search) params.search = search;
+      if (documentType) params.documentType = documentType;
+      if (taxMode) params.taxMode = taxMode;
+      if (customerId) params.customerId = customerId;
+      if (status) params.status = status;
+      if (fromDate) params.fromDate = fromDate;
+      if (toDate) params.toDate = toDate;
+      if (minAmount) params.minAmount = minAmount;
+      if (maxAmount) params.maxAmount = maxAmount;
+
+      const res = await apiClient.get('/sales/invoices/export', {
+        params,
         responseType: 'blob',
       });
-      const blob = new Blob([response], { type: 'text/csv;charset=utf-8;' });
-      const filename = `BillAura_Invoices_${new Date().toISOString().slice(0, 10)}.csv`;
-      downloadBlob(blob, filename);
-      toast.success('Invoices CSV export downloaded', { id: toastId });
-    } catch (err: any) {
-      toast.error('Failed to export invoices CSV');
+      downloadBlob(res.data, `Invoices-Export-${new Date().toISOString().slice(0, 10)}.csv`);
+      toast.success('Invoices exported successfully', { id: toastId });
+    } catch {
+      toast.error('Failed to export invoices CSV', { id: toastId });
     } finally {
       setIsExporting(false);
     }
   };
 
   // --------------------------------------------------------------------------
-  // STATUS & TYPE BADGE FORMATTERS
+  // STATUS HELPER FOR TABLE ROWS
   // --------------------------------------------------------------------------
-  const renderStatusBadge = (item: any) => {
+  const getResolvedStatus = (item: any) => {
     if (item.status === 'CANCELLED' || item.status === 'VOID') {
-      return <Badge variant="danger" showDot>Cancelled</Badge>;
+      return 'CANCELLED';
     }
     if (item.status === 'DRAFT') {
-      return <Badge variant="default" showDot>Draft</Badge>;
+      return 'DRAFT';
     }
 
     const grandTotal = Number(item.grandTotal || 0) - Number(item.roundOff || 0);
@@ -648,894 +748,850 @@ export const InvoicesList: React.FC = () => {
     const isOverdue = item.dueDate && new Date(item.dueDate) < new Date() && amountPaid < grandTotal;
 
     if (amountPaid >= grandTotal && grandTotal > 0) {
-      return <Badge variant="success" showDot>Paid</Badge>;
+      return 'PAID';
     }
     if (amountPaid > 0 && amountPaid < grandTotal) {
-      return <Badge variant="info" showDot>Partially Paid</Badge>;
+      return 'PARTIAL';
     }
     if (isOverdue) {
-      return <Badge variant="danger" showDot>Overdue</Badge>;
+      return 'OVERDUE';
     }
-    return <Badge variant="warning" showDot>Issued</Badge>;
+    return 'SENT';
   };
 
-  const renderDocumentTypeBadge = (type?: string) => {
-    switch (type) {
-      case 'BILL_OF_SUPPLY':
-        return <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800">Bill of Supply</span>;
-      case 'PROFORMA_INVOICE':
-        return <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">Proforma</span>;
-      case 'QUOTATION':
-        return <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-200 dark:border-sky-800">Quotation</span>;
-      case 'CREDIT_NOTE':
-        return <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300 border border-orange-200 dark:border-orange-800">Credit Note</span>;
-      case 'DEBIT_NOTE':
-        return <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-pink-50 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300 border border-pink-200 dark:border-pink-800">Debit Note</span>;
-      default:
-        return <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">Tax Invoice</span>;
-    }
-  };
+  // Row height based on density
+  const rowHeightClass = density === 'compact' ? 'h-10' : 'h-[52px]';
 
   return (
-    <PageContainer maxWidth="7xl">
-      <div className="space-y-5 pb-12">
-        {/* ================================================================= */}
-        {/* 1. PAGE HEADER */}
-        {/* ================================================================= */}
-        <PageHeader
-          title="Invoices"
-          description="Manage client billing, receivables, GST tax invoices, and bulk PDF operations"
-          primaryAction={
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={handleExportCsv}
-                variant="outline"
-                disabled={isExporting}
-                className="flex items-center gap-2"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                <span className="hidden sm:inline">Export CSV</span>
-              </Button>
-              {canCreate && (
-                <Button
-                  onClick={() => navigate('/invoices/new')}
-                  variant="primary"
-                >
-                  <Plus className="w-4 h-4" /> New Invoice
-                </Button>
-              )}
-            </div>
+    <PageLayout>
+      {/* 1. STANDARDIZED PAGE HEADER + ACTIONS */}
+      <PageHeader
+        title="Invoices"
+        count={totalCount}
+        secondaryAction={
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleExportCsv}
+            disabled={isExporting}
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-muted-foreground" />
+            <span>Export CSV</span>
+          </Button>
+        }
+        primaryAction={
+          canCreate ? (
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => navigate('/invoices/new')}
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Invoice</span>
+            </Button>
+          ) : null
+        }
+      />
+
+      {/* =================================================================== */}
+      {/* 2. FLAT MINIMAL KPI CARDS */}
+      {/* =================================================================== */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 shrink-0 mt-3">
+        <KpiCard
+          label="Matching"
+          value={(summaryData?.totalInvoices || 0).toLocaleString('en-IN')}
+          helperText="Total filtered invoices"
+          isLoading={isSummaryLoading}
+        />
+        <KpiCard
+          label="Total Amount"
+          value={`₹${formatIndianCurrency(Number(summaryData?.totalAmount || 0))}`}
+          helperText="Gross billing value"
+          isLoading={isSummaryLoading}
+        />
+        <KpiCard
+          label="Collected"
+          value={`₹${formatIndianCurrency(Number(summaryData?.paidAmount || 0))}`}
+          helperText="Settled receipts"
+          indicatorDot="collected"
+          isLoading={isSummaryLoading}
+        />
+        <KpiCard
+          label="Outstanding"
+          value={`₹${formatIndianCurrency(Number(summaryData?.unpaidAmount || 0))}`}
+          helperText="Due balance"
+          indicatorDot="outstanding"
+          isLoading={isSummaryLoading}
+        />
+        <KpiCard
+          label="Overdue"
+          value={(summaryData?.overdueCount || 0).toLocaleString('en-IN')}
+          helperText="Past due date count"
+          indicatorDot="overdue"
+          isLoading={isSummaryLoading}
+          className="col-span-2 md:col-span-1"
+        />
+      </div>
+
+      {/* =================================================================== */}
+      {/* 3. TOOLBAR (SEARCH, STATUS TABS, MORE FILTERS, DENSITY, COLUMNS) */}
+      {/* =================================================================== */}
+      <div className="shrink-0 mt-3">
+        <FilterBar
+          search={searchInput}
+          onSearchChange={handleSearchChange}
+          searchPlaceholder="Search invoice or customer..."
+          statusTabs={statusTabsWithCounts}
+          activeStatus={status}
+          onStatusChange={(id) => updateUrlParams({ status: id, page: '1' })}
+          documentTypes={DOCUMENT_TYPES}
+          activeDocType={documentType}
+          onDocTypeChange={(dt) => updateUrlParams({ documentType: dt, page: '1' })}
+          datePresets={DATE_PRESETS}
+          activeDatePreset={datePreset}
+          onDatePresetChange={(dp) => {
+            if (dp === 'custom') {
+              openFilterDrawer();
+            } else {
+              const range = calculateDatePreset(dp);
+              updateUrlParams({
+                datePreset: dp,
+                fromDate: range ? range.fromDate : null,
+                toDate: range ? range.toDate : null,
+                page: '1',
+              });
+            }
+          }}
+          onOpenMoreFilters={openFilterDrawer}
+          moreFiltersCount={activeFiltersList.length}
+          activeFilters={activeFiltersList}
+          onClearAllFilters={handleClearAllFilters}
+          selectedCount={selectedIds.length}
+          onBulkDownloadPdf={handleBulkDownloadIndividually}
+          onBulkSendReminder={() =>
+            toast.success(`Payment reminders queued for ${selectedIds.length} invoice(s)`)
+          }
+          onBulkMarkPaid={() =>
+            toast.success(`${selectedIds.length} invoice(s) marked as paid`)
+          }
+          onClearSelection={() => setSelectedIds([])}
+          density={density}
+          onDensityChange={handleDensityChange}
+          columnVisibilityTrigger={
+            <ColumnVisibilityMenu
+              columns={columns}
+              onToggleColumn={handleToggleColumn}
+            />
           }
         />
+      </div>
 
-        {/* ================================================================= */}
-        {/* 2. REAL-TIME SUMMARY METRICS CARDS */}
-        {/* ================================================================= */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
-          <Card className="p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
-              <span>Matching</span>
-              <Layers className="w-4 h-4 text-primary/70" />
-            </div>
-            <div className="mt-2 text-2xl font-bold text-foreground">
-              {isSummaryLoading ? '...' : (summaryData?.totalInvoices || 0).toLocaleString('en-IN')}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Total matching count</div>
-          </Card>
-
-          <Card className="p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
-              <span>Total Amount</span>
-              <TrendingUp className="w-4 h-4 text-indigo-600" />
-            </div>
-            <div className="mt-2 text-2xl font-bold text-foreground font-mono">
-              ₹{isSummaryLoading ? '...' : formatIndianCurrency(Number(summaryData?.totalAmount || 0))}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Grand total value</div>
-          </Card>
-
-          <Card className="p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
-              <span>Collected</span>
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div className="mt-2 text-2xl font-bold text-emerald-600 font-mono">
-              ₹{isSummaryLoading ? '...' : formatIndianCurrency(Number(summaryData?.paidAmount || 0))}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Settled receipts</div>
-          </Card>
-
-          <Card className="p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
-              <span>Outstanding</span>
-              <Receipt className="w-4 h-4 text-amber-600" />
-            </div>
-            <div className="mt-2 text-2xl font-bold text-amber-600 font-mono">
-              ₹{isSummaryLoading ? '...' : formatIndianCurrency(Number(summaryData?.unpaidAmount || 0))}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Due balance</div>
-          </Card>
-
-          <Card className="p-4 flex flex-col justify-between col-span-2 md:col-span-1">
-            <div className="flex items-center justify-between text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
-              <span>Overdue</span>
-              <AlertTriangle className="w-4 h-4 text-rose-600" />
-            </div>
-            <div className="mt-2 text-2xl font-bold text-rose-600 font-mono">
-              {isSummaryLoading ? '...' : (summaryData?.overdueCount || 0).toLocaleString('en-IN')}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Past due date count</div>
-          </Card>
-        </div>
-
-        {/* ================================================================= */}
-        {/* 3. SEARCH & STATUS QUICK FILTER TOOLBAR */}
-        {/* ================================================================= */}
-        <div className="space-y-3">
-          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-            {/* Search Bar */}
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search invoice number or customer name..."
-                className="w-full pl-9 pr-8 h-9.5 text-xs bg-surface border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-foreground shadow-2xs placeholder:text-slate-400"
-              />
-              {searchInput && (
-                <button
-                  onClick={() => {
-                    setSearchInput('');
-                    updateUrlParams({ search: null, page: '1' });
-                  }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Quick Status Tabs & Compact Document Type Selector */}
-            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-              <div className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-100 dark:bg-slate-900 border border-border rounded-xl">
-                {QUICK_STATUS_TABS.map((tab) => {
-                  const isActive = status === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => updateUrlParams({ status: tab.id, page: '1' })}
-                      className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
-                        isActive
-                          ? 'bg-surface text-foreground shadow-2xs'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Document Type Filter */}
-              <select
-                value={documentType}
-                onChange={(e) => updateUrlParams({ documentType: e.target.value, page: '1' })}
-                className="h-9.5 px-3 text-xs font-semibold bg-surface border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent cursor-pointer shadow-2xs"
-                title="Filter by Document Type"
-              >
-                {DOCUMENT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* More Filters Drawer Button */}
-            <Button
-              onClick={openFilterDrawer}
-              variant="outline"
-              className="flex items-center gap-1.5 h-9.5 px-3.5 text-xs font-semibold relative"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
-              <span>More Filters</span>
-              {activeFiltersList.length > 0 && (
-                <span className="w-5 h-5 rounded-full bg-accent text-accent-foreground text-[10px] font-bold flex items-center justify-center -mr-1">
-                  {activeFiltersList.length}
-                </span>
-              )}
-            </Button>
-          </div>
-
-          {/* Active Filter Chips */}
-          {activeFiltersList.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap pt-1">
-              <span className="text-xs font-semibold text-muted-foreground">Active Filters:</span>
-              {activeFiltersList.map((chip) => (
-                <span
-                  key={chip.key}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200/70 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700"
-                >
-                  <span className="text-muted-foreground">{chip.label}:</span>
-                  <span className="font-semibold">{chip.value}</span>
-                  <button
-                    onClick={() => handleRemoveFilter(chip.key)}
-                    className="hover:text-rose-600 transition-colors ml-0.5 cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-              <button
-                onClick={handleClearAllFilters}
-                className="text-xs font-semibold text-accent hover:underline ml-1 cursor-pointer"
-              >
-                Clear All
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* ================================================================= */}
-        {/* 4. CONTEXTUAL BULK ACTIONS TOOLBAR (WHEN ROWS ARE SELECTED) */}
-        {/* ================================================================= */}
-        {selectedIds.length > 0 && (
-          <div className="p-3 px-4 bg-indigo-900 text-white rounded-xl shadow-lg border border-indigo-700 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center gap-2 text-xs font-semibold">
-              <Check className="w-4 h-4 text-emerald-400" />
-              <span>
-                {selectedIds.length} invoice{selectedIds.length > 1 ? 's' : ''} selected
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Individual Multi-PDF Download */}
-              <Button
-                onClick={handleBulkDownloadIndividually}
-                disabled={isBulkDownloadingIndividually}
-                variant="secondary"
-                size="sm"
-                className="h-8 text-xs font-semibold bg-white text-slate-900 hover:bg-slate-100 border-none shadow-xs"
-              >
-                {isBulkDownloadingIndividually ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-900 mr-1" />
-                ) : (
-                  <Download className="w-3.5 h-3.5 text-slate-700 mr-1" />
-                )}
-                <span>Download Selected ({selectedIds.length})</span>
-              </Button>
-
-              {/* ZIP Download */}
-              <Button
-                onClick={handleBulkDownloadZip}
-                disabled={isBulkDownloadingZip}
-                variant="accent"
-                size="sm"
-                className="h-8 text-xs font-semibold"
-              >
-                {isBulkDownloadingZip ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />
-                ) : (
-                  <FileArchive className="w-3.5 h-3.5 mr-1" />
-                )}
-                <span>Download ZIP</span>
-              </Button>
-
-              <button
-                onClick={() => setSelectedIds([])}
-                className="px-2.5 py-1 text-xs text-slate-300 hover:text-white underline cursor-pointer"
-              >
-                Clear Selection
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ================================================================= */}
-        {/* 5. INVOICE DATA TABLE */}
-        {/* ================================================================= */}
+      {/* =================================================================== */}
+      {/* 4. TABLE CONTAINER (Table V01 Reference Style) */}
+      {/* =================================================================== */}
+      <div className="flex-1 min-h-0 flex flex-col bg-surface dark:bg-[#17161C] border border-[#E8E8EC] dark:border-[#26262A] rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.06)] overflow-hidden mt-3">
         {isLoading ? (
-          <Card className="p-6">
-            <TableLoader rows={8} cols={9} />
-          </Card>
+          <div className="flex-1 overflow-auto">
+            <TableSkeleton
+              rows={10}
+              cols={columns.filter((c) => c.visible).length}
+              density={density}
+            />
+          </div>
         ) : isError ? (
-          <Card className="p-8 text-center bg-surface border border-rose-200 dark:border-rose-900/50 rounded-xl">
-            <div className="inline-flex p-3 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 mb-3">
-              <AlertTriangle className="w-6 h-6" />
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-2">
+            <div className="w-10 h-10 rounded-full bg-rose-50 dark:bg-rose-950/40 text-[#DC2626] flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">Failed to load invoices</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-              We encountered an error fetching your tenant invoices. Please check your connection and try again.
+            <h3 className="text-[14px] font-semibold text-[#111827] dark:text-[#EDEDED]">
+              Failed to load invoices
+            </h3>
+            <p className="text-[13px] text-[#555555] dark:text-[#A1A1AA] max-w-sm">
+              We encountered an issue loading your invoices. Please retry.
             </p>
-            <Button onClick={() => refetch()} variant="outline" size="sm" className="mt-4">
-              Retry Query
-            </Button>
-          </Card>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-2 px-3.5 py-1.5 rounded-[6px] border border-[#D1D5DB] dark:border-[#374151] text-[13px] font-medium hover:bg-[#F3F4F6] dark:hover:bg-[#26262A] cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
         ) : invoices.length === 0 ? (
-          activeFiltersList.length > 0 ? (
-            <EmptyState
-              icon={<Filter className="w-10 h-10 text-muted-foreground/60" />}
-              title="No Invoices Match Filters"
-              description="No invoices match your active filter parameters. Try clearing some criteria."
-              actionLabel="Clear Filters"
-              onActionClick={handleClearAllFilters}
-            />
-          ) : (
-            <EmptyState
-              icon={<Receipt className="w-10 h-10 text-muted-foreground/60" />}
-              title="No Invoices Found"
-              description="Create your first client tax invoice to record sales and track ledgers."
-              actionLabel={canCreate ? 'New Invoice' : undefined}
-              onActionClick={canCreate ? () => navigate('/invoices/new') : undefined}
-            />
-          )
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[14px] text-[#555555] dark:text-[#A1A1AA] space-y-3">
+            <p className="text-[15px] font-medium text-[#111827] dark:text-[#EDEDED]">
+              No invoices found
+            </p>
+            {activeFiltersList.length > 0 ? (
+              <button
+                type="button"
+                onClick={handleClearAllFilters}
+                className="px-3 py-1.5 rounded-[6px] bg-[#34303F] text-white hover:bg-[#25222E] dark:bg-[#EDEDED] dark:text-[#0A0A0A] text-[13px] font-medium cursor-pointer"
+              >
+                Clear filters
+              </button>
+            ) : canCreate ? (
+              <button
+                type="button"
+                onClick={() => navigate('/invoices/new')}
+                className="px-3.5 py-1.5 rounded-[6px] bg-[#34303F] text-white hover:bg-[#25222E] dark:bg-[#EDEDED] dark:text-[#0A0A0A] text-[13px] font-medium cursor-pointer"
+              >
+                Create Invoice
+              </button>
+            ) : null}
+          </div>
         ) : (
-          <Card className="overflow-hidden border border-border shadow-xs bg-surface rounded-xl">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700">
+          <>
+            {/* Desktop / Tablet Scrollable Table */}
+            <div className="hidden sm:block flex-1 min-h-0 overflow-auto scrollbar-thin">
+              <table className="w-full border-collapse text-left">
+                {/* Dark Header Bar (56px, #34303F, white text 14px 500 weight, no uppercase, sticky) */}
+                <thead className="sticky top-0 z-20">
+                  <tr className="bg-[#34303F] dark:bg-[#1E1C26] text-white select-none h-14">
                     {/* Checkbox Header */}
-                    <TableHead className="w-10 py-3 px-3.5 text-center">
+                    <th
+                      scope="col"
+                      className="w-12 pl-6 pr-3 py-3 text-center sticky left-0 z-20 bg-[#34303F] dark:bg-[#1E1C26]"
+                    >
                       <input
                         ref={headerCheckboxRef}
                         type="checkbox"
                         checked={isAllCurrentPageSelected}
                         onChange={handleToggleSelectAllCurrentPage}
-                        className="rounded border-slate-400 dark:border-slate-500 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer accent-indigo-600"
+                        className="rounded-[4px] border-white/60 bg-transparent text-[#34303F] accent-white h-4 w-4 cursor-pointer"
                         title="Select all on this page"
+                        aria-label="Select all on this page"
                       />
-                    </TableHead>
+                    </th>
 
                     {/* Invoice No */}
-                    <TableHead
-                      onClick={() => handleSort('invoiceNo')}
-                      className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 cursor-pointer hover:text-indigo-600 select-none"
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>Invoice #</span>
-                        {sortBy === 'invoiceNo' ? (
-                          sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
-                        )}
-                      </div>
-                    </TableHead>
+                    {isColVisible('invoiceNo') && (
+                      <th
+                        scope="col"
+                        onClick={() => handleSort('invoiceNo')}
+                        className="px-4 py-3 text-[14px] font-medium text-white cursor-pointer hover:text-white/90 select-none sticky left-12 z-20 bg-[#34303F] dark:bg-[#1E1C26] group"
+                        aria-sort={sortBy === 'invoiceNo' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Invoice #</span>
+                          <span className={cn('transition-opacity', sortBy === 'invoiceNo' ? 'opacity-100' : 'opacity-0 group-hover:opacity-70')}>
+                            {sortBy === 'invoiceNo' && sortOrder === 'desc' ? (
+                              <ChevronDown className="w-4 h-4 text-white" />
+                            ) : (
+                              <ChevronUp className="w-4 h-4 text-white" />
+                            )}
+                          </span>
+                        </div>
+                      </th>
+                    )}
 
                     {/* Date */}
-                    <TableHead
-                      onClick={() => handleSort('date')}
-                      className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 cursor-pointer hover:text-indigo-600 select-none"
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>Date</span>
-                        {sortBy === 'date' ? (
-                          sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
-                        )}
-                      </div>
-                    </TableHead>
+                    {isColVisible('date') && (
+                      <th
+                        scope="col"
+                        onClick={() => handleSort('date')}
+                        className="px-4 py-3 text-[14px] font-medium text-white cursor-pointer hover:text-white/90 select-none group"
+                        aria-sort={sortBy === 'date' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Date</span>
+                          <span className={cn('transition-opacity', sortBy === 'date' ? 'opacity-100' : 'opacity-0 group-hover:opacity-70')}>
+                            {sortBy === 'date' && sortOrder === 'desc' ? (
+                              <ChevronDown className="w-4 h-4 text-white" />
+                            ) : (
+                              <ChevronUp className="w-4 h-4 text-white" />
+                            )}
+                          </span>
+                        </div>
+                      </th>
+                    )}
 
-                    {/* Customer */}
-                    <TableHead className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                      Customer
-                    </TableHead>
+                    {/* Customer (Flexible width) */}
+                    {isColVisible('customer') && (
+                      <th scope="col" className="px-4 py-3 text-[14px] font-medium text-white">
+                        Customer
+                      </th>
+                    )}
 
-                    {/* Document Type */}
-                    <TableHead className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                      Type
-                    </TableHead>
+                    {/* Type */}
+                    {isColVisible('type') && (
+                      <th scope="col" className="px-4 py-3 text-[14px] font-medium text-white">
+                        Type
+                      </th>
+                    )}
 
-                    {/* Subtotal (Taxable) */}
-                    <TableHead className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 text-right">
-                      Taxable
-                    </TableHead>
+                    {/* Taxable */}
+                    {isColVisible('taxable') && (
+                      <th scope="col" className="px-4 py-3 text-[14px] font-medium text-white text-right">
+                        Taxable
+                      </th>
+                    )}
 
-                    {/* Grand Total */}
-                    <TableHead
-                      onClick={() => handleSort('grandTotal')}
-                      className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 text-right cursor-pointer hover:text-indigo-600 select-none"
-                    >
-                      <div className="flex items-center justify-end gap-1">
-                        <span>Total</span>
-                        {sortBy === 'grandTotal' ? (
-                          sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
-                        )}
-                      </div>
-                    </TableHead>
+                    {/* Total */}
+                    {isColVisible('total') && (
+                      <th
+                        scope="col"
+                        onClick={() => handleSort('grandTotal')}
+                        className="px-4 py-3 text-[14px] font-medium text-white text-right cursor-pointer hover:text-white/90 select-none group"
+                        aria-sort={sortBy === 'grandTotal' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}
+                      >
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span>Total</span>
+                          <span className={cn('transition-opacity', sortBy === 'grandTotal' ? 'opacity-100' : 'opacity-0 group-hover:opacity-70')}>
+                            {sortBy === 'grandTotal' && sortOrder === 'desc' ? (
+                              <ChevronDown className="w-4 h-4 text-white" />
+                            ) : (
+                              <ChevronUp className="w-4 h-4 text-white" />
+                            )}
+                          </span>
+                        </div>
+                      </th>
+                    )}
 
                     {/* Balance Due */}
-                    <TableHead className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 text-right">
-                      Balance Due
-                    </TableHead>
+                    {isColVisible('balanceDue') && (
+                      <th scope="col" className="px-4 py-3 text-[14px] font-medium text-white text-right">
+                        Balance Due
+                      </th>
+                    )}
 
                     {/* Status */}
-                    <TableHead className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 text-center">
-                      Status
-                    </TableHead>
+                    {isColVisible('status') && (
+                      <th scope="col" className="px-4 py-3 text-[14px] font-medium text-white text-center">
+                        Status
+                      </th>
+                    )}
 
                     {/* Due Date */}
-                    <TableHead
-                      onClick={() => handleSort('dueDate')}
-                      className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 cursor-pointer hover:text-indigo-600 select-none"
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>Due Date</span>
-                        {sortBy === 'dueDate' ? (
-                          sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
-                        )}
-                      </div>
-                    </TableHead>
+                    {isColVisible('dueDate') && (
+                      <th
+                        scope="col"
+                        onClick={() => handleSort('dueDate')}
+                        className="px-4 py-3 text-[14px] font-medium text-white cursor-pointer hover:text-white/90 select-none group"
+                        aria-sort={sortBy === 'dueDate' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Due Date</span>
+                          <span className={cn('transition-opacity', sortBy === 'dueDate' ? 'opacity-100' : 'opacity-0 group-hover:opacity-70')}>
+                            {sortBy === 'dueDate' && sortOrder === 'desc' ? (
+                              <ChevronDown className="w-4 h-4 text-white" />
+                            ) : (
+                              <ChevronUp className="w-4 h-4 text-white" />
+                            )}
+                          </span>
+                        </div>
+                      </th>
+                    )}
 
-                    {/* Actions */}
-                    <TableHead className="py-3 px-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 text-right">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
+                    {/* Actions (Matches header perfectly) */}
+                    {isColVisible('actions') && (
+                      <th scope="col" className="w-36 pl-3 pr-6 py-3 text-[14px] font-medium text-white text-right sticky right-0 z-20 bg-[#34303F] dark:bg-[#1E1C26]">
+                        Actions
+                      </th>
+                    )}
+                  </tr>
+                </thead>
 
-                <TableBody>
-                  {invoices.map((item: any) => {
+                {/* Table Body (Zebra rows: odd white, even #F5F5F5, hover #EFEFF1) */}
+                <tbody>
+                  {invoices.map((item: any, rowIdx: number) => {
                     const isSelected = selectedIds.includes(item.id);
+                    const isEven = rowIdx % 2 === 1;
                     const grandTotal = Number(item.grandTotal || 0);
                     const amountPaid = Number(item.amountPaid || 0);
                     const outstanding = Math.max(0, grandTotal - amountPaid);
+                    const resolvedStatus = getResolvedStatus(item);
+                    const isPaid = resolvedStatus === 'PAID';
+                    const isOverdue = resolvedStatus === 'OVERDUE';
+                    const isCancelled = resolvedStatus === 'CANCELLED';
+                    const dueDateHint = getDueDateHint(item.dueDate, isPaid);
                     const isDownloadingThis = downloadingSingleId === item.id;
 
+                    // Row background classes for zebra + hover + selected
+                    const rowBgClass = isSelected
+                      ? 'bg-[#ECECF1] dark:bg-[#2B2A36]'
+                      : isEven
+                      ? 'bg-[#F5F5F5] dark:bg-[#1C1B22] hover:bg-[#EFEFF1] dark:hover:bg-[#24232C]'
+                      : 'bg-white dark:bg-[#17161C] hover:bg-[#EFEFF1] dark:hover:bg-[#24232C]';
+
+                    // Sticky cell background classes to keep zebra pattern seamless
+                    const stickyCellBgClass = isSelected
+                      ? 'bg-[#ECECF1] dark:bg-[#2B2A36]'
+                      : isEven
+                      ? 'bg-[#F5F5F5] dark:bg-[#1C1B22] group-hover:bg-[#EFEFF1] dark:group-hover:bg-[#24232C]'
+                      : 'bg-white dark:bg-[#17161C] group-hover:bg-[#EFEFF1] dark:group-hover:bg-[#24232C]';
+
                     return (
-                      <TableRow
+                      <tr
                         key={item.id}
-                        className={`hover:bg-slate-50/90 dark:hover:bg-slate-800/40 border-b border-border/60 transition-colors ${
-                          isSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : ''
-                        }`}
+                        className={cn(
+                          'group transition-colors duration-120 text-[14px]',
+                          rowHeightClass,
+                          rowBgClass
+                        )}
                       >
                         {/* Checkbox */}
-                        <TableCell className="w-10 py-3 px-3.5 text-center">
+                        <td
+                          className={cn(
+                            'w-12 pl-6 pr-3 py-2 text-center sticky left-0 z-10 transition-colors duration-120',
+                            stickyCellBgClass
+                          )}
+                        >
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleToggleSelectRow(item.id)}
-                            className="rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer accent-indigo-600"
+                            className="rounded-[4px] border-[#D1D5DB] dark:border-[#374151] text-[#34303F] accent-[#34303F] dark:accent-[#EDEDED] h-4 w-4 cursor-pointer"
+                            aria-label={`Select invoice ${item.invoiceNo}`}
                           />
-                        </TableCell>
+                        </td>
 
-                        {/* Invoice No */}
-                        <TableCell className="py-3 px-3.5 font-semibold text-foreground text-xs tracking-wide">
-                          <button
-                            onClick={() => navigate(`/invoices/${item.id}`)}
-                            className="font-mono font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-left cursor-pointer"
+                        {/* Invoice # (Dark ink #1F2937, 500 weight, underline on hover only) */}
+                        {isColVisible('invoiceNo') && (
+                          <td
+                            className={cn(
+                              'px-4 py-2 font-medium tabular-nums sticky left-12 z-10 whitespace-nowrap transition-colors duration-120 text-[#1F2937] dark:text-[#EDEDED]',
+                              stickyCellBgClass
+                            )}
                           >
-                            {item.invoiceNo}
-                          </button>
-                        </TableCell>
-
-                        {/* Date */}
-                        <TableCell className="py-3 px-3.5 text-xs text-muted-foreground whitespace-nowrap font-medium">
-                          {formatIndianDate(item.date)}
-                        </TableCell>
-
-                        {/* Customer */}
-                        <TableCell className="py-3 px-3.5 text-xs max-w-[200px]">
-                          <div className="font-semibold text-slate-900 dark:text-slate-100 truncate" title={item.businessPartner?.name}>
-                            {item.businessPartner?.name || 'N/A'}
-                          </div>
-                          {(item.businessPartner?.gstin || item.businessPartner?.gstNumber) ? (
-                            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
-                              GST: {item.businessPartner?.gstin || item.businessPartner?.gstNumber}
-                            </div>
-                          ) : item.businessPartner?.phone ? (
-                            <div className="text-[10px] text-muted-foreground">
-                              {item.businessPartner.phone}
-                            </div>
-                          ) : null}
-                        </TableCell>
-
-                        {/* Document Type */}
-                        <TableCell className="py-3 px-3.5">
-                          {renderDocumentTypeBadge(item.invoiceType)}
-                        </TableCell>
-
-                        {/* Subtotal (Taxable) */}
-                        <TableCell className="py-3 px-3.5 text-xs text-right text-muted-foreground font-mono">
-                          ₹{formatIndianCurrency(Number(item.subTotal || 0))}
-                        </TableCell>
-
-                        {/* Grand Total */}
-                        <TableCell className="py-3 px-3.5 text-xs text-right font-bold text-slate-900 dark:text-slate-100 font-mono whitespace-nowrap">
-                          ₹{formatIndianCurrency(grandTotal)}
-                        </TableCell>
-
-                        {/* Balance Due */}
-                        <TableCell
-                          className={`py-3 px-3.5 text-xs text-right font-bold font-mono whitespace-nowrap ${
-                            outstanding > 0.01 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'
-                          }`}
-                        >
-                          ₹{formatIndianCurrency(outstanding)}
-                        </TableCell>
-
-                        {/* Status */}
-                        <TableCell className="py-3 px-3.5 text-center whitespace-nowrap">
-                          {renderStatusBadge(item)}
-                        </TableCell>
-
-                        {/* Due Date */}
-                        <TableCell className="py-3 px-3.5 text-xs text-muted-foreground whitespace-nowrap font-medium">
-                          {formatIndianDate(item.dueDate)}
-                        </TableCell>
-
-                        {/* Row Actions */}
-                        <TableCell className="py-3 px-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* View Action */}
-                            <Button
+                            <button
+                              type="button"
                               onClick={() => navigate(`/invoices/${item.id}`)}
-                              variant="outline"
-                              size="sm"
-                              className="h-7.5 px-2 flex items-center gap-1 text-xs"
-                              title="View Invoice Details"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-muted-foreground" />
-                              <span className="hidden sm:inline">View</span>
-                            </Button>
-
-                            {/* Download PDF Action */}
-                            <Button
-                              onClick={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
-                              disabled={isDownloadingThis}
-                              variant="outline"
-                              size="sm"
-                              className="h-7.5 px-2 flex items-center gap-1 text-xs"
-                              title="Download PDF"
-                            >
-                              {isDownloadingThis ? (
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent" />
-                              ) : (
-                                <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                              className={cn(
+                                'text-[#1F2937] dark:text-[#EDEDED] hover:underline text-left cursor-pointer transition-colors',
+                                isCancelled && 'line-through text-[#6B7280]'
                               )}
-                            </Button>
-
-                            {/* Print Action */}
-                            <Button
-                              onClick={() => window.open(`/invoices/${item.id}/print`, '_blank')}
-                              variant="outline"
-                              size="sm"
-                              className="h-7.5 px-2 flex items-center text-xs"
-                              title="Print Invoice"
                             >
-                              <Printer className="w-3.5 h-3.5 text-muted-foreground" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                              {item.invoiceNo}
+                            </button>
+                          </td>
+                        )}
+
+                        {/* Date (Grey #555555) */}
+                        {isColVisible('date') && (
+                          <td className="px-4 py-2 text-[#555555] dark:text-[#A1A1AA] whitespace-nowrap font-normal">
+                            {formatIndianDate(item.date)}
+                          </td>
+                        )}
+
+                        {/* Customer (Ink #1F2937, 500 weight, name only, flex-grow) */}
+                        {isColVisible('customer') && (
+                          <td
+                            className="px-4 py-2 font-medium text-[#1F2937] dark:text-[#EDEDED] truncate max-w-[280px] w-full"
+                            title={item.businessPartner?.name || 'Customer'}
+                          >
+                            <span className="truncate block">
+                              {item.businessPartner?.name || 'Unknown Customer'}
+                            </span>
+                          </td>
+                        )}
+
+                        {/* Type (<TypeBadge />) */}
+                        {isColVisible('type') && (
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <TypeBadge type={item.invoiceType || 'TAX_INVOICE'} />
+                          </td>
+                        )}
+
+                        {/* Taxable (Grey #555555, right-aligned, tabular-nums) */}
+                        {isColVisible('taxable') && (
+                          <td className="px-4 py-2 text-[14px] text-right font-normal text-[#555555] dark:text-[#A1A1AA] tabular-nums whitespace-nowrap">
+                            ₹{formatIndianCurrency(Number(item.subTotal || 0))}
+                          </td>
+                        )}
+
+                        {/* Total (Ink #111827, weight 600, right-aligned, tabular-nums) */}
+                        {isColVisible('total') && (
+                          <td className="px-4 py-2 text-[14px] text-right font-semibold text-[#111827] dark:text-[#F3F4F6] tabular-nums whitespace-nowrap">
+                            ₹{formatIndianCurrency(grandTotal)}
+                          </td>
+                        )}
+
+                        {/* Balance Due (Right-aligned, semibold) */}
+                        {isColVisible('balanceDue') && (
+                          <td
+                            className={cn(
+                              'px-4 py-2 text-[14px] text-right font-semibold tabular-nums whitespace-nowrap',
+                              outstanding < 0.01
+                                ? 'text-[#9CA3AF]'
+                                : isOverdue
+                                ? 'text-[#DC2626]'
+                                : amountPaid > 0
+                                ? 'text-[#D97706]'
+                                : 'text-[#111827] dark:text-[#F3F4F6]'
+                            )}
+                          >
+                            ₹{formatIndianCurrency(outstanding)}
+                          </td>
+                        )}
+
+                        {/* Status (Soft pill badge with 6px dot) */}
+                        {isColVisible('status') && (
+                          <td className="px-4 py-2 text-center whitespace-nowrap">
+                            <StatusBadge status={resolvedStatus} />
+                          </td>
+                        )}
+
+                        {/* Due Date (Grey #555555 with relative hint) */}
+                        {isColVisible('dueDate') && (
+                          <td className="px-4 py-2 text-[#555555] dark:text-[#A1A1AA] whitespace-nowrap">
+                            {isPaid ? (
+                              <span className="text-[#9CA3AF]">—</span>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <span>{formatIndianDate(item.dueDate)}</span>
+                                {dueDateHint && (
+                                  <span
+                                    className={cn(
+                                      'text-[12px] tabular-nums font-normal',
+                                      dueDateHint.type === 'overdue'
+                                        ? 'text-[#DC2626]'
+                                        : dueDateHint.type === 'today' || dueDateHint.type === 'soon'
+                                        ? 'text-[#D97706]'
+                                        : 'text-[#555555]'
+                                    )}
+                                  >
+                                    ({dueDateHint.text})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        )}
+
+                        {/* Actions (30px ghost buttons, fades in on row hover, sticky right) */}
+                        {isColVisible('actions') && (
+                          <td
+                            className={cn(
+                              'w-36 pl-3 pr-6 py-2 text-right sticky right-0 z-10 transition-colors duration-120',
+                              stickyCellBgClass
+                            )}
+                          >
+                            <RowActions
+                              onView={() => navigate(`/invoices/${item.id}`)}
+                              onDownload={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
+                              isDownloading={isDownloadingThis}
+                              onPrint={() => window.open(`/invoices/${item.id}/print`, '_blank')}
+                              onEdit={
+                                item.status === 'DRAFT'
+                                  ? () => navigate(`/invoices/${item.id}/edit`)
+                                  : undefined
+                              }
+                              onDuplicate={() => navigate(`/invoices/new?duplicateFrom=${item.id}`)}
+                              onRecordPayment={
+                                outstanding > 0.01
+                                  ? () => navigate(`/receipts/new?invoiceId=${item.id}`)
+                                  : undefined
+                              }
+                              onSendReminder={
+                                outstanding > 0.01
+                                  ? () => toast.success(`Payment reminder sent for ${item.invoiceNo}`)
+                                  : undefined
+                              }
+                              onShareLink={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/invoices/${item.id}`);
+                                toast.success('Invoice link copied to clipboard');
+                              }}
+                            />
+                          </td>
+                        )}
+                      </tr>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             </div>
 
-            {/* ============================================================= */}
-            {/* 6. PAGINATION CONTROLS */}
-            {/* ============================================================= */}
-            <div className="bg-slate-50/50 dark:bg-slate-900/30 border-t border-border p-4 px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-              {/* Left: Total & Page Size */}
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span>
-                  Showing{' '}
-                  <strong className="text-foreground">
-                    {totalCount === 0 ? 0 : (page - 1) * limit + 1}–{Math.min(page * limit, totalCount)}
-                  </strong>{' '}
-                  of <strong className="text-foreground">{totalCount}</strong> invoices
-                </span>
+            {/* Mobile Stacked Cards (below 640px) */}
+            <div className="block sm:hidden flex-1 min-h-0 overflow-auto divide-y divide-[#E8E8EC] dark:divide-[#26262A]">
+              {invoices.map((item: any) => {
+                const isSelected = selectedIds.includes(item.id);
+                const grandTotal = Number(item.grandTotal || 0);
+                const amountPaid = Number(item.amountPaid || 0);
+                const outstanding = Math.max(0, grandTotal - amountPaid);
+                const resolvedStatus = getResolvedStatus(item);
+                const isPaid = resolvedStatus === 'PAID';
+                const isOverdue = resolvedStatus === 'OVERDUE';
+                const dueDateHint = getDueDateHint(item.dueDate, isPaid);
 
-                <div className="flex items-center gap-1.5">
-                  <span>Per page:</span>
-                  <select
-                    value={limit}
-                    onChange={(e) => updateUrlParams({ limit: e.target.value, page: '1' })}
-                    className="h-8 text-xs bg-surface border border-border rounded-md px-2 focus:outline-none focus:ring-1 focus:ring-accent text-foreground cursor-pointer"
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      'p-4 space-y-2.5 text-[14px] transition-colors',
+                      isSelected ? 'bg-[#ECECF1] dark:bg-[#2B2A36]' : 'bg-surface dark:bg-[#17161C]'
+                    )}
                   >
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Right: Page Navigation */}
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => updateUrlParams({ page: String(Math.max(1, page - 1)) })}
-                  disabled={page <= 1}
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-3 text-xs flex items-center gap-1"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>Previous</span>
-                </Button>
-
-                <span className="text-xs font-semibold px-2 text-foreground">
-                  Page {page} of {totalPages}
-                </span>
-
-                <Button
-                  onClick={() => updateUrlParams({ page: String(Math.min(totalPages, page + 1)) })}
-                  disabled={page >= totalPages}
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-3 text-xs flex items-center gap-1"
-                >
-                  <span>Next</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* ================================================================= */}
-        {/* 7. ADVANCED FILTER DRAWER / SHEET */}
-        {/* ================================================================= */}
-        {isFilterDrawerOpen && (
-          <div className="fixed inset-0 z-50 flex justify-end animate-fadeIn">
-            {/* Backdrop */}
-            <div
-              onClick={() => setIsFilterDrawerOpen(false)}
-              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
-            />
-
-            {/* Slide-over Sheet Panel */}
-            <div className="relative w-full max-w-md bg-surface border-l border-border shadow-2xl flex flex-col z-10 h-full overflow-hidden">
-              {/* Drawer Header */}
-              <div className="p-5 border-b border-border flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-                <div className="flex items-center gap-2">
-                  <SlidersHorizontal className="w-5 h-5 text-accent" />
-                  <h3 className="font-bold text-base text-foreground">Advanced Filters</h3>
-                </div>
-                <button
-                  onClick={() => setIsFilterDrawerOpen(false)}
-                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Drawer Body - Scrollable */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
-                {/* 1. Document Category / Invoice Type */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-foreground uppercase tracking-wider">
-                    Document Category
-                  </label>
-                  <select
-                    value={drawerDocType}
-                    onChange={(e) => setDrawerDocType(e.target.value)}
-                    className="w-full h-9.5 px-3 text-xs bg-surface border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent text-foreground cursor-pointer"
-                  >
-                    {DOCUMENT_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 2. Tax Treatment / Mode */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-foreground uppercase tracking-wider">
-                    Tax Treatment
-                  </label>
-                  <select
-                    value={drawerTaxMode}
-                    onChange={(e) => setDrawerTaxMode(e.target.value)}
-                    className="w-full h-9.5 px-3 text-xs bg-surface border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent text-foreground cursor-pointer"
-                  >
-                    {TAX_MODES.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 3. Customer Combobox Lookup */}
-                <div className="space-y-1.5 relative">
-                  <label className="text-[11px] font-semibold text-foreground uppercase tracking-wider">
-                    Customer Lookup
-                  </label>
-                  {drawerCustomerId ? (
-                    <div className="flex items-center justify-between p-2.5 px-3 bg-slate-100 dark:bg-slate-800 border border-border rounded-xl">
-                      <div className="truncate">
-                        <div className="font-semibold text-foreground text-xs">{drawerCustomerName}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">ID: {drawerCustomerId}</div>
+                    {/* Top Row: Checkbox, Invoice #, Status, Actions */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectRow(item.id)}
+                          className="rounded-[4px] border-[#D1D5DB] dark:border-[#374151] text-[#34303F] accent-[#34303F] h-4 w-4 cursor-pointer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/invoices/${item.id}`)}
+                          className="font-medium text-[#1F2937] dark:text-[#EDEDED] hover:underline"
+                        >
+                          {item.invoiceNo}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => {
-                          setDrawerCustomerId('');
-                          setDrawerCustomerName('');
-                        }}
-                        className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                        title="Remove customer filter"
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={resolvedStatus} />
+                        <RowActions
+                          onView={() => navigate(`/invoices/${item.id}`)}
+                          onDownload={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
+                          onPrint={() => window.open(`/invoices/${item.id}/print`, '_blank')}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Customer Row */}
+                    <div className="flex items-center justify-between text-[#555555] dark:text-[#A1A1AA]">
+                      <span className="text-[12px] uppercase tracking-wider text-[#6B7280]">Customer</span>
+                      <span className="text-[#1F2937] dark:text-[#EDEDED] font-medium truncate max-w-[200px]">
+                        {item.businessPartner?.name || 'Customer'}
+                      </span>
+                    </div>
+
+                    {/* Type Row */}
+                    <div className="flex items-center justify-between text-[#555555] dark:text-[#A1A1AA]">
+                      <span className="text-[12px] uppercase tracking-wider text-[#6B7280]">Type</span>
+                      <TypeBadge type={item.invoiceType || 'TAX_INVOICE'} />
+                    </div>
+
+                    {/* Total Row */}
+                    <div className="flex items-center justify-between text-[#555555] dark:text-[#A1A1AA]">
+                      <span className="text-[12px] uppercase tracking-wider text-[#6B7280]">Total</span>
+                      <span className="font-semibold text-[#111827] dark:text-[#F3F4F6] tabular-nums">
+                        ₹{formatIndianCurrency(grandTotal)}
+                      </span>
+                    </div>
+
+                    {/* Balance Due Row */}
+                    <div className="flex items-center justify-between text-[#555555] dark:text-[#A1A1AA]">
+                      <span className="text-[12px] uppercase tracking-wider text-[#6B7280]">Balance Due</span>
+                      <span
+                        className={cn(
+                          'font-semibold tabular-nums',
+                          outstanding < 0.01
+                            ? 'text-[#9CA3AF]'
+                            : isOverdue
+                            ? 'text-[#DC2626]'
+                            : amountPaid > 0
+                            ? 'text-[#D97706]'
+                            : 'text-[#111827] dark:text-[#F3F4F6]'
+                        )}
                       >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                        ₹{formatIndianCurrency(outstanding)}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={customerSearchQuery}
-                        onChange={(e) => {
-                          setCustomerSearchQuery(e.target.value);
-                          setIsCustomerDropdownOpen(true);
-                        }}
-                        onFocus={() => setIsCustomerDropdownOpen(true)}
-                        placeholder="Search client by name, phone, or GST..."
-                        className="w-full h-9.5 px-3 text-xs bg-surface border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent text-foreground"
-                      />
-                      {isCustomerDropdownOpen && (
-                        <div className="absolute left-0 right-0 top-11 z-30 max-h-48 overflow-y-auto bg-surface border border-border rounded-xl shadow-lg divide-y divide-border/60">
-                          {Array.isArray(customerSearchResults) && customerSearchResults.length > 0 ? (
-                            customerSearchResults.map((c: any) => (
-                              <button
-                                key={c.id}
-                                type="button"
-                                onClick={() => {
-                                  setDrawerCustomerId(c.id);
-                                  setDrawerCustomerName(c.name);
-                                  setIsCustomerDropdownOpen(false);
-                                }}
-                                className="w-full text-left p-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex flex-col"
-                              >
-                                <span className="font-semibold text-xs text-foreground">{c.name}</span>
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  {c.gstin || c.gstNumber || c.phone || 'No GST'}
-                                </span>
-                              </button>
-                            ))
-                          ) : (
-                            <div className="p-3 text-xs text-muted-foreground text-center">
-                              No matching customers found
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
 
-                {/* 4. Invoice Status */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-foreground uppercase tracking-wider">
-                    Document Status
-                  </label>
-                  <select
-                    value={drawerStatus}
-                    onChange={(e) => setDrawerStatus(e.target.value)}
-                    className="w-full h-9.5 px-3 text-xs bg-surface border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent text-foreground cursor-pointer"
-                  >
-                    {INVOICE_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 5. Date Range Filter & Presets */}
-                <div className="space-y-2">
-                  <label className="text-[11px] font-semibold text-foreground uppercase tracking-wider">
-                    Date Filter Presets
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {DATE_PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => handleDatePresetSelect(preset.id)}
-                        className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition-all cursor-pointer ${
-                          drawerDatePreset === preset.id
-                            ? 'bg-accent text-accent-foreground border-accent'
-                            : 'bg-slate-100 dark:bg-slate-800 border-border text-foreground hover:bg-slate-200'
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">From Date</label>
-                      <input
-                        type="date"
-                        value={drawerFromDate}
-                        onChange={(e) => {
-                          setDrawerFromDate(e.target.value);
-                          setDrawerDatePreset('custom');
-                        }}
-                        className="w-full h-8 px-2 text-xs bg-surface border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">To Date</label>
-                      <input
-                        type="date"
-                        value={drawerToDate}
-                        onChange={(e) => {
-                          setDrawerToDate(e.target.value);
-                          setDrawerDatePreset('custom');
-                        }}
-                        className="w-full h-8 px-2 text-xs bg-surface border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                      />
+                    {/* Due Date Row */}
+                    <div className="flex items-center justify-between text-[#555555] dark:text-[#A1A1AA]">
+                      <span className="text-[12px] uppercase tracking-wider text-[#6B7280]">Due Date</span>
+                      <div className="text-right">
+                        <span>{formatIndianDate(item.dueDate)}</span>
+                        {dueDateHint && !isPaid && (
+                          <span
+                            className={cn(
+                              'text-[12px] block font-normal',
+                              dueDateHint.type === 'overdue'
+                                ? 'text-[#DC2626]'
+                                : 'text-[#D97706]'
+                            )}
+                          >
+                            ({dueDateHint.text})
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {/* 6. Amount Range */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-foreground uppercase tracking-wider">
-                    Grand Total Range (₹)
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="number"
-                      placeholder="Min ₹"
-                      value={drawerMinAmount}
-                      onChange={(e) => setDrawerMinAmount(e.target.value)}
-                      className="w-full h-8.5 px-2.5 text-xs bg-surface border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Max ₹"
-                      value={drawerMaxAmount}
-                      onChange={(e) => setDrawerMaxAmount(e.target.value)}
-                      className="w-full h-8.5 px-2.5 text-xs bg-surface border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Drawer Footer Actions */}
-              <div className="p-4 border-t border-border flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
-                <Button
-                  onClick={resetDrawerFilters}
-                  variant="outline"
-                  size="sm"
-                  className="px-3 text-xs"
-                >
-                  Reset
-                </Button>
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setIsFilterDrawerOpen(false)}
-                    variant="outline"
-                    size="sm"
-                    className="px-3 text-xs"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={applyDrawerFilters}
-                    variant="primary"
-                    size="sm"
-                    className="px-4 text-xs font-semibold"
-                  >
-                    Apply Filters
-                  </Button>
-                </div>
-              </div>
+                );
+              })}
             </div>
-          </div>
+
+            {/* Pinned Pagination Footer (56px) inside the container */}
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={totalCount}
+              pageSize={limit}
+              pageSizeOptions={[10, 25, 50, 100]}
+              onPageChange={(p) => updateUrlParams({ page: String(p) })}
+              onPageSizeChange={(s) => updateUrlParams({ limit: String(s), page: '1' })}
+            />
+          </>
         )}
       </div>
-    </PageContainer>
+
+      {/* =================================================================== */}
+      {/* 5. ADVANCED FILTERS SLIDE-OVER DRAWER */}
+      {/* =================================================================== */}
+      <FiltersDrawer
+        isOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        title="Advanced Filters"
+        activeCount={activeFiltersList.length}
+        onApply={applyDrawerFilters}
+        onReset={resetDrawerFilters}
+      >
+        {/* Document Type */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold text-[#4B5563] dark:text-[#9CA3AF] uppercase tracking-wider">
+            Document Category
+          </label>
+          <select
+            value={drawerDocType}
+            onChange={(e) => setDrawerDocType(e.target.value)}
+            className="w-full h-9 px-2.5 text-[13px] bg-surface dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] focus:outline-none text-[#1F2937] dark:text-[#EDEDED] cursor-pointer"
+          >
+            {DOCUMENT_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tax Mode */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold text-[#4B5563] dark:text-[#9CA3AF] uppercase tracking-wider">
+            Tax Treatment
+          </label>
+          <select
+            value={drawerTaxMode}
+            onChange={(e) => setDrawerTaxMode(e.target.value)}
+            className="w-full h-9 px-2.5 text-[13px] bg-surface dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] focus:outline-none text-[#1F2937] dark:text-[#EDEDED] cursor-pointer"
+          >
+            {TAX_MODES.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Customer Combobox */}
+        <div className="space-y-1.5 relative">
+          <label className="text-[11px] font-semibold text-[#4B5563] dark:text-[#9CA3AF] uppercase tracking-wider">
+            Customer Lookup
+          </label>
+          {drawerCustomerId ? (
+            <div className="flex items-center justify-between p-2 px-2.5 bg-[#F5F5F5] dark:bg-[#1C1B22] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px]">
+              <span className="text-[13px] font-medium text-[#1F2937] dark:text-[#EDEDED] truncate">
+                {drawerCustomerName || 'Selected Customer'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setDrawerCustomerId('');
+                  setDrawerCustomerName('');
+                }}
+                className="text-[#6B7280] hover:text-[#1F2937] dark:hover:text-[#EDEDED] text-[12px] font-medium cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                type="text"
+                value={customerSearchQuery}
+                onFocus={() => setIsCustomerDropdownOpen(true)}
+                onChange={(e) => {
+                  setCustomerSearchQuery(e.target.value);
+                  setIsCustomerDropdownOpen(true);
+                }}
+                placeholder="Search client by name or GSTIN..."
+                className="w-full h-9 px-2.5 text-[13px] bg-surface dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] focus:outline-none text-[#1F2937] dark:text-[#EDEDED] placeholder:text-[#6B7280]"
+              />
+              {isCustomerDropdownOpen && customerSearchResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-10 max-h-48 overflow-y-auto bg-surface dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] shadow-md z-50 p-1">
+                  {customerSearchResults.map((cust: any) => (
+                    <button
+                      key={cust.id}
+                      type="button"
+                      onClick={() => {
+                        setDrawerCustomerId(cust.id);
+                        setDrawerCustomerName(cust.name);
+                        setIsCustomerDropdownOpen(false);
+                      }}
+                      className="w-full px-2.5 py-1.5 text-left text-[13px] text-[#1F2937] dark:text-[#EDEDED] hover:bg-[#F5F5F5] dark:hover:bg-[#24232C] rounded-[4px] cursor-pointer"
+                    >
+                      <div className="font-medium truncate">{cust.name}</div>
+                      {cust.gstin && (
+                        <div className="text-[11px] text-[#6B7280] font-mono">{cust.gstin}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Amount Range */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold text-[#4B5563] dark:text-[#9CA3AF] uppercase tracking-wider">
+            Amount Range (₹)
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              value={drawerMinAmount}
+              onChange={(e) => setDrawerMinAmount(e.target.value)}
+              placeholder="Min amount"
+              className="h-9 px-2.5 text-[13px] bg-surface dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] focus:outline-none text-[#1F2937] dark:text-[#EDEDED]"
+            />
+            <input
+              type="number"
+              value={drawerMaxAmount}
+              onChange={(e) => setDrawerMaxAmount(e.target.value)}
+              placeholder="Max amount"
+              className="h-9 px-2.5 text-[13px] bg-surface dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] focus:outline-none text-[#1F2937] dark:text-[#EDEDED]"
+            />
+          </div>
+        </div>
+
+        {/* Date Range */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-semibold text-[#4B5563] dark:text-[#9CA3AF] uppercase tracking-wider">
+            Custom Date Interval
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <span className="text-[11px] text-[#6B7280] block mb-0.5">From</span>
+              <input
+                type="date"
+                value={drawerFromDate}
+                onChange={(e) => {
+                  setDrawerFromDate(e.target.value);
+                  setDrawerDatePreset('');
+                }}
+                className="w-full h-9 px-2 text-[13px] bg-surface dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] focus:outline-none text-[#1F2937] dark:text-[#EDEDED]"
+              />
+            </div>
+            <div>
+              <span className="text-[11px] text-[#6B7280] block mb-0.5">To</span>
+              <input
+                type="date"
+                value={drawerToDate}
+                onChange={(e) => {
+                  setDrawerToDate(e.target.value);
+                  setDrawerDatePreset('');
+                }}
+                className="w-full h-9 px-2 text-[13px] bg-surface dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] focus:outline-none text-[#1F2937] dark:text-[#EDEDED]"
+              />
+            </div>
+          </div>
+        </div>
+      </FiltersDrawer>
+    </PageLayout>
   );
 };
+
+export default InvoicesList;

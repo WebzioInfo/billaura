@@ -7,6 +7,8 @@ import { Users, Search, Plus, Edit2, Trash2, Mail, Loader2, Shield } from 'lucid
 import { apiClient } from '../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DeleteDialog } from '../../shared/components/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/components/ui/Table';
+import { StatusBadge } from '../../shared/components/ui/StatusBadge';
 import { useNavigate } from 'react-router-dom';
 
 const userSchema = z.object({
@@ -174,86 +176,77 @@ export const UsersList = () => {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-sm text-left">
-          <thead className="text-xs uppercase bg-muted text-muted-foreground font-semibold">
-            <tr>
-              <th className="px-4 py-3">User</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3 text-center">Status</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-card">
-            {isLoading ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  <div className="flex justify-center items-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Loading users...</span>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>User</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead className="text-center">Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            <TableRow>
+              <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <div className="flex justify-center items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading users...</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : filteredUsers.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>No users found</p>
+              </TableCell>
+            </TableRow>
+          ) : (
+            filteredUsers.map((item) => (
+              <TableRow key={item.userId}>
+                <TableCell className="font-medium text-foreground">
+                  {item.user.name}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 opacity-60" />
+                    {item.user.email}
                   </div>
-                </td>
-              </tr>
-            ) : filteredUsers.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No users found</p>
-                </td>
-              </tr>
-            ) : (
-              filteredUsers.map((item) => (
-                <tr key={item.userId} className="hover:bg-muted/50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold">
-                        {item.user.name?.charAt(0).toUpperCase()}
-                      </div>
-                      {item.user.name}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Mail className="w-3 h-3" />
-                      {item.user.email}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground">
-                      <Shield className="w-3 h-3" />
-                      {item.role === 'CUSTOM' ? item.customRole?.name : item.role}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${item.user.isActive ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'}`}>
-                      {item.user.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => openEditModal(item)}
-                        className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded transition-colors"
-                        title="Edit Role"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirmId(item.userId)}
-                        className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
-                        title="Remove User"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                </TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-neutral-100 dark:bg-neutral-800 text-foreground">
+                    <Shield className="w-3 h-3 opacity-60" />
+                    {item.role === 'CUSTOM' ? item.customRole?.name : item.role}
+                  </span>
+                </TableCell>
+                <TableCell className="text-center">
+                  <StatusBadge status={item.user.isActive ? 'active' : 'inactive'} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => openEditModal(item)}
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
+                      title="Edit Role"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirmId(item.userId)}
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                      title="Remove User"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">

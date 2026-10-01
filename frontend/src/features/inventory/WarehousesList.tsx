@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 
@@ -29,28 +29,40 @@ export const WarehousesList = () => {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
+            <TableHead className="pl-6 pr-4">Name</TableHead>
             <TableHead>Location</TableHead>
             <TableHead>Default</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead className="pr-6 pl-4">Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center py-4">Loading warehouses...</TableCell>
+              <TableCell colSpan={4} className="p-0">
+                <TableLoader rows={4} />
+              </TableCell>
             </TableRow>
           ) : data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">No warehouses found.</TableCell>
+              <TableCell colSpan={4} className="text-center py-12 text-sm text-muted-foreground">
+                No warehouses found.
+              </TableCell>
             </TableRow>
           ) : (
             data.map((warehouse: any) => (
               <TableRow key={warehouse.id}>
-                <TableCell className="font-medium">{warehouse.name}</TableCell>
-                <TableCell>{warehouse.location || 'N/A'}</TableCell>
-                <TableCell>{warehouse.isDefault ? 'Yes' : 'No'}</TableCell>
-                <TableCell>{warehouse.isActive ? 'Active' : 'Inactive'}</TableCell>
+                <TableCell className="pl-6 pr-4 font-semibold text-foreground">{warehouse.name}</TableCell>
+                <TableCell className="text-muted-foreground">{warehouse.location || '—'}</TableCell>
+                <TableCell>
+                  {warehouse.isDefault ? (
+                    <span className="font-semibold text-foreground">Yes</span>
+                  ) : (
+                    <span className="text-muted-foreground">No</span>
+                  )}
+                </TableCell>
+                <TableCell className="pr-6 pl-4">
+                  <StatusBadge status={warehouse.isActive ? 'ACTIVE' : 'INACTIVE'} />
+                </TableCell>
               </TableRow>
             ))
           )}

@@ -1,8 +1,7 @@
 import React from 'react';
 import { Plus, Truck } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
-import { Card } from '@/shared/components/ui/Card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, StatusBadge, DateCell } from '@/shared/components/ui';
 import { Button } from '@/shared/components/ui/Button';
 import { PageContainer, EmptyState, LoadingState } from '@/shared/components/ui/LayoutComponents';
 import apiClient from '@/core/api';
@@ -46,34 +45,30 @@ export const DeliveryNotesList = () => {
           onActionClick={() => navigate('/delivery-notes/new')}
         />
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/10 border-b border-border">
-                <TableHead className="font-semibold py-4 px-6">Note No</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Date</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Customer</TableHead>
-                <TableHead className="font-semibold py-4 px-6 text-right">Total Items</TableHead>
-                <TableHead className="font-semibold py-4 px-6">Status</TableHead>
+        <Table>
+          <TableHeader>
+            <tr>
+              <TableHead className="pl-6 pr-4">Note No</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead align="right">Total Items</TableHead>
+              <TableHead align="center" className="pr-6 pl-4">Status</TableHead>
+            </tr>
+          </TableHeader>
+          <TableBody>
+            {data.map((item: any) => (
+              <TableRow key={item.id} className="group cursor-pointer" onClick={() => navigate(`/delivery-notes/${item.id}`)}>
+                <TableCell className="pl-6 pr-4 font-medium text-[#1F2937] dark:text-[#EDEDED]">{item.noteNo}</TableCell>
+                <TableCell><DateCell value={item.date} /></TableCell>
+                <TableCell className="font-medium text-[#1F2937] dark:text-[#EDEDED]">{item.businessPartner?.name || '—'}</TableCell>
+                <TableCell align="right" className="font-medium text-[#111827] dark:text-[#EDEDED] tabular-nums">{item.items?.length || 0}</TableCell>
+                <TableCell align="center" className="pr-6 pl-4">
+                  <StatusBadge status={item.status || 'SHIPPED'} />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((item: any) => (
-                <TableRow key={item.id} className="hover:bg-muted/50 border-b border-border transition-colors">
-                  <TableCell className="font-semibold py-4 px-6">{item.noteNo}</TableCell>
-                  <TableCell className="py-4 px-6">{new Date(item.date).toLocaleDateString()}</TableCell>
-                  <TableCell className="py-4 px-6 font-medium text-foreground">{item.businessPartner?.name || 'N/A'}</TableCell>
-                  <TableCell className="font-bold py-4 px-6 text-right">{item.items?.length || 0}</TableCell>
-                  <TableCell className="py-4 px-6">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${item.status === 'DELIVERED' ? 'bg-green-500/10 text-green-600' : 'bg-blue-500/10 text-blue-600'}`}>
-                      {item.status}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </PageContainer>
   );

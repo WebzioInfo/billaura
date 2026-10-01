@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Download, Printer, FileText, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { apiClient } from '@/core/api/apiClient';
 
@@ -112,67 +114,54 @@ export default function ProfitLossDashboard() {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-      
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Profit & Loss Statement</h1>
-          <p className="text-muted-foreground">Detailed financial performance for the selected period.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select 
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-          >
-            <option value="FY">This Financial Year</option>
-            <option value="MTD">This Month</option>
-            <option value="QTD">This Quarter</option>
-          </select>
-          <Button variant="outline" onClick={exportPDF}><FileText className="w-4 h-4 mr-2" /> PDF</Button>
-          <Button variant="outline" onClick={exportExcel}><Download className="w-4 h-4 mr-2" /> Excel</Button>
-          <Button variant="outline" onClick={handlePrint} className="hidden sm:flex"><Printer className="w-4 h-4 mr-2" /> Print</Button>
-        </div>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Profit & Loss"
+        secondaryActions={
+          <div className="flex items-center gap-2">
+            <select 
+              className="h-8 rounded-lg border border-border bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+            >
+              <option value="FY">This Financial Year</option>
+              <option value="MTD">This Month</option>
+              <option value="QTD">This Quarter</option>
+            </select>
+            <Button variant="secondary" size="sm" onClick={exportPDF}><FileText className="w-4 h-4 mr-1.5" /> PDF</Button>
+            <Button variant="secondary" size="sm" onClick={exportExcel}><Download className="w-4 h-4 mr-1.5" /> Excel</Button>
+            <Button variant="secondary" size="sm" onClick={handlePrint} className="hidden sm:flex"><Printer className="w-4 h-4 mr-1.5" /> Print</Button>
+          </div>
+        }
+      />
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">{formatCurrency(kpis?.totalRevenue || 0)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Gross Profit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(kpis?.grossProfit || 0)}</div>
-            <p className="text-xs text-muted-foreground">{kpis?.grossMarginPct?.toFixed(1)}% margin</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Operating Expenses</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(kpis?.operatingExpense || 0)}</div>
-            <p className="text-xs text-muted-foreground">{kpis?.expenseRatioPct?.toFixed(1)}% of revenue</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-primary text-primary-foreground">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(kpis?.netProfit || 0)}</div>
-            <p className="text-xs opacity-80">{kpis?.netMarginPct?.toFixed(1)}% net margin</p>
-          </CardContent>
-        </Card>
+      {/* KPI Cards Row */}
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 shrink-0 mb-3">
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Total Revenue</p>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{formatCurrency(kpis?.totalRevenue || 0)}</p>
+        </div>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Gross Profit</p>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">
+            {formatCurrency(kpis?.grossProfit || 0)}
+            <span className="text-xs font-normal text-muted-foreground ml-2">({kpis?.grossMarginPct?.toFixed(1)}%)</span>
+          </p>
+        </div>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Operating Expenses</p>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">
+            {formatCurrency(kpis?.operatingExpense || 0)}
+            <span className="text-xs font-normal text-muted-foreground ml-2">({kpis?.expenseRatioPct?.toFixed(1)}%)</span>
+          </p>
+        </div>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Net Profit</p>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">
+            {formatCurrency(kpis?.netProfit || 0)}
+            <span className="text-xs font-normal text-muted-foreground ml-2">({kpis?.netMarginPct?.toFixed(1)}%)</span>
+          </p>
+        </div>
       </div>
 
       {/* Main Statement & Charts Layout */}
@@ -362,6 +351,6 @@ export default function ProfitLossDashboard() {
         </div>
 
       </div>
-    </div>
+    </PageLayout>
   );
 }

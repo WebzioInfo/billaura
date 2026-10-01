@@ -25,6 +25,8 @@ import {
 import { apiClient } from '../../core/api/apiClient';
 import { useSessionStore } from '../../features/auth/stores/sessionStore';
 import { useWorkspaceStore } from '../../shared/stores/workspaceStore';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 
 export interface DashboardData {
   company: {
@@ -151,8 +153,8 @@ export const ExecutiveDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 text-left max-w-7xl mx-auto">
-        <div className="h-20 bg-muted/30 rounded-2xl animate-pulse" />
+      <PageLayout>
+        <div className="h-12 bg-muted/30 rounded-xl animate-pulse" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-28 bg-surface border border-border/60 rounded-2xl p-5 animate-pulse" />
@@ -162,7 +164,7 @@ export const ExecutiveDashboard: React.FC = () => {
           <div className="lg:col-span-6 h-64 bg-surface border border-border/60 rounded-2xl animate-pulse" />
           <div className="lg:col-span-6 h-64 bg-surface border border-border/60 rounded-2xl animate-pulse" />
         </div>
-      </div>
+      </PageLayout>
     );
   }
 
@@ -213,45 +215,41 @@ export const ExecutiveDashboard: React.FC = () => {
   const totalOverdue = overdueInvoices.reduce((acc, inv) => acc + inv.amount, 0);
 
   return (
-    <div className="space-y-6 text-left max-w-7xl mx-auto pb-12">
-      {/* 1. TOP GREETING & COMPACT DATE FILTER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {greeting}, {userName}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-1 font-medium">
-            {data.company?.name || 'Bill Aura'} • FY {data.company?.financialYear || '2025-2026'}
-          </p>
-        </div>
+    <PageLayout>
+      <PageHeader
+        title={`${greeting}, ${userName}`}
+        secondaryActions={
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-lg border border-border/60">
+              {(['today', 'this_week', 'this_month', 'this_year', 'all'] as const).map((periodKey) => {
+                const isActive = selectedPeriod === periodKey;
+                return (
+                  <button
+                    key={periodKey}
+                    onClick={() => setSelectedPeriod(periodKey)}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-background text-foreground shadow-xs border border-border/80'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                    }`}
+                  >
+                    {periodLabels[periodKey]}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => refetch()}
+              title="Refresh Data"
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-lg cursor-pointer transition"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin text-primary' : ''}`} />
+            </button>
+          </div>
+        }
+      />
 
-        {/* Filter Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/60">
-          {(['today', 'this_week', 'this_month', 'this_year', 'all'] as const).map((periodKey) => {
-            const isActive = selectedPeriod === periodKey;
-            return (
-              <button
-                key={periodKey}
-                onClick={() => setSelectedPeriod(periodKey)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-background text-foreground shadow-xs border border-border/80'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                }`}
-              >
-                {periodLabels[periodKey]}
-              </button>
-            );
-          })}
-          <button
-            onClick={() => refetch()}
-            title="Refresh Data"
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-lg ml-1 cursor-pointer transition"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin text-primary' : ''}`} />
-          </button>
-        </div>
-      </div>
+      <div className="space-y-6 flex-1 min-h-0 overflow-y-auto pb-8">
 
       {/* OVERDUE NOTICE (Shown only if actual overdue invoices exist) */}
       {overdueInvoices.length > 0 && (
@@ -617,6 +615,7 @@ export const ExecutiveDashboard: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </PageLayout>
   );
 };

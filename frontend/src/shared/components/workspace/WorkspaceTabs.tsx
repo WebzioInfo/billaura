@@ -52,44 +52,56 @@ function SortableTab({ tab, isActive, onSelect, onClose, onPin }: SortableTabPro
       style={style}
       {...attributes}
       {...listeners}
+      data-active={isActive ? 'true' : 'false'}
       onPointerDown={(e) => {
-        // Only trigger selection if not clicking a button (close/pin)
         if (!(e.target as HTMLElement).closest('.tab-action')) {
           onSelect(tab.id, tab.path);
         }
       }}
       className={cn(
-        "group relative flex items-center min-w-[100px] max-w-[180px] h-7 px-2.5 gap-1.5 border-r border-t border-l rounded-t-sm transition-colors text-[11px] shrink-0 touch-none",
+        "group relative flex items-center min-w-max h-9 px-3 first:pl-0 gap-2 text-[13px] shrink-0 select-none cursor-pointer transition-colors duration-120 whitespace-nowrap",
         isActive 
-          ? "bg-background border-border text-foreground before:absolute before:bottom-[-1px] before:left-0 before:right-0 before:h-[1px] before:bg-background" 
-          : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted",
-        isDragging && "opacity-50 shadow-md"
+          ? "text-[#111827] dark:text-[#F3F4F6] font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#111827] dark:after:bg-[#F3F4F6]" 
+          : "text-[#6B7280] dark:text-[#9CA3AF] hover:text-[#111827] dark:hover:text-[#F3F4F6] font-medium",
+        isDragging && "opacity-50"
       )}
     >
-      <div className="truncate flex-1 font-semibold cursor-default">{tab.title}</div>
+      <div className="tracking-tight whitespace-nowrap">{tab.title}</div>
       
-      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity tab-action cursor-pointer">
+      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity tab-action">
         {tab.isPinned ? (
-          <PinOff 
-            className="w-2.5 h-2.5 hover:text-foreground text-muted-foreground mr-0.5" 
-            onPointerDown={(e) => { e.stopPropagation(); onPin(e as any, tab.id, true); }} 
-          />
+          <button
+            type="button"
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+            title="Unpin Tab"
+            onPointerDown={(e) => { e.stopPropagation(); onPin(e as any, tab.id, true); }}
+          >
+            <PinOff className="w-3 h-3" />
+          </button>
         ) : (
-          <Pin 
-            className="w-2.5 h-2.5 hover:text-foreground text-muted-foreground mr-0.5" 
-            onPointerDown={(e) => { e.stopPropagation(); onPin(e as any, tab.id, false); }} 
-          />
+          <button
+            type="button"
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+            title="Pin Tab"
+            onPointerDown={(e) => { e.stopPropagation(); onPin(e as any, tab.id, false); }}
+          >
+            <Pin className="w-3 h-3" />
+          </button>
         )}
         {!tab.isPinned && (
-          <X 
-            className="w-3 h-3 hover:bg-muted-foreground/20 rounded-sm hover:text-foreground text-muted-foreground p-[1px]" 
-            onPointerDown={(e) => { e.stopPropagation(); onClose(e as any, tab.id); }} 
-          />
+          <button
+            type="button"
+            className="p-0.5 rounded text-muted-foreground hover:text-rose-600 transition-colors ml-0.5"
+            title="Close Tab"
+            onPointerDown={(e) => { e.stopPropagation(); onClose(e as any, tab.id); }}
+          >
+            <X className="w-3 h-3" />
+          </button>
         )}
       </div>
       
       {tab.isPinned && !isActive && (
-        <Pin className="w-2.5 h-2.5 text-muted-foreground/50 absolute right-2 opacity-100 group-hover:opacity-0 pointer-events-none" />
+        <Pin className="w-2.5 h-2.5 text-muted-foreground/40 absolute right-2 opacity-100 group-hover:opacity-0 pointer-events-none" />
       )}
     </div>
   );
@@ -98,6 +110,30 @@ function SortableTab({ tab, isActive, onSelect, onClose, onPin }: SortableTabPro
 export function WorkspaceTabs() {
   const { tabs, activeTabId, setActiveTab, closeTab, pinTab, unpinTab, reorderTabs } = useWorkspaceStore();
   const navigate = useNavigate();
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Horizontal mousewheel scroll
+  React.useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // Auto-scroll active tab into view
+  React.useEffect(() => {
+    if (!activeTabId || !scrollContainerRef.current) return;
+    const activeEl = scrollContainerRef.current.querySelector('[data-active="true"]');
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+  }, [activeTabId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -149,28 +185,33 @@ export function WorkspaceTabs() {
   };
 
   return (
-    <div className="flex bg-muted/30 border-b border-border overflow-x-auto overflow-y-hidden scrollbar-hide select-none h-8 items-end px-1.5 w-full">
-      <DndContext 
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
+    <div className="relative w-full h-9 flex items-center overflow-hidden">
+      <div
+        ref={scrollContainerRef}
+        className="flex bg-transparent overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden select-none h-9 items-center gap-1 w-full"
       >
-        <SortableContext 
-          items={tabs.map(t => t.id)}
-          strategy={horizontalListSortingStrategy}
+        <DndContext 
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
         >
-          {tabs.map((tab) => (
-            <SortableTab
-              key={tab.id}
-              tab={tab}
-              isActive={activeTabId === tab.id}
-              onSelect={handleTabClick}
-              onClose={handleClose}
-              onPin={handlePin}
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
+          <SortableContext 
+            items={tabs.map(t => t.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {tabs.map((tab) => (
+              <SortableTab
+                key={tab.id}
+                tab={tab}
+                isActive={activeTabId === tab.id}
+                onSelect={handleTabClick}
+                onClose={handleClose}
+                onPin={handlePin}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+      </div>
     </div>
   );
 }

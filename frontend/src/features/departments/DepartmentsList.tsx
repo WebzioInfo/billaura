@@ -16,6 +16,8 @@ import { DeleteDialog, ConfirmDialog } from '../../shared/components/ui';
 import { SearchableSelect } from '@/shared/components/ui/SearchableSelect';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { HRMastersManager } from '../hr/components/HRMastersManager';
 
 // --- SCHEMAS ---
@@ -321,34 +323,24 @@ export const DepartmentsList = () => {
   });
 
   return (
-    <div className="space-y-6 text-left p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Building className="w-6 h-6 text-accent" />
-            Enterprise HRMS & Payroll Control Center
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Standard SAP-grade workforce database, master registers, attendance auditing, and salary journal posting.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {activeTab === 'employees' && (
-            <Button onClick={handleOpenCreateEmployee} variant="primary" className="flex items-center gap-2 font-bold px-4">
-              <Plus className="w-4 h-4" /> Register Employee
+    <PageLayout>
+      <PageHeader
+        title="Departments"
+        primaryAction={
+          activeTab === 'employees' ? (
+            <Button onClick={handleOpenCreateEmployee} variant="primary" size="sm">
+              <Plus className="w-4 h-4 mr-1.5" /> Register Employee
             </Button>
-          )}
-          {activeTab === 'attendance' && (
-            <Button onClick={() => { attendanceForm.reset(); setIsModalOpen(true); }} variant="primary" className="flex items-center gap-2 font-bold px-4">
-              <Plus className="w-4 h-4" /> Record Check-in
+          ) : activeTab === 'attendance' ? (
+            <Button onClick={() => { attendanceForm.reset(); setIsModalOpen(true); }} variant="primary" size="sm">
+              <Plus className="w-4 h-4 mr-1.5" /> Record Check-in
             </Button>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* Tabs */}
-      <div className="flex flex-wrap border-b border-border gap-1">
+      <div className="flex flex-wrap border-b border-border gap-1 shrink-0">
         {[
           { id: 'employees', label: 'Employees Directory' },
           { id: 'masters', label: 'HR Configurations (Masters)' },
@@ -762,6 +754,6 @@ export const DepartmentsList = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 };

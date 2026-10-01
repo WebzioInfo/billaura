@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/shared/components/ui
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, CurrencyCell, DateCell } from '@/shared/components/ui';
 import { formatCurrency, formatDate } from '@/shared/utils/formatters';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Printer, Download } from 'lucide-react';
@@ -75,66 +75,61 @@ export default function CustomerStatement() {
       </Card>
 
       {customerId && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+        <div className="space-y-4">
+          <div className="flex flex-row items-center justify-between px-2">
             <div>
-              <CardTitle className="text-lg">Statement Details</CardTitle>
+              <h3 className="text-lg font-bold text-foreground">Statement Details</h3>
               {statement?.customer && (
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-0.5">
                   For {statement.customer.name} ({formatDate(startDate)} to {formatDate(endDate)})
                 </p>
               )}
             </div>
             {statement && (
               <div className="text-right">
-                <p className="text-sm text-gray-500">Closing Balance</p>
-                <p className={`text-xl font-bold ${statement.closingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                <p className="text-xs text-muted-foreground">Closing Balance</p>
+                <p className={`text-lg font-bold ${statement.closingBalance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                   {formatCurrency(statement.closingBalance)}
                 </p>
               </div>
             )}
-          </CardHeader>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="p-8 text-center text-gray-500">Loading statement...</div>
-            ) : isError ? (
-              <div className="p-8 text-center text-red-500">Failed to load statement</div>
-            ) : !statement?.lines?.length ? (
-              <div className="p-8 text-center text-gray-500">No transactions found for this period.</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Details</TableHead>
-                    <TableHead>Reference</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Credit</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
+          </div>
+
+          {isLoading ? (
+            <TableLoader rows={5} />
+          ) : isError ? (
+            <div className="p-12 text-center text-red-500 bg-surface rounded-xl border border-border">Failed to load statement</div>
+          ) : !statement?.lines?.length ? (
+            <div className="p-12 text-center text-muted-foreground bg-surface rounded-xl border border-border text-sm">No transactions found for this period.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-6 pr-4">Date</TableHead>
+                  <TableHead>Details</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead align="right">Debit</TableHead>
+                  <TableHead align="right">Credit</TableHead>
+                  <TableHead align="right" className="pr-6 pl-4">Balance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {statement.lines.map((line: any, index: number) => (
+                  <TableRow key={index}>
+                    <TableCell className="pl-6 pr-4">
+                      <DateCell date={line.date} />
+                    </TableCell>
+                    <TableCell className="font-medium text-foreground">{line.type}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{line.reference || '—'}</TableCell>
+                    <CurrencyCell amount={line.debit} />
+                    <CurrencyCell amount={line.credit} />
+                    <CurrencyCell amount={line.balance} className="pr-6 pl-4 font-semibold text-foreground" />
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {statement.lines.map((line: any, index: number) => (
-                    <TableRow key={index}>
-                      <TableCell>{formatDate(line.date)}</TableCell>
-                      <TableCell>{line.type}</TableCell>
-                      <TableCell>{line.reference || '-'}</TableCell>
-                      <TableCell className="text-right text-red-600">
-                        {line.debit > 0 ? formatCurrency(line.debit) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right text-green-600">
-                        {line.credit > 0 ? formatCurrency(line.credit) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(line.balance)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
       )}
     </div>
   );

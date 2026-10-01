@@ -8,8 +8,11 @@ import { Search, Plus, Trash2, Edit2, Download, AlertCircle } from 'lucide-react
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/core/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
-import { DeleteDialog, AsyncSelect } from '@/shared/components/ui';
+import { DeleteDialog, AsyncSelect, StatusBadge, CurrencyCell, DateCell, TableLoader, Button, IconButton } from '@/shared/components/ui';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { Pagination } from '@/shared/components/ui/Pagination';
+import { usePagination } from '@/shared/hooks/usePagination';
 import { useTaxEngine } from '@/features/taxes/hooks/useTaxEngine';
 
 const expenseSchema = z.object({
@@ -349,15 +352,46 @@ export const ExpensesDashboard = () => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
   };
 
+  // TODO: Endpoint /expenses should support server-side pagination (?page=&limit=)
+  const {
+    page: claimsPage,
+    limit: claimsLimit,
+    paginatedData: paginatedExpenses,
+    totalPages: claimsTotalPages,
+    totalItems: claimsTotalItems,
+    setPage: setClaimsPage,
+    setLimit: setClaimsLimit,
+  } = usePagination({
+    data: filteredExpenses,
+    tableKey: 'expenses_claims',
+    defaultLimit: 25,
+  });
+
+  // TODO: Endpoint /expenses/categories should support server-side pagination (?page=&limit=)
+  const {
+    page: catPage,
+    limit: catLimit,
+    paginatedData: paginatedCategories,
+    totalPages: catTotalPages,
+    totalItems: catTotalItems,
+    setPage: setCatPage,
+    setLimit: setCatLimit,
+  } = usePagination({
+    data: categories,
+    tableKey: 'expenses_categories',
+    defaultLimit: 25,
+  });
+
   return (
     <>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+      <PageLayout>
         <PageHeader
           title={activeTab === 'claims' ? "Expense Claims" : "Expense Categories"}
-          description={activeTab === 'claims' ? "Manage overhead disbursements, track employee reimbursements, and inspect GL postings" : "Define expense categories and map them directly to General Ledger accounts"}
+          count={activeTab === 'claims' ? filteredExpenses.length : categories.length}
           primaryAction={
             activeTab === 'claims' ? (
-              <button
+              <Button
+                variant="primary"
                 onClick={() => {
                   setEditingId(null);
                   form.reset({
@@ -367,184 +401,223 @@ export const ExpensesDashboard = () => {
                   prevPaymentMethodRef.current = 'BANK_TRANSFER';
                   setIsModalOpen(true);
                 }}
-                className="bg-accent text-white px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold hover:bg-opacity-90 transition-all shadow-md shadow-accent/15 cursor-pointer"
               >
-                <Plus className="w-4 h-4" /> File Expense Claim
-              </button>
+                <Plus className="w-4 h-4 mr-1.5" /> File Expense Claim
+              </Button>
             ) : (
-              <button
+              <Button
+                variant="primary"
                 onClick={() => {
                   setEditingCategoryId(null);
                   categoryForm.reset({ name: '', description: '', accountId: '' });
                   setIsCategoryModalOpen(true);
                 }}
-                className="bg-accent text-white px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold hover:bg-opacity-90 transition-all shadow-md shadow-accent/15 cursor-pointer"
               >
-                <Plus className="w-4 h-4" /> Add Custom Category
-              </button>
+                <Plus className="w-4 h-4 mr-1.5" /> Add Custom Category
+              </Button>
             )
           }
         />
 
-        <div className="flex border-b border-border mb-4 select-none">
-          <button
-            onClick={() => setActiveTab('claims')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-              activeTab === 'claims' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Claims Register
-          </button>
-          <button
-            onClick={() => setActiveTab('categories')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-              activeTab === 'categories' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Category Ledger Mappings
-          </button>
+        <div className="flex items-center justify-between gap-4 border-b border-border pb-2 shrink-0">
+          <div className="flex border-b border-transparent gap-2 select-none">
+            <button
+              onClick={() => setActiveTab('claims')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                activeTab === 'claims' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Claims Register
+            </button>
+            <button
+              onClick={() => setActiveTab('categories')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                activeTab === 'categories' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Category Ledger Mappings
+            </button>
+          </div>
+
+          {activeTab === 'claims' && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border/80 w-full max-w-sm focus-within:border-accent transition-colors">
+              <Search className="w-4 h-4 text-muted-foreground" />
+              <input 
+                type="text" 
+                placeholder="Search claims..." 
+                className="bg-transparent border-none outline-none w-full text-xs text-foreground placeholder:text-muted-foreground/60"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          )}
         </div>
 
-        {activeTab === 'claims' && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface/50 border border-border/80 w-full max-w-md focus-within:border-accent transition-colors shadow-xs">
-            <Search className="w-4 h-4 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Search claims..." 
-              className="bg-transparent border-none outline-none w-full text-xs text-foreground placeholder:text-muted-foreground/60"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+        {activeTab === 'claims' ? (
+          <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-card border border-border rounded-xl shadow-xs overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-[#34303F] hover:bg-[#34303F] text-white border-none">
+                    <TableHead className="pl-6 pr-4 text-white font-medium">Claim No</TableHead>
+                    <TableHead className="text-white font-medium">Date</TableHead>
+                    <TableHead className="text-white font-medium">Category</TableHead>
+                    <TableHead className="text-white font-medium">Description</TableHead>
+                    <TableHead className="text-white font-medium">Payment Source</TableHead>
+                    <TableHead align="right" className="text-white font-medium">Total Amount</TableHead>
+                    <TableHead align="center" className="text-white font-medium">Approval</TableHead>
+                    <TableHead align="right" className="pr-6 pl-4 text-white font-medium">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loadingExpenses ? (
+                    <TableRow><TableCell colSpan={8} className="p-0"><TableLoader rows={claimsLimit} /></TableCell></TableRow>
+                  ) : filteredExpenses.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="text-center py-12 text-sm text-muted-foreground">No expense claims found.</TableCell></TableRow>
+                  ) : (
+                    paginatedExpenses.map((exp: any) => (
+                      <TableRow key={exp.id} className="hover:bg-muted/30 transition-colors">
+                        <TableCell className="pl-6 pr-4 tabular-nums font-medium text-foreground">{exp.expenseNo}</TableCell>
+                        <DateCell date={exp.date} />
+                        <TableCell className="font-medium text-foreground">{exp.category?.name || 'Uncategorized'}</TableCell>
+                        <TableCell className="text-muted-foreground truncate max-w-[200px]">{exp.description || '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{exp.bankAccount?.name || 'Cash'}</TableCell>
+                        <CurrencyCell amount={Number(exp.totalAmount)} className="tabular-nums font-semibold text-foreground" />
+                        <TableCell align="center">
+                          <StatusBadge status={exp.approvalStatus} />
+                        </TableCell>
+                        <TableCell align="right" className="pr-6 pl-4">
+                          <div className="flex items-center justify-end gap-1">
+                            {exp.approvalStatus === 'PENDING' && (
+                              <Button 
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => approveExpense.mutate(exp.id)}
+                                className="h-7 text-xs font-medium text-emerald-600 border-emerald-300 hover:bg-emerald-50"
+                              >
+                                Approve
+                              </Button>
+                            )}
+                            <IconButton
+                              icon={Download}
+                              aria-label="Download PDF Receipt"
+                              tooltip="Download PDF Receipt"
+                              size="dense"
+                              onClick={async () => {
+                                try {
+                                  notification.loading('Generating receipt...', { id: 'pdf-gen' });
+                                  const res = await apiClient.get(`/documents/expenses/${exp.id}/export`, { responseType: 'blob' });
+                                  const url = URL.createObjectURL(res.data);
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = `Receipt_${exp.expenseNo}.pdf`;
+                                  link.click();
+                                  notification.success('Receipt downloaded', { id: 'pdf-gen' });
+                                } catch (e) {
+                                  notification.error('Failed to download receipt', { id: 'pdf-gen' });
+                                }
+                              }}
+                            />
+                            {exp.approvalStatus !== 'APPROVED' && (
+                              <IconButton 
+                                icon={Edit2}
+                                aria-label="Edit Claim"
+                                tooltip="Edit Claim"
+                                size="dense"
+                                onClick={() => handleEdit(exp)} 
+                              />
+                            )}
+                            <IconButton 
+                              icon={Trash2}
+                              aria-label="Delete Claim"
+                              tooltip="Delete Claim"
+                              size="dense"
+                              variant="danger-ghost"
+                              onClick={() => setExpenseToDelete(exp)} 
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <Pagination
+              currentPage={claimsPage}
+              totalPages={claimsTotalPages}
+              totalItems={claimsTotalItems}
+              pageSize={claimsLimit}
+              onPageChange={setClaimsPage}
+              onPageSizeChange={setClaimsLimit}
+              itemLabel="expense claims"
             />
           </div>
-        )}
-
-        {activeTab === 'claims' ? (
-          <div className="bg-surface border border-border/80 rounded-2xl overflow-hidden shadow-xs">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Claim No</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Payment Source</TableHead>
-                  <TableHead className="text-right">Total Amount</TableHead>
-                  <TableHead>Approval</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadingExpenses ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-xs text-muted-foreground">Loading expenses...</TableCell></TableRow>
-                ) : filteredExpenses.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-xs text-muted-foreground">No expense claims found.</TableCell></TableRow>
-                ) : (
-                  filteredExpenses.map((exp: any) => (
-                    <TableRow key={exp.id} className="h-10 hover:bg-muted/40">
-                      <TableCell className="font-mono font-bold text-accent">{exp.expenseNo}</TableCell>
-                      <TableCell className="text-xs">{new Date(exp.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</TableCell>
-                      <TableCell className="text-xs font-semibold">{exp.category?.name || 'Uncategorized'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]">{exp.description || 'N/A'}</TableCell>
-                      <TableCell className="text-xs">{exp.bankAccount?.name || 'Cash'}</TableCell>
-                      <TableCell className="text-right text-xs font-black">{formatCurrency(Number(exp.totalAmount))}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-0.5 text-[9px] rounded-full font-bold uppercase border ${
-                          exp.approvalStatus === 'APPROVED' 
-                            ? 'bg-green-500/10 text-green-500 border-green-500/20' 
-                            : exp.approvalStatus === 'REJECTED'
-                            ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                            : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                        }`}>
-                          {exp.approvalStatus}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right flex items-center justify-end gap-1">
-                        {exp.approvalStatus === 'PENDING' && (
-                          <button 
-                            onClick={() => approveExpense.mutate(exp.id)}
-                            className="px-2 py-1 text-[10px] font-bold bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm cursor-pointer"
-                          >
-                            Approve
-                          </button>
-                        )}
-                        <button
-                          onClick={async () => {
-                            try {
-                              notification.loading('Generating receipt...', { id: 'pdf-gen' });
-                              const res = await apiClient.get(`/documents/expenses/${exp.id}/export`, { responseType: 'blob' });
-                              const url = URL.createObjectURL(res.data);
-                              const link = document.createElement('a');
-                              link.href = url;
-                              link.download = `Receipt_${exp.expenseNo}.pdf`;
-                              link.click();
-                              notification.success('Receipt downloaded', { id: 'pdf-gen' });
-                            } catch (e) {
-                              notification.error('Failed to download receipt', { id: 'pdf-gen' });
-                            }
-                          }}
-                          className="p-1 border border-border hover:bg-muted rounded-lg text-muted-foreground transition-all flex items-center justify-center cursor-pointer"
-                          title="Download PDF Receipt"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                        {exp.approvalStatus !== 'APPROVED' && (
-                          <button onClick={() => handleEdit(exp)} className="p-1 border border-border hover:bg-muted rounded-lg text-muted-foreground hover:text-blue-500 transition-colors cursor-pointer">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <button onClick={() => setExpenseToDelete(exp)} className="p-1 border border-border hover:bg-muted rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
         ) : (
-          <div className="bg-surface border border-border/80 rounded-2xl overflow-hidden shadow-xs">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Category Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>GL Account Ledger mapping</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadingCategories ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-xs text-muted-foreground">Loading categories...</TableCell></TableRow>
-                ) : categories.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-xs text-muted-foreground">No categories configured.</TableCell></TableRow>
-                ) : (
-                  categories.map((cat: any) => (
-                    <TableRow key={cat.id} className="h-10 hover:bg-muted/40">
-                      <TableCell className="font-semibold text-xs">{cat.name}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{cat.description || 'N/A'}</TableCell>
-                      <TableCell className="text-xs font-mono">
-                        {cat.account ? (
-                          <span className="text-accent font-bold bg-accent/5 px-2 py-0.5 rounded border border-accent/15">{cat.account.name}</span>
-                        ) : (
-                          <span className="text-muted-foreground italic bg-muted/50 px-2 py-0.5 rounded border border-border">Name Matching ({cat.name})</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right flex items-center justify-end gap-1.5">
-                        <button onClick={() => handleEditCategory(cat)} className="p-1 border border-border hover:bg-muted rounded-lg text-muted-foreground hover:text-blue-500 transition-colors cursor-pointer">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        {cat.type !== 'SYSTEM' && (
-                          <button onClick={() => setCategoryToDelete(cat)} className="p-1 border border-border hover:bg-muted rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+          <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-card border border-border rounded-xl shadow-xs overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-[#34303F] hover:bg-[#34303F] text-white border-none">
+                    <TableHead className="pl-6 pr-4 text-white font-medium">Category Name</TableHead>
+                    <TableHead className="text-white font-medium">Description</TableHead>
+                    <TableHead className="text-white font-medium">GL Account Ledger mapping</TableHead>
+                    <TableHead align="right" className="pr-6 pl-4 text-white font-medium">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loadingCategories ? (
+                    <TableRow><TableCell colSpan={4} className="p-0"><TableLoader rows={catLimit} /></TableCell></TableRow>
+                  ) : categories.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="text-center py-12 text-sm text-muted-foreground">No categories configured.</TableCell></TableRow>
+                  ) : (
+                    paginatedCategories.map((cat: any) => (
+                      <TableRow key={cat.id} className="hover:bg-muted/30 transition-colors">
+                        <TableCell className="pl-6 pr-4 font-medium text-foreground">{cat.name}</TableCell>
+                        <TableCell className="text-muted-foreground">{cat.description || '—'}</TableCell>
+                        <TableCell className="tabular-nums text-xs">
+                          {cat.account ? (
+                            <span className="text-foreground font-medium bg-muted/60 px-2 py-0.5 rounded border border-border">{cat.account.name}</span>
+                          ) : (
+                            <span className="text-muted-foreground italic bg-muted/30 px-2 py-0.5 rounded border border-border/50">Name Matching ({cat.name})</span>
+                          )}
+                        </TableCell>
+                        <TableCell align="right" className="pr-6 pl-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <IconButton 
+                              icon={Edit2}
+                              aria-label="Edit Category"
+                              tooltip="Edit Category"
+                              size="dense"
+                              onClick={() => handleEditCategory(cat)} 
+                            />
+                            {cat.type !== 'SYSTEM' && (
+                              <IconButton 
+                                icon={Trash2}
+                                aria-label="Delete Category"
+                                tooltip="Delete Category"
+                                size="dense"
+                                variant="danger-ghost"
+                                onClick={() => setCategoryToDelete(cat)} 
+                              />
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <Pagination
+              currentPage={catPage}
+              totalPages={catTotalPages}
+              totalItems={catTotalItems}
+              pageSize={catLimit}
+              onPageChange={setCatPage}
+              onPageSizeChange={setCatLimit}
+              itemLabel="categories"
+            />
           </div>
         )}
 
@@ -777,7 +850,7 @@ export const ExpensesDashboard = () => {
             </div>
           </div>
         )}
-      </div>
+      </PageLayout>
 
       <DeleteDialog 
         isOpen={!!expenseToDelete} 

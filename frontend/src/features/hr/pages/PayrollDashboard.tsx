@@ -7,7 +7,13 @@ import { PaySalaryModal } from '../components/PaySalaryModal';
 import { Payslip } from '../components/Payslip';
 import { Modal } from '../../../shared/components/ui/Modal';
 import { PortalDropdown } from '../../../shared/components/ui/PortalDropdown';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/Table';
+import { StatusBadge } from '../../../shared/components/ui/StatusBadge';
+import { CurrencyCell } from '../../../shared/components/ui/data-table/cells';
 import { apiClient } from '../../../core/api/apiClient';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { Button } from '@/shared/components/ui/Button';
 import notification from '@/core/services/NotificationService';
 import { ReportEngine } from '@/core/reporting/ReportEngine';
 import { ExportService } from '@/core/services/ExportService';
@@ -349,169 +355,70 @@ export const PayrollDashboard: React.FC = () => {
   }, [salarySlips, activeMenuId]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 py-6 bg-white min-h-screen font-sans text-[#111827]">
-      {/* Enterprise Header Bar: Run Payroll | Export ▼ | More ▼ */}
-      <header className="flex items-center justify-between h-[60px] border-b border-[#E5E7EB] pb-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-[24px] font-semibold tracking-tight text-[#111827]">
-            Payroll
-          </h1>
-          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#FAFAFA] border border-[#E5E7EB] text-[#6B7280]">
-            July 2026
-          </span>
-          <span className="text-xs text-[#6B7280]">Bill Aura Enterprise</span>
-        </div>
-
-        {/* Action Button System */}
-        <div className="flex items-center gap-2">
-          {/* Primary Action Button */}
-          <button 
+    <PageLayout>
+      <PageHeader
+        title="Payroll"
+        count={salarySlips.length}
+        primaryAction={
+          <Button
             onClick={handleOpenGenerate}
-            className="px-3.5 py-1.5 rounded-lg bg-[#2563EB] hover:bg-blue-700 text-white font-medium text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            variant="primary"
+            size="sm"
           >
-            <Plus className="w-3.5 h-3.5" /> Run Payroll
-          </button>
-
-          {/* Export Dropdown Menu [ Export ▼ ] */}
-          <button 
-            ref={exportBtnRef}
-            onClick={() => { setIsExportOpen(!isExportOpen); setIsMoreOpen(false); setActiveMenuId(null); }}
-            className="px-3 py-1.5 rounded-lg bg-white hover:bg-[#FAFAFA] border border-[#E5E7EB] text-[#111827] font-medium text-xs transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-[#6B7280]" /> Export <ChevronDown className="w-3.5 h-3.5 text-[#6B7280]" />
-          </button>
-
-          <PortalDropdown
-            isOpen={isExportOpen}
-            onClose={() => setIsExportOpen(false)}
-            triggerRef={exportBtnRef}
-            width={260}
-          >
-            <div className="px-3 py-1 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Reports & Exports</div>
-            <button onClick={handleExportPDF} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              <FileText className="w-3.5 h-3.5 text-red-600" /> Export as Vector PDF
-            </button>
-            <button onClick={handleExportExcel} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Export as Excel (.xlsx)
-            </button>
-            <button onClick={handleExportCSV} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              <FileCode className="w-3.5 h-3.5 text-blue-600" /> Export as CSV
-            </button>
-
-            <div className="border-t border-[#E5E7EB] my-1" />
-            <div className="px-3 py-1 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Registers</div>
-
-            <button onClick={handleExportPDF} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              Download Payroll Register
-            </button>
-            <button onClick={handleExportExcel} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              Download Attendance Register
-            </button>
-            <button onClick={() => {
-              const doc = DocumentEngine.generateTablePDF({
-                title: 'Payroll Register Report',
-                columns: [
-                  { header: 'Emp Code', dataKey: 'code' },
-                  { header: 'Employee Name', dataKey: 'name' },
-                  { header: 'Department', dataKey: 'dept' },
-                  { header: 'Net Salary', dataKey: 'net', align: 'right' },
-                  { header: 'Status', dataKey: 'status', align: 'center' },
-                ],
-                data: filteredSlips.map((s: any) => ({
-                  code: s.employee?.employeeCode || '',
-                  name: s.employee?.name || '',
-                  dept: s.employee?.department?.name || '',
-                  net: Number(s.netSalary) || 0,
-                  status: s.status,
-                }))
-              });
-            }} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              <Printer className="w-3.5 h-3.5 text-slate-500" /> Print Report
-            </button>
-          </PortalDropdown>
-
-          {/* More Options Dropdown Menu [ More ▼ ] */}
-          <button 
-            ref={moreBtnRef}
-            onClick={() => { setIsMoreOpen(!isMoreOpen); setIsExportOpen(false); setActiveMenuId(null); }}
-            className="px-3 py-1.5 rounded-lg bg-white hover:bg-[#FAFAFA] border border-[#E5E7EB] text-[#111827] font-medium text-xs transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            More <ChevronDown className="w-3.5 h-3.5 text-[#6B7280]" />
-          </button>
-
-          <PortalDropdown
-            isOpen={isMoreOpen}
-            onClose={() => setIsMoreOpen(false)}
-            triggerRef={moreBtnRef}
-            width={260}
-          >
-            <div className="px-3 py-1 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Bulk Reports</div>
-            <button onClick={handleBulkPrintDossier} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              <FileText className="w-3.5 h-3.5 text-blue-600" /> Generate Payroll Dossiers
-            </button>
-            <button onClick={handleBankSheet} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Bank Transfer Sheet (.xlsx)
-            </button>
-
-            <div className="border-t border-[#E5E7EB] my-1" />
-            <div className="px-3 py-1 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Statutory</div>
-
-            <button onClick={handleExportExcel} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              Generate Statutory PF Report
-            </button>
-            <button onClick={handleExportExcel} className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#111827] flex items-center gap-2 text-left">
-              Generate ESI Monthly Return
-            </button>
-
-            <div className="border-t border-[#E5E7EB] my-1" />
-            <div className="px-3 py-1 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Management</div>
-
-            <button 
-              onClick={() => {
-                setIsMoreOpen(false);
-                if (confirm('Lock all approved payroll records in current batch?')) {
-                  notification.success('Selected payroll records locked');
-                  refetch();
-                }
-              }} 
-              className="w-full px-3 py-1.5 hover:bg-[#FAFAFA] text-[#2563EB] flex items-center gap-2 font-medium text-left"
+            <Plus className="w-4 h-4 mr-1.5" /> Run Payroll
+          </Button>
+        }
+        secondaryActions={
+          <div className="flex items-center gap-2">
+            <Button
+              ref={exportBtnRef}
+              onClick={() => { setIsExportOpen(!isExportOpen); setIsMoreOpen(false); setActiveMenuId(null); }}
+              variant="secondary"
+              size="sm"
             >
-              <Lock className="w-3.5 h-3.5" /> Bulk Lock Payroll
-            </button>
-          </PortalDropdown>
-        </div>
-      </header>
-
+              <Download className="w-4 h-4 mr-1.5" /> Export <ChevronDown className="w-3.5 h-3.5 ml-1" />
+            </Button>
+            <Button
+              ref={moreBtnRef}
+              onClick={() => { setIsMoreOpen(!isMoreOpen); setIsExportOpen(false); setActiveMenuId(null); }}
+              variant="secondary"
+              size="sm"
+            >
+              More <ChevronDown className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          </div>
+        }
+      />
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="p-3 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
-          <span className="text-[11px] font-medium text-[#6B7280] block mb-1">Employees</span>
-          <p className="text-lg font-bold text-[#111827]">{kpiMetrics.totalEmployees}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 shrink-0 mb-3">
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium block">Employees</span>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{kpiMetrics.totalEmployees}</p>
         </div>
 
-        <div className="p-3 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
-          <span className="text-[11px] font-medium text-[#6B7280] block mb-1">Payroll Cost</span>
-          <p className="text-lg font-bold font-mono text-[#111827]">{formatCurrency(kpiMetrics.totalGross)}</p>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium block">Payroll Cost</span>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{formatCurrency(kpiMetrics.totalGross)}</p>
         </div>
 
-        <div className="p-3 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
-          <span className="text-[11px] font-medium text-[#6B7280] block mb-1">Pending</span>
-          <p className="text-lg font-bold text-[#F59E0B]">{kpiMetrics.pendingApproval}</p>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium block">Pending</span>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{kpiMetrics.pendingApproval}</p>
         </div>
 
-        <div className="p-3 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
-          <span className="text-[11px] font-medium text-[#6B7280] block mb-1">Approved</span>
-          <p className="text-lg font-bold text-[#2563EB]">{kpiMetrics.approvedCount}</p>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium block">Approved</span>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{kpiMetrics.approvedCount}</p>
         </div>
 
-        <div className="p-3 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
-          <span className="text-[11px] font-medium text-[#6B7280] block mb-1">Paid</span>
-          <p className="text-lg font-bold text-[#16A34A]">{kpiMetrics.paidCount}</p>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium block">Paid</span>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{kpiMetrics.paidCount}</p>
         </div>
 
-        <div className="p-3 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
-          <span className="text-[11px] font-medium text-[#6B7280] block mb-1">Average Salary</span>
-          <p className="text-lg font-bold font-mono text-[#111827]">{formatCurrency(kpiMetrics.avgSalary)}</p>
+        <div className="border border-border rounded-[10px] px-4 py-3 bg-white dark:bg-card">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium block">Average Salary</span>
+          <p className="text-[20px] font-semibold tabular-nums text-foreground mt-0.5">{formatCurrency(kpiMetrics.avgSalary)}</p>
         </div>
       </div>
 
@@ -564,138 +471,124 @@ export const PayrollDashboard: React.FC = () => {
       </div>
 
       {/* Linear Data Grid */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-        {isLoading ? (
-          <div className="py-12 text-center text-xs text-[#6B7280]">
-            Loading payroll list...
-          </div>
-        ) : filteredSlips.length === 0 ? (
-          <div className="py-12 text-center text-xs text-[#6B7280]">
-            No records found.
-          </div>
-        ) : (
-          <table className="w-full text-xs text-left border-collapse">
-            <thead className="bg-[#FAFAFA] text-[#6B7280] font-medium border-b border-[#E5E7EB]">
-              <tr>
-                <th className="py-2.5 px-4 w-8">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.length === filteredSlips.length && filteredSlips.length > 0}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded cursor-pointer"
-                  />
-                </th>
-                <th className="py-2.5 px-4">Employee</th>
-                <th className="py-2.5 px-4">Department</th>
-                <th className="py-2.5 px-4 text-center">Attendance</th>
-                <th className="py-2.5 px-4 text-right">Gross</th>
-                <th className="py-2.5 px-4 text-right">Net</th>
-                <th className="py-2.5 px-4">Status</th>
-                <th className="py-2.5 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E5E7EB]">
-              {filteredSlips.map((row: any) => {
-                const emp = row.employee || {};
-                const basic = Number(row.basicSalary) || 0;
-                const allowances = Number(row.allowances) || 0;
-                const bonus = Number(row.bonus) || 0;
-                const incentives = Number(row.incentives) || 0;
-                const gross = basic + allowances + bonus + incentives;
-                const net = Number(row.netSalary) || 0;
-                const isSelected = selectedIds.includes(row.id);
+      {isLoading ? (
+        <div className="py-12 text-center text-xs text-muted-foreground bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">
+          Loading payroll list...
+        </div>
+      ) : filteredSlips.length === 0 ? (
+        <div className="py-12 text-center text-xs text-muted-foreground bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">
+          No records found.
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-8">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filteredSlips.length && filteredSlips.length > 0}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  className="rounded cursor-pointer accent-[#34303F]"
+                />
+              </TableHead>
+              <TableHead>Employee</TableHead>
+              <TableHead>Department</TableHead>
+              <TableHead className="text-center">Attendance</TableHead>
+              <TableHead className="text-right">Gross</TableHead>
+              <TableHead className="text-right">Net</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredSlips.map((row: any) => {
+              const emp = row.employee || {};
+              const basic = Number(row.basicSalary) || 0;
+              const allowances = Number(row.allowances) || 0;
+              const bonus = Number(row.bonus) || 0;
+              const incentives = Number(row.incentives) || 0;
+              const gross = basic + allowances + bonus + incentives;
+              const net = Number(row.netSalary) || 0;
+              const isSelected = selectedIds.includes(row.id);
 
-                return (
-                  <tr
-                    key={row.id}
-                    onClick={() => navigate(`/payroll/${row.id}`)}
-                    className={`hover:bg-[#F9FAFB] cursor-pointer transition-colors ${
-                      isSelected ? 'bg-[#F3F4F6]' : ''
-                    }`}
-                  >
-                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => handleToggleSelect(row.id, e as any)}
-                        className="rounded cursor-pointer"
-                      />
-                    </td>
+              return (
+                <TableRow
+                  key={row.id}
+                  isSelected={isSelected}
+                  onClick={() => navigate(`/payroll/${row.id}`)}
+                  className="cursor-pointer"
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => handleToggleSelect(row.id, e as any)}
+                      className="rounded cursor-pointer accent-[#34303F]"
+                    />
+                  </TableCell>
 
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-full bg-[#E5E7EB] text-[#111827] font-semibold flex items-center justify-center text-xs">
-                          {emp.name?.[0] || 'E'}
-                        </div>
-                        <div>
-                          <span className="font-medium text-[#111827] block">{emp.name}</span>
-                          <span className="text-[11px] text-[#6B7280] font-mono">{emp.employeeCode}</span>
-                        </div>
-                      </div>
-                    </td>
+                  <TableCell>
+                    <div>
+                      <span className="font-medium text-foreground block">{emp.name}</span>
+                      <span className="text-[11px] text-muted-foreground font-mono">{emp.employeeCode}</span>
+                    </div>
+                  </TableCell>
 
-                    <td className="py-3 px-4 text-[#111827]">
-                      <span className="font-medium block">{emp.department?.name || 'General'}</span>
-                      <span className="text-[11px] text-[#6B7280]">{emp.designation?.name || 'Staff'}</span>
-                    </td>
+                  <TableCell className="text-muted-foreground">
+                    <span className="font-medium text-foreground block">{emp.department?.name || 'General'}</span>
+                    <span className="text-[11px] text-muted-foreground">{emp.designation?.name || 'Staff'}</span>
+                  </TableCell>
 
-                    <td className="py-3 px-4 text-center text-[#111827]">
-                      <span className="text-[#16A34A] font-medium">{row.paidDays}P</span>
-                      <span className="text-[#9CA3AF] mx-1">/</span>
-                      <span className="text-[#DC2626] font-medium">{row.absentDays}LOP</span>
-                    </td>
+                  <TableCell className="text-center">
+                    <span className="text-green-600 dark:text-green-400 font-medium">{row.paidDays}P</span>
+                    <span className="text-muted-foreground/40 mx-1">/</span>
+                    <span className="text-red-500 dark:text-red-400 font-medium">{row.absentDays}LOP</span>
+                  </TableCell>
 
-                    <td className="py-3 px-4 text-right font-mono text-[#111827]">
-                      {formatCurrency(gross)}
-                    </td>
+                  <TableCell className="text-right font-mono">
+                    <CurrencyCell amount={gross} />
+                  </TableCell>
 
-                    <td className="py-3 px-4 text-right font-mono font-semibold text-[#2563EB]">
-                      {formatCurrency(net)}
-                    </td>
+                  <TableCell className="text-right font-mono font-semibold text-foreground">
+                    <CurrencyCell amount={net} />
+                  </TableCell>
 
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium capitalize ${
-                        row.status === 'PAID' ? 'bg-green-50 text-[#16A34A]' :
-                        row.status === 'APPROVED' ? 'bg-blue-50 text-[#2563EB]' :
-                        'bg-amber-50 text-[#F59E0B]'
-                      }`}>
-                        {row.status?.toLowerCase()}
-                      </span>
-                    </td>
+                  <TableCell>
+                    <StatusBadge status={row.status} />
+                  </TableCell>
 
-                    {/* Single Visible Button + React Portal Dropdown Menu */}
-                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1.5 relative">
-                        <button
-                          onClick={() => navigate(`/payroll/${row.id}`)}
-                          className="px-2.5 py-1 rounded-md text-xs font-medium bg-white hover:bg-[#FAFAFA] border border-[#E5E7EB] text-[#111827] cursor-pointer transition-colors"
-                        >
-                          Open
-                        </button>
+                  {/* Single Visible Button + React Portal Dropdown Menu */}
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1.5 relative">
+                      <button
+                        onClick={() => navigate(`/payroll/${row.id}`)}
+                        className="px-2.5 py-1 rounded-md text-xs font-medium bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 text-foreground cursor-pointer transition-colors"
+                      >
+                        Open
+                      </button>
 
-                        <button
-                          ref={(el) => {
-                            if (el) rowBtnRefs.current.set(row.id, el);
-                            else rowBtnRefs.current.delete(row.id);
-                          }}
-                          onClick={() => {
-                            setIsExportOpen(false);
-                            setIsMoreOpen(false);
-                            setActiveMenuId(activeMenuId === row.id ? null : row.id);
-                          }}
-                          className="p-1 rounded-md text-[#6B7280] hover:bg-[#FAFAFA] cursor-pointer transition-colors"
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                      <button
+                        ref={(el) => {
+                          if (el) rowBtnRefs.current.set(row.id, el);
+                          else rowBtnRefs.current.delete(row.id);
+                        }}
+                        onClick={() => {
+                          setIsExportOpen(false);
+                          setIsMoreOpen(false);
+                          setActiveMenuId(activeMenuId === row.id ? null : row.id);
+                        }}
+                        className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
 
       {/* Row Context Menu rendered via PortalDropdown into document.body */}
       {activeMenuId && activeSlip && (
@@ -854,6 +747,6 @@ export const PayrollDashboard: React.FC = () => {
       )}
 
 
-    </div>
+    </PageLayout>
   );
 };

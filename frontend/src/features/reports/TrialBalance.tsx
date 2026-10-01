@@ -61,30 +61,39 @@ export const TrialBalance = () => {
           description="Trial balance ledger balances will populate when transactions are registered."
         />
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/15 border-b border-border">
-                <TableHead className="font-semibold py-4 px-6">Account Name</TableHead>
-                <TableHead className="font-semibold py-4 px-6 text-right">Debit</TableHead>
-                <TableHead className="font-semibold py-4 px-6 text-right">Credit</TableHead>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Account Name</TableHead>
+              <TableHead className="text-right">Debit</TableHead>
+              <TableHead className="text-right">Credit</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((item: any, i: number) => (
+              <TableRow key={i}>
+                <TableCell className="font-medium text-foreground">{item.accountName}</TableCell>
+                <TableCell className="text-right">
+                  <AmountText value={item.debit} className={Number(item.debit) > 0 ? "text-foreground font-semibold" : "text-muted-foreground opacity-40 font-normal"} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <AmountText value={item.credit} className={Number(item.credit) > 0 ? "text-foreground font-semibold" : "text-muted-foreground opacity-40 font-normal"} />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((item: any, i: number) => (
-                <TableRow key={i} className="hover:bg-muted/50 border-b border-border transition-colors">
-                  <TableCell className="font-medium py-4 px-6 text-foreground">{item.accountName}</TableCell>
-                  <TableCell className="text-right py-4 px-6">
-                    <AmountText value={item.debit} className={Number(item.debit) > 0 ? "text-foreground font-semibold" : "text-muted-foreground opacity-40 font-normal"} />
-                  </TableCell>
-                  <TableCell className="text-right py-4 px-6">
-                    <AmountText value={item.credit} className={Number(item.credit) > 0 ? "text-foreground font-semibold" : "text-muted-foreground opacity-40 font-normal"} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+            ))}
+            {data.length > 0 && (
+              <TableRow isTotalRow>
+                <TableCell className="font-semibold text-foreground">Total</TableCell>
+                <TableCell className="text-right">
+                  <AmountText value={data.reduce((acc: number, item: any) => acc + (Number(item.debit) || 0), 0)} isTotal />
+                </TableCell>
+                <TableCell className="text-right">
+                  <AmountText value={data.reduce((acc: number, item: any) => acc + (Number(item.credit) || 0), 0)} isTotal />
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       )}
     </PageContainer>
   );

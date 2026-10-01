@@ -1,9 +1,11 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, StatusBadge, DateCell, CurrencyCell, Button } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileUp, CheckCircle, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export const ReconciliationCenter = () => {
   const queryClient = useQueryClient();
@@ -40,36 +42,42 @@ export const ReconciliationCenter = () => {
   });
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto space-y-6">
+    <PageLayout>
       <PageHeader
         title="Bank Reconciliation"
         description="Match bank statements with your ledger automatically"
         primaryAction={
-          <button className="bg-accent text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm">
-            <FileUp className="w-4 h-4" /> Upload Statement
-          </button>
+          <Button variant="primary">
+            <FileUp className="w-4 h-4 mr-1.5" /> Upload Statement
+          </Button>
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 bg-white border rounded-lg shadow-sm flex flex-col h-[600px]">
-          <div className="p-4 border-b font-semibold">Statements</div>
-          <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Left: Statements List */}
+        <div className="lg:col-span-1 bg-surface dark:bg-[#17161C] border border-border rounded-xl shadow-xs flex flex-col min-h-0 overflow-hidden">
+          <div className="p-3.5 border-b border-border font-semibold text-foreground text-sm">Statements</div>
+          <div className="flex-1 overflow-y-auto scrollbar-overlay">
             {loadingStatements ? (
-              <div className="p-4 text-center text-gray-500">Loading statements...</div>
+              <div className="p-4 text-center text-muted-foreground text-sm">Loading statements...</div>
             ) : statements.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">No statements available.</div>
+              <div className="p-4 text-center text-muted-foreground text-sm">No statements available.</div>
             ) : (
-              <ul className="divide-y">
+              <ul className="divide-y divide-border/40">
                 {statements.map((stmt: any) => (
                   <li 
                     key={stmt.id} 
-                    className={`p-4 cursor-pointer hover:bg-gray-50 ${selectedStatementId === stmt.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                    className={cn(
+                      'p-3.5 cursor-pointer hover:bg-muted/40 transition-colors',
+                      selectedStatementId === stmt.id && 'bg-primary/10 border-l-3 border-primary dark:bg-primary/20'
+                    )}
                     onClick={() => setSelectedStatementId(stmt.id)}
                   >
-                    <p className="font-medium text-sm">Statement {new Date(stmt.statementDate).toLocaleDateString()}</p>
-                    <p className="text-xs text-gray-500">{stmt.bankAccount?.name}</p>
-                    <p className="text-sm font-semibold mt-1">Status: {stmt.status}</p>
+                    <p className="font-medium text-sm text-foreground">
+                      Statement {new Date(stmt.statementDate).toLocaleDateString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{stmt.bankAccount?.name}</p>
+                    <p className="text-xs font-medium text-foreground mt-1">Status: {stmt.status}</p>
                   </li>
                 ))}
               </ul>
@@ -77,61 +85,75 @@ export const ReconciliationCenter = () => {
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-white border rounded-lg shadow-sm flex flex-col h-[600px]">
-          <div className="p-4 border-b flex justify-between items-center">
-            <span className="font-semibold">Statement Lines</span>
+        {/* Right: Statement Lines */}
+        <div className="lg:col-span-2 bg-surface dark:bg-[#17161C] border border-border rounded-xl shadow-xs flex flex-col min-h-0 overflow-hidden">
+          <div className="p-3.5 border-b border-border flex justify-between items-center shrink-0">
+            <span className="font-semibold text-foreground text-sm">Statement Lines</span>
             {selectedStatementId && (
-              <button 
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => autoMatch.mutate(selectedStatementId)}
                 disabled={autoMatch.isPending}
-                className="text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded flex items-center gap-2 hover:bg-blue-200"
+                className="gap-1.5"
               >
-                {autoMatch.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {autoMatch.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
                 Auto-Match
-              </button>
+              </Button>
             )}
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto scrollbar-overlay">
             {!selectedStatementId ? (
-              <div className="h-full flex items-center justify-center text-gray-500">
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-8">
                 Select a statement to view its lines.
               </div>
             ) : loadingLines ? (
-              <div className="p-4 text-center text-gray-500">Loading lines...</div>
+              <div className="p-8 text-center text-muted-foreground text-sm">Loading lines...</div>
             ) : lines.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">No lines found.</div>
+              <div className="p-8 text-center text-muted-foreground text-sm">No lines found.</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lines.map((line: any) => (
-                    <TableRow key={line.id}>
-                      <TableCell>{new Date(line.date).toLocaleDateString()}</TableCell>
-                      <TableCell>{line.description}</TableCell>
-                      <TableCell className="font-semibold">₹${Number(line.amount).toFixed(2)}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          line.status === 'MATCHED' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {line.status}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <table className="w-full text-left border-collapse text-[14px]">
+                <thead className="sticky top-0 z-20 bg-[#34303F] dark:bg-[#1E1C26] text-white font-medium select-none shadow-xs h-11 text-[13px]">
+                  <tr>
+                    <th className="pl-6 pr-4 py-2 text-white font-medium">Date</th>
+                    <th className="px-4 py-2 text-white font-medium">Description</th>
+                    <th className="px-4 py-2 text-white font-medium text-right">Amount</th>
+                    <th className="pr-6 pl-4 py-2 text-white font-medium text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-none text-[14px]">
+                  {lines.map((line: any, idx: number) => {
+                    const isEven = idx % 2 === 1;
+                    return (
+                      <tr
+                        key={line.id}
+                        className={cn(
+                          'h-[48px] border-b border-border/30 transition-colors',
+                          isEven
+                            ? 'bg-[#F9FAFB] dark:bg-[#1C1B22] hover:bg-[#F3F4F6] dark:hover:bg-[#24232C]'
+                            : 'bg-white dark:bg-[#17161C] hover:bg-[#F3F4F6] dark:hover:bg-[#24232C]'
+                        )}
+                      >
+                        <td className="pl-6 pr-4 py-2 text-sm">
+                          <DateCell date={line.date} />
+                        </td>
+                        <td className="px-4 py-2 text-muted-foreground text-sm font-medium">{line.description}</td>
+                        <td className="px-4 py-2 text-right text-sm">
+                          <CurrencyCell amount={Number(line.amount || 0)} className="font-semibold text-foreground tabular-nums" />
+                        </td>
+                        <td className="pr-6 pl-4 py-2 text-center text-sm">
+                          <StatusBadge status={line.status} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

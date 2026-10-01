@@ -5,6 +5,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/Card';
 import { Select } from '@/shared/components/ui/Select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import apiClient from '@/core/api';
 import { ExportService } from '@/core/services/ExportService';
 import { DocumentEngine } from '@/core/reporting/DocumentEngine';
@@ -206,44 +207,40 @@ export const AttendanceReportPage = () => {
              </Card>
           </div>
 
-          <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-lg">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-600 uppercase bg-slate-50 dark:bg-slate-900 dark:text-slate-400">
-                  <tr>
-                    <th className="px-6 py-4 font-semibold">Employee</th>
-                    <th className="px-6 py-4 font-semibold">Code</th>
-                    <th className="px-6 py-4 font-semibold">Working Days</th>
-                    <th className="px-6 py-4 font-semibold text-green-600">Present</th>
-                    <th className="px-6 py-4 font-semibold text-red-600">Absent</th>
-                    <th className="px-6 py-4 font-semibold text-amber-600">Late</th>
-                    <th className="px-6 py-4 font-semibold text-purple-600">Overtime</th>
-                    <th className="px-6 py-4 font-semibold text-right">Attendance %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.map((row: any, i: number) => (
-                    <tr key={i} className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-900 dark:text-white whitespace-nowrap">
-                        {row.employee.name}
-                      </td>
-                      <td className="px-6 py-4">{row.employee.employeeCode}</td>
-                      <td className="px-6 py-4">{row.summary.totalWorkingDays}</td>
-                      <td className="px-6 py-4 font-semibold text-green-600">{row.summary.present}</td>
-                      <td className="px-6 py-4 font-semibold text-red-600">{row.summary.absent}</td>
-                      <td className="px-6 py-4 font-semibold text-amber-600">{row.summary.lateCount}</td>
-                      <td className="px-6 py-4 font-semibold text-purple-600">{row.summary.overtimeHours}h</td>
-                      <td className="px-6 py-4 text-right">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${row.summary.attendancePercentage >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : row.summary.attendancePercentage >= 75 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'}`}>
-                          {row.summary.attendancePercentage.toFixed(1)}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead className="text-right">Working Days</TableHead>
+                <TableHead className="text-right">Present</TableHead>
+                <TableHead className="text-right">Absent</TableHead>
+                <TableHead className="text-right">Late</TableHead>
+                <TableHead className="text-right">Overtime</TableHead>
+                <TableHead className="text-right">Attendance %</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {report.map((row: any, i: number) => (
+                <TableRow key={i}>
+                  <TableCell className="font-medium text-foreground whitespace-nowrap">
+                    {row.employee.name}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{row.employee.employeeCode}</TableCell>
+                  <TableCell className="text-right text-sm text-foreground tabular-nums">{row.summary.totalWorkingDays}</TableCell>
+                  <TableCell className="text-right text-sm font-medium text-green-600 dark:text-green-400 tabular-nums">{row.summary.present}</TableCell>
+                  <TableCell className="text-right text-sm font-medium text-red-600 dark:text-red-400 tabular-nums">{row.summary.absent}</TableCell>
+                  <TableCell className="text-right text-sm font-medium text-amber-600 dark:text-amber-400 tabular-nums">{row.summary.lateCount}</TableCell>
+                  <TableCell className="text-right text-sm font-medium text-foreground tabular-nums">{row.summary.overtimeHours}h</TableCell>
+                  <TableCell className="text-right">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${row.summary.attendancePercentage >= 90 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : row.summary.attendancePercentage >= 75 ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'}`}>
+                      {row.summary.attendancePercentage.toFixed(1)}%
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center h-64 text-slate-500 dark:text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/20">

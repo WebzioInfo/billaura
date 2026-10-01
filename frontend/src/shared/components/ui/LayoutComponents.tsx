@@ -54,35 +54,8 @@ export const FormSection = ({ title, children, className, ...props }: { title?: 
 );
 
 // 4. EmptyState
-interface EmptyStateProps {
-  icon?: React.ReactNode;
-  title: string;
-  description: string;
-  actionLabel?: string;
-  onActionClick?: () => void;
-}
+export { EmptyState, type EmptyStateProps } from './EmptyState';
 
-export const EmptyState = ({ icon, title, description, actionLabel, onActionClick }: EmptyStateProps) => (
-  <div className="flex flex-col items-center justify-center p-6 text-center bg-surface border border-border rounded-lg shadow-sm space-y-2.5 w-full">
-    <div className="p-2 bg-muted/30 text-muted-foreground rounded-md">
-      {icon || <AlertCircle className="w-6 h-6 text-muted-foreground" />}
-    </div>
-    <div className="space-y-1 max-w-sm">
-      <h3 className="font-bold text-sm text-foreground">{title}</h3>
-      <p className="text-[11px] text-muted-foreground">{description}</p>
-    </div>
-    {actionLabel && onActionClick && (
-      <Button onClick={onActionClick} variant="primary" size="sm" className="mt-1 font-bold px-4">
-        {actionLabel}
-      </Button>
-    )}
-    <div className="pt-2 border-t border-border/40 w-full max-w-[160px] text-center mt-3 opacity-60">
-      <span className="text-[9px] text-muted-foreground font-mono select-none tracking-wider block">
-        Bill Aura &bull; A Product by Webzio
-      </span>
-    </div>
-  </div>
-);
 
 // 5. LoadingState
 interface LoadingStateProps {

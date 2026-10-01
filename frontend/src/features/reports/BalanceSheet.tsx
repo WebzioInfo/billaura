@@ -60,26 +60,29 @@ export const BalanceSheet = () => {
           description="Balance sheet postings will generate when double-entry journals are recorded."
         />
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/15 border-b border-border">
-                <TableHead className="font-semibold py-4 px-6">Account Name</TableHead>
-                <TableHead className="font-semibold py-4 px-6 text-right">Balance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((item: any, i: number) => (
-                <TableRow key={i} className="hover:bg-muted/50 border-b border-border transition-colors">
-                  <TableCell className="font-medium py-4 px-6 text-foreground">{item.accountName}</TableCell>
-                  <TableCell className="text-right py-4 px-6">
-                    <AmountText value={item.balance} isTotal={item.accountName.toLowerCase().includes('total')} />
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Account Name</TableHead>
+              <TableHead className="text-right">Balance</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((item: any, i: number) => {
+              const isTotal = (item.accountName || '').toLowerCase().includes('total');
+              return (
+                <TableRow key={i} isTotalRow={isTotal}>
+                  <TableCell className={isTotal ? "font-semibold text-foreground" : "font-medium text-foreground"}>
+                    {item.accountName}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <AmountText value={item.balance} isTotal={isTotal} />
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
     </PageContainer>
   );

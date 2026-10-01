@@ -7,6 +7,8 @@ import { Shield, Plus, Edit2, Trash2, Search, Loader2, Check, Copy } from 'lucid
 import { apiClient } from '../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DeleteDialog } from '../../shared/components/ui';
+import { Button } from '@/shared/components/ui/Button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/components/ui/Table';
 
 const roleSchema = z.object({
   name: z.string().min(2, 'Role name must be at least 2 characters'),
@@ -200,37 +202,27 @@ export const RolesList = () => {
 
   return (
     <>
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Shield className="w-6 h-6 text-accent" />
-            Roles & Permissions Matrix
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Define custom authorization profiles, grant resource actions, and build the security access matrix for your company users.
-          </p>
+      <div className="space-y-4">
+        {/* Action & Filter toolbar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border w-full max-w-md focus-within:border-accent transition-colors">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input 
+            type="text" 
+            placeholder="Search roles..." 
+            className="bg-transparent border-none outline-none w-full text-sm text-foreground placeholder:text-muted-foreground"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
-        <button
+        <Button
           onClick={openAddModal}
-          className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+          variant="primary"
+          size="sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 mr-1.5" />
           Create Custom Role
-        </button>
-      </div>
-
-      {/* Filter Row */}
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-border w-full max-w-md focus-within:border-accent transition-colors">
-        <Search className="w-4 h-4 text-muted-foreground" />
-        <input 
-          type="text" 
-          placeholder="Search roles..." 
-          className="bg-transparent border-none outline-none w-full text-sm text-foreground placeholder:text-muted-foreground"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+        </Button>
       </div>
 
       {/* Grid List */}
@@ -386,45 +378,43 @@ export const RolesList = () => {
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Access Permissions Matrix
                 </label>
-                <div className="overflow-x-auto border border-border rounded-xl">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-background bg-opacity-50 text-xs font-semibold text-muted-foreground uppercase">
-                      <tr>
-                        <th className="p-3 border-b border-border">Resource Category</th>
-                        {ACTIONS.map((action) => (
-                          <th key={action.value} className="p-3 text-center border-b border-border">
-                            {action.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {RESOURCES.map((res) => (
-                        <tr key={res.value} className="hover:bg-background/20 transition-colors">
-                          <td className="p-3 font-semibold text-foreground">{res.label}</td>
-                          {ACTIONS.map((action) => {
-                            const checked = isPermissionChecked(res.value, action.value);
-                            return (
-                              <td key={action.value} className="p-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handlePermissionToggle(res.value, action.value)}
-                                  className={`w-5 h-5 rounded border flex items-center justify-center transition-all mx-auto cursor-pointer ${
-                                    checked 
-                                      ? 'bg-accent border-accent text-white' 
-                                      : 'border-border hover:border-accent'
-                                  }`}
-                                >
-                                  {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                                </button>
-                              </td>
-                            );
-                          })}
-                        </tr>
+                <Table embedded={true}>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Resource Category</TableHead>
+                      {ACTIONS.map((action) => (
+                        <TableHead key={action.value} className="text-center">
+                          {action.label}
+                        </TableHead>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {RESOURCES.map((res) => (
+                      <TableRow key={res.value}>
+                        <TableCell className="font-medium text-foreground">{res.label}</TableCell>
+                        {ACTIONS.map((action) => {
+                          const checked = isPermissionChecked(res.value, action.value);
+                          return (
+                            <TableCell key={action.value} className="text-center">
+                              <button
+                                type="button"
+                                onClick={() => handlePermissionToggle(res.value, action.value)}
+                                className={`w-5 h-5 rounded border flex items-center justify-center transition-all mx-auto cursor-pointer ${
+                                  checked 
+                                    ? 'bg-[#34303F] border-[#34303F] text-white' 
+                                    : 'border-border hover:border-neutral-400'
+                                }`}
+                              >
+                                {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                              </button>
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
 
               {/* Footer */}

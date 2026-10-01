@@ -1,13 +1,14 @@
 import React from 'react';
-import { Card } from '../../shared/components/ui/Card';
-import { Button } from '../../shared/components/ui/Button';
-import { PageHeader } from '../../shared/components/ui/PageHeader';
-import { PageContainer, EmptyState, LoadingState } from '../../shared/components/ui/LayoutComponents';
+import { Button } from '@/shared/components/ui/Button';
+import { IconButton } from '@/shared/components/ui/IconButton';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PageLayout } from '@/shared/components/layout/PageLayout';
+import { EmptyState, LoadingState } from '@/shared/components/ui/LayoutComponents';
 import { Plus, ArrowRight, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient as api } from '../../core/api/apiClient';
-import { DataTable, DataTableColumnHeader } from '../../shared/components/ui/data-table';
+import { apiClient as api } from '@/core/api/apiClient';
+import { DataTable, DataTableColumnHeader, CurrencyCell, DateCell } from '@/shared/components/ui';
 import { ColumnDef } from '@tanstack/react-table';
 
 export const JournalVouchersList = () => {
@@ -25,41 +26,46 @@ export const JournalVouchersList = () => {
     {
       accessorKey: 'date',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
-      cell: ({ row }) => <span>{new Date(row.getValue('date')).toLocaleDateString()}</span>,
+      cell: ({ row }) => <DateCell date={row.getValue('date')} />,
     },
     {
       accessorKey: 'reference',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Reference" />,
-      cell: ({ row }) => <span className="font-medium">{row.getValue('reference') || '-'}</span>,
+      cell: ({ row }) => <span className="tabular-nums font-medium text-foreground">{row.getValue('reference') || '—'}</span>,
     },
     {
       accessorKey: 'description',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Description" />,
-      cell: ({ row }) => <span>{row.getValue('description') || '-'}</span>,
+      cell: ({ row }) => <span className="text-muted-foreground">{row.getValue('description') || '—'}</span>,
     },
     {
       id: 'debit',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Debit" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Debit" className="justify-end" />,
       cell: ({ row }) => {
-        const totalDebit = row.original.lines.reduce((sum: number, l: any) => sum + Number(l.debit || 0), 0);
-        return <span className="font-medium text-right block">₹{totalDebit.toFixed(2)}</span>;
+        const totalDebit = row.original.lines?.reduce((sum: number, l: any) => sum + Number(l.debit || 0), 0) || 0;
+        return <CurrencyCell amount={totalDebit} />;
       },
     },
     {
       id: 'credit',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Credit" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Credit" className="justify-end" />,
       cell: ({ row }) => {
-        const totalCredit = row.original.lines.reduce((sum: number, l: any) => sum + Number(l.credit || 0), 0);
-        return <span className="font-medium text-right block">₹{totalCredit.toFixed(2)}</span>;
+        const totalCredit = row.original.lines?.reduce((sum: number, l: any) => sum + Number(l.credit || 0), 0) || 0;
+        return <CurrencyCell amount={totalCredit} />;
       },
     },
     {
       id: 'actions',
+      header: () => <div className="text-right pr-2">Actions</div>,
       cell: ({ row }) => (
-        <div className="flex justify-end">
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/journal-entries/${row.original.id}`)}>
-            View <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+        <div className="flex justify-end pr-2">
+          <IconButton
+            icon={ArrowRight}
+            size="dense"
+            aria-label="View Entry Details"
+            tooltip="View Entry Details"
+            onClick={() => navigate(`/journal-entries/${row.original.id}`)}
+          />
         </div>
       ),
     },
@@ -68,17 +74,16 @@ export const JournalVouchersList = () => {
   const entriesData = journalEntries?.data || [];
 
   return (
-    <PageContainer maxWidth="7xl">
+    <PageLayout>
       <PageHeader
-        title="Journal Vouchers"
-        description="Manage your manual journal entries."
+        title="Journal Entries"
+        count={entriesData.length}
         primaryAction={
           <Button 
             onClick={() => navigate('/journal-entries/new')}
-            className="flex items-center gap-2 font-bold px-5"
             variant="primary"
           >
-            <Plus className="w-4 h-4" /> Add Journal Voucher
+            <Plus className="w-4 h-4 mr-1.5" /> New Journal Entry
           </Button>
         }
       />
@@ -94,13 +99,10 @@ export const JournalVouchersList = () => {
           onActionClick={() => navigate('/journal-entries/new')}
         />
       ) : (
-        <Card className="p-6">
-          <h3 className="text-sm font-bold text-foreground border-b border-border pb-3 mb-4">
-            Recent Journal Vouchers
-          </h3>
-          <DataTable columns={columns} data={entriesData} searchKey="reference" exportFilename="journal_vouchers" />
-        </Card>
+        <div className="flex-1 min-h-0 flex flex-col mt-3">
+          <DataTable columns={columns} data={entriesData} searchKey="reference" exportFilename="journal_vouchers" itemLabel="journal entries" />
+        </div>
       )}
-    </PageContainer>
+    </PageLayout>
   );
 };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { useQuery } from '@tanstack/react-query';
 
@@ -29,34 +29,33 @@ export const SerialsList = () => {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Serial No</TableHead>
+            <TableHead className="pl-6 pr-4">Serial No</TableHead>
             <TableHead>Product</TableHead>
             <TableHead>Warehouse</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead align="center" className="pr-6 pl-4">Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center py-4">Loading serials...</TableCell>
+              <TableCell colSpan={4} className="p-0">
+                <TableLoader rows={4} />
+              </TableCell>
             </TableRow>
           ) : data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">No serial numbers found.</TableCell>
+              <TableCell colSpan={4} className="text-center py-12 text-sm text-muted-foreground">
+                No serial numbers found.
+              </TableCell>
             </TableRow>
           ) : (
             data.map((serial: any) => (
               <TableRow key={serial.id}>
-                <TableCell className="font-medium">{serial.serialNo}</TableCell>
-                <TableCell>{serial.product?.name || 'N/A'}</TableCell>
-                <TableCell>{serial.warehouse?.name || 'N/A'}</TableCell>
-                <TableCell>
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    serial.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' : 
-                    serial.status === 'SOLD' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {serial.status}
-                  </span>
+                <TableCell className="pl-6 pr-4 font-mono font-medium text-foreground">{serial.serialNo}</TableCell>
+                <TableCell className="font-semibold text-foreground">{serial.product?.name || '—'}</TableCell>
+                <TableCell className="text-muted-foreground">{serial.warehouse?.name || '—'}</TableCell>
+                <TableCell align="center" className="pr-6 pl-4">
+                  <StatusBadge status={serial.status} />
                 </TableCell>
               </TableRow>
             ))

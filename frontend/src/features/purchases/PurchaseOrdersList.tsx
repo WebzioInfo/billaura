@@ -2,18 +2,19 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Plus, Search, RefreshCw, Filter, Eye, Edit2, Copy, Trash2, 
-  CheckCircle, XCircle, FileText, Download, Printer, Mail,
-  ChevronDown, AlertCircle, ShoppingCart, TrendingUp, Info
+  Plus, Search, Filter, Eye, Edit2, Copy, Trash2, 
+  XCircle, ShoppingCart
 } from 'lucide-react';
+import { ColumnDef } from '@tanstack/react-table';
+
+import { PageLayout } from '@/shared/components/layout/PageLayout';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { PageContainer, EmptyState, LoadingState } from '@/shared/components/ui/LayoutComponents';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
-import { Card } from '@/shared/components/ui/Card';
-import { Button } from '@/shared/components/ui/Button';
+import { Button, IconButton, KpiCard, DeleteDialog, StatusBadge, CurrencyCell, DateCell } from '@/shared/components/ui';
+import { DataTable } from '@/shared/components/ui/data-table/DataTable';
+import { usePagination } from '@/shared/hooks/usePagination';
 import apiClient from '@/core/api';
-import { DeleteDialog } from '@/shared/components/ui';
 import notification from '@/core/services/NotificationService';
+import { formatIndianCurrency } from '@/lib/utils';
 
 export const PurchaseOrdersList = () => {
   const navigate = useNavigate();
@@ -33,7 +34,7 @@ export const PurchaseOrdersList = () => {
   const [poToDelete, setPoToDelete] = useState<any>(null);
 
   // Fetch Master Data
-  const { data: vendors = [] } = useQuery<unknown[]>({
+  const { data: vendors = [] } = useQuery<any[]>({
     queryKey: ['vendors'],
     queryFn: async () => {
       const res = await apiClient.get('/vendors');
@@ -42,7 +43,7 @@ export const PurchaseOrdersList = () => {
     }
   });
 
-  const { data: warehouses = [] } = useQuery<unknown[]>({
+  const { data: warehouses = [] } = useQuery<any[]>({
     queryKey: ['warehouses'],
     queryFn: async () => {
       const res = await apiClient.get('/warehouses');
@@ -62,11 +63,11 @@ export const PurchaseOrdersList = () => {
       endDate: endDate || undefined,
       amountMin: amountMin || undefined,
       amountMax: amountMax || undefined,
-      limit: 100
+      limit: 200
     };
   }, [search, status, vendorId, warehouseId, startDate, endDate, amountMin, amountMax]);
 
-  const { data: poResponse, isLoading: loadingPo, refetch } = useQuery<any>({
+  const { data: poResponse, isLoading: loadingPo } = useQuery<any>({
     queryKey: ['purchase-orders', queryParams],
     queryFn: async () => {
       const res = await apiClient.get('/purchase-orders', { params: queryParams });
@@ -82,161 +83,232 @@ export const PurchaseOrdersList = () => {
   // Compute live KPI metrics from total queried list
   const kpis = useMemo(() => {
     const totalCount = poList.length;
-    let draft = 0;
-    let sent = 0;
-    let approved = 0;
-    let partial = 0;
-    let completed = 0;
-    let cancelled = 0;
     let totalValue = 0;
     let outstandingValue = 0;
-    const dueTodayCount = 0;
-    const overdueCount = 0;
-
-    const todayStr = new Date().toISOString().split('T')[0];
+    let completed = 0;
 
     poList.forEach(po => {
       const gTotal = Number(po.grandTotal || 0);
       totalValue += gTotal;
-
-      if (po.status === 'DRAFT') draft++;
-      else if (po.status === 'SENT') sent++;
-      else if (po.status === 'ACCEPTED') approved++;
-      else if (po.status === 'PARTIAL') {
-        partial++;
-        outstandingValue += gTotal; // treat partial as unpaid balance
-      } else if (po.status === 'CONVERTED') {
-        completed++;
-      } else if (po.status === 'CANCELLED') cancelled++;
-
-      // Expected delivery and warehouse details are removed from PO header
-      const meta = po.gstBreakup || {};
+      if (po.status === 'PARTIAL') outstandingValue += gTotal;
+      if (po.status === 'CONVERTED') completed++;
     });
 
-    return {
-      totalCount,
-      draft,
-      sent,
-      approved,
-      partial,
-      completed,
-      cancelled,
-      totalValue,
-      outstandingValue,
-      dueTodayCount,
-      overdueCount
-    };
+    return { totalCount, totalValue, outstandingValue, completed };
   }, [poList]);
 
-  // Actions Mutators
+  // Mutations
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiClient.delete(`/purchase-orders/${id}`),
+    mutationFn: async (id: string) => apiClient.delete(`/purchase-orders/${id}`),
     onSuccess: () => {
-      notification.success('Purchase Order deleted');
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      notification.success('Purchase order deleted successfully');
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to delete Purchase Order');
+      notification.error(err.response?.data?.message || 'Failed to delete purchase order');
     }
   });
 
-  const handleDuplicate = async (po: any) => {
-    navigate(`/purchase-orders/new?duplicate=true`, { state: po });
-    // Duplicate handler will fetch data via React Router state or duplicate=true
-    navigate(`/purchase-orders/new?duplicate=true&poId=${po.id}`);
-  };
+  const cancelMutation = useMutation({
+    mutationFn: async (id: string) => apiClient.patch(`/purchase-orders/${id}/status`, { status: 'CANCELLED' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      notification.success('Purchase order cancelled successfully');
+    },
+    onError: (err: any) => {
+      notification.error(err.response?.data?.message || 'Failed to cancel purchase order');
+    }
+  });
 
-  const handleCancelPo = async (id: string) => {
-    try {
-      await apiClient.patch(`/purchase-orders/${id}`, { status: 'CANCELLED' });
-      notification.success('Purchase Order cancelled successfully');
-      refetch();
-    } catch (e: any) {
-      notification.error(e.response?.data?.message || 'Failed to cancel Purchase Order');
+  const handleCancelPo = (id: string) => {
+    if (window.confirm('Are you sure you want to cancel this purchase order?')) {
+      cancelMutation.mutate(id);
     }
   };
 
-  const clearFilters = () => {
-    setSearch('');
-    setStatus('');
-    setVendorId('');
-    setWarehouseId('');
-    setStartDate('');
-    setEndDate('');
-    setAmountMin('');
-    setAmountMax('');
+  const handleDuplicate = (po: any) => {
+    navigate(`/purchase-orders/new?duplicate=${po.id}`);
   };
+
+  // Unified pagination (Client-side slicing for POs; TODO: endpoint should support server-side pagination)
+  const {
+    page,
+    limit,
+    totalPages,
+    totalItems,
+    setPage,
+    setLimit,
+    resetPage,
+    paginatedData,
+  } = usePagination({
+    tableKey: 'purchase-orders',
+    data: poList,
+    itemLabel: 'purchase orders',
+  });
+
+  const columns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      accessorKey: 'orderNo',
+      header: 'PO Number',
+      cell: ({ row }) => (
+        <Link
+          to={`/purchase-orders/${row.original.id}`}
+          className="tabular-nums font-medium text-[#111827] dark:text-[#EDEDED] hover:underline"
+        >
+          {row.original.orderNo}
+        </Link>
+      )
+    },
+    {
+      accessorKey: 'businessPartner',
+      header: 'Vendor Supplier',
+      cell: ({ row }) => (
+        <span className="font-medium text-[#111827] dark:text-[#EDEDED]">
+          {row.original.businessPartner?.name || '—'}
+        </span>
+      )
+    },
+    {
+      accessorKey: 'date',
+      header: 'Order Date',
+      cell: ({ row }) => <DateCell date={row.original.date} />
+    },
+    {
+      accessorKey: 'items',
+      header: () => <div className="text-right">Lines</div>,
+      cell: ({ row }) => (
+        <div className="text-right text-[#6B7280] dark:text-[#9CA3AF] tabular-nums text-[13px]">
+          {row.original.items?.length || 0} lines
+        </div>
+      )
+    },
+    {
+      accessorKey: 'grandTotal',
+      header: () => <div className="text-right">Grand Total</div>,
+      cell: ({ row }) => (
+        <CurrencyCell
+          amount={Number(row.original.grandTotal || 0)}
+          className="font-semibold text-foreground text-right"
+        />
+      )
+    },
+    {
+      accessorKey: 'status',
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ row }) => (
+        <div className="text-center">
+          <StatusBadge status={row.original.status} />
+        </div>
+      )
+    },
+    {
+      id: 'actions',
+      header: () => <div className="text-right">Actions</div>,
+      cell: ({ row }) => {
+        const item = row.original;
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <IconButton
+              icon={Eye}
+              aria-label="View Details"
+              tooltip="View Details"
+              size="dense"
+              variant="ghost"
+              onClick={() => navigate(`/purchase-orders/${item.id}`)}
+            />
+            {item.status !== 'CANCELLED' && item.status !== 'CONVERTED' && (
+              <IconButton
+                icon={Edit2}
+                aria-label="Edit Order"
+                tooltip="Edit Order"
+                size="dense"
+                variant="ghost"
+                onClick={() => navigate(`/purchase-orders/${item.id}/edit`)}
+              />
+            )}
+            <IconButton
+              icon={Copy}
+              aria-label="Duplicate Order"
+              tooltip="Duplicate Order"
+              size="dense"
+              variant="ghost"
+              onClick={() => handleDuplicate(item)}
+            />
+            {item.status !== 'CANCELLED' && item.status !== 'CONVERTED' && (
+              <IconButton
+                icon={XCircle}
+                aria-label="Cancel Order"
+                tooltip="Cancel Order"
+                size="dense"
+                variant="danger-ghost"
+                onClick={() => handleCancelPo(item.id)}
+              />
+            )}
+            {item.status === 'DRAFT' && (
+              <IconButton
+                icon={Trash2}
+                aria-label="Delete Draft"
+                tooltip="Delete Draft"
+                size="dense"
+                variant="danger-ghost"
+                onClick={() => setPoToDelete(item)}
+              />
+            )}
+          </div>
+        );
+      }
+    }
+  ], [navigate]);
 
   return (
     <>
-    <PageContainer maxWidth="7xl">
-      {/* Header */}
-      <PageHeader
-        title="Purchase Orders"
-        description="Manage vendor purchase orders and incoming inventory"
-        primaryAction={
-          <div className="flex gap-2">
-            <Button onClick={() => setShowFilters(!showFilters)} variant="outline" className="flex items-center gap-1 text-xs">
-              <Filter className="w-4 h-4" /> Filters
+      <PageLayout>
+        <PageHeader
+          title="Purchase Orders"
+          count={kpis.totalCount}
+          primaryAction={
+            <Button
+              onClick={() => navigate('/purchase-orders/new')}
+              variant="primary"
+              size="md"
+            >
+              <Plus className="w-4 h-4" /> New Purchase Order
             </Button>
-            <Button onClick={() => refetch()} variant="outline" className="flex items-center gap-1 text-xs">
-              <RefreshCw className="w-4 h-4" /> Refresh
-            </Button>
-            <Link to="/purchase-orders/new">
-              <Button variant="primary" className="bg-accent hover:bg-accent/90 text-white font-bold px-5 flex items-center gap-1.5">
-                <Plus className="w-4 h-4" /> New Purchase Order
-              </Button>
-            </Link>
-          </div>
-        }
-      />
+          }
+        />
 
-      {/* KPI Cards section */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 text-left">
-        <Card className="p-4 border border-border/80 flex flex-col justify-between">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Purchase Value</p>
-          <p className="text-2xl font-black text-foreground mt-2 font-sans">₹{kpis.totalValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
-          <p className="text-[10px] text-muted-foreground mt-1">Across {kpis.totalCount} active PO orders</p>
-        </Card>
+        {/* KPI Cards section */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 shrink-0 mb-3 text-left">
+          <KpiCard
+            label="Total Purchase Value"
+            value={`₹${formatIndianCurrency(kpis.totalValue)}`}
+            helperText={`Across ${kpis.totalCount} purchase orders`}
+            isLoading={loadingPo}
+          />
+          <KpiCard
+            label="Pending Delivery Value"
+            value={`₹${formatIndianCurrency(kpis.outstandingValue)}`}
+            helperText="Pending incoming fulfillment"
+            isLoading={loadingPo}
+          />
+          <KpiCard
+            label="Completed Orders"
+            value={kpis.completed.toString()}
+            helperText="Fully received orders"
+            indicatorDot="collected"
+            isLoading={loadingPo}
+          />
+        </div>
 
-        <Card className="p-4 border border-border/80 flex flex-col justify-between">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Partially Received Value</p>
-          <p className="text-2xl font-black text-amber-500 mt-2 font-sans">₹{kpis.outstandingValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
-          <p className="text-[10px] text-muted-foreground mt-1">Pending incoming delivery fulfillments</p>
-        </Card>
-
-        <Card className="p-4 border border-border/80 flex flex-col justify-between">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Fulfillments Status</p>
-          <div className="flex gap-4 mt-2 text-xs font-bold">
-            <div><span className="text-green-600">{kpis.completed}</span> Fully</div>
-            <div><span className="text-amber-500">{kpis.partial}</span> Partial</div>
-            <div><span className="text-blue-500">{kpis.approved + kpis.sent + kpis.draft}</span> Pending</div>
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-1">Total count tracking summary</p>
-        </Card>
-
-        <Card className="p-4 border border-border/80 flex flex-col justify-between">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Delivery Due Logs</p>
-          <div className="flex gap-4 mt-2 text-xs font-bold">
-            <div><span className="text-blue-500">{kpis.dueTodayCount}</span> Due Today</div>
-            <div><span className="text-red-500">{kpis.overdueCount}</span> Overdue</div>
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-1">Expected arrival schedule metrics</p>
-        </Card>
-      </div>
-
-      {/* Expanded filters panel */}
-      {showFilters && (
-        <Card className="p-5 mb-6 text-left border border-border space-y-4">
-          <h4 className="font-extrabold text-xs uppercase tracking-wider text-foreground">Advanced Search Filter Parameters</h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Expanded filters panel */}
+        {showFilters && (
+          <div className="bg-surface border border-border p-3.5 rounded-xl shadow-xs shrink-0 mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
-              <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1.5">Supplier Vendor</label>
+              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Supplier</label>
               <select
                 value={vendorId}
-                onChange={e => setVendorId(e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
+                onChange={e => { setVendorId(e.target.value); resetPage(); }}
+                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
               >
                 <option value="">All Suppliers</option>
                 {vendors.map((v: any) => <option key={v.id} value={v.id}>{v.name}</option>)}
@@ -244,11 +316,11 @@ export const PurchaseOrdersList = () => {
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1.5">PO Status</label>
+              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">PO Status</label>
               <select
                 value={status}
-                onChange={e => setStatus(e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
+                onChange={e => { setStatus(e.target.value); resetPage(); }}
+                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
               >
                 <option value="">All Statuses</option>
                 <option value="DRAFT">Draft</option>
@@ -261,181 +333,96 @@ export const PurchaseOrdersList = () => {
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1.5">Destination Warehouse</label>
+              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Warehouse</label>
               <select
                 value={warehouseId}
-                onChange={e => setWarehouseId(e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
+                onChange={e => { setWarehouseId(e.target.value); resetPage(); }}
+                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
               >
                 <option value="">All Warehouses</option>
                 {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1.5">Date Range</label>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="w-full px-2 py-1 bg-background border border-border rounded-lg text-xs"
-                />
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  className="w-full px-2 py-1 bg-background border border-border rounded-lg text-xs"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1.5">Value Range</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  placeholder="Min"
-                  value={amountMin}
-                  onChange={e => setAmountMin(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
-                />
-                <input
-                  type="number"
-                  placeholder="Max"
-                  value={amountMax}
-                  onChange={e => setAmountMax(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="md:col-span-3 flex items-end justify-end gap-2">
-              <Button onClick={clearFilters} variant="outline" className="text-xs font-bold py-2">
-                Clear Filters
-              </Button>
-              <Button onClick={() => refetch()} variant="primary" className="bg-accent hover:bg-accent/95 text-white font-bold text-xs py-2 px-5">
-                Apply Search Filters
+            <div className="flex items-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setVendorId('');
+                  setStatus('');
+                  setWarehouseId('');
+                  setStartDate('');
+                  setEndDate('');
+                  setAmountMin('');
+                  setAmountMax('');
+                  setSearch('');
+                  resetPage();
+                }}
+                className="w-full h-8 text-[13px]"
+              >
+                Reset Filters
               </Button>
             </div>
           </div>
-        </Card>
-      )}
+        )}
 
-      {/* Main Table search bar */}
-      <div className="relative mb-4 max-w-md">
-        <span className="absolute left-3 top-2.5 text-muted-foreground"><Search className="w-4 h-4" /></span>
-        <input
-          type="text"
-          placeholder="Search by PO number or supplier name..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:border-accent"
+        <DataTable
+          columns={columns}
+          data={paginatedData}
+          totalItems={totalItems}
+          manualPagination={true}
+          pagination={{
+            pageIndex: page - 1,
+            pageSize: limit,
+          }}
+          onPaginationChange={(updater: any) => {
+            const next = typeof updater === 'function' ? updater({ pageIndex: page - 1, pageSize: limit }) : updater;
+            if (next.pageIndex !== undefined) setPage(next.pageIndex + 1);
+            if (next.pageSize !== undefined) setLimit(next.pageSize);
+          }}
+          isLoading={loadingPo}
+          storageKey="purchase-orders"
+          searchPlaceholder="Search by PO number or supplier name..."
+          globalFilter={search}
+          onGlobalFilterChange={(val) => {
+            setSearch(val);
+            resetPage();
+          }}
+          toolbarExtras={
+            <Button
+              variant={showFilters ? 'primary' : 'secondary'}
+              size="md"
+              onClick={() => setShowFilters(!showFilters)}
+              className="text-[13px]"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Filters
+              {(status || vendorId || warehouseId || startDate || endDate || amountMin || amountMax) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5" />
+              )}
+            </Button>
+          }
+          exportFilename="Purchase_Orders_List"
+          itemLabel="purchase orders"
+          emptyText="No purchase orders found"
+          emptyDescription="Create your first purchase order to start procurement flows."
+          emptyActionLabel="New Purchase Order"
+          onEmptyAction={() => navigate('/purchase-orders/new')}
         />
-      </div>
+      </PageLayout>
 
-      {loadingPo ? (
-        <LoadingState variant="table" />
-      ) : poList.length === 0 ? (
-        <EmptyState
-          icon={<ShoppingCart className="w-8 h-8 text-muted-foreground" />}
-          title="No purchase orders found"
-          description="Create your first purchase order to start procurement flows."
-          actionLabel="New Purchase Order"
-          onActionClick={() => navigate('/purchase-orders/new')}
-        />
-      ) : (
-        <Card className="overflow-x-auto border border-border">
-          <Table className="min-w-[1000px]">
-            <TableHeader>
-              <TableRow className="bg-muted/15 border-b border-border text-xs uppercase tracking-wider">
-                <TableHead className="font-bold py-4 px-6">PO Number</TableHead>
-                <TableHead className="font-bold py-4 px-6">Vendor Supplier</TableHead>
-                <TableHead className="font-bold py-4 px-6">Order Date</TableHead>
-                <TableHead className="font-bold py-4 px-6 text-right">Items</TableHead>
-                <TableHead className="font-bold py-4 px-6 text-right">Grand Total</TableHead>
-                <TableHead className="font-bold py-4 px-6 text-center">Status</TableHead>
-                <TableHead className="font-bold py-4 px-6 text-center w-24">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="text-xs">
-              {poList.map((item: any) => {
-                const meta = item.gstBreakup || {};
-                
-                return (
-                  <TableRow key={item.id} className="hover:bg-muted/50 border-b border-border transition-all">
-                    <TableCell className="font-bold py-4 px-6 font-mono">
-                      <Link to={`/purchase-orders/${item.id}`} className="text-accent hover:underline">
-                        {item.orderNo}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="py-4 px-6 font-bold text-foreground">{item.businessPartner?.name || 'N/A'}</TableCell>
-                    <TableCell className="py-4 px-6 text-muted-foreground">{new Date(item.date).toLocaleDateString()}</TableCell>
-                    <TableCell className="py-4 px-6 text-right font-medium">{item.items?.length || 0} lines</TableCell>
-                    <TableCell className="font-bold py-4 px-6 text-right text-foreground font-mono">₹{Number(item.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="py-4 px-6 text-center">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        item.status === 'CONVERTED' ? 'bg-green-100 text-green-700' :
-                        item.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' :
-                        item.status === 'ACCEPTED' ? 'bg-blue-100 text-blue-700' :
-                        item.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {item.status === 'CONVERTED' ? 'FULLY RECEIVED' : item.status === 'PARTIAL' ? 'PARTIALLY RECEIVED' : item.status === 'ACCEPTED' ? 'APPROVED' : item.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-4 px-6 text-center">
-                      <div className="flex gap-2 justify-center">
-                        <Link to={`/purchase-orders/${item.id}`} title="View Details">
-                          <button className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground rounded cursor-pointer">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        </Link>
-                        {item.status !== 'CANCELLED' && item.status !== 'CONVERTED' && (
-                          <Link to={`/purchase-orders/${item.id}/edit`} title="Edit Order">
-                            <button className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground rounded cursor-pointer">
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                          </Link>
-                        )}
-                        <button 
-                          onClick={() => handleDuplicate(item)} 
-                          title="Duplicate Order"
-                          className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground rounded cursor-pointer"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        {item.status !== 'CANCELLED' && item.status !== 'CONVERTED' && (
-                          <button 
-                            onClick={() => handleCancelPo(item.id)} 
-                            title="Cancel Order"
-                            className="p-1 hover:bg-red-50 text-muted-foreground hover:text-red-500 rounded cursor-pointer"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                        {item.status === 'DRAFT' && (
-                          <button 
-                            onClick={() => setPoToDelete(item)}
-                            title="Delete Draft"
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" /> Delete
-                          </button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
-    </PageContainer>
-      <DeleteDialog isOpen={!!poToDelete} onClose={() => setPoToDelete(null)} onConfirm={async () => { deleteMutation.mutate(poToDelete.id); setPoToDelete(null); }} entityName="Purchase Order" entityId={poToDelete?.orderNo} warningText="This action cannot be undone." />
+      <DeleteDialog
+        isOpen={!!poToDelete}
+        onClose={() => setPoToDelete(null)}
+        onConfirm={async () => {
+          deleteMutation.mutate(poToDelete.id);
+          setPoToDelete(null);
+        }}
+        entityName="Purchase Order"
+        entityId={poToDelete?.orderNo}
+        warningText="This action cannot be undone."
+      />
     </>
   );
 };

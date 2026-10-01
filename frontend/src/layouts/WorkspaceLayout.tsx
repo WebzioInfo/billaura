@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { AppSidebar } from '@/shared/components/layout/AppSidebar';
+import { AppSidebar, SIDEBAR_NAVIGATION } from '@/shared/components/layout/AppSidebar';
 import { AppHeader } from '@/shared/components/layout/AppHeader';
 import { WorkspaceTabs } from '@/shared/components/workspace/WorkspaceTabs';
 import { TopProgressBar } from '@/shared/components/ui';
@@ -61,11 +61,14 @@ export function WorkspaceLayout() {
 
     const state = useWorkspaceStore.getState();
 
+    // Normalize route to avoid leading/trailing slash mismatches and duplicate tabs
+    const normalizedBase = baseRoute.replace(/^\/app/, '').replace(/^\/+/, '') || 'dashboard';
+
     // Match existing tab by stable base route or id
     const existingTab = state.tabs.find(t => {
-      const tabBase = t.path.split('?')[0].replace(/^\/app/, '');
-      const expectedBase = baseRoute.replace(/^\/app/, '');
-      return t.id === expectedBase || tabBase === expectedBase;
+      const tabBase = t.path.split('?')[0].replace(/^\/app/, '').replace(/^\/+/, '') || 'dashboard';
+      const cleanId = t.id.replace(/^\/+/, '') || 'dashboard';
+      return cleanId === normalizedBase || tabBase === normalizedBase;
     });
 
     if (existingTab) {
@@ -79,7 +82,20 @@ export function WorkspaceLayout() {
       // Auto-register a new tab for direct navigation/link clicks
       const segments = location.pathname.split('/').filter(Boolean);
       let title = 'Document';
-      if (location.pathname === '/invoices/new') {
+      
+      // Match against sidebar navigation first
+      let matchedSidebarLabel: string | undefined;
+      for (const group of SIDEBAR_NAVIGATION) {
+        const item = group.items.find(i => i.path === baseRoute);
+        if (item) {
+          matchedSidebarLabel = item.label;
+          break;
+        }
+      }
+
+      if (matchedSidebarLabel) {
+        title = matchedSidebarLabel;
+      } else if (location.pathname === '/invoices/new') {
         title = 'New Invoice';
       } else if (location.pathname === '/other-income') {
         const params = new URLSearchParams(location.search);
@@ -110,9 +126,8 @@ export function WorkspaceLayout() {
         }
       }
 
-      const stableId = baseRoute.replace(/^\/app/, '');
       state.openTab({
-        id: stableId,
+        id: normalizedBase,
         title,
         path: currentFullPath,
       });
@@ -120,7 +135,7 @@ export function WorkspaceLayout() {
   }, [location.pathname, location.search]);
 
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden font-sans text-foreground">
+    <div className="flex h-[100dvh] w-full bg-background overflow-hidden font-sans text-foreground">
       {/* 1. Left Persistent & Responsive Modern Sidebar */}
       <AppSidebar
         isCollapsed={isCollapsed}
@@ -145,13 +160,13 @@ export function WorkspaceLayout() {
 
         {/* Workspace Open Tabs */}
         {hasTabs && (
-          <div className="bg-muted/20 border-b border-border/60 px-2 pt-1 flex items-center overflow-x-auto shrink-0 select-none">
+          <div className="bg-background border-b border-border px-[var(--page-gutter)] flex items-center overflow-x-auto shrink-0 select-none">
             <WorkspaceTabs />
           </div>
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden relative bg-background/60 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 min-h-0 overflow-hidden relative bg-background flex flex-col">
           <Outlet />
         </main>
       </div>
