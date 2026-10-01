@@ -1,220 +1,234 @@
 import React from 'react';
-import {
-  Document,
-  Page,
-  Text,
-  View,
-  StyleSheet,
-  Image,
-} from '@react-pdf/renderer';
 import { PdfDocumentData } from './pdf-document.types';
+
+export interface ReactPdfModule {
+  Document: any;
+  Page: any;
+  Text: any;
+  View: any;
+  StyleSheet: any;
+  Image: any;
+  [key: string]: any;
+}
 
 const fmt = (num: any): string => {
   const n = Number(num);
   return isNaN(n) ? '0.00' : n.toFixed(2);
 };
 
-const styles = StyleSheet.create({
-  page: {
-    padding: 32,
-    fontFamily: 'Helvetica',
-    fontSize: 9,
-    color: '#1e293b',
-    backgroundColor: '#ffffff',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderBottomWidth: 2,
-    borderBottomColor: '#0f172a',
-    borderBottomStyle: 'solid',
-    paddingBottom: 12,
-    marginBottom: 16,
-  },
-  companyCol: {
-    maxWidth: '55%',
-  },
-  logo: {
-    maxHeight: 45,
-    maxWidth: 160,
-    objectFit: 'contain',
-    marginBottom: 6,
-  },
-  companyName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 3,
-  },
-  companyText: {
-    fontSize: 9,
-    color: '#475569',
-    marginBottom: 1.5,
-  },
-  docMetaCol: {
-    textAlign: 'right',
-  },
-  docTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4f46e5',
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  docMetaText: {
-    fontSize: 9,
-    color: '#334155',
-    marginBottom: 1.5,
-  },
-  disclaimer: {
-    fontSize: 8,
-    color: '#64748b',
-    fontStyle: 'italic',
-    marginTop: 3,
-  },
-  detailsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderStyle: 'solid',
-    marginBottom: 16,
-  },
-  detailsCol: {
-    width: '48%',
-  },
-  detailsHeading: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    color: '#64748b',
-    borderBottomWidth: 1,
-    borderBottomColor: '#cbd5e1',
-    borderBottomStyle: 'solid',
-    paddingBottom: 3,
-    marginBottom: 4,
-  },
-  detailsText: {
-    fontSize: 9,
-    color: '#1e293b',
-    marginBottom: 1.5,
-  },
-  boldText: {
-    fontWeight: 'bold',
-  },
-  table: {
-    width: '100%',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#cbd5e1',
-    borderBottomStyle: 'solid',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    borderBottomStyle: 'solid',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  colIndex: { width: '6%' },
-  colDesc: { width: '42%' },
-  colQty: { width: '12%', textAlign: 'right' },
-  colRate: { width: '15%', textAlign: 'right' },
-  colTax: { width: '12%', textAlign: 'right' },
-  colTotal: { width: '13%', textAlign: 'right' },
-  thText: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    textTransform: 'uppercase',
-  },
-  tdText: {
-    fontSize: 9,
-    color: '#334155',
-  },
-  summarySection: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 16,
-  },
-  summaryTable: {
-    width: 240,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    borderTopWidth: 1.5,
-    borderTopColor: '#0f172a',
-    borderTopStyle: 'solid',
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#0f172a',
-    borderBottomStyle: 'solid',
-    marginTop: 3,
-  },
-  summaryLabel: {
-    fontSize: 9,
-    color: '#475569',
-  },
-  summaryValue: {
-    fontSize: 9,
-    color: '#0f172a',
-    textAlign: 'right',
-  },
-  totalLabel: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#0f172a',
-  },
-  totalValue: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    textAlign: 'right',
-  },
-  notesBlock: {
-    padding: 10,
-    backgroundColor: '#f8fafc',
-    borderLeftWidth: 3,
-    borderLeftColor: '#4f46e5',
-    borderLeftStyle: 'solid',
-    borderRadius: 4,
-    marginBottom: 16,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 32,
-    right: 32,
-    textAlign: 'center',
-    fontSize: 8,
-    color: '#94a3b8',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    borderTopStyle: 'solid',
-    paddingTop: 8,
-  },
-});
+let cachedStyles: any = null;
+const getStyles = (StyleSheet: any) => {
+  if (cachedStyles) return cachedStyles;
+  cachedStyles = StyleSheet.create({
+    page: {
+      padding: 32,
+      fontFamily: 'Helvetica',
+      fontSize: 9,
+      color: '#1e293b',
+      backgroundColor: '#ffffff',
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      borderBottomWidth: 2,
+      borderBottomColor: '#0f172a',
+      borderBottomStyle: 'solid',
+      paddingBottom: 12,
+      marginBottom: 16,
+    },
+    companyCol: {
+      maxWidth: '55%',
+    },
+    logo: {
+      maxHeight: 45,
+      maxWidth: 160,
+      objectFit: 'contain',
+      marginBottom: 6,
+    },
+    companyName: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: '#0f172a',
+      marginBottom: 3,
+    },
+    companyText: {
+      fontSize: 9,
+      color: '#475569',
+      marginBottom: 1.5,
+    },
+    docMetaCol: {
+      textAlign: 'right',
+    },
+    docTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#4f46e5',
+      textTransform: 'uppercase',
+      marginBottom: 4,
+    },
+    docMetaText: {
+      fontSize: 9,
+      color: '#334155',
+      marginBottom: 1.5,
+    },
+    disclaimer: {
+      fontSize: 8,
+      color: '#64748b',
+      fontStyle: 'italic',
+      marginTop: 3,
+    },
+    detailsGrid: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      backgroundColor: '#f8fafc',
+      padding: 12,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: '#e2e8f0',
+      borderStyle: 'solid',
+      marginBottom: 16,
+    },
+    detailsCol: {
+      width: '48%',
+    },
+    detailsHeading: {
+      fontSize: 8,
+      fontWeight: 'bold',
+      textTransform: 'uppercase',
+      color: '#64748b',
+      borderBottomWidth: 1,
+      borderBottomColor: '#cbd5e1',
+      borderBottomStyle: 'solid',
+      paddingBottom: 3,
+      marginBottom: 4,
+    },
+    detailsText: {
+      fontSize: 9,
+      color: '#1e293b',
+      marginBottom: 1.5,
+    },
+    boldText: {
+      fontWeight: 'bold',
+    },
+    table: {
+      width: '100%',
+      marginTop: 8,
+      marginBottom: 16,
+    },
+    tableHeader: {
+      flexDirection: 'row',
+      backgroundColor: '#f1f5f9',
+      borderBottomWidth: 1.5,
+      borderBottomColor: '#cbd5e1',
+      borderBottomStyle: 'solid',
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+    },
+    tableRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: '#e2e8f0',
+      borderBottomStyle: 'solid',
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+    },
+    colIndex: { width: '6%' },
+    colDesc: { width: '42%' },
+    colQty: { width: '12%', textAlign: 'right' },
+    colRate: { width: '15%', textAlign: 'right' },
+    colTax: { width: '12%', textAlign: 'right' },
+    colTotal: { width: '13%', textAlign: 'right' },
+    thText: {
+      fontSize: 8,
+      fontWeight: 'bold',
+      color: '#0f172a',
+      textTransform: 'uppercase',
+    },
+    tdText: {
+      fontSize: 9,
+      color: '#334155',
+    },
+    summarySection: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      marginBottom: 16,
+    },
+    summaryTable: {
+      width: 240,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: 3,
+      paddingHorizontal: 6,
+    },
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: 5,
+      paddingHorizontal: 6,
+      borderTopWidth: 1.5,
+      borderTopColor: '#0f172a',
+      borderTopStyle: 'solid',
+      borderBottomWidth: 1.5,
+      borderBottomColor: '#0f172a',
+      borderBottomStyle: 'solid',
+      marginTop: 3,
+    },
+    summaryLabel: {
+      fontSize: 9,
+      color: '#475569',
+    },
+    summaryValue: {
+      fontSize: 9,
+      color: '#0f172a',
+      textAlign: 'right',
+    },
+    totalLabel: {
+      fontSize: 11,
+      fontWeight: 'bold',
+      color: '#0f172a',
+    },
+    totalValue: {
+      fontSize: 11,
+      fontWeight: 'bold',
+      color: '#0f172a',
+      textAlign: 'right',
+    },
+    notesBlock: {
+      padding: 10,
+      backgroundColor: '#f8fafc',
+      borderLeftWidth: 3,
+      borderLeftColor: '#4f46e5',
+      borderLeftStyle: 'solid',
+      borderRadius: 4,
+      marginBottom: 16,
+    },
+    footer: {
+      position: 'absolute',
+      bottom: 20,
+      left: 32,
+      right: 32,
+      textAlign: 'center',
+      fontSize: 8,
+      color: '#94a3b8',
+      borderTopWidth: 1,
+      borderTopColor: '#e2e8f0',
+      borderTopStyle: 'solid',
+      paddingTop: 8,
+    },
+  });
+  return cachedStyles;
+};
 
-export const UniversalPdfDocument: React.FC<{ data: PdfDocumentData }> = ({ data }) => {
+export const UniversalPdfDocument: React.FC<{ data: PdfDocumentData; pdf?: ReactPdfModule }> = ({ data, pdf }) => {
+  if (!pdf) {
+    throw new Error('UniversalPdfDocument: "pdf" module must be passed to render UniversalPdfDocument.');
+  }
+
+  const { Document, Page, Text, View, Image, StyleSheet } = pdf;
+  const styles = getStyles(StyleSheet);
+
   const company = data?.company || {};
   const customer = data?.customer || {};
   const document = data?.document || {};
@@ -411,7 +425,7 @@ export const UniversalPdfDocument: React.FC<{ data: PdfDocumentData }> = ({ data
         {/* FOOTER */}
         <Text
           style={styles.footer}
-          render={({ pageNumber, totalPages }) =>
+          render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
             `This is an official computer-generated document. Generated by ${company.name || 'Bill Aura ERP'}. Page ${pageNumber} of ${totalPages}`
           }
           fixed
