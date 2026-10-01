@@ -16,7 +16,10 @@ import {
   BadRequestException,
   Res,
   Req,
+  UseInterceptors,
+  UploadedFile,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { Response, Request as ExpressRequest } from "express";
 import { Throttle } from "@nestjs/throttler";
 import { AuthService } from "./auth.service";
@@ -36,6 +39,8 @@ import { TenantGuard } from "../common/guards/tenant.guard";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { RefreshTokenDto } from "./dto/refresh.dto";
 import { ConfigService } from "@nestjs/config";
+import { CloudinaryStorageService } from "../storage/cloudinary-storage.service";
+import { validateImageFile, UploadedMulterFile } from "../common/utils/file-validation.util";
 
 @Controller("auth")
 export class AuthController {
@@ -43,6 +48,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly sessionService: SessionService,
     private readonly configService: ConfigService,
+    private readonly cloudinaryStorageService: CloudinaryStorageService,
   ) {}
 
   private getCookie(request: ExpressRequest, name: string): string | undefined {
@@ -227,8 +233,31 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard, TenantGuard)
   @Patch("company")
-  async updateCompany(@Request() req: any, @Body() dto: UpdateCompanyDto) {
-    return this.authService.updateCompany(req.user.companyId || req.user.tenantId, dto);
+  @UseInterceptors(FileInterceptor("logo", { limits: { fileSize: 5 * 1024 * 1024 } }))
+  async updateCompany(
+    @Request() req: any,
+    @Body() dto: UpdateCompanyDto,
+    @UploadedFile() file?: UploadedMulterFile,
+  ) {
+    const companyId = req.user.companyId || req.user.tenantId;
+    if (!companyId) {
+      throw new BadRequestException("Authenticated company context is required");
+    }
+
+    let logoUrl: string | null | undefined = undefined;
+
+    if (file) {
+      validateImageFile(file);
+      logoUrl = await this.cloudinaryStorageService.uploadCompanyLogo(
+        companyId,
+        file.buffer,
+        file.mimetype,
+      );
+    } else if (dto.removeLogo === true || dto.removeLogo === "true") {
+      logoUrl = null;
+    }
+
+    return this.authService.updateCompany(companyId, dto, logoUrl);
   }
 
   @Post("resend-otp")

@@ -33,7 +33,9 @@ type CompanyFormValues = z.infer<typeof companySchema>;
 export const CompanyProfilePage = () => {
   const { setSession, user, accessToken } = useSessionStore();
   
-  const [localLogoBase64, setLocalLogoBase64] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [removeLogoRequested, setRemoveLogoRequested] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,7 +49,9 @@ export const CompanyProfilePage = () => {
 
   const companyData = profileData?.data?.company || profileData?.company;
   const companyId = companyData?.id || '';
-  const displayLogo = localLogoBase64 || companyData?.settings?.logoBase64;
+  const displayLogo = removeLogoRequested
+    ? null
+    : (logoPreview || companyData?.logo || companyData?.settings?.logoBase64);
 
   const { register, handleSubmit, formState: { errors } } = useAsyncForm<CompanyFormValues>(
     {
@@ -95,16 +99,15 @@ export const CompanyProfilePage = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setLocalLogoBase64(result);
-    };
-    reader.readAsDataURL(file);
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+    setRemoveLogoRequested(false);
   };
 
   const removeLogo = () => {
-    setLocalLogoBase64(null);
+    setLogoFile(null);
+    setLogoPreview(null);
+    setRemoveLogoRequested(true);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -115,21 +118,38 @@ export const CompanyProfilePage = () => {
   const onSubmit = async (values: CompanyFormValues) => {
     setIsSubmitting(true);
     try {
-      const finalLogo = localLogoBase64 !== null ? localLogoBase64 : companyData?.settings?.logoBase64;
-      const payload = {
-        ...values,
-        logoBase64: finalLogo
-      };
-      await apiClient.patch('/auth/company', payload);
-      notification.success('Workspace profile settings updated successfully');
-      
-      queryClient.invalidateQueries({ queryKey: ['company-profile'] });
-      
-      if (user) {
-        setSession({ ...user, companyName: values.companyName, logoBase64: finalLogo }, accessToken);
+      const formData = new FormData();
+
+      if (logoFile) {
+        formData.append('logo', logoFile);
+      } else if (removeLogoRequested) {
+        formData.append('removeLogo', 'true');
       }
+
+      Object.entries(values).forEach(([key, val]) => {
+        if (val !== undefined && val !== null) {
+          formData.append(key, String(val));
+        }
+      });
+
+      const res = await apiClient.patch<any>('/auth/company', formData);
+      notification.success('Workspace profile settings updated successfully');
+
+      queryClient.invalidateQueries({ queryKey: ['company-profile'] });
+
+      const updatedCompany = res?.data || res;
+      const newLogoUrl = updatedCompany?.logo || updatedCompany?.settings?.logoBase64 || (removeLogoRequested ? null : displayLogo);
+
+      if (user) {
+        setSession({ ...user, companyName: values.companyName, logoBase64: newLogoUrl }, accessToken);
+      }
+
+      setLogoFile(null);
+      setLogoPreview(null);
+      setRemoveLogoRequested(false);
     } catch (err: any) {
-      notification.error(err.response?.data?.message || 'Failed to update company profile');
+      const msg = err.response?.data?.message || err.response?.data?.error?.message || 'Failed to update company profile';
+      notification.error(msg);
     } finally {
       setIsSubmitting(false);
     }

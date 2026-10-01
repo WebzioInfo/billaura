@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import express from "express";
 import { ValidationPipe, ValidationError, BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
@@ -40,6 +41,9 @@ async function bootstrap() {
     .filter(Boolean);
 
   app.enableCors(corsOptions(allowedOrigins));
+
+  app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
   app.use(helmet());
   app.use(compression());

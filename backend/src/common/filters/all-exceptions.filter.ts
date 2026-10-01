@@ -16,22 +16,43 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const _request = ctx.getRequest<Request>();
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
-    const exceptionResponse = exception instanceof HttpException ? exception.getResponse() : null;
-    let message = exception instanceof HttpException ? exception.message : "Internal server error";
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message = "Internal server error";
     let errors = undefined;
 
-    if (exceptionResponse && typeof exceptionResponse === 'object') {
-       if ('message' in exceptionResponse) {
-           message = (exceptionResponse as any).message as string;
-       }
-       if ('errors' in exceptionResponse) {
-           errors = (exceptionResponse as any).errors;
-       }
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
+      if (exceptionResponse && typeof exceptionResponse === 'object') {
+        if ('message' in exceptionResponse) {
+          message = (exceptionResponse as any).message as string;
+        }
+        if ('errors' in exceptionResponse) {
+          errors = (exceptionResponse as any).errors;
+        }
+      } else {
+        message = exception.message;
+      }
+    } else if (exception && typeof exception === 'object') {
+      const err = exception as any;
+      if (
+        err.name === 'PayloadTooLargeError' ||
+        err.type === 'entity.too.large' ||
+        err.code === 'LIMIT_FILE_SIZE' ||
+        err.status === 413 ||
+        err.statusCode === 413
+      ) {
+        status = HttpStatus.PAYLOAD_TOO_LARGE;
+        message = 'The uploaded image/payload exceeds the maximum allowed size (5MB).';
+      } else if (typeof err.status === 'number' && err.status >= 400 && err.status < 600) {
+        status = err.status;
+        message = err.message || message;
+      } else if (typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600) {
+        status = err.statusCode;
+        message = err.message || message;
+      }
     }
+
     const requestId = response.getHeader("x-request-id")?.toString();
 
     const isDebugEnabled =
@@ -65,13 +86,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
       );
     }
 
-    response.status(status).json({
+    const errorEnvelope: Record<string, any> = {
       success: false,
       statusCode: status,
       message,
       errors: errors || null,
       correlationId: requestId || null,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    if (status === 413) {
+      errorEnvelope.error = {
+        code: "PAYLOAD_TOO_LARGE",
+        message,
+      };
+    }
+
+    response.status(status).json(errorEnvelope);
   }
 }

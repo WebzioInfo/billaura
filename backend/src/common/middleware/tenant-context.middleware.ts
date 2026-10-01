@@ -6,28 +6,32 @@ import * as jwt from "jsonwebtoken";
 @Injectable()
 export class TenantContextMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
-    let companyId = (req.headers["x-company-id"] ||
-      req.headers["x-tenant-id"]) as string | undefined;
+    let companyId: string | null = null;
     let userId: string | null = null;
 
+    const requestedHeaderCompanyId = (req.headers["x-company-id"] || req.headers["x-tenant-id"]) as string | undefined;
     const authHeader = req.headers["authorization"];
+
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.split(" ")[1];
       try {
-        // Decode without verification just to extract context early in middleware
         const decoded = jwt.decode(token) as any;
         if (decoded) {
-          companyId = companyId || decoded.tenantId || decoded.companyId;
+          const jwtCompanyId = decoded.companyId || decoded.tenantId || null;
+          if (decoded.globalRole === "SUPER_ADMIN" && requestedHeaderCompanyId) {
+            companyId = requestedHeaderCompanyId;
+          } else {
+            companyId = jwtCompanyId;
+          }
           userId = decoded.sub || decoded.userId || null;
         }
       } catch {
-        // Suppress decode errors (guards will handle signature validation later)
+        companyId = null;
       }
     }
 
-    CompanyContext.run(companyId || null, userId, () => {
-      // Attach to request object for standard express usage
-      (req as any).companyId = companyId || null;
+    CompanyContext.run(companyId, userId, () => {
+      (req as any).companyId = companyId;
       (req as any).userId = userId;
       next();
     });

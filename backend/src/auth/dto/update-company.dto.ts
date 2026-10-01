@@ -53,10 +53,18 @@ export class UpdateCompanyDto {
   @IsOptional()
   logoBase64?: string;
 
+  @IsString()
+  @IsOptional()
+  logo?: string;
+
+  @IsOptional()
+  removeLogo?: boolean | string;
+
   @IsOptional()
   invoiceConfig?: Record<string, any>;
 
   @IsOptional()
   invoiceSettings?: Record<string, any>;
 }
+
 

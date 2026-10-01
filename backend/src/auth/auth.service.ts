@@ -509,9 +509,11 @@ export class AuthService {
     };
   }
 
-  async updateCompany(companyId: string, data: UpdateCompanyDto) {
+  async updateCompany(companyId: string, data: UpdateCompanyDto, logoUrl?: string | null) {
+    const effectiveLogo = logoUrl !== undefined ? logoUrl : (data.logo !== undefined ? data.logo : data.logoBase64);
+
     const settingsPayload: Record<string, any> = {};
-    if (data.logoBase64 !== undefined) settingsPayload.logoBase64 = data.logoBase64;
+    if (effectiveLogo !== undefined) settingsPayload.logoBase64 = effectiveLogo;
     if (data.invoiceConfig !== undefined) settingsPayload.invoiceSettings = data.invoiceConfig;
 
     const hasSettingsUpdate = Object.keys(settingsPayload).length > 0;
@@ -519,6 +521,7 @@ export class AuthService {
     return this.prisma.company.update({
       where: { id: companyId },
       data: {
+        ...(effectiveLogo !== undefined && { logo: effectiveLogo }),
         ...(data.companyName !== undefined && { companyName: data.companyName }),
         ...(data.legalName !== undefined && { legalName: data.legalName }),
         ...(data.gstin !== undefined && { gstin: data.gstin }),
