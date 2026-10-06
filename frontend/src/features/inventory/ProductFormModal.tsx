@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck } from 'lucide-react';
+import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { apiClient as api, ensureArray } from '../../core/api/apiClient';
 import notification from '@/core/services/NotificationService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -244,6 +244,128 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   const purchasePrice = watch('purchasePrice') || 0;
   const sellingPrice = watch('sellingPrice') || 0;
 
+  // Dynamic wizard steps based on item type and taxable configuration
+  const availableSteps = [
+    { id: 'general', label: 'General' },
+    ...(isInventoryItem ? [{ id: 'inventory', label: 'Inventory' }] : []),
+    { id: 'rates', label: 'Rates' },
+    ...(isTaxable ? [{ id: 'compliance', label: 'Compliance' }] : []),
+  ];
+
+  const currentIndex = availableSteps.findIndex(s => s.id === activeTab);
+  const isFirstStep = currentIndex <= 0;
+  const isLastStep = currentIndex === availableSteps.length - 1;
+
+  // Keep activeTab aligned if options switch (e.g., itemType changed to non-inventory)
+  useEffect(() => {
+    if (!availableSteps.some(s => s.id === activeTab)) {
+      setActiveTab(availableSteps[0]?.id || 'general');
+    }
+  }, [availableSteps, activeTab]);
+
+  const STEP_FIELDS: Record<string, (keyof ProductFormValues)[]> = {
+    general: ['name', 'sku', 'alias', 'barcode', 'itemType', 'categoryId', 'brandId', 'unit'],
+    inventory: ['minStock', 'maxStock', 'reorderLevel', 'valuationMethod', 'salesAccountId', 'purchaseAccountId', 'inventoryAccountId'],
+    rates: ['sellingPrice', 'purchasePrice'],
+    compliance: ['hsnCode', 'eInvoiceHsn', 'gstRate', 'taxPreference'],
+  };
+
+  const validateStep = async (stepId: string): Promise<boolean> => {
+    const fields = STEP_FIELDS[stepId] || [];
+    const isValid = await form.trigger(fields as any);
+
+    if (stepId === 'general') {
+      const vals = form.getValues();
+      let customValid = true;
+      if (!vals.name || !vals.name.trim()) {
+        setError('name', { type: 'manual', message: 'Item Name is required' });
+        customValid = false;
+      }
+      if (!vals.categoryId) {
+        setError('categoryId', { type: 'manual', message: 'Category is required' });
+        customValid = false;
+      }
+      if (!vals.unit) {
+        setError('unit', { type: 'manual', message: 'Please select a valid Base Unit' });
+        customValid = false;
+      }
+      if (!customValid) return false;
+    }
+
+    if (stepId === 'rates') {
+      const vals = form.getValues();
+      let customValid = true;
+      if (vals.isSellable && (vals.sellingPrice === undefined || vals.sellingPrice < 0)) {
+        setError('sellingPrice', { type: 'manual', message: 'Selling Price is required' });
+        customValid = false;
+      }
+      if (vals.isPurchasable && (vals.purchasePrice === undefined || vals.purchasePrice < 0)) {
+        setError('purchasePrice', { type: 'manual', message: 'Purchase Price is required' });
+        customValid = false;
+      }
+      if (!customValid) return false;
+    }
+
+    if (stepId === 'compliance') {
+      const vals = form.getValues();
+      if (vals.isTaxable && vals.taxPreference === 'TAXABLE' && vals.hsnCode) {
+        if (!isValidHsnOrSac(vals.hsnCode, vals.isService)) {
+          setError('hsnCode', {
+            type: 'manual',
+            message: vals.isService ? 'Invalid SAC Code format (e.g. 998311)' : 'Invalid HSN Code format (e.g. 847130)',
+          });
+          return false;
+        }
+      }
+    }
+
+    return isValid;
+  };
+
+  const handleContinue = async () => {
+    const isValid = await validateStep(activeTab);
+    if (!isValid) return;
+
+    if (currentIndex < availableSteps.length - 1) {
+      setActiveTab(availableSteps[currentIndex + 1].id);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentIndex > 0) {
+      setActiveTab(availableSteps[currentIndex - 1].id);
+    }
+  };
+
+  const handleTabClick = async (targetStepId: string) => {
+    const targetIndex = availableSteps.findIndex(s => s.id === targetStepId);
+    if (targetIndex === -1) return;
+
+    // In Edit mode, allow freely switching tabs
+    if (product) {
+      setActiveTab(targetStepId);
+      return;
+    }
+
+    // Moving back to any previously visited step is always allowed
+    if (targetIndex <= currentIndex) {
+      setActiveTab(targetStepId);
+      return;
+    }
+
+    // Moving forward requires validating all previous steps up to target
+    for (let i = 0; i < targetIndex; i++) {
+      const stepToCheck = availableSteps[i];
+      const valid = await validateStep(stepToCheck.id);
+      if (!valid) {
+        setActiveTab(stepToCheck.id);
+        return;
+      }
+    }
+
+    setActiveTab(targetStepId);
+  };
+
   useEffect(() => {
     if (!isTaxable) {
       setValue('hsnCode', '', { shouldValidate: true, shouldDirty: true });
@@ -287,6 +409,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   }, [errors]);
 
   const onSubmit = async (data: ProductFormValues) => {
+    if (isLoading) return;
     setIsLoading(true);
     try {
       const payload = {
@@ -325,28 +448,53 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
           </button>
         </div>
 
-        <div className="flex border-b border-border px-6 mt-4 gap-6">
-          {['general', 'inventory', 'rates', 'compliance']
-            .filter(tab => {
-              if (tab === 'inventory' && !isInventoryItem) return false;
-              if (tab === 'compliance' && !isTaxable) return false;
-              return true;
-            })
-            .map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={`pb-4 text-sm font-semibold capitalize transition-colors border-b-2 cursor-pointer ${
-                activeTab === tab ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+        <div className="flex items-center border-b border-border px-6 mt-3 gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
+          {availableSteps.map((step, idx) => {
+            const isCurrent = step.id === activeTab;
+            const isCompleted = idx < currentIndex;
+
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => handleTabClick(step.id)}
+                className={`group flex items-center gap-2 pb-3.5 pt-1 text-xs sm:text-sm font-semibold capitalize transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+                  isCurrent
+                    ? 'border-accent text-accent'
+                    : isCompleted
+                    ? 'border-transparent text-foreground hover:text-accent'
+                    : 'border-transparent text-muted-foreground/70 hover:text-muted-foreground'
+                }`}
+              >
+                <span
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                    isCurrent
+                      ? 'bg-accent text-accent-foreground shadow-sm'
+                      : isCompleted
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {isCompleted ? <Check className="w-3 h-3 stroke-[3]" /> : idx + 1}
+                </span>
+                <span>{step.label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <form id="productForm" onSubmit={handleFormSubmit(onSubmit)} noValidate className="flex flex-col flex-1 overflow-hidden">
+        <form 
+          id="productForm" 
+          onSubmit={handleFormSubmit(onSubmit)} 
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && e.target instanceof HTMLInputElement && !isLastStep && !product) {
+              e.preventDefault();
+              handleContinue();
+            }
+          }}
+          noValidate 
+          className="flex flex-col flex-1 overflow-hidden"
+        >
           <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-8">
             
             <div className={activeTab === 'general' ? 'block' : 'hidden'}>
@@ -386,6 +534,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                       render={({ field }) => (
                         <SearchableMasterDropdown
                           label="Category (Item Group)"
+                          required
                           value={field.value || ''}
                           onChange={(val) => field.onChange(val)}
                           error={errors.categoryId?.message as string}
@@ -425,6 +574,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                         render={({ field }) => (
                           <SearchableSelect
                             label="Base Unit"
+                            required
                             value={field.value || 'PCS'}
                             onChange={(val) => field.onChange(val)}
                             error={errors.unit?.message as string}
@@ -816,18 +966,72 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
           </div>
 
           <div className="p-6 border-t border-border bg-muted/10 flex justify-between items-center">
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" {...register('isActive')} className="w-4 h-4 text-accent border-border rounded focus:ring-accent" />
               <span className="text-sm font-semibold text-foreground">Active Item</span>
             </label>
-            <div className="flex gap-3">
-              <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl border border-border text-foreground font-semibold hover:bg-muted transition-colors cursor-pointer">
-                Cancel
-              </button>
-              <button type="submit" disabled={isLoading} className="px-6 py-2.5 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 cursor-pointer disabled:opacity-50">
-                {isLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
-                {product ? 'Update Product' : 'Save Product'}
-              </button>
+            <div className="flex items-center gap-3">
+              {isFirstStep ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 rounded-xl border border-border text-foreground font-semibold hover:bg-muted transition-colors cursor-pointer text-xs sm:text-sm"
+                >
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="px-5 py-2.5 rounded-xl border border-border text-foreground font-semibold hover:bg-muted transition-colors cursor-pointer flex items-center gap-1.5 text-xs sm:text-sm"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back</span>
+                </button>
+              )}
+
+              {!isLastStep && !product && (
+                <button
+                  type="button"
+                  onClick={handleContinue}
+                  className="px-6 py-2.5 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 cursor-pointer text-xs sm:text-sm"
+                >
+                  <span>Continue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+
+              {!isLastStep && product && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleContinue}
+                    className="px-5 py-2.5 rounded-xl border border-border hover:bg-muted text-foreground font-semibold transition-colors flex items-center gap-1.5 cursor-pointer text-xs sm:text-sm"
+                  >
+                    <span>Continue</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="px-6 py-2.5 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 cursor-pointer disabled:opacity-50 text-xs sm:text-sm"
+                  >
+                    {isLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
+                    {isLoading ? 'Updating...' : 'Update Product'}
+                  </button>
+                </>
+              )}
+
+              {isLastStep && (
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="px-6 py-2.5 rounded-xl bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center gap-2 cursor-pointer disabled:opacity-50 text-xs sm:text-sm"
+                >
+                  {isLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  {isLoading ? (product ? 'Updating...' : 'Saving...') : (product ? 'Update Product' : 'Save Product')}
+                </button>
+              )}
             </div>
           </div>
         </form>

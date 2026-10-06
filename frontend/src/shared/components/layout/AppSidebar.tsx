@@ -72,7 +72,7 @@ export const SIDEBAR_NAVIGATION: SidebarGroup[] = [
     items: [
       { id: 'invoices', label: 'Invoices', path: '/invoices', icon: Receipt },
       { id: 'customers', label: 'Customers', path: '/customers', icon: Users },
-      { id: 'receipts', label: 'Payments Received', path: '/receipts', icon: CreditCard },
+      { id: 'receipts', label: 'Payments', path: '/receipts', icon: CreditCard },
       { id: 'quotations', label: 'Quotations', path: '/quotations', icon: MessageSquare },
     ],
   },

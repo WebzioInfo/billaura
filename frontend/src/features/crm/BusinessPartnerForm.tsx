@@ -267,9 +267,29 @@ export const BusinessPartnerForm = () => {
     saveMutation.mutate({ ...data, historicalInvoices } as any);
   };
 
+  const handleToggleB2b = (b2b: boolean) => {
+    setB2bMode(b2b);
+    if (!b2b) {
+      setValue('gstRegistrationStatus', 'UNREGISTERED');
+      setValue('gstin', '');
+      setValue('panNumber', '');
+      setValue('tradeName', '');
+      setValue('creditLimit', '');
+      if (!isEditMode && segments) {
+        const defaultB2c = segments.find((s: any) => s.segmentType === 'B2C' && s.isDefault);
+        if (defaultB2c) setValue('customerSegmentId', defaultB2c.id);
+      }
+    } else {
+      if (!isEditMode && segments) {
+        const defaultB2b = segments.find((s: any) => s.segmentType === 'B2B' && s.isDefault);
+        if (defaultB2b) setValue('customerSegmentId', defaultB2b.id);
+      }
+    }
+  };
+
   if (isEditMode && isLoading) {
     return (
-      <PageContainer maxWidth="5xl">
+      <PageContainer maxWidth="full" className="w-full px-4 sm:px-6 lg:px-8 py-4 max-w-[1680px] mx-auto">
         <div className="flex items-center justify-center p-12">
           <Loader2 className="w-8 h-8 animate-spin text-accent" />
         </div>
@@ -278,84 +298,94 @@ export const BusinessPartnerForm = () => {
   }
 
   return (
-    <PageContainer maxWidth="5xl">
-        <PageHeader 
-          title={isEditMode ? `Edit ${entityLabel}` : `New ${entityLabel}`}
-          breadcrumbs={[
-            { label: entityLabel + "s", href: `/${entityPath}` },
-            { label: isEditMode ? (customer ? displayName : `Edit ${entityLabel}`) : `New ${entityLabel}` }
-          ]}
-          primaryAction={
-          <Button 
-            onClick={form.handleSubmit(onSubmit)} 
-            disabled={saveMutation.isPending}
-            variant="primary"
-            className="flex items-center gap-2"
-          >
-            {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {isEditMode ? 'Save Changes' : `Create ${entityLabel}`}
-          </Button>
+    <PageContainer maxWidth="full" className="w-full px-4 sm:px-6 lg:px-8 py-3.5 space-y-3.5 max-w-[1680px] mx-auto text-left">
+      <PageHeader 
+        title={isEditMode ? (customer ? `Edit ${displayName}` : `Edit ${entityLabel}`) : `New ${entityLabel}`}
+        backTo={{ label: `${entityLabel}s`, path: `/${entityPath}` }}
+        secondaryAction={
+          !isVendor ? (
+            <div className="flex items-center p-0.5 bg-muted/60 rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => handleToggleB2b(false)}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                  !b2bMode
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                B2C Individual
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleB2b(true)}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                  b2bMode
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                B2B Business
+              </button>
+            </div>
+          ) : undefined
+        }
+        primaryAction={
+          <div className="flex items-center gap-2">
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="h-8 text-xs font-medium"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit"
+              form="customerForm"
+              disabled={saveMutation.isPending}
+              variant="primary"
+              size="sm"
+              className="h-8 text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+            >
+              {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {isEditMode ? 'Save Changes' : `Create ${entityLabel}`}
+            </Button>
+          </div>
         }
       />
 
-      <form id="customerForm" onSubmit={handleFormSubmit(onSubmit)} className="space-y-6">
-        <div className="flex items-center justify-center p-1 mb-6 bg-muted/50 rounded-lg border border-border w-fit mx-auto">
-          <button
-            type="button"
-            onClick={() => {
-              setB2bMode(false);
-              setValue('gstRegistrationStatus', 'UNREGISTERED');
-              setValue('gstin', '');
-              setValue('panNumber', '');
-              setValue('tradeName', '');
-              setValue('creditLimit', '');
-              if (!isEditMode && segments) {
-                const defaultB2c = segments.find((s: any) => s.segmentType === 'B2C' && s.isDefault);
-                if (defaultB2c) setValue('customerSegmentId', defaultB2c.id);
-              }
-            }}
-            className={`px-6 py-2 text-sm font-medium rounded-md transition-colors ${!b2bMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            B2C Customer (Individual)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setB2bMode(true);
-              if (!isEditMode && segments) {
-                const defaultB2b = segments.find((s: any) => s.segmentType === 'B2B' && s.isDefault);
-                if (defaultB2b) setValue('customerSegmentId', defaultB2b.id);
-              }
-            }}
-            className={`px-6 py-2 text-sm font-medium rounded-md transition-colors ${b2bMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            B2B Customer (Business)
-          </button>
-        </div>
+      <form id="customerForm" onSubmit={handleFormSubmit(onSubmit)} className="space-y-3.5">
+        {/* Section 1: Basic Information */}
+        <FormSection title="Basic Information" className="p-3.5 sm:p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
+            {/* Row 1: Name (8 cols) + Code (4 cols) */}
+            <div className="md:col-span-8">
+              <Input
+                label={`${entityLabel} Name`}
+                {...register('name')}
+                placeholder={b2bMode ? "Contact Person / Authorized Signatory Name" : "Customer Full Name"}
+                required
+              />
+              <FormErrorDisplay error={errors.name} />
+            </div>
 
-        <Section>
-          <FormSection title="Basic Information">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Input
-                  label={`${entityLabel} Name`}
-                  {...register('name')}
-                  placeholder={b2bMode ? "Contact Person Name" : "Customer Full Name"}
-                  required
-                />
-              </div>
-              <div>
-                  <AutoGenerateInput
-                    label={`${entityLabel} Code`}
-                    documentType={entityType}
-                    onGenerate={(code) => setValue('customerCode', code, { shouldValidate: true })}
-                    {...register('customerCode')}
-                    error={errors.customerCode?.message as string}
-                    placeholder="Auto-generated if left empty"
-                  />
-              </div>
-              {!isVendor && (
-                <div>
+            <div className="md:col-span-4">
+              <AutoGenerateInput
+                label={`${entityLabel} Code`}
+                documentType={entityType}
+                onGenerate={(code) => setValue('customerCode', code, { shouldValidate: true })}
+                {...register('customerCode')}
+                error={errors.customerCode?.message as string}
+                placeholder="Auto-generated if empty"
+              />
+            </div>
+
+            {/* Row 2: Customer Segment (6 cols) + Department (6 cols) */}
+            {!isVendor && (
+              <>
+                <div className="md:col-span-6">
                   <SearchableSelect
                     label="Customer Segment"
                     value={watch('customerSegmentId') || ''}
@@ -373,9 +403,8 @@ export const BusinessPartnerForm = () => {
                   />
                   <FormErrorDisplay error={errors.customerSegmentId} />
                 </div>
-              )}
-              {!isVendor && (
-                <div>
+
+                <div className="md:col-span-6">
                   <SearchableSelect
                     label="Customer Department"
                     value={watch('customerDepartmentId') || ''}
@@ -393,427 +422,462 @@ export const BusinessPartnerForm = () => {
                   />
                   <FormErrorDisplay error={errors.customerDepartmentId} />
                 </div>
-              )}
-              {b2bMode && (
-                <>
-                  <div>
-                    <Input
-                      label="Company / Trade Name"
-                      {...register('tradeName')}
-                      placeholder="Legal Business Name"
-                    />
-                    <FormErrorDisplay error={errors.tradeName} />
-                  </div>
-                  <div>
-                    <Select
-                      label="Customer Type"
-                      {...register('customerType')}
-                      options={[
-                        { value: 'B2B', label: 'B2B' },
-                        { value: 'B2C', label: 'B2C' },
-                        { value: 'GOVERNMENT', label: 'Government' },
-                        { value: 'EXPORT', label: 'Export' },
-                      ]}
-                    />
-                    <FormErrorDisplay error={errors.customerType} />
-                  </div>
-                  <div>
-                    <Select
-                      label="GST Registration Status"
-                      {...register('gstRegistrationStatus')}
-                      options={[
-                        { value: 'UNREGISTERED', label: 'Unregistered' },
-                        { value: 'REGISTERED', label: 'Registered Business (Regular)' },
-                        { value: 'COMPOSITION', label: 'Composition Dealer' },
-                        { value: 'SEZ', label: 'SEZ' },
-                        { value: 'EXPORT', label: 'Export' },
-                      ]}
-                    />
-                    <FormErrorDisplay error={errors.gstRegistrationStatus} />
-                  </div>
-                  <div>
-                    <Select
-                      label="Tax Preference"
-                      {...register('taxPreference')}
-                      options={[
-                        { value: 'TAXABLE', label: 'Taxable' },
-                        { value: 'EXEMPT', label: 'Exempt' },
-                        { value: 'NIL_RATED', label: 'Nil Rated' },
-                        { value: 'NON_GST', label: 'Non-GST' },
-                        { value: 'COMPOSITION', label: 'Composition' },
-                        { value: 'REVERSE_CHARGE', label: 'Reverse Charge' },
-                      ]}
-                    />
-                    <FormErrorDisplay error={errors.taxPreference} />
-                  </div>
-                </>
-              )}
-            </div>
-          </FormSection>
-        </Section>
+              </>
+            )}
 
-        <Section>
-          <FormSection title="Contact Information">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Input
-                  label="Email Address"
-                  type="email"
-                  {...register('email')}
-                  placeholder="email@example.com"
-                />
-                <FormErrorDisplay error={errors.email} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+            {/* Row 3 (B2B): Trade Name (8 cols) + Customer Type (4 cols) */}
+            {b2bMode && (
+              <>
+                <div className="md:col-span-8">
                   <Input
-                    label="Phone / Mobile"
-                    {...register('mobile')}
-                    placeholder="+91 99999 99999"
+                    label="Company / Trade Name"
+                    {...register('tradeName')}
+                    placeholder="Legal Business / Registered Entity Name"
                   />
-                  <FormErrorDisplay error={errors.mobile} />
+                  <FormErrorDisplay error={errors.tradeName} />
                 </div>
-                <div>
-                  <Input
-                    label="WhatsApp"
-                    {...register('whatsapp')}
-                    placeholder="+91 99999 99999"
-                  />
-                  <FormErrorDisplay error={errors.whatsapp} />
-                </div>
-              </div>
-            </div>
-          </FormSection>
-        </Section>
 
+                <div className="md:col-span-4">
+                  <Select
+                    label="Customer Type"
+                    {...register('customerType')}
+                    options={[
+                      { value: 'B2B', label: 'B2B (Business)' },
+                      { value: 'B2C', label: 'B2C (Consumer)' },
+                      { value: 'GOVERNMENT', label: 'Government / Public Sector' },
+                      { value: 'EXPORT', label: 'Export / Overseas' },
+                    ]}
+                  />
+                  <FormErrorDisplay error={errors.customerType} />
+                </div>
+
+                {/* Row 4 (B2B): GST Registration (6 cols) + Tax Preference (6 cols) */}
+                <div className="md:col-span-6">
+                  <Select
+                    label="GST Registration Status"
+                    {...register('gstRegistrationStatus')}
+                    options={[
+                      { value: 'UNREGISTERED', label: 'Unregistered' },
+                      { value: 'REGISTERED', label: 'Registered Business (Regular)' },
+                      { value: 'COMPOSITION', label: 'Composition Dealer' },
+                      { value: 'SEZ', label: 'SEZ (Special Economic Zone)' },
+                      { value: 'EXPORT', label: 'Export / Deemed Export' },
+                    ]}
+                  />
+                  <FormErrorDisplay error={errors.gstRegistrationStatus} />
+                </div>
+
+                <div className="md:col-span-6">
+                  <Select
+                    label="Tax Preference"
+                    {...register('taxPreference')}
+                    options={[
+                      { value: 'TAXABLE', label: 'Taxable' },
+                      { value: 'EXEMPT', label: 'Exempt' },
+                      { value: 'NIL_RATED', label: 'Nil Rated' },
+                      { value: 'NON_GST', label: 'Non-GST' },
+                      { value: 'COMPOSITION', label: 'Composition' },
+                      { value: 'REVERSE_CHARGE', label: 'Reverse Charge' },
+                    ]}
+                  />
+                  <FormErrorDisplay error={errors.taxPreference} />
+                </div>
+              </>
+            )}
+
+            {/* In B2C mode: compact tax preference & customer type */}
+            {!b2bMode && (
+              <>
+                <div className="md:col-span-6">
+                  <Select
+                    label="Customer Type"
+                    {...register('customerType')}
+                    options={[
+                      { value: 'B2C', label: 'B2C (Individual / Retail)' },
+                      { value: 'B2B', label: 'B2B (Business)' },
+                    ]}
+                  />
+                  <FormErrorDisplay error={errors.customerType} />
+                </div>
+                <div className="md:col-span-6">
+                  <Select
+                    label="Tax Preference"
+                    {...register('taxPreference')}
+                    options={[
+                      { value: 'TAXABLE', label: 'Taxable' },
+                      { value: 'EXEMPT', label: 'Exempt' },
+                      { value: 'NIL_RATED', label: 'Nil Rated' },
+                      { value: 'NON_GST', label: 'Non-GST' },
+                    ]}
+                  />
+                  <FormErrorDisplay error={errors.taxPreference} />
+                </div>
+              </>
+            )}
+          </div>
+        </FormSection>
+
+        {/* Section 2: Contact Information */}
+        <FormSection title="Contact Information" className="p-3.5 sm:p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
+            <div className="md:col-span-5">
+              <Input
+                label="Email Address"
+                type="email"
+                {...register('email')}
+                placeholder="contact@company.com"
+              />
+              <FormErrorDisplay error={errors.email} />
+            </div>
+
+            <div className="md:col-span-4">
+              <Input
+                label="Phone / Mobile"
+                {...register('mobile')}
+                placeholder="+91 98765 43210"
+              />
+              <FormErrorDisplay error={errors.mobile} />
+            </div>
+
+            <div className="md:col-span-3">
+              <Input
+                label="WhatsApp"
+                {...register('whatsapp')}
+                placeholder="+91 98765 43210"
+              />
+              <FormErrorDisplay error={errors.whatsapp} />
+            </div>
+          </div>
+        </FormSection>
+
+        {/* Section 3: Tax & Financial Details (B2B Only) */}
         {b2bMode && (
-          <Section>
-            <FormSection title="Tax & Financial Details">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Input
-                    label="GSTIN"
-                    {...register('gstin')}
-                    placeholder="27AAAAA0000A1Z5"
-                    className="font-mono uppercase"
-                  />
-                  <FormErrorDisplay error={errors.gstin} />
-                </div>
-                <div>
-                  <Input
-                    label="PAN Number"
-                    {...register('panNumber')}
-                    placeholder="AAAAA0000A"
-                    className="font-mono uppercase"
-                  />
-                  <FormErrorDisplay error={errors.panNumber} />
-                </div>
-                <div>
-                  <Input
-                    label="Credit Limit"
-                    type="number"
-                    {...register('creditLimit')}
-                    placeholder="0.00"
-                  />
-                  <FormErrorDisplay error={errors.creditLimit} />
-                </div>
-              </div>
-            </FormSection>
-          </Section>
-        )}
-
-        <Section>
-          <FormSection title="Opening Balance & Migration">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Select
-                  label="Opening Balance Type"
-                  {...register('openingBalanceType')}
-                  options={[
-                    { value: 'NONE', label: 'No Opening Balance' },
-                    { value: 'DEBIT_BALANCE', label: 'Debit Balance (Receivable / Debit)' },
-                    { value: 'CREDIT_BALANCE', label: 'Credit Balance (Payable / Credit)' },
-                  ]}
-                />
-                <FormErrorDisplay error={errors.openingBalanceType} />
-              </div>
+          <FormSection title="Tax & Financial Details" className="p-3.5 sm:p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               <div>
                 <Input
-                  label="Opening Balance Amount"
+                  label="GSTIN"
+                  {...register('gstin')}
+                  placeholder="27AAAAA0000A1Z5"
+                  className="font-mono uppercase tracking-wide"
+                />
+                <FormErrorDisplay error={errors.gstin} />
+              </div>
+
+              <div>
+                <Input
+                  label="PAN Number"
+                  {...register('panNumber')}
+                  placeholder="AAAAA0000A"
+                  className="font-mono uppercase tracking-wide"
+                />
+                <FormErrorDisplay error={errors.panNumber} />
+              </div>
+
+              <div>
+                <Input
+                  label="Credit Limit (₹)"
                   type="number"
                   step="0.01"
-                  min="0"
-                  {...register('openingBalanceAmount')}
-                  disabled={watchedObType === 'NONE'}
-                  readOnly={watchedObType === 'NONE'}
-                  className={watchedObType === 'NONE' ? 'bg-muted/50 cursor-not-allowed opacity-75' : ''}
-                  placeholder={
-                    watchedObType === 'DEBIT_BALANCE'
-                      ? 'Enter Debit Opening Balance'
-                      : watchedObType === 'CREDIT_BALANCE'
-                      ? 'Enter Credit Opening Balance'
-                      : '0.00'
-                  }
-                  helperText={
-                    watchedObType === 'NONE'
-                      ? 'No opening balance will be created.'
-                      : watchedObType === 'DEBIT_BALANCE'
-                      ? 'Debit balance will be posted to Accounts Receivable & Opening Balance Equity.'
-                      : watchedObType === 'CREDIT_BALANCE'
-                      ? 'Credit balance will be posted to Customer Account & Opening Balance Equity.'
-                      : undefined
-                  }
+                  {...register('creditLimit')}
+                  placeholder="0.00"
                 />
-                <FormErrorDisplay error={errors.openingBalanceAmount} />
-              </div>
-              <div>
-                <Input
-                  label="Effective Date"
-                  type="date"
-                  {...register('openingBalanceDate')}
-                />
-                <FormErrorDisplay error={errors.openingBalanceDate} />
-              </div>
-              <div>
-                <Input
-                  label="Migration Reference Number"
-                  {...register('migrationReferenceNo')}
-                  placeholder="Legacy ERP Ref (e.g. MIGR-2026)"
-                />
-                <FormErrorDisplay error={errors.migrationReferenceNo} />
-              </div>
-              <div className="flex items-center gap-2 pt-6">
-                <input
-                  type="checkbox"
-                  id="isMigrated"
-                  {...register('isMigrated')}
-                  className="w-4 h-4 text-accent rounded border-border focus:ring-accent"
-                />
-                <label htmlFor="isMigrated" className="text-sm font-semibold text-foreground cursor-pointer">
-                  Migrated from another system
-                </label>
-              </div>
-            </div>
-
-            {watchedIsMigrated && (
-              <div className="mt-4 p-4 bg-muted/20 border border-border rounded-lg space-y-4 animate-in fade-in duration-200">
-                <h4 className="text-sm font-bold text-foreground">Legacy System Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Input
-                      label="Previous Software"
-                      {...register('previousSoftware')}
-                      placeholder="e.g. TallyPrime, SAP"
-                    />
-                  </div>
-                  <div>
-                    <Input
-                      label="Previous Ledger Code"
-                      {...register('previousLedgerCode')}
-                      placeholder="e.g. CUST-001"
-                    />
-                  </div>
-                  <div>
-                    <Input
-                      label="Migration Notes"
-                      {...register('migrationNotes')}
-                      placeholder="Remarks..."
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {(watchedObType === 'DEBIT_BALANCE' || watchedObType === 'RECEIVABLE') && (
-              <div className="mt-6 border-t border-border pt-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-sm font-bold text-foreground">Invoice-wise Migration</h4>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setHistoricalInvoices([...historicalInvoices, { id: Date.now(), invoiceNo: '', date: new Date().toISOString().split('T')[0], totalAmount: 0 }])}
-                  >
-                    + Add Historical Invoice
-                  </Button>
-                </div>
-                {historicalInvoices.length > 0 ? (
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-muted text-muted-foreground text-xs uppercase">
-                        <tr>
-                          <th className="px-4 py-2">Invoice No</th>
-                          <th className="px-4 py-2">Date</th>
-                          <th className="px-4 py-2 text-right">Amount</th>
-                          <th className="px-4 py-2 text-center">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {historicalInvoices.map((inv, index) => (
-                          <tr key={inv.id || index} className="border-b border-border bg-background">
-                            <td className="px-4 py-2">
-                              <Input 
-                                value={inv.invoiceNo} 
-                                onChange={(e) => {
-                                  const updated = [...historicalInvoices];
-                                  updated[index].invoiceNo = e.target.value;
-                                  setHistoricalInvoices(updated);
-                                }} 
-                                placeholder="INV-..." 
-                              />
-                            </td>
-                            <td className="px-4 py-2">
-                              <Input 
-                                type="date"
-                                value={inv.date} 
-                                onChange={(e) => {
-                                  const updated = [...historicalInvoices];
-                                  updated[index].date = e.target.value;
-                                  setHistoricalInvoices(updated);
-                                }} 
-                              />
-                            </td>
-                            <td className="px-4 py-2">
-                              <Input 
-                                type="number"
-                                value={inv.totalAmount} 
-                                onChange={(e) => {
-                                  const updated = [...historicalInvoices];
-                                  updated[index].totalAmount = Number(e.target.value);
-                                  setHistoricalInvoices(updated);
-                                }} 
-                                placeholder="0.00"
-                              />
-                            </td>
-                            <td className="px-4 py-2 text-center">
-                              <Button 
-                                type="button" 
-                                variant="ghost" 
-                                className="text-red-500"
-                                onClick={() => {
-                                  setHistoricalInvoices(historicalInvoices.filter((_, i) => i !== index));
-                                }}
-                              >
-                                Remove
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground text-center py-4 bg-muted/10 rounded border border-dashed border-border">
-                    No historical invoices added. The total opening balance will be posted as a single summary journal.
-                  </p>
-                )}
-              </div>
-            )}
-          </FormSection>
-        </Section>
-        
-        <Section>
-          <FormSection title="Account Status">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Select
-                  label="Status"
-                  {...register('status')}
-                  options={[
-                    { value: 'ACTIVE', label: 'Active' },
-                    { value: 'INACTIVE', label: 'Inactive' },
-                    { value: 'SUSPENDED', label: 'Suspended' },
-                  ]}
-                />
-                <FormErrorDisplay error={errors.status} />
+                <FormErrorDisplay error={errors.creditLimit} />
               </div>
             </div>
           </FormSection>
-        </Section>
+        )}
 
-        <Section>
-          <FormSection title="Address">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+        {/* Section 4: Address Information */}
+        <FormSection title="Address Information" className="p-3.5 sm:p-4 space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+            {/* Left Column: Full Billing Address */}
+            <div className="lg:col-span-6 flex flex-col justify-between">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                   Billing Address
                 </label>
                 <textarea
                   {...register('address')}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none h-20"
-                  placeholder="Complete address..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-surface border border-border rounded-md text-xs text-foreground placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none min-h-[82px]"
+                  placeholder="Door/Flat No, Building, Street, Landmark..."
                 />
                 <FormErrorDisplay error={errors.address} />
               </div>
+            </div>
+
+            {/* Right Column: Locality, State, Country, Place of Supply */}
+            <div className="lg:col-span-6 grid grid-cols-2 gap-3.5">
               <div>
                 <Input
                   label="PIN Code"
                   {...register('pinCode')}
-                  placeholder="Enter PIN Code"
+                  placeholder="e.g. 400001"
                 />
                 <FormErrorDisplay error={errors.pinCode} />
               </div>
+
               <div>
                 <Input
                   label="State"
                   {...register('state')}
-                  placeholder="Enter State"
+                  placeholder="State / Province"
                 />
                 <FormErrorDisplay error={errors.state} />
               </div>
+
               <div>
                 <Input
                   label="Country"
                   {...register('country')}
-                  placeholder="Enter Country"
+                  placeholder="India"
                 />
                 <FormErrorDisplay error={errors.country} />
               </div>
+
               {b2bMode && (
                 <div>
                   <Input
                     label="Place of Supply"
                     {...register('placeOfSupply')}
-                    placeholder="State Name (for GST purposes)"
+                    placeholder="e.g. Maharashtra (27)"
                   />
                   <FormErrorDisplay error={errors.placeOfSupply} />
                 </div>
               )}
             </div>
-          </FormSection>
-        </Section>
-        
-        {!b2bMode && (
-          <Section>
-            <FormSection title="Additional Information">
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Notes (Optional)
-                  </label>
-                  <textarea
-                    {...register('notes')}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none h-20"
-                    placeholder="Enter any additional notes..."
-                  />
-                  <FormErrorDisplay error={errors.notes} />
-                </div>
+          </div>
+        </FormSection>
+
+        {/* Section 5: Opening Balance & Account Settings */}
+        <FormSection title="Opening Balance & Account Settings" className="p-3.5 sm:p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-start">
+            <div>
+              <Select
+                label="Opening Balance Type"
+                {...register('openingBalanceType')}
+                options={[
+                  { value: 'NONE', label: 'No Opening Balance' },
+                  { value: 'DEBIT_BALANCE', label: 'Debit (Receivable / Due)' },
+                  { value: 'CREDIT_BALANCE', label: 'Credit (Advance / Payable)' },
+                ]}
+              />
+              <FormErrorDisplay error={errors.openingBalanceType} />
+            </div>
+
+            <div>
+              <Input
+                label="Opening Balance (₹)"
+                type="number"
+                step="0.01"
+                min="0"
+                {...register('openingBalanceAmount')}
+                disabled={watchedObType === 'NONE'}
+                readOnly={watchedObType === 'NONE'}
+                className={watchedObType === 'NONE' ? 'bg-muted/50 cursor-not-allowed opacity-75' : ''}
+                placeholder={
+                  watchedObType === 'DEBIT_BALANCE'
+                    ? 'Debit Balance'
+                    : watchedObType === 'CREDIT_BALANCE'
+                    ? 'Credit Balance'
+                    : '0.00'
+                }
+              />
+              <FormErrorDisplay error={errors.openingBalanceAmount} />
+            </div>
+
+            <div>
+              <Input
+                label="Effective Date"
+                type="date"
+                {...register('openingBalanceDate')}
+              />
+              <FormErrorDisplay error={errors.openingBalanceDate} />
+            </div>
+
+            <div>
+              <Select
+                label="Account Status"
+                {...register('status')}
+                options={[
+                  { value: 'ACTIVE', label: 'Active' },
+                  { value: 'INACTIVE', label: 'Inactive' },
+                  { value: 'SUSPENDED', label: 'Suspended' },
+                ]}
+              />
+              <FormErrorDisplay error={errors.status} />
+            </div>
+          </div>
+
+          {/* Row 2: Migration Ref, Notes & Checkbox */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-center pt-2 border-t border-border/50">
+            <div className="md:col-span-5">
+              <Input
+                label="Migration Reference Number"
+                {...register('migrationReferenceNo')}
+                placeholder="Legacy ERP Ref (e.g. MIGR-2026)"
+              />
+              <FormErrorDisplay error={errors.migrationReferenceNo} />
+            </div>
+
+            <div className="md:col-span-4">
+              <Input
+                label="Internal Notes"
+                {...register('notes')}
+                placeholder="Optional internal remarks or instructions..."
+              />
+              <FormErrorDisplay error={errors.notes} />
+            </div>
+
+            <div className="md:col-span-3 flex items-center gap-2 pt-4">
+              <input
+                type="checkbox"
+                id="isMigrated"
+                {...register('isMigrated')}
+                className="w-4 h-4 text-accent rounded border-border focus:ring-accent"
+              />
+              <label htmlFor="isMigrated" className="text-xs font-semibold text-foreground cursor-pointer select-none">
+                Migrated from another system
+              </label>
+            </div>
+          </div>
+
+          {/* Collapsible legacy system details if checkbox is checked */}
+          {watchedIsMigrated && (
+            <div className="p-3 bg-muted/20 border border-border rounded-lg space-y-3 animate-in fade-in duration-150">
+              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Legacy System Details</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Input
+                  label="Previous Software"
+                  {...register('previousSoftware')}
+                  placeholder="e.g. TallyPrime, Busy, SAP"
+                />
+                <Input
+                  label="Previous Ledger Code"
+                  {...register('previousLedgerCode')}
+                  placeholder="e.g. CUST-001"
+                />
+                <Input
+                  label="Migration Notes"
+                  {...register('migrationNotes')}
+                  placeholder="Migration notes / remarks..."
+                />
               </div>
-            </FormSection>
-          </Section>
-        )}
-        
-        <div className="flex justify-end gap-3 pt-4 pb-12">
-          <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+            </div>
+          )}
+
+          {/* Historical Invoices table if debit balance / receivable */}
+          {(watchedObType === 'DEBIT_BALANCE' || watchedObType === 'RECEIVABLE') && (
+            <div className="border-t border-border/60 pt-3 space-y-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Invoice-wise Migration Breakdown</h4>
+                  <p className="text-[11px] text-muted-foreground">Optional breakdown of outstanding invoices from previous accounting system</p>
+                </div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setHistoricalInvoices([...historicalInvoices, { id: Date.now(), invoiceNo: '', date: new Date().toISOString().split('T')[0], totalAmount: 0 }])}
+                  className="h-7 text-xs font-medium"
+                >
+                  + Add Historical Invoice
+                </Button>
+              </div>
+
+              {historicalInvoices.length > 0 ? (
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-muted/50 text-muted-foreground text-[10px] uppercase font-bold tracking-wider">
+                      <tr>
+                        <th className="px-3 py-2">Invoice No</th>
+                        <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2 text-right">Amount (₹)</th>
+                        <th className="px-3 py-2 text-center w-20">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {historicalInvoices.map((inv, index) => (
+                        <tr key={inv.id || index} className="bg-background">
+                          <td className="px-3 py-1.5">
+                            <input 
+                              value={inv.invoiceNo} 
+                              onChange={(e) => {
+                                const updated = [...historicalInvoices];
+                                updated[index].invoiceNo = e.target.value;
+                                setHistoricalInvoices(updated);
+                              }} 
+                              placeholder="INV-..." 
+                              className="w-full h-8 px-2 bg-surface border border-border rounded text-xs"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <input 
+                              type="date"
+                              value={inv.date} 
+                              onChange={(e) => {
+                                const updated = [...historicalInvoices];
+                                updated[index].date = e.target.value;
+                                setHistoricalInvoices(updated);
+                              }} 
+                              className="w-full h-8 px-2 bg-surface border border-border rounded text-xs"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <input 
+                              type="number"
+                              value={inv.totalAmount} 
+                              onChange={(e) => {
+                                const updated = [...historicalInvoices];
+                                updated[index].totalAmount = Number(e.target.value);
+                                setHistoricalInvoices(updated);
+                              }} 
+                              placeholder="0.00"
+                              className="w-full h-8 px-2 bg-surface border border-border rounded text-xs text-right font-mono"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="sm"
+                              className="text-red-500 hover:text-red-600 h-7 px-2 text-xs"
+                              onClick={() => {
+                                setHistoricalInvoices(historicalInvoices.filter((_, i) => i !== index));
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-2.5 bg-muted/10 rounded-lg border border-dashed border-border">
+                  No historical invoices added. The total opening balance will be posted as a single summary journal.
+                </p>
+              )}
+            </div>
+          )}
+        </FormSection>
+
+        {/* Section 6: Bottom Action Bar */}
+        <div className="flex items-center justify-end gap-3 pt-2 pb-6 border-t border-border/50">
+          <Button type="button" variant="outline" size="sm" onClick={() => navigate(-1)} className="h-8 text-xs font-medium">
             Cancel
           </Button>
           <Button 
             type="submit" 
             disabled={saveMutation.isPending}
             variant="primary"
-            className="min-w-[120px]"
+            size="sm"
+            className="h-8 text-xs font-semibold flex items-center gap-1.5 min-w-[130px] justify-center shadow-sm"
           >
-            {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (isEditMode ? 'Save Changes' : `Create ${entityLabel}`)}
+            {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            {isEditMode ? 'Save Changes' : `Create ${entityLabel}`}
           </Button>
         </div>
       </form>
