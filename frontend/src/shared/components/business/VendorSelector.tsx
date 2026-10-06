@@ -54,8 +54,11 @@ export const VendorSelector = ({ value, onChange, error, label = "Vendor", requi
       isLoading={isLoading}
       isError={isError}
       onRetry={fetchVendors}
-      onCreate={() => navigate('/vendors/new')}
-      createLabel="Create Vendor"
+      quickCreateEntity="vendor"
+      onQuickCreated={(newVendor) => {
+        setVendors((prev) => [newVendor, ...prev]);
+        fetchVendors();
+      }}
       allowClear={!required}
     />
   );

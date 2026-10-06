@@ -185,6 +185,7 @@ const ChequeFields: React.FC<PaymentFieldsProps> = ({
           }}
           error={!bankAccountId ? 'Bank account is required' : undefined}
           disabled={isView}
+          quickCreateEntity="bankAccount"
         />
       ) : (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -1181,6 +1182,7 @@ export const ReceiptForm = () => {
                     placeholder="Select Customer..."
                     searchPlaceholder="Search customers by name, code, GSTIN..."
                     clearable={!isView && id === undefined}
+                    quickCreateEntity="customer"
                   />
                   {!businessPartnerId && (
                     <p className="mt-1.5 text-[11px] text-red-500 flex items-center gap-1">

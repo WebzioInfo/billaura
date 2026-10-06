@@ -55,8 +55,11 @@ export const CustomerSelector = ({ value, onChange, error, label = "Customer", r
       isLoading={isLoading}
       isError={isError}
       onRetry={fetchCustomers}
-      onCreate={() => navigate('/crm/customers/new')}
-      createLabel="Create Customer"
+      quickCreateEntity="customer"
+      onQuickCreated={(newCust) => {
+        setCustomers((prev) => [newCust, ...prev]);
+        fetchCustomers();
+      }}
       allowClear={!required}
     />
   );

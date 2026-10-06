@@ -238,9 +238,9 @@ export const PurchaseOrderForm = () => {
     }
   };
 
-  const handleProductChange = (index: number, pId: string) => {
+  const handleProductChange = (index: number, pId: string, directProductObj?: any) => {
     const list = [...items];
-    const p = products.find(prod => prod.id === pId);
+    const p = directProductObj || products.find(prod => prod.id === pId);
     if (p) {
       list[index].productId = pId;
       list[index].description = p.name;
@@ -418,10 +418,9 @@ export const PurchaseOrderForm = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                Vendor Supplier <span className="text-red-500">*</span>
-              </label>
               <SearchableSelect
+                label="Vendor / Supplier"
+                required
                 value={vendorId || ''}
                 onChange={(val) => {
                   setValue('vendorId', val, { shouldValidate: true, shouldDirty: true });
@@ -441,8 +440,11 @@ export const PurchaseOrderForm = () => {
                 isLoading={loadingVendors}
                 isError={errorVendors}
                 onRetry={() => refetchVendors()}
-                onCreate={() => navigate('/vendors/new')}
-                createLabel="Create Vendor"
+                quickCreateEntity="vendor"
+                onQuickCreated={(newVendor) => {
+                  setValue('vendorId', newVendor.id);
+                  refetchVendors();
+                }}
               />
               <FormErrorDisplay error={errors.vendorId} />
             </div>
@@ -598,8 +600,11 @@ export const PurchaseOrderForm = () => {
                           isLoading={loadingProducts}
                           isError={errorProducts}
                           onRetry={() => refetchProducts()}
-                          onCreate={() => navigate('/products/new')}
-                          createLabel="Create Product"
+                          quickCreateEntity="product"
+                          onQuickCreated={(newProd) => {
+                            handleProductChange(index, newProd.id, newProd);
+                            refetchProducts();
+                          }}
                         />
 
                         {(() => {

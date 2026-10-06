@@ -406,8 +406,8 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
     };
   }, [items, invoiceType, selectedPlaceOfSupply, companyProfile]);
 
-  const handleProductSelect = (index: number, productId: string) => {
-    const product = products.find(p => p.id === productId);
+  const handleProductSelect = (index: number, productId: string, directProductObj?: any) => {
+    const product = directProductObj || products.find(p => p.id === productId);
     if (product) {
       setValue(`items.${index}.rate`, product.sellingPrice || 0);
       setValue(`items.${index}.description`, product.description || product.name || '');
@@ -620,7 +620,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
 
               <div className="md:col-span-2">
                 <SearchableSelect
-                  label="Customer *"
+                  label="Customer"
                   value={watch('customerId') || ''}
                   onChange={(val) => {
                     setValue('customerId', val, { shouldValidate: true });
@@ -629,7 +629,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                   isLoading={custLoading}
                   options={customers}
                   mapOption={(c) => ({
-                    label: `${c.name || 'Unnamed'}${c.gstNumber ? ` (${c.gstNumber})` : ''}`,
+                    label: `${c.name || 'Unnamed'}${c.gstNumber || c.gstin ? ` (${c.gstNumber || c.gstin})` : ''}`,
                     value: c.id,
                     description: c.phone || c.email || (c.city ? `${c.city}, ${c.state || ''}` : c.state) || undefined,
                   })}
@@ -637,8 +637,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                   searchPlaceholder="Search customer by name, GSTIN, phone..."
                   error={errors.customerId?.message as string}
                   required
-                  onCreate={() => navigate('/customers/new')}
-                  createLabel="+ Add New Customer"
+                  quickCreateEntity="customer"
                 />
                 <FormErrorDisplay error={errors.customerId} />
               </div>
@@ -735,9 +734,9 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                         <td className="py-3 pr-4">
                           <SearchableSelect
                             value={watch(`items.${index}.productId`) || ''}
-                            onChange={(val) => {
+                            onChange={(val, item) => {
                               setValue(`items.${index}.productId`, val, { shouldValidate: true, shouldDirty: true });
-                              handleProductSelect(index, val);
+                              handleProductSelect(index, val, item);
                             }}
                             options={products}
                             mapOption={(p) => {
@@ -754,8 +753,11 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                             isLoading={prodLoading}
                             triggerClassName="w-full text-sm"
                             clearable
-                            onCreate={() => navigate('/products/new')}
-                            createLabel="Create Product"
+                            quickCreateEntity="product"
+                            onQuickCreated={(newProd) => {
+                              setValue(`items.${index}.productId`, newProd.id, { shouldValidate: true, shouldDirty: true });
+                              handleProductSelect(index, newProd.id, newProd);
+                            }}
                           />
                           {errors.items?.[index]?.productId && <p className="text-red-500 text-xs mt-1">{errors.items[index].productId?.message}</p>}
 

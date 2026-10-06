@@ -13,6 +13,7 @@ import { LedgerSearchSelect } from '@/shared/components/ui/LedgerSearchSelect';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
+import { QuickCreateModal, useQuickCreatePermission } from '@/shared/components/quick-create';
 
 interface FormLineItem {
   keyId: string;
@@ -35,7 +36,10 @@ const GroupedCashBankSelect = ({ value, onChange, error }: GroupedCashBankSelect
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  const hasBankPermission = useQuickCreatePermission('bankAccount');
 
   const { data, isLoading } = useQuery({
     queryKey: ['cash-bank-accounts-all'],
@@ -117,9 +121,26 @@ const GroupedCashBankSelect = ({ value, onChange, error }: GroupedCashBankSelect
 
   return (
     <div className="w-full relative" ref={containerRef} onKeyDown={handleKeyDown}>
-      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 font-sans">
-        Cash / Bank Account Ledger *
-      </label>
+      <div className="flex flex-col gap-1 mb-1.5">
+        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider font-sans">
+          Cash / Bank Account Ledger *
+        </label>
+        {hasBankPermission && (
+          <div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsQuickCreateOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-accent hover:text-accent/90 bg-accent/10 hover:bg-accent/15 border border-accent/25 rounded-lg transition-colors cursor-pointer shadow-2xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Bank Account</span>
+            </button>
+          </div>
+        )}
+      </div>
       
       <div 
         tabIndex={0}
@@ -243,6 +264,19 @@ const GroupedCashBankSelect = ({ value, onChange, error }: GroupedCashBankSelect
         </div>
       )}
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+
+      {isQuickCreateOpen && (
+        <QuickCreateModal
+          isOpen={isQuickCreateOpen}
+          entity="bankAccount"
+          onClose={() => setIsQuickCreateOpen(false)}
+          onSuccess={(created) => {
+            queryClient.invalidateQueries({ queryKey: ['cash-bank-accounts-all'] });
+            onChange(created.id, created);
+            setIsQuickCreateOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -770,6 +804,7 @@ export const UnifiedReceiptForm = () => {
                           setBusinessPartnerId(val);
                           setSelectedPartner(item);
                         }}
+                        quickCreateEntity="vendor"
                         mapOption={(vendor: any) => ({
                           label: vendor.name,
                           value: vendor.id,
@@ -798,6 +833,7 @@ export const UnifiedReceiptForm = () => {
                           setBusinessPartnerId(val);
                           setSelectedPartner(item);
                         }}
+                        quickCreateEntity="customer"
                         mapOption={(cust: any) => ({
                           label: cust.name,
                           value: cust.id,
@@ -815,6 +851,7 @@ export const UnifiedReceiptForm = () => {
                           setBusinessPartnerId(val);
                           setSelectedPartner(item);
                         }}
+                        quickCreateEntity="vendor"
                         mapOption={(vend: any) => ({
                           label: vend.name,
                           value: vend.id,
@@ -849,6 +886,8 @@ export const UnifiedReceiptForm = () => {
                                   placeholder="Select product"
                                   value={item.productId}
                                   onChange={(val, p) => handleProductSelect(index, p)}
+                                  quickCreateEntity="product"
+                                  onQuickCreated={(p) => handleProductSelect(index, p)}
                                   mapOption={(prod: any) => ({
                                     label: prod.name,
                                     value: prod.id,

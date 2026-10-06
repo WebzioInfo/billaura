@@ -23,6 +23,7 @@ export * from './SearchableMasterDropdown';
 export * from './CategoryFormModal';
 export * from './KpiCard';
 export * from './PageHeader';
+export * from '../quick-create';
 
 export * from './StatusBadge';
 export * from './TypeBadge';

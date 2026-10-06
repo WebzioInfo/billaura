@@ -298,17 +298,17 @@ export const BillForm = () => {
   };
 
   // Line item change handlers
-  const handleLineChange = (index: number, field: keyof FormLineItem, value: any) => {
+  const handleLineChange = (index: number, field: keyof FormLineItem, value: any, itemObj?: any) => {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
 
     // Auto populate rate/details when product changes
     if (field === 'productId') {
-      const p = products.find(prod => prod.id === value);
+      const p = itemObj || products.find(prod => prod.id === value);
       if (p) {
         updated[index].description = p.name;
         updated[index].hsnCode = p.hsnCode || 'N/A';
-        updated[index].rate = Number(p.purchasePrice || 0);
+        updated[index].rate = Number(p.purchasePrice || p.rate || 0);
         updated[index].unit = p.unit || 'PCS';
         updated[index].taxPercent = Number(p.taxRate || p.gstRate || 18);
       }
@@ -517,10 +517,9 @@ export const BillForm = () => {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    Vendor <span className="text-red-500">*</span>
-                  </label>
                   <SearchableSelect
+                    label="Vendor / Supplier"
+                    required
                     value={vendorId || ''}
                     onChange={(val) => {
                       setValue('vendorId', val, { shouldValidate: true, shouldDirty: true });
@@ -539,8 +538,11 @@ export const BillForm = () => {
                     isLoading={loadingVendors}
                     isError={errorVendors}
                     onRetry={() => refetchVendors()}
-                    onCreate={() => navigate('/vendors/new')}
-                    createLabel="Create Vendor"
+                    quickCreateEntity="vendor"
+                    onQuickCreated={(newVendor) => {
+                      handleVendorChange(newVendor.id);
+                      refetchVendors();
+                    }}
                   />
                   <FormErrorDisplay error={errors.vendorId} />
                 </div>
@@ -679,8 +681,11 @@ export const BillForm = () => {
                             isLoading={loadingProducts}
                             isError={errorProducts}
                             onRetry={() => refetchProducts()}
-                            onCreate={() => navigate('/products/new')}
-                            createLabel="Create Product"
+                            quickCreateEntity="product"
+                            onQuickCreated={(newProd) => {
+                              handleLineChange(index, 'productId', newProd.id, newProd);
+                              refetchProducts();
+                            }}
                           />
                         </div>
 
@@ -798,6 +803,11 @@ export const BillForm = () => {
                     placeholder="Select Warehouse"
                     searchPlaceholder="Search warehouses..."
                     clearable={false}
+                    quickCreateEntity="warehouse"
+                    onQuickCreated={(newWh) => {
+                      setWarehouseId(newWh.id);
+                      refetchWarehouses();
+                    }}
                   />
                 </div>
 

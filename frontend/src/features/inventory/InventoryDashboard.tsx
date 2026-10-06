@@ -751,8 +751,9 @@ export const InventoryDashboard = () => {
             <form onSubmit={adjustStockForm.handleSubmit(handleAdjustStockSubmit)} className="p-6 space-y-4 text-left">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Select Product *</label>
                   <SearchableSelect
+                    label="Select Product"
+                    required
                     value={adjustStockForm.watch('productId') || ''}
                     onChange={(val) => adjustStockForm.setValue('productId', val, { shouldValidate: true })}
                     options={products}
@@ -765,15 +766,14 @@ export const InventoryDashboard = () => {
                     placeholder="Select product..."
                     searchPlaceholder="Search products by name, SKU..."
                     clearable
+                    quickCreateEntity="product"
                   />
                 </div>
 
                 <div className="col-span-2">
-                  <div className="flex justify-between mb-1.5">
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Warehouse *</label>
-                    <button type="button" onClick={() => setIsWarehouseModalOpen(true)} className="text-xs text-accent font-bold hover:underline cursor-pointer flex items-center gap-1"><Plus className="w-3 h-3" /> New</button>
-                  </div>
                   <SearchableSelect
+                    label="Warehouse"
+                    required
                     value={adjustStockForm.watch('warehouseId') || ''}
                     onChange={(val) => adjustStockForm.setValue('warehouseId', val, { shouldValidate: true })}
                     options={warehouses}
@@ -785,6 +785,7 @@ export const InventoryDashboard = () => {
                     placeholder="Select warehouse..."
                     searchPlaceholder="Search warehouses..."
                     clearable
+                    quickCreateEntity="warehouse"
                   />
                 </div>
 

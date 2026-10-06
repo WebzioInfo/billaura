@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Loader2, Check, ChevronDown, X, Plus, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, Loader2, Check, ChevronDown, X, Plus, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ensureArray } from '../../../core/api/apiClient';
+import { QuickCreateModal } from '../quick-create/QuickCreateModal';
+import { QUICK_CREATE_REGISTRY, QuickCreateEntityType } from '../quick-create/quickCreateRegistry';
+import { useQuickCreatePermission } from '../quick-create/useQuickCreatePermission';
 
 const HighlightMatch = ({ text, match }: { text: string; match: string }) => {
   if (!text) return null;
@@ -27,6 +30,15 @@ const HighlightMatch = ({ text, match }: { text: string; match: string }) => {
   );
 };
 
+export interface SearchableSelectOption {
+  label: string;
+  value: string;
+  description?: string;
+  subLabel?: string;
+  badge?: string;
+  searchKeywords?: (string | undefined | null)[];
+}
+
 export interface SearchableSelectProps {
   label?: string;
   error?: string;
@@ -35,13 +47,7 @@ export interface SearchableSelectProps {
   onChange?: (value: string, item?: any) => void;
   onValueChange?: (value: string, item?: any) => void;
   options?: any[];
-  mapOption?: (item: any) => {
-    label: string;
-    value: string;
-    description?: string;
-    subLabel?: string;
-    searchKeywords?: string[];
-  };
+  mapOption?: (item: any) => SearchableSelectOption;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyMessage?: string;
@@ -60,6 +66,11 @@ export interface SearchableSelectProps {
   createLabel?: string;
   createNewText?: string;
   name?: string;
+  quickCreateEntity?: QuickCreateEntityType;
+  quickCreateDefaultValues?: Record<string, any>;
+  onQuickCreated?: (item: any) => void;
+  showQuickCreateButton?: boolean;
+  quickCreatePosition?: 'above' | 'header-right' | 'none';
 }
 
 export const SearchableSelect = ({
@@ -89,11 +100,19 @@ export const SearchableSelect = ({
   createLabel,
   createNewText = 'Create New',
   name,
+  quickCreateEntity,
+  quickCreateDefaultValues,
+  onQuickCreated,
+  showQuickCreateButton = true,
+  quickCreatePosition = 'above',
 }: SearchableSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [quickCreateInitialValues, setQuickCreateInitialValues] = useState<Record<string, any>>({});
+  const [localCreatedOptions, setLocalCreatedOptions] = useState<any[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -102,18 +121,46 @@ export const SearchableSelect = ({
 
   const isActuallyLoading = isLoading || loading;
   const showClear = (allowClear || clearable) && !!value && !disabled;
-  const handleCreate = onCreate || onCreateNew;
-  const createButtonText = createLabel || createNewText;
 
-  // Normalized safe array of options
+  const hasQuickCreatePermission = useQuickCreatePermission(quickCreateEntity);
+  const quickEntityConfig = quickCreateEntity ? QUICK_CREATE_REGISTRY[quickCreateEntity] : null;
+
+  const openQuickCreate = useCallback((initialName?: string) => {
+    if (!quickCreateEntity) return;
+    setQuickCreateInitialValues({
+      ...(quickCreateDefaultValues || {}),
+      name: initialName !== undefined ? initialName : searchTerm.trim(),
+    });
+    setIsOpen(false);
+    setIsQuickCreateOpen(true);
+  }, [quickCreateEntity, quickCreateDefaultValues, searchTerm]);
+
+  const handleCreate = quickCreateEntity && hasQuickCreatePermission
+    ? () => openQuickCreate(searchTerm.trim())
+    : (onCreate || onCreateNew);
+
+  const createButtonText = quickCreateEntity && quickEntityConfig
+    ? `Create ${quickEntityConfig.title}`
+    : (createLabel || createNewText);
+
+  // Normalized safe array of options including dynamically created ones
   const rawOptions = useMemo(() => {
-    return ensureArray(options);
-  }, [options]);
+    const base = ensureArray(options);
+    if (localCreatedOptions.length === 0) return base;
+    return [...localCreatedOptions, ...base];
+  }, [options, localCreatedOptions]);
 
   const handleSelectValue = useCallback((val: string, item?: any) => {
     if (onChange) onChange(val, item);
     if (onValueChange) onValueChange(val, item);
   }, [onChange, onValueChange]);
+
+  const handleQuickCreateSuccess = useCallback((createdItem: any) => {
+    setLocalCreatedOptions((prev) => [createdItem, ...prev]);
+    const val = String(createdItem.id || createdItem.value || createdItem.code || '');
+    handleSelectValue(val, createdItem);
+    if (onQuickCreated) onQuickCreated(createdItem);
+  }, [handleSelectValue, onQuickCreated]);
 
   // Default option mapper supporting rich meta
   const resolveOption = useCallback((item: any) => {
@@ -293,11 +340,31 @@ export const SearchableSelect = ({
 
   return (
     <div className={`w-full relative ${className}`} ref={containerRef}>
-      {label && (
-        <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 select-none">
-          {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
-        </label>
+      {(label || (quickCreateEntity && hasQuickCreatePermission && showQuickCreateButton && !disabled)) && (
+        <div className={`mb-1.5 ${quickCreatePosition === 'header-right' ? 'flex items-center justify-between' : 'flex flex-col gap-1'}`}>
+          {label && (
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
+              {label}
+              {required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+          )}
+          {quickCreateEntity && hasQuickCreatePermission && showQuickCreateButton && !disabled && quickCreatePosition !== 'none' && (
+            <div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openQuickCreate();
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-accent hover:text-accent/90 bg-accent/10 hover:bg-accent/15 border border-accent/25 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                title={`Create ${quickEntityConfig?.title || 'New'}`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create {quickEntityConfig?.title || 'New'}</span>
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Hidden input for form integration / name attributes if provided */}
@@ -418,8 +485,22 @@ export const SearchableSelect = ({
                 )}
               </div>
             ) : filteredOptions.length === 0 ? (
-              <div className="py-6 text-center text-xs text-muted-foreground px-4">
-                {emptyMessage || `No ${entityName} match "${searchTerm.trim()}".`}
+              <div className="py-6 text-center text-xs text-muted-foreground px-4 flex flex-col items-center gap-2">
+                <span>{emptyMessage || `No ${entityName} match "${searchTerm.trim()}".`}</span>
+                {handleCreate && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsOpen(false);
+                      handleCreate();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg shadow-sm transition-colors cursor-pointer mt-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Create "{searchTerm.trim() || entityName}"</span>
+                  </button>
+                )}
               </div>
             ) : (
               <div
@@ -480,24 +561,6 @@ export const SearchableSelect = ({
               </div>
             )}
           </div>
-
-          {/* Optional Inline Quick Create Bottom Bar */}
-          {handleCreate && rawOptions.length > 0 && (
-            <div className="p-1.5 border-t border-border/80 bg-muted/20 shrink-0">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsOpen(false);
-                  handleCreate();
-                }}
-                className="flex items-center w-full gap-2 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/10 rounded-lg transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                {createButtonText}
-              </button>
-            </div>
-          )}
         </div>,
         document.body
       )}
@@ -509,6 +572,17 @@ export const SearchableSelect = ({
         </div>
       )}
       {helperText && !error && <p className="mt-1.5 text-xs text-muted-foreground">{helperText}</p>}
+
+      {quickCreateEntity && isQuickCreateOpen && (
+        <QuickCreateModal
+          isOpen={isQuickCreateOpen}
+          onClose={() => setIsQuickCreateOpen(false)}
+          entity={quickCreateEntity}
+          initialValues={quickCreateInitialValues}
+          onSuccess={handleQuickCreateSuccess}
+        />
+      )}
     </div>
   );
 };
+

@@ -634,8 +634,9 @@ export const ExpensesDashboard = () => {
               <form onSubmit={form.handleSubmit((d) => saveExpense.mutate(d))} className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Expense Category *</label>
                     <SearchableSelect
+                      label="Expense Category"
+                      required
                       value={form.watch('categoryId') || ''}
                       onChange={(val) => form.setValue('categoryId', val, { shouldValidate: true })}
                       options={categories}
@@ -647,6 +648,7 @@ export const ExpensesDashboard = () => {
                       placeholder="Select Category"
                       searchPlaceholder="Search categories..."
                       clearable
+                      quickCreateEntity="expenseCategory"
                     />
                   </div>
                   <div className="col-span-2">
@@ -753,6 +755,7 @@ export const ExpensesDashboard = () => {
                       }}
                       additionalParams={{ type: form.watch('paymentMethod') === 'CASH' ? 'CASH' : 'BANK' }}
                       error={form.formState.errors.bankAccountId?.message}
+                      quickCreateEntity="bankAccount"
                       mapOption={(b: any) => {
                         const balance = Number(b.currentBalance || b.balance || 0);
                         const balanceStr = balance > 0

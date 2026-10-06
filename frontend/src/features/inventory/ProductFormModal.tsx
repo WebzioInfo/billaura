@@ -542,8 +542,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                           queryKeyPrefix="product_categories"
                           mapOption={(c: any) => ({ label: c.categoryName || c.name, value: c.id })}
                           placeholder="Select Category..."
-                          onCreateNew={() => setIsCategoryModalOpen(true)}
-                          createNewText="Create New Category"
+                          quickCreateEntity="category"
                         />
                       )}
                     />
@@ -561,8 +560,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                             queryKeyPrefix="brands"
                             mapOption={(b: any) => ({ label: b.brandName || b.name, value: b.id })}
                             placeholder="Select Brand..."
-                            onCreateNew={() => setIsBrandModalOpen(true)}
-                            createNewText="Create New Brand"
+                            quickCreateEntity="brand"
                           />
                         )}
                       />
@@ -589,6 +587,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                             }}
                             placeholder="Select Unit..."
                             isLoading={loadingUnits}
+                            quickCreateEntity="unit"
                           />
                         )}
                       />

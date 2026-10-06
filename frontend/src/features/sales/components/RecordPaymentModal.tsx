@@ -261,8 +261,8 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
                   </div>
 
                   <div className="col-span-4">
-                    <label className="block text-xs text-gray-500 mb-1">Account</label>
                     <SearchableSelect
+                      label="Account"
                       value={split.accountId || ''}
                       onChange={val => handleUpdateSplit(split.id, 'accountId', val)}
                       options={accounts || []}
@@ -277,6 +277,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
                       triggerClassName="w-full text-xs"
                       isLoading={loadingAccounts}
                       clearable
+                      quickCreateEntity="bankAccount"
                     />
                   </div>
 
