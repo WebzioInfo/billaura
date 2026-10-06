@@ -6,6 +6,7 @@ import {
   ValidateNested,
   IsNumber,
   IsDateString,
+  ArrayMinSize,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -64,6 +65,14 @@ export class CreateQuotationDto {
   @IsOptional()
   quotationNo?: string;
 
+  @IsString()
+  @IsOptional()
+  documentNo?: string;
+
+  @IsString()
+  @IsOptional()
+  invoiceNo?: string;
+
   @IsDateString()
   @IsNotEmpty()
   date: string;
@@ -113,6 +122,7 @@ export class CreateQuotationDto {
   termsConditions?: string;
 
   @IsArray()
+  @ArrayMinSize(1, { message: 'At least one line item is required' })
   @ValidateNested({ each: true })
   @Type(() => QuotationItemDto)
   items: QuotationItemDto[];

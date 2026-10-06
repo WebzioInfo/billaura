@@ -428,9 +428,14 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       const payload = {
         customerId: data.customerId,
         businessPartnerId: data.customerId,
-        docNo: data.invoiceNo,
-        date: new Date(data.date).toISOString(),
-        dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
+        invoiceNo: data.invoiceNo?.trim() || undefined,
+        documentNo: data.invoiceNo?.trim() || undefined,
+        date: data.date && !isNaN(new Date(data.date).getTime())
+          ? new Date(data.date).toISOString()
+          : new Date().toISOString(),
+        dueDate: data.dueDate && !isNaN(new Date(data.dueDate).getTime())
+          ? new Date(data.dueDate).toISOString()
+          : undefined,
         invoiceType: backendType,
         placeOfSupply: data.placeOfSupply,
         status: submitStatus,
@@ -462,7 +467,11 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       let endpoint = '/sales/invoices';
       if (docType === 'QUOTATION') endpoint = '/sales/quotations';
       
-      const actualPayload = { ...payload, documentType: docType };
+      const actualPayload: any = {
+        ...payload,
+        documentType: docType === 'INVOICE' ? backendType : docType,
+      };
+      if (docType === 'QUOTATION') actualPayload.quotationNo = data.invoiceNo?.trim() || undefined;
       if (docType === 'PROFORMA') actualPayload.invoiceType = 'PROFORMA_INVOICE';
       if (docType === 'BILL_OF_SUPPLY') actualPayload.invoiceType = 'BILL_OF_SUPPLY';
       if (docType === 'EXEMPT_SUPPLY') actualPayload.invoiceType = 'EXEMPT_SUPPLY';
@@ -472,7 +481,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       if (docType === 'DEBIT_NOTE') actualPayload.invoiceType = 'DEBIT_NOTE';
       if (docType === 'CREDIT_NOTE') actualPayload.invoiceType = 'CREDIT_NOTE';
       
-      await apiClient.post(endpoint, actualPayload);
+      const createdDoc: any = await apiClient.post(endpoint, actualPayload);
       if (docType === 'QUOTATION') {
         queryClient.invalidateQueries({ queryKey: ['quotations'] });
       } else {
@@ -485,10 +494,26 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
           ? `${docType} draft saved successfully!`
           : `${docType} created and issued successfully!`
       );
-      navigate(docType === 'QUOTATION' ? '/quotations' : '/invoices');
+      if (docType === 'QUOTATION') {
+        navigate('/quotations');
+      } else if (createdDoc?.id) {
+        navigate(`/invoices/${createdDoc.id}`);
+      } else {
+        navigate('/invoices');
+      }
     } catch (err: any) {
       console.error(err);
-      notification.error(err.response?.data?.message || `Failed to create ${docType.toLowerCase()}`);
+      let errorMsg = `Failed to create ${docType.toLowerCase()}`;
+      if (err.response?.data?.message) {
+        const m = err.response.data.message;
+        errorMsg = Array.isArray(m) ? m.join(', ') : m;
+      } else if (err.response?.data?.errors) {
+        const errs = err.response.data.errors;
+        errorMsg = typeof errs === 'object' ? Object.values(errs).flat().join(', ') : String(errs);
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      notification.error(errorMsg);
     } finally {
       setIsSubmitting(false);
     }

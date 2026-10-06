@@ -9,6 +9,7 @@ module.exports = {
         experimentalDecorators: true,
         emitDecoratorMetadata: true,
         esModuleInterop: true,
+        jsx: ts.JsxEmit.React,
       },
       fileName: sourcePath,
     });

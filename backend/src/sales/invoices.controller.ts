@@ -67,8 +67,8 @@ export class InvoicesController {
   }
 
   @Post()
-  async create(@Body() dto: CreateInvoiceDto) {
-    return this.invoicesService.create(dto);
+  async create(@Body() dto: CreateInvoiceDto, @Req() req: any) {
+    return this.invoicesService.create(dto, undefined, req?.user?.id);
   }
 
   @Post(":id/payments")

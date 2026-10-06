@@ -8,6 +8,7 @@ import {
   IsDateString,
   ArrayMinSize,
   ArrayMaxSize,
+  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
@@ -23,18 +24,22 @@ export class InvoiceItemDto {
 
   @IsNumber()
   @IsNotEmpty()
+  @Min(0.0001, { message: 'Quantity must be greater than zero' })
   qty: number;
 
   @IsNumber()
   @IsNotEmpty()
+  @Min(0, { message: 'Rate cannot be negative' })
   rate: number;
 
   @IsNumber()
   @IsOptional()
+  @Min(0)
   taxPercent?: number;
 
   @IsNumber()
   @IsOptional()
+  @Min(0)
   cessPercent?: number;
 
   @IsString()
@@ -48,8 +53,8 @@ export class CreateInvoiceDto {
   customerId?: string;
 
   @IsString()
-  @IsNotEmpty()
-  businessPartnerId: string;
+  @IsOptional()
+  businessPartnerId?: string;
 
   @IsDateString()
   @IsNotEmpty()
@@ -133,6 +138,10 @@ export class CreateInvoiceDto {
 
   @IsString()
   @IsOptional()
+  docNo?: string;
+
+  @IsString()
+  @IsOptional()
   placeOfSupply?: string;
 
   @IsString()
@@ -185,9 +194,11 @@ export class CreateInvoiceDto {
 
   @IsNumber()
   @IsOptional()
+  @Min(0, { message: 'Amount paid cannot be negative' })
   amountPaid?: number;
 
   @IsArray()
+  @ArrayMinSize(1, { message: 'At least one line item is required' })
   @ValidateNested({ each: true })
   @Type(() => InvoiceItemDto)
   items: InvoiceItemDto[];

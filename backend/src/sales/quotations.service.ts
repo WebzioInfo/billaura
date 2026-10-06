@@ -123,7 +123,7 @@ export class QuotationsService {
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Generate quotation number
-      let quotationNo = dto.quotationNo || dto.docNo;
+      let quotationNo = (dto.quotationNo || dto.documentNo || dto.docNo)?.trim();
       if (!quotationNo) {
         quotationNo = await this.sequenceService.generateUniversalSequence(companyId, 'QUOTATION', {}, tx);
       } else {

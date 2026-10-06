@@ -337,7 +337,8 @@ export const SalesDashboard = () => {
       setIsInvoiceModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     } catch (err: any) {
-      notification.error(err.response?.data?.message || 'Invoice posting failed');
+      const m = err.response?.data?.message;
+      notification.error(Array.isArray(m) ? m.join(', ') : m || 'Invoice posting failed');
     } finally {
       setIsSubmitting(false);
     }

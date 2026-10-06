@@ -44,8 +44,8 @@ export class AccountingEngineService {
       throw new BadRequestException('Journal entry cannot be zero.');
     }
 
-    // 2. Ensure the Financial Year is open (Simplified validation for this engine)
-    const financialYear = await tx.financialYear.findFirst({
+    // 2. Ensure the Financial Year is open (Auto-initialize if not yet explicitly created)
+    let financialYear = await tx.financialYear.findFirst({
       where: {
         companyId: params.companyId,
         startDate: { lte: params.date },
@@ -56,7 +56,31 @@ export class AccountingEngineService {
     });
 
     if (!financialYear) {
-      throw new BadRequestException('No active and open financial year found for the given date.');
+      const d = new Date(params.date);
+      const year = d.getFullYear();
+      const month = d.getMonth(); // 0-indexed: April is 3
+      const startYear = month >= 3 ? year : year - 1;
+      const endYear = startYear + 1;
+      const fyName = `FY-${startYear}-${endYear}`;
+      const startDate = new Date(`${startYear}-04-01T00:00:00.000Z`);
+      const endDate = new Date(`${endYear}-03-31T23:59:59.999Z`);
+
+      financialYear = await tx.financialYear.findFirst({
+        where: { companyId: params.companyId, name: fyName },
+      });
+
+      if (!financialYear) {
+        financialYear = await tx.financialYear.create({
+          data: {
+            companyId: params.companyId,
+            name: fyName,
+            startDate,
+            endDate,
+            isActive: true,
+            isClosed: false,
+          },
+        });
+      }
     }
 
     // 3. Create the Journal Entry

@@ -79,11 +79,15 @@ function publish(kind: NotificationKind, message: any, options: NotificationOpti
   
   if (typeof message === 'string') {
     safeMessage = message.trim() || safeMessage;
+  } else if (Array.isArray(message)) {
+    safeMessage = message.map(m => (typeof m === 'string' ? m : JSON.stringify(m))).join(', ') || safeMessage;
   } else if (message instanceof Error) {
     safeMessage = message.message;
   } else if (typeof message === 'object' && message !== null) {
-    if (message.message && typeof message.message === 'string') {
+    if (typeof message.message === 'string') {
       safeMessage = message.message;
+    } else if (Array.isArray(message.message)) {
+      safeMessage = message.message.map((m: any) => (typeof m === 'string' ? m : JSON.stringify(m))).join(', ');
     } else {
       try {
         safeMessage = JSON.stringify(message);

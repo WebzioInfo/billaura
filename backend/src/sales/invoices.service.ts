@@ -46,7 +46,12 @@ export class InvoicesService {
     // 3. Document / Invoice type filter
     const docType = query.invoiceType || query.documentType;
     if (docType && docType.trim()) {
-      where.invoiceType = docType.trim() as any;
+      const upper = docType.trim().toUpperCase();
+      if (upper === 'INVOICE') {
+        where.invoiceType = { in: ['TAX_INVOICE', 'RETAIL_INVOICE', 'BILL_OF_SUPPLY'] };
+      } else {
+        where.invoiceType = this.normalizeInvoiceType(upper);
+      }
     }
 
     // 4. Tax mode filter
@@ -426,30 +431,51 @@ export class InvoicesService {
     };
   }
 
-  async create(dto: CreateInvoiceDto, txClient?: Prisma.TransactionClient) {
+  async create(dto: CreateInvoiceDto, txClient?: Prisma.TransactionClient, userId?: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
 
-    const partnerId = (dto.businessPartnerId || dto.customerId) as string;
+    const partnerId = (dto.businessPartnerId || dto.customerId)?.trim();
     if (!partnerId) {
       throw new BadRequestException('Customer / Business Partner ID is required');
     }
 
-    // Check customer exists
+    // Validate customer exists, belongs to tenant, and is active
     const customer = await this.prisma.businessPartner.findFirst({
-      where: { id: partnerId, companyId },
+      where: { id: partnerId, companyId, deletedAt: null },
     });
     if (!customer) {
-      throw new NotFoundException(`Customer with ID ${partnerId} not found`);
+      throw new NotFoundException(`Customer with ID "${partnerId}" not found`);
+    }
+    if ((customer as any).status === 'INACTIVE') {
+      throw new BadRequestException(`Customer "${customer.name}" is inactive`);
+    }
+
+    // Validate date format
+    const invoiceDate = new Date(dto.date);
+    if (isNaN(invoiceDate.getTime())) {
+      throw new BadRequestException('Invalid invoice date provided');
+    }
+    let dueDate: Date | null = null;
+    if (dto.dueDate) {
+      dueDate = new Date(dto.dueDate);
+      if (isNaN(dueDate.getTime())) {
+        throw new BadRequestException('Invalid due date provided');
+      }
+    }
+
+    // Validate line items
+    if (!dto.items || !Array.isArray(dto.items) || dto.items.length === 0) {
+      throw new BadRequestException('At least one line item is required');
     }
 
     const execute = async (tx: Prisma.TransactionClient) => {
-      const docType = (dto.documentType || dto.invoiceType || 'TAX_INVOICE') as any;
+      const docType = this.normalizeInvoiceType(dto.invoiceType || dto.documentType);
 
       // 1. Concurrency-Safe Document Sequence Allocation
-      let invoiceNo = dto.documentNo || dto.invoiceNo;
+      let invoiceNo = (dto.invoiceNo || dto.documentNo || dto.docNo)?.trim();
       if (!invoiceNo) {
         invoiceNo = await this.sequenceService.generateUniversalSequence(
           companyId,
@@ -512,24 +538,38 @@ export class InvoicesService {
 
       // 3. Process items and calculate authoritative totals via GSTEngine
       let subTotal = 0;
-      let taxTotal = 0;
       let totalCgst = 0;
       let totalSgst = 0;
       let totalIgst = 0;
       let totalCess = 0;
       const itemsToCreate = [];
 
-      for (const item of dto.items || []) {
+      for (const item of dto.items) {
+        if (!item || typeof item !== 'object') {
+          throw new BadRequestException('Invalid item payload');
+        }
+
+        const qty = Number(item.qty);
+        if (isNaN(qty) || qty <= 0) {
+          throw new BadRequestException(`Item quantity must be greater than zero. Received: ${item.qty}`);
+        }
+
+        const rate = Number(item.rate);
+        if (isNaN(rate) || rate < 0) {
+          throw new BadRequestException(`Item rate cannot be negative. Received: ${item.rate}`);
+        }
+
         let product: any = null;
         if (item.productId) {
           product = await tx.product.findFirst({
-            where: { id: item.productId, companyId },
+            where: { id: item.productId, companyId, deletedAt: null },
           });
+          if (!product) {
+            throw new BadRequestException(`Product with ID "${item.productId}" not found or has been deleted`);
+          }
         }
 
-        const qty = Number(item.qty || 1);
-        const rate = Number(item.rate || 0);
-        const lineTotal = qty * rate;
+        const lineTotal = Number((qty * rate).toFixed(2));
 
         // Resolve item-level tax preference
         let lineTaxPref = item.taxPreference || overrideTaxPref || product?.taxPreference || bpTaxPreference;
@@ -560,7 +600,6 @@ export class InvoicesService {
         });
 
         subTotal += gstResult.taxableAmount;
-        taxTotal += gstResult.totalTax;
         totalCgst += gstResult.cgstAmount;
         totalSgst += gstResult.sgstAmount;
         totalIgst += gstResult.igstAmount;
@@ -581,8 +620,43 @@ export class InvoicesService {
         });
       }
 
+      subTotal = Number(subTotal.toFixed(2));
+      totalCgst = Number(totalCgst.toFixed(2));
+      totalSgst = Number(totalSgst.toFixed(2));
+      totalIgst = Number(totalIgst.toFixed(2));
+      totalCess = Number(totalCess.toFixed(2));
+      const taxTotal = isInterState
+        ? Number((totalIgst + totalCess).toFixed(2))
+        : Number((totalCgst + totalSgst + totalCess).toFixed(2));
       const grandTotal = Number((subTotal + taxTotal).toFixed(2));
-      const amountPaid = Number(dto.amountPaid || (isReceipt ? grandTotal : 0));
+
+      // Validate payment amount
+      let amountPaid = Number(dto.amountPaid || (isReceipt ? grandTotal : 0));
+      if (isNaN(amountPaid) || amountPaid < 0) {
+        throw new BadRequestException('Amount paid cannot be negative');
+      }
+      if (amountPaid > grandTotal + 0.01) {
+        throw new BadRequestException(`Amount paid (₹${amountPaid.toFixed(2)}) cannot exceed grand total (₹${grandTotal.toFixed(2)})`);
+      }
+      amountPaid = Math.min(grandTotal, Number(amountPaid.toFixed(2)));
+
+      // Authoritative status calculation
+      let invoiceStatus = (dto.status as any);
+      if (!invoiceStatus) {
+        if (isReceipt || (amountPaid >= grandTotal && grandTotal > 0)) {
+          invoiceStatus = 'PAID';
+        } else if (amountPaid > 0) {
+          invoiceStatus = 'PARTIAL';
+        } else if (isNonPosting) {
+          invoiceStatus = 'DRAFT';
+        } else {
+          invoiceStatus = 'SENT';
+        }
+      } else if (invoiceStatus === 'SENT' && amountPaid >= grandTotal && grandTotal > 0) {
+        invoiceStatus = 'PAID';
+      } else if (invoiceStatus === 'SENT' && amountPaid > 0) {
+        invoiceStatus = 'PARTIAL';
+      }
 
       // 4. Commission evaluation if requested
       let commissionRecordId: string | null = null;
@@ -610,18 +684,18 @@ export class InvoicesService {
           invoiceNo: invoiceNo || '',
           invoiceType: docType,
           placeOfSupply: dto.placeOfSupply || company?.state || '',
-          date: new Date(dto.date),
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-          status: (dto.status as any) || (isReceipt ? 'PAID' : isNonPosting ? 'DRAFT' : 'SENT'),
-          subTotal: Number(subTotal.toFixed(2)),
-          taxTotal: Number(taxTotal.toFixed(2)),
+          date: invoiceDate,
+          dueDate: dueDate,
+          status: invoiceStatus,
+          subTotal,
+          taxTotal,
           grandTotal,
           amountPaid,
-          cgstAmount: Number(totalCgst.toFixed(2)),
-          sgstAmount: Number(totalSgst.toFixed(2)),
-          igstAmount: Number(totalIgst.toFixed(2)),
-          cessAmount: Number(totalCess.toFixed(2)),
-          totalTaxAmount: Number(taxTotal.toFixed(2)),
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
+          cessAmount: totalCess,
+          totalTaxAmount: taxTotal,
           gstBreakup: {
             notes: dto.notes,
             termsConditions: dto.termsConditions,
@@ -650,7 +724,9 @@ export class InvoicesService {
 
       // 6. Execute Accounting Policy per Document Type
       if (!isNonPosting) {
-        const netReceivableDelta = isCreditNote ? -grandTotal : isReceipt ? grandTotal - amountPaid : grandTotal;
+        const netReceivableDelta = isCreditNote
+          ? -grandTotal
+          : Number((grandTotal - amountPaid).toFixed(2));
 
         // A. Update customer outstanding balance
         if (customer && netReceivableDelta !== 0) {
@@ -669,12 +745,12 @@ export class InvoicesService {
           data: {
             companyId,
             businessPartnerId: partnerId,
-            date: new Date(dto.date),
+            date: invoiceDate,
             type: docType,
             reference: invoiceNo || '',
             debit: isCreditNote ? 0 : grandTotal,
             credit: isCreditNote ? grandTotal : amountPaid,
-            balance: Number(customer?.receivableBalance || 0) + netReceivableDelta,
+            balance: Number((Number(customer?.receivableBalance || 0) + netReceivableDelta).toFixed(2)),
           },
         });
 
@@ -686,54 +762,62 @@ export class InvoicesService {
               continue; // Services and non-inventory items strictly bypass stock ledgers & warehouse updates
             }
 
-            const defaultWh = await tx.warehouse.findFirst({
+            let wh = await tx.warehouse.findFirst({
               where: { companyId, isDefault: true },
             });
-
-            if (defaultWh) {
-              const stock = await tx.stock.findFirst({
-                where: { companyId, productId: item.productId, warehouseId: defaultWh.id },
+            if (!wh) {
+              wh = await tx.warehouse.findFirst({
+                where: { companyId },
               });
+            }
+            if (!wh) {
+              wh = await tx.warehouse.create({
+                data: { companyId, name: 'Main Warehouse', isDefault: true },
+              });
+            }
 
-              const currentQty = stock ? Number(stock.quantity) : 0;
-              const qtyDelta = isCreditNote ? item.qty : -item.qty;
-              const newQty = currentQty + qtyDelta;
+            const stock = await tx.stock.findFirst({
+              where: { companyId, productId: item.productId, warehouseId: wh.id },
+            });
 
-              if (stock) {
-                await tx.stock.update({
-                  where: { id: stock.id },
-                  data: { quantity: newQty, availableQuantity: newQty },
-                });
-              } else {
-                await tx.stock.create({
-                  data: {
-                    companyId,
-                    productId: item.productId,
-                    warehouseId: defaultWh.id,
-                    quantity: newQty,
-                    availableQuantity: newQty,
-                  },
-                });
-              }
+            const currentQty = stock ? Number(stock.quantity) : 0;
+            const qtyDelta = isCreditNote ? item.qty : -item.qty;
+            const newQty = currentQty + qtyDelta;
 
-              await tx.stockLedger.create({
+            if (stock) {
+              await tx.stock.update({
+                where: { id: stock.id },
+                data: { quantity: newQty, availableQuantity: newQty },
+              });
+            } else {
+              await tx.stock.create({
                 data: {
                   companyId,
                   productId: item.productId,
-                  type: isCreditNote ? 'RETURN' : 'SALE',
-                  quantityBefore: currentQty,
-                  quantityChange: qtyDelta,
-                  quantityAfter: newQty,
-                  notes: `Issued via ${docType} ${invoiceNo}`,
-                  referenceId: invoice.id,
-                  referenceType: 'INVOICE',
+                  warehouseId: wh.id,
+                  quantity: newQty,
+                  availableQuantity: newQty,
                 },
               });
             }
+
+            await tx.stockLedger.create({
+              data: {
+                companyId,
+                productId: item.productId,
+                type: isCreditNote ? 'RETURN' : 'SALE',
+                quantityBefore: currentQty,
+                quantityChange: qtyDelta,
+                quantityAfter: newQty,
+                notes: `Issued via ${docType} ${invoiceNo}`,
+                referenceId: invoice.id,
+                referenceType: 'INVOICE',
+              },
+            });
           }
         }
 
-        // D. Post Journal Entry to General Ledger
+        // D. Post Balanced Journal Entry to General Ledger
         let arAccount = await tx.account.findFirst({
           where: { companyId, name: 'Accounts Receivable' },
         });
@@ -774,6 +858,7 @@ export class InvoicesService {
         const cgstAccount = isInterState ? null : await getTaxAccount('Output CGST');
         const sgstAccount = isInterState ? null : await getTaxAccount('Output SGST');
         const igstAccount = isInterState ? await getTaxAccount('Output IGST') : null;
+        const cessAccount = totalCess > 0 ? await getTaxAccount('Output Cess') : null;
 
         const journalLines = isCreditNote
           ? [
@@ -804,11 +889,102 @@ export class InvoicesService {
             credit: isCreditNote ? 0 : totalIgst,
           });
         }
+        if (totalCess > 0 && cessAccount) {
+          journalLines.push({
+            accountId: cessAccount.id,
+            debit: isCreditNote ? totalCess : 0,
+            credit: isCreditNote ? 0 : totalCess,
+          });
+        }
+
+        // If paid immediately, record payment receipt and cash/bank accounting entry
+        if (amountPaid > 0 && !isCreditNote) {
+          const isCash = (dto.paymentMode || '').toUpperCase() === 'CASH';
+          const defaultPaymentAccName = isCash ? 'Cash' : 'Bank Accounts';
+          let paymentAccount = await tx.account.findFirst({
+            where: { companyId, name: defaultPaymentAccName },
+          });
+          if (!paymentAccount) {
+            paymentAccount = await tx.account.create({
+              data: {
+                companyId,
+                name: defaultPaymentAccName,
+                category: 'ASSET',
+                subCategory: 'CURRENT_ASSET',
+                balance: 0,
+              },
+            });
+          }
+
+          journalLines.push({
+            accountId: paymentAccount.id,
+            debit: amountPaid,
+            credit: 0,
+          });
+          journalLines.push({
+            accountId: arAccount.id,
+            debit: 0,
+            credit: amountPaid,
+          });
+
+          // Create Receipt and Allocation record for payment history traceability
+          const receiptNo = await this.sequenceService.generateUniversalSequence(
+            companyId,
+            'PAYMENT_RECEIPT',
+            {},
+            tx
+          );
+
+          let validUserId = userId;
+          if (!validUserId) {
+            const companyUser = await tx.companyUser.findFirst({ where: { companyId } });
+            validUserId = companyUser?.userId;
+          }
+          if (!validUserId) {
+            const fallbackUser = await tx.user.findFirst();
+            validUserId = fallbackUser?.id;
+          }
+
+          if (validUserId) {
+            await tx.receipt.create({
+              data: {
+                companyId,
+                receiptNo,
+                date: invoiceDate,
+                businessPartnerId: partnerId,
+                amount: amountPaid,
+                currency: 'INR',
+                exchangeRate: 1.0,
+                receivedById: validUserId,
+                status: 'COMPLETED',
+                payments: {
+                  create: [
+                    {
+                      account: { connect: { id: paymentAccount.id } },
+                      paymentMethod: (dto.paymentMode as any) || (isCash ? 'CASH' : 'BANK_TRANSFER'),
+                      amount: amountPaid,
+                      referenceNo: dto.paymentReference || null,
+                      notes: `Payment for invoice ${invoiceNo}`,
+                    },
+                  ],
+                },
+                allocations: {
+                  create: [
+                    {
+                      invoiceId: invoice.id,
+                      amount: amountPaid,
+                    },
+                  ],
+                },
+              },
+            });
+          }
+        }
 
         await this.accountingEngine.postTransaction(
           {
             companyId,
-            date: new Date(dto.date),
+            date: invoiceDate,
             reference: invoiceNo,
             description: `Automatic ${docType} posting ${invoiceNo}`,
             lines: journalLines,
@@ -942,5 +1118,52 @@ export class InvoicesService {
 
     const nextNum = sequence.currentNumber + 1;
     return { nextNumber: `${prefix}-${String(nextNum).padStart(sequence.padding || 5, '0')}` };
+  }
+
+  normalizeInvoiceType(raw?: string): Prisma.InvoiceType {
+    if (!raw) return 'TAX_INVOICE';
+    const norm = raw.trim().toUpperCase();
+    switch (norm) {
+      case 'INVOICE':
+      case 'TAX_INVOICE':
+        return 'TAX_INVOICE';
+      case 'RETAIL_INVOICE':
+      case 'B2C':
+        return 'RETAIL_INVOICE';
+      case 'BILL_OF_SUPPLY':
+      case 'NO_TAX':
+      case 'EXEMPT_SUPPLY':
+      case 'NIL_RATED_INVOICE':
+      case 'EXPORT_INVOICE':
+      case 'SEZ_INVOICE':
+        return 'BILL_OF_SUPPLY';
+      case 'PROFORMA':
+      case 'PROFORMA_INVOICE':
+        return 'PROFORMA_INVOICE';
+      case 'CREDIT_NOTE':
+        return 'CREDIT_NOTE';
+      case 'DEBIT_NOTE':
+        return 'DEBIT_NOTE';
+      case 'DELIVERY_CHALLAN':
+      case 'DELIVERY_NOTE':
+        return 'DELIVERY_CHALLAN';
+      case 'QUOTATION':
+        return 'QUOTATION';
+      case 'ESTIMATE':
+        return 'ESTIMATE';
+      case 'PURCHASE_INVOICE':
+        return 'PURCHASE_INVOICE';
+      case 'PURCHASE_RETURN':
+        return 'PURCHASE_RETURN';
+      case 'FEE_RECEIPT':
+        return 'FEE_RECEIPT';
+      case 'PAYMENT_RECEIPT':
+      case 'RECEIPT':
+        return 'PAYMENT_RECEIPT';
+      case 'OTHER_RECEIPT':
+        return 'OTHER_RECEIPT';
+      default:
+        return 'TAX_INVOICE';
+    }
   }
 }
