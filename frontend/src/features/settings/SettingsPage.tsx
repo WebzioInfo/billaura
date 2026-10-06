@@ -333,7 +333,7 @@ export const SettingsPage = () => {
           </button>
         </div>
 
-      <div className="mt-6">
+      <div className="mt-6 flex-1 min-h-0 overflow-y-auto pb-8">
         {activeTab === 'branches' && <BranchesList />}
         {activeTab === 'roles' && <RolesList />}
         {activeTab === 'numbering' && <DocumentNumbering />}

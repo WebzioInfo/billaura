@@ -19,7 +19,7 @@ export const FinancialReports = () => {
   ];
 
   return (
-    <PageLayout>
+    <PageLayout scrollable>
       <PageHeader title="Financial Reports" count={reports.length} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

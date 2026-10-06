@@ -286,7 +286,7 @@ export const TaxesDashboard = () => {
           <Loader2 className="w-5 h-5 animate-spin" /> Fetching Tax Records...
         </div>
       ) : activeTab === 'summary' ? (
-        <div className="space-y-6">
+        <div className="space-y-6 flex-1 min-h-0 overflow-y-auto pb-8">
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-surface p-6 rounded-2xl border border-border flex items-center justify-between shadow-premium hover-premium">
@@ -358,7 +358,7 @@ export const TaxesDashboard = () => {
         </div>
       ) : (
         // GSTR-1 / GSTR-2 Grids
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto pb-8">
           {/* Simple query filter */}
           <div className="flex gap-4">
             <div className="relative flex-1 max-w-md">

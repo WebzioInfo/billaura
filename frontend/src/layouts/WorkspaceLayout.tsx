@@ -165,8 +165,8 @@ export function WorkspaceLayout() {
           </div>
         )}
 
-        {/* Main Content Area */}
-        <main className="flex-1 min-h-0 overflow-hidden relative bg-background flex flex-col">
+        {/* Main Content Area - Primary vertical scroll container for document & form pages */}
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative bg-background flex flex-col">
           <Outlet />
         </main>
       </div>

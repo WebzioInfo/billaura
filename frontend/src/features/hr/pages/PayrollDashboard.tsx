@@ -480,7 +480,8 @@ export const PayrollDashboard: React.FC = () => {
           No records found.
         </div>
       ) : (
-        <Table>
+        <div className="flex-1 min-h-0 overflow-auto border border-neutral-200 dark:border-neutral-800 rounded-xl bg-white dark:bg-neutral-900">
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-8">
@@ -588,6 +589,7 @@ export const PayrollDashboard: React.FC = () => {
             })}
           </TableBody>
         </Table>
+        </div>
       )}
 
       {/* Row Context Menu rendered via PortalDropdown into document.body */}

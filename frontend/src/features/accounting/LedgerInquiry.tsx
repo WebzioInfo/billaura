@@ -278,7 +278,7 @@ export function LedgerInquiry() {
   }, [inquiryData, sortField, sortAsc]);
 
   return (
-    <div className="p-3 w-full bg-background text-foreground print:p-0 flex flex-col space-y-2 select-none h-[calc(100vh-32px)] overflow-hidden">
+    <div className="p-3 w-full bg-background text-foreground print:p-0 flex flex-col space-y-2 select-none h-full flex-1 min-h-0 overflow-hidden">
       
       {/* Search Header Row */}
       <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-1.5 print:hidden shrink-0">

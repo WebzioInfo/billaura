@@ -23,7 +23,7 @@ export const PageContainer = ({ className, maxWidth = '7xl', children, ...props 
   return (
     <div
       className={cn(
-        "mx-auto w-full px-4 pt-3 pb-4 text-left text-foreground bg-background min-h-screen space-y-3.5",
+        "mx-auto w-full px-4 pt-3 pb-4 text-left text-foreground bg-background min-h-full space-y-3.5",
         maxWidthClasses[maxWidth],
         className
       )}

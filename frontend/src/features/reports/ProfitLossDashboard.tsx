@@ -114,7 +114,7 @@ export default function ProfitLossDashboard() {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
   return (
-    <PageLayout>
+    <PageLayout scrollable>
       <PageHeader
         title="Profit & Loss"
         secondaryActions={

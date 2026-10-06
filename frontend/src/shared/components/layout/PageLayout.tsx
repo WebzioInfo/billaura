@@ -7,15 +7,17 @@ export interface PageLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
   subNav?: React.ReactNode;
   className?: string;
   noGutter?: boolean;
+  scrollable?: boolean;
 }
 
 export const PageLayout = React.forwardRef<HTMLDivElement, PageLayoutProps>(
-  ({ children, header, subNav, className = '', noGutter = false, ...props }, ref) => {
+  ({ children, header, subNav, className = '', noGutter = false, scrollable = false, ...props }, ref) => {
     return (
       <div
         ref={ref}
         className={cn(
-          'w-full h-full flex-1 min-h-0 flex flex-col overflow-hidden bg-background text-foreground',
+          'w-full flex-1 min-h-0 flex flex-col bg-background text-foreground',
+          scrollable ? 'min-h-full overflow-y-auto' : 'h-full overflow-hidden',
           !noGutter && 'px-[var(--page-gutter)] pt-[var(--page-gutter)] pb-4',
           className
         )}
