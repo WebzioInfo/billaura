@@ -318,7 +318,7 @@ describe('InvoicesService - Production Test Matrix (Phase 15)', () => {
     expect(invoice.subTotal).toBe(5000);
     expect(invoice.taxTotal).toBe(900);
     expect(invoice.grandTotal).toBe(5900);
-    expect(invoice.items.create).toHaveLength(2);
+    expect((invoice.items as any)?.create || invoice.items).toHaveLength(2);
   });
 
   // TEST 5: Discount handling

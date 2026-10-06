@@ -5,7 +5,7 @@ import { CreateInvoiceDto, InvoiceQueryDto } from './dto/invoice.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
 import { GSTEngine } from '../common/utils/gst-engine.util';
-import type { Prisma } from '@prisma/client';
+import { InvoiceType, type Prisma } from '@prisma/client';
 import { AccountingEngineService } from '../accounting/accounting-engine.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import { SequenceService } from '../shared/sequence/sequence.service';
@@ -1120,7 +1120,7 @@ export class InvoicesService {
     return { nextNumber: `${prefix}-${String(nextNum).padStart(sequence.padding || 5, '0')}` };
   }
 
-  normalizeInvoiceType(raw?: string): Prisma.InvoiceType {
+  normalizeInvoiceType(raw?: string): InvoiceType {
     if (!raw) return 'TAX_INVOICE';
     const norm = raw.trim().toUpperCase();
     switch (norm) {
