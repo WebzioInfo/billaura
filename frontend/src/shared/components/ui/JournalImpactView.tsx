@@ -4,21 +4,30 @@ import apiClient from '@/core/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './Table';
 import { FileText, ArrowRight } from 'lucide-react';
 
+import { formatDate, formatCurrency } from '@/shared/utils/formatters';
+
 interface JournalImpactViewProps {
-  reference: string;
+  reference?: string;
+  initialEntries?: any[];
 }
 
-export const JournalImpactView: React.FC<JournalImpactViewProps> = ({ reference }) => {
-  const { data: entries, isLoading } = useQuery({
+export const JournalImpactView: React.FC<JournalImpactViewProps> = ({ reference, initialEntries }) => {
+  const hasInitial = Array.isArray(initialEntries) && initialEntries.length > 0;
+
+  const { data: fetchedEntries, isLoading } = useQuery({
     queryKey: ['journal-entries-reference', reference],
     queryFn: async () => {
-      const res = await apiClient.get(`/journal-entries?search=${reference}`);
-      return res.data?.data || res.data || [];
+      if (!reference) return [];
+      const res = await apiClient.get(`/journal-entries?search=${encodeURIComponent(reference)}`);
+      if (Array.isArray(res)) return res;
+      return res.data?.data || res.data || res.items || [];
     },
-    enabled: !!reference,
+    enabled: !hasInitial && !!reference,
   });
 
-  if (isLoading) {
+  const entries = hasInitial ? initialEntries : fetchedEntries;
+
+  if (isLoading && !hasInitial) {
     return <div className="p-4 text-xs text-muted-foreground animate-pulse">Loading accounting impact...</div>;
   }
 
@@ -32,10 +41,6 @@ export const JournalImpactView: React.FC<JournalImpactViewProps> = ({ reference 
     );
   }
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
-  };
-
   return (
     <div className="space-y-4">
       {entries.map((entry: any) => (
@@ -46,7 +51,7 @@ export const JournalImpactView: React.FC<JournalImpactViewProps> = ({ reference 
               <p className="text-[10px] text-muted-foreground mt-0.5">{entry.description}</p>
             </div>
             <p className="text-[10px] tabular-nums font-medium bg-background px-2 py-1 rounded border border-border shadow-xs">
-              {new Date(entry.date).toLocaleDateString()}
+              {formatDate(entry.date)}
             </p>
           </div>
           <Table>

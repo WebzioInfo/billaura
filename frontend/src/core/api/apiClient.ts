@@ -202,7 +202,11 @@ export class ApiClient {
               configurable: true
             });
           }
-        } else if (Array.isArray(payload.items)) {
+        } else if (
+          Array.isArray(payload.items) &&
+          !('id' in payload) &&
+          ('total' in payload || 'totalItems' in payload || 'totalPages' in payload || 'page' in payload)
+        ) {
           if (!('data' in payload)) {
             Object.defineProperty(payload, 'data', {
               get() { return this.items; },

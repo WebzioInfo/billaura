@@ -352,11 +352,24 @@ export class InvoicesService {
     }
 
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id },
+      where: {
+        companyId,
+        OR: [{ id }, { invoiceNo: id }],
+      },
       include: {
+        company: true,
         businessPartner: true,
-        items: { include: { product: true } },
-        receiptAllocations: { include: { receipt: true } }
+        items: {
+          include: { product: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        receiptAllocations: {
+          include: { receipt: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        taxTreatment: true,
+        numberingSeries: true,
+        salesReturns: true,
       },
     });
 
@@ -364,7 +377,53 @@ export class InvoicesService {
       throw new NotFoundException(`Invoice with ID ${id} not found`);
     }
 
-    return invoice;
+    // Authoritative double-entry ledger journals for this invoice
+    const journalEntries = await this.prisma.journalEntry.findMany({
+      where: {
+        companyId,
+        OR: [
+          { reference: invoice.invoiceNo },
+          { description: { contains: invoice.invoiceNo } },
+        ],
+      },
+      include: {
+        lines: {
+          include: { account: true },
+        },
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    // Audit trail records for this invoice
+    const auditLogs = await this.prisma.auditLog.findMany({
+      where: {
+        companyId,
+        OR: [
+          { tableName: 'invoices' },
+          { tableName: 'INVOICES' },
+          { tableName: 'Invoice' },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+
+    const relatedAuditLogs = auditLogs.filter((log: any) => {
+      const newV = log.newValues as any;
+      const oldV = log.oldValues as any;
+      return (
+        newV?.id === invoice.id ||
+        newV?.invoiceNo === invoice.invoiceNo ||
+        oldV?.id === invoice.id ||
+        oldV?.invoiceNo === invoice.invoiceNo
+      );
+    });
+
+    return {
+      ...invoice,
+      journalEntries,
+      auditLogs: relatedAuditLogs,
+    };
   }
 
   async create(dto: CreateInvoiceDto, txClient?: Prisma.TransactionClient) {
