@@ -9,7 +9,7 @@ interface PageContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   maxWidth?: 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl' | 'full';
 }
 
-export const PageContainer = ({ className, maxWidth = '7xl', children, ...props }: PageContainerProps) => {
+export const PageContainer = ({ className, maxWidth = 'full', children, ...props }: PageContainerProps) => {
   const maxWidthClasses = {
     xl: 'max-w-screen-xl',
     '2xl': 'max-w-screen-2xl',
@@ -17,13 +17,13 @@ export const PageContainer = ({ className, maxWidth = '7xl', children, ...props 
     '4xl': 'max-w-4xl',
     '5xl': 'max-w-5xl',
     '6xl': 'max-w-6xl',
-    '7xl': 'max-w-[1600px]', // standard 1600px width
-    full: 'max-w-full',
+    '7xl': 'max-w-[1680px]',
+    full: 'max-w-none',
   };
   return (
     <div
       className={cn(
-        "mx-auto w-full px-4 pt-3 pb-4 text-left text-foreground bg-background min-h-full space-y-3.5",
+        "w-full px-[var(--page-gutter)] pt-[var(--page-gutter)] pb-6 text-left text-foreground bg-background min-h-full space-y-4",
         maxWidthClasses[maxWidth],
         className
       )}

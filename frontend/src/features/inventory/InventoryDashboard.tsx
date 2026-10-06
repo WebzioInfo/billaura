@@ -13,6 +13,8 @@ import ProductFormModal from './ProductFormModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../shared/hooks/useApiList';
 import { SearchableSelect } from '../../shared/components/ui';
+import { PageContainer } from '@/shared/components/ui/LayoutComponents';
+import { cn } from '@/lib/utils';
 
 // --- SCHEMAS ---
 const categorySchema = z.object({
@@ -346,23 +348,23 @@ export const InventoryDashboard = () => {
   };
 
   return (
-    <div className="space-y-6 text-left">
+    <PageContainer maxWidth="full" className="w-full space-y-5 text-left">
       {/* Header Row */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/40">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Package className="w-6 h-6 text-accent" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+            <Package className="w-5 h-5 sm:w-6 sm:h-6 text-accent shrink-0" />
             Products & Inventory Catalog
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Manage goods, track stock levels across multiple warehouses, perform manual stock audits, and check reorder levels.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 shrink-0">
           {activeTab === 'stocks' && (
             <button
               onClick={() => { adjustStockForm.reset(); setIsAdjustModalOpen(true); }}
-              className="bg-accent text-white hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              className="bg-accent text-white hover:bg-accent/90 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
               Adjust Inventory Stock
@@ -371,7 +373,7 @@ export const InventoryDashboard = () => {
           {activeTab !== 'stocks' && (
             <button
               onClick={handleOpenAddModal}
-              className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              className="bg-accent text-white hover:bg-accent/90 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               {activeTab === 'products' ? 'Register Product' 
@@ -384,59 +386,40 @@ export const InventoryDashboard = () => {
       </div>
 
       {/* Tabs Row */}
-      <div className="flex border-b border-border">
-        <button
-          onClick={() => { setActiveTab('products'); setSearchQuery(''); }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'products' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Product Catalog
-        </button>
-        <button
-          onClick={() => { setActiveTab('stocks'); setSearchQuery(''); }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'stocks' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Warehouse Stock Levels
-        </button>
-        <button
-          onClick={() => { setActiveTab('warehouses'); setSearchQuery(''); }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'warehouses' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Warehouses
-        </button>
-        <button
-          onClick={() => { setActiveTab('categories'); setSearchQuery(''); }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'categories' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Category Types
-        </button>
-        <button
-          onClick={() => { setActiveTab('brands'); setSearchQuery(''); }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'brands' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Product Brands
-        </button>
+      <div className="flex items-center border-b border-border gap-2 sm:gap-6 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'products', label: 'Product Catalog' },
+          { id: 'stocks', label: 'Warehouse Stock Levels' },
+          { id: 'warehouses', label: 'Warehouses' },
+          { id: 'categories', label: 'Category Types' },
+          { id: 'brands', label: 'Product Brands' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => { setActiveTab(tab.id as any); setSearchQuery(''); }}
+            className={`pb-3 pt-1 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'border-accent text-accent'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Search Input Filter */}
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-border w-full max-w-md focus-within:border-accent transition-colors">
-        <Search className="w-4 h-4 text-muted-foreground" />
-        <input 
-          type="text" 
-          placeholder={`Search ${activeTab}...`} 
-          className="bg-transparent border-none outline-none w-full text-sm text-foreground placeholder:text-muted-foreground"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+      <div className="w-full sm:w-[380px] max-w-full">
+        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-surface border border-border focus-within:border-accent transition-colors shadow-2xs">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input 
+            type="text" 
+            placeholder={`Search ${activeTab === 'stocks' ? 'stock levels' : activeTab}...`} 
+            className="bg-transparent border-none outline-hidden w-full text-xs sm:text-sm text-foreground placeholder:text-muted-foreground"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Main Grid Panels */}
@@ -513,23 +496,42 @@ export const InventoryDashboard = () => {
             <p className="text-sm text-muted-foreground">Perform a stock adjustment to add quantities.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {stocks.filter(s => s.product?.name.toLowerCase().includes(searchQuery.toLowerCase())).map((st) => (
-              <div key={st.id} className="glass-panel p-6 rounded-2xl border border-border hover-premium flex flex-col justify-between">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-base text-foreground">{st.product?.name}</h3>
-                      <p className="text-xs text-muted-foreground">Warehouse: <span className="font-semibold text-foreground">{st.warehouse?.name}</span></p>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 w-full">
+            {stocks.filter(s => s.product?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.warehouse?.name?.toLowerCase().includes(searchQuery.toLowerCase())).map((st) => (
+              <div 
+                key={st.id} 
+                className="bg-surface border border-border rounded-xl p-4 sm:p-5 flex flex-col justify-between shadow-2xs hover:border-accent/40 transition-all min-h-[145px]"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-sm sm:text-base text-foreground truncate" title={st.product?.name}>
+                        {st.product?.name || 'Unnamed Product'}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        Warehouse: <span className="font-medium text-foreground">{st.warehouse?.name || 'General'}</span>
+                      </p>
                     </div>
-                    <span className="bg-primary/10 text-foreground px-2.5 py-0.5 rounded-full text-xs font-semibold">
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-accent/10 text-accent font-mono shrink-0">
                       Qty: {Number(st.quantity)}
                     </span>
                   </div>
 
-                  <div className="space-y-1.5 text-xs text-muted-foreground border-t border-border pt-4">
-                    <p>Average Cost: <span className="text-foreground font-semibold">{formatCurrency(Number(st.averageCost || 0))}</span></p>
-                    <p>Location: <span className="text-foreground">{st.warehouse?.location || 'N/A'}</span></p>
+                  <div className="border-t border-border/60 my-3" />
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Average Cost</span>
+                      <span className="font-semibold text-foreground font-mono">
+                        {formatCurrency(Number(st.averageCost || 0))}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Location</span>
+                      <span className="font-medium text-foreground truncate block" title={st.warehouse?.location || '—'}>
+                        {st.warehouse?.location || '—'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -538,38 +540,39 @@ export const InventoryDashboard = () => {
         )
       ) : activeTab === 'warehouses' ? (
         warehouses.length === 0 ? (
-          <div className="glass-panel p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4">
-            <h3 className="font-semibold text-lg">No Warehouses Registered</h3>
-            <button onClick={handleOpenAddModal} className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-xs font-semibold">
+          <div className="bg-surface p-12 rounded-2xl border border-border text-center max-w-xl mx-auto space-y-4 shadow-xs">
+            <h3 className="font-semibold text-lg text-foreground">No Warehouses Registered</h3>
+            <button onClick={handleOpenAddModal} className="bg-accent text-white hover:bg-accent/90 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer">
               Create Warehouse
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 w-full">
             {warehouses.filter(w => w.name.toLowerCase().includes(searchQuery.toLowerCase())).map((wh) => (
-              <div key={wh.id} className={`glass-panel p-6 rounded-2xl border flex flex-col justify-between ${
-                wh.isDefault ? 'border-accent ring-1 ring-accent' : 'border-border'
-              }`}>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
+              <div key={wh.id} className={cn(
+                "bg-surface border rounded-xl p-4 sm:p-5 flex flex-col justify-between shadow-2xs hover:border-accent/40 transition-all min-h-[140px]",
+                wh.isDefault ? "border-accent ring-1 ring-accent/30" : "border-border"
+              )}>
+                <div>
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-sm sm:text-base text-foreground flex items-center gap-2 truncate">
                         {wh.name}
                         {wh.isDefault && (
-                          <span className="bg-accent text-white px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase">Default</span>
+                          <span className="bg-accent/15 text-accent border border-accent/20 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider shrink-0">Default</span>
                         )}
                       </h3>
-                      <p className="text-xs text-muted-foreground">Location: {wh.location || 'Not set'}</p>
+                      <p className="text-xs text-muted-foreground mt-1 truncate">Location: <span className="text-foreground">{wh.location || 'Not set'}</span></p>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 border-t border-border mt-6 pt-4">
-                  <button onClick={() => handleOpenEditModal(wh)} className="p-2 text-muted-foreground hover:text-foreground hover:bg-background rounded-lg transition-colors cursor-pointer">
-                    <Edit2 className="w-4 h-4" />
+                <div className="flex items-center justify-end gap-1.5 border-t border-border/60 mt-4 pt-3">
+                  <button onClick={() => handleOpenEditModal(wh)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-lg transition-colors cursor-pointer" title="Edit Warehouse">
+                    <Edit2 className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => handleDelete(wh.id)} disabled={wh.isDefault} className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30">
-                    <Trash2 className="w-4 h-4" />
+                  <button onClick={() => handleDelete(wh.id)} disabled={wh.isDefault} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30" title="Delete Warehouse">
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -909,6 +912,6 @@ export const InventoryDashboard = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };
