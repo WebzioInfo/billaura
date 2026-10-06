@@ -23,7 +23,7 @@ export class CustomersController {
   async findAll(@Query("search") search: string) {
     const companyId = CompanyContext.getCompanyId() as string;
     const items = await this.customersService.findAll(companyId, search);
-    return { success: true, data: { items } };
+    return { success: true, data: items };
   }
 
   @Get(":id")

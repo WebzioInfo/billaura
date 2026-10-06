@@ -29,4 +29,5 @@ export const productService = {
   },
 };
 
+export { ensureArray } from './api/apiClient';
 export default apiClient;

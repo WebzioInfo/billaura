@@ -3,6 +3,7 @@ import notification from '@/core/services/NotificationService';
 import { Modal } from '../../../shared/components/ui/Modal';
 import { Button } from '../../../shared/components/ui/Button';
 import { Input } from '../../../shared/components/ui/Input';
+import { SearchableSelect } from '../../../shared/components/ui';
 import { apiClient as api } from '../../../core/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 
@@ -194,17 +195,19 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Income Category</Label>
-            <select 
-              required
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+            <SearchableSelect 
               value={formData.categoryId}
-              onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-            >
-              <option value="">Select Category</option>
-              {categories.map((cat: any) => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
+              onChange={(val) => setFormData({ ...formData, categoryId: val })}
+              options={categories}
+              mapOption={(cat: any) => ({
+                value: cat.id,
+                label: cat.name,
+                subLabel: cat.description || undefined,
+              })}
+              placeholder="Select Category"
+              searchPlaceholder="Search income categories..."
+              clearable
+            />
           </div>
           <div className="space-y-2">
             <Label>Customer Name (Walk-in)</Label>
@@ -218,17 +221,19 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
 
         <div className="space-y-2">
           <Label>Segment Department</Label>
-          <select 
-            required
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+          <SearchableSelect 
             value={formData.departmentId}
-            onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-          >
-            <option value="">Select Department</option>
-            {departments.map((d: any) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
+            onChange={(val) => setFormData({ ...formData, departmentId: val })}
+            options={departments}
+            mapOption={(d: any) => ({
+              value: d.id,
+              label: d.name,
+              subLabel: d.code || undefined,
+            })}
+            placeholder="Select Department"
+            searchPlaceholder="Search departments..."
+            clearable
+          />
         </div>
 
         <div className="space-y-2">
@@ -320,17 +325,20 @@ export function OtherIncomeFormModal({ isOpen, onClose, onSuccess, editingId, de
               {formData.paymentMethod !== 'CASH' && (
                 <div className="space-y-2">
                   <Label>Bank Account</Label>
-                  <select 
-                    required
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                  <SearchableSelect
                     value={formData.bankAccountId}
-                    onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
-                  >
-                    <option value="">Select Bank Account</option>
-                    {bankAccounts.map((acc: any) => (
-                      <option key={acc.id} value={acc.id}>{acc.name} - {acc.accountNumber}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setFormData({ ...formData, bankAccountId: val })}
+                    options={bankAccounts}
+                    mapOption={(acc: any) => ({
+                      value: acc.id,
+                      label: `${acc.name} - ${acc.accountNumber}`,
+                      subLabel: acc.bankName || acc.accountType || undefined,
+                      searchKeywords: [acc.accountNumber, acc.bankName].filter(Boolean),
+                    })}
+                    placeholder="Select Bank Account"
+                    searchPlaceholder="Search bank accounts..."
+                    clearable
+                  />
                 </div>
               )}
             </>

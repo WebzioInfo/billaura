@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/shared/components/ui
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, CurrencyCell, DateCell } from '@/shared/components/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, CurrencyCell, DateCell, SearchableSelect } from '@/shared/components/ui';
 import { formatCurrency, formatDate } from '@/shared/utils/formatters';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Printer, Download } from 'lucide-react';
@@ -37,10 +37,6 @@ export default function CustomerStatement() {
     enabled: !!customerId,
   });
 
-  const customerOptions = [
-    { label: 'Select a customer', value: '' },
-    ...(customers || []).map((c: any) => ({ label: c.name, value: c.id }))
-  ];
 
   return (
     <div className="space-y-6">
@@ -55,11 +51,20 @@ export default function CustomerStatement() {
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Select
+              <SearchableSelect
                 label="Customer"
                 value={customerId}
-                onChange={e => setCustomerId(e.target.value)}
-                options={customerOptions}
+                onChange={val => setCustomerId(val)}
+                options={customers || []}
+                mapOption={(c: any) => ({
+                  value: c.id,
+                  label: c.name,
+                  subLabel: c.phone || c.gstin ? [c.phone, c.gstin].filter(Boolean).join(' • ') : undefined,
+                  searchKeywords: [c.phone, c.gstin, c.customerCode].filter(Boolean),
+                })}
+                placeholder="Select a customer..."
+                searchPlaceholder="Search customers by name, phone..."
+                clearable
               />
             </div>
             <div>

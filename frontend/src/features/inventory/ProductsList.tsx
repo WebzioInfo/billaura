@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { Plus, Edit, Trash2, Search, Filter, Layers, Package, AlertTriangle, TrendingUp, Columns, Eye, ChevronDown, Check, Box, Wrench, Globe, Archive, Server, FileText, Ban } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { PageLayout } from '@/shared/components/layout/PageLayout';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, CurrencyCell, Button, IconButton } from '@/shared/components/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, CurrencyCell, Button, IconButton, SearchableSelect } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/ui/LayoutComponents';
 import { Pagination } from '@/shared/components/ui/Pagination';
 import { usePagination } from '@/shared/hooks/usePagination';
@@ -260,16 +260,17 @@ export const ProductsList = () => {
               <option value="EXPENSE">Expense</option>
             </select>
 
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-2.5 py-1.5 bg-background border border-border rounded-lg text-xs font-medium text-foreground focus:outline-none"
-            >
-              <option value="ALL">All Categories</option>
-              {categories.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.categoryName || c.name}</option>
-              ))}
-            </select>
+            <div className="w-48">
+              <SearchableSelect
+                placeholder="All Categories"
+                searchPlaceholder="Search category..."
+                value={selectedCategory === 'ALL' ? '' : selectedCategory}
+                onChange={(val) => setSelectedCategory(val || 'ALL')}
+                options={categories}
+                mapOption={(c: any) => ({ label: c.categoryName || c.name, value: c.id })}
+                clearable
+              />
+            </div>
 
             {/* Column Chooser Button */}
             <div className="relative">

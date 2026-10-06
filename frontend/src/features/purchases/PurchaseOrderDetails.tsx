@@ -14,7 +14,7 @@ import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
-import { ConfirmDialog } from '@/shared/components/ui';
+import { ConfirmDialog, SearchableSelect } from '@/shared/components/ui';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 
 export const PurchaseOrderDetails = () => {
@@ -496,18 +496,15 @@ export const PurchaseOrderDetails = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">Destination Warehouse *</label>
-                <select
-                  required
+                <SearchableSelect
+                  label="Destination Warehouse *"
+                  placeholder="Select Warehouse..."
+                  searchPlaceholder="Search warehouse..."
                   value={grnWarehouseId}
-                  onChange={e => setGrnWarehouseId(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none"
-                >
-                  <option value="">Select Warehouse...</option>
-                  {warehouses.map((w: any) => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
+                  onChange={val => setGrnWarehouseId(val)}
+                  options={warehouses}
+                  mapOption={(w: any) => ({ label: w.name, value: w.id })}
+                />
               </div>
 
               <div>

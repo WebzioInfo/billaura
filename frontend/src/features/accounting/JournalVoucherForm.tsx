@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, ArrowLeft, Save } from 'lucide-react';
 import notification from '@/core/services/NotificationService';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 
 import { apiClient as api } from '../../core/api/apiClient';
 import { Button } from '../../shared/components/ui/Button';
@@ -88,10 +89,9 @@ export const JournalVoucherForm = () => {
     mutationFn: async (data: JournalFormValues) => {
       return api.post('/journal-entries', data);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success('Journal Voucher created successfully');
-      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      await erpInvalidate.journalEntry(queryClient);
       navigate('/journal-entries');
     },
     onError: (error: any) => {

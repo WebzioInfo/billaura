@@ -30,9 +30,9 @@ import { PageContainer, LoadingState, FormSection } from '@/shared/components/ui
 import { DocumentSummarySidebar } from '@/shared/components/ui/DocumentSummarySidebar';
 import { Button } from '@/shared/components/ui/Button';
 import { Card } from '@/shared/components/ui/Card';
-import { FormErrorDisplay } from '@/shared/components/ui';
+import { FormErrorDisplay, SearchableSelect } from '@/shared/components/ui';
 import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
-import apiClient from '@/core/api';
+import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { ReferralSection } from './components/form/ReferralSection';
 
@@ -93,7 +93,8 @@ const invoiceSchema = z.object({
 
 type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 
 export type SalesDocumentType = 'INVOICE' | 'BILL_OF_SUPPLY' | 'EXEMPT_SUPPLY' | 'NIL_RATED_INVOICE' | 'EXPORT_INVOICE' | 'SEZ_INVOICE' | 'PROFORMA' | 'QUOTATION' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'DELIVERY_CHALLAN' | 'SALES_ORDER';
 
@@ -103,6 +104,7 @@ interface SalesDocumentFormProps {
 
 export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDocType = 'INVOICE' }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const queryCustomerId = searchParams.get('customerId');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -175,8 +177,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
   });
 
   const categories = useMemo(() => {
-    const list = categoriesData?.data?.items || categoriesData?.data || categoriesData || [];
-    return Array.isArray(list) ? list : [];
+    return ensureArray(categoriesData);
   }, [categoriesData]);
 
   const { data: nextNoData, error: nextNoError, isLoading: nextNoLoading, refetch: refetchNextNo } = useQuery<any>({
@@ -193,18 +194,15 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
   });
 
   const customers = useMemo(() => {
-    const list = customersData?.data?.items || customersData?.data || customersData || [];
-    return Array.isArray(list) ? list : [];
+    return ensureArray(customersData);
   }, [customersData]);
 
   const products = useMemo(() => {
-    const list = productsData?.data?.data || productsData?.data || productsData || [];
-    return Array.isArray(list) ? list : [];
+    return ensureArray(productsData);
   }, [productsData]);
 
   const units = useMemo(() => {
-    const list = unitsData?.data?.data || unitsData?.data || unitsData || [];
-    return Array.isArray(list) ? list : [];
+    return ensureArray(unitsData);
   }, [unitsData]);
 
   const companyProfile = useMemo(() => {
@@ -213,13 +211,21 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
 
   const isLoading = meLoading || custLoading || prodLoading || unitsLoading || nextNoLoading;
 
-  // Single unified error toast handler to prevent toast flooding
-  const hasError = meError || custError || prodError || unitsError || nextNoError;
+  const errorDetails = useMemo(() => {
+    const list: string[] = [];
+    if (meError) list.push("Company profile could not be loaded");
+    if (custError) list.push("Customer master records could not be loaded");
+    if (prodError) list.push("Product catalog could not be loaded");
+    if (nextNoError) list.push(`Unable to generate ${docType.toLowerCase().replace('_', ' ')} sequence number`);
+    return list;
+  }, [meError, custError, prodError, nextNoError, docType]);
+
+  const hasError = Boolean(meError || custError || prodError || nextNoError);
   useEffect(() => {
-    if (hasError) {
-      notification.error("Failed to load customer or product master data");
+    if (hasError && errorDetails.length > 0) {
+      notification.error(errorDetails.join(". "));
     }
-  }, [hasError]);
+  }, [hasError, errorDetails]);
 
   useEffect(() => {
     if (nextNoData?.nextNumber) {
@@ -467,6 +473,13 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       if (docType === 'CREDIT_NOTE') actualPayload.invoiceType = 'CREDIT_NOTE';
       
       await apiClient.post(endpoint, actualPayload);
+      if (docType === 'QUOTATION') {
+        queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      } else {
+        await erpInvalidate.invoice(queryClient, {
+          customerId: data.customerId,
+        });
+      }
       notification.success(
         submitStatus === 'DRAFT'
           ? `${docType} draft saved successfully!`
@@ -482,11 +495,11 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
   };
 
   const handleRetry = () => {
-    refetchMe();
-    refetchCust();
-    refetchProd();
-    refetchUnits();
-    refetchNextNo();
+    if (meError) refetchMe();
+    if (custError) refetchCust();
+    if (prodError) refetchProd();
+    if (unitsError) refetchUnits();
+    if (nextNoError) refetchNextNo();
   };
 
   if (isLoading) {
@@ -501,19 +514,26 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
     return (
       <PageContainer maxWidth="7xl">
         <div className="glass-panel p-8 rounded-2xl border border-border text-center space-y-4 max-w-md mx-auto mt-12 shadow-sm bg-surface">
-          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto text-red-600">
+          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center mx-auto text-red-600">
             <AlertCircle className="w-6 h-6" />
           </div>
-          <h2 className="text-lg font-bold text-foreground">Failed to Load Master Data</h2>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            We couldn't load the required customer, product, or numbering sequence parameters. Please check your network connection and try again.
-          </p>
+          <h2 className="text-lg font-bold text-foreground">
+            {errorDetails.length === 1 ? errorDetails[0] : "Failed to Load Master Data"}
+          </h2>
+          <div className="text-xs text-muted-foreground leading-relaxed space-y-2 text-left bg-muted/40 p-3.5 rounded-xl border border-border/60">
+            <p className="font-semibold text-foreground text-[11px] uppercase tracking-wider">Required Data Check:</p>
+            <ul className="list-disc list-inside space-y-1">
+              {errorDetails.map((err, idx) => (
+                <li key={idx} className="text-red-500 dark:text-red-400 font-medium">{err}</li>
+              ))}
+            </ul>
+          </div>
           <button
             type="button"
             onClick={handleRetry}
-            className="w-full py-2 bg-accent hover:bg-accent/90 text-white rounded-lg text-xs font-semibold tracking-wider transition-colors cursor-pointer"
+            className="w-full py-2.5 bg-accent hover:bg-accent/90 text-white rounded-xl text-xs font-semibold tracking-wider transition-colors cursor-pointer shadow-sm"
           >
-            Retry Loading Master Data
+            Retry Loading
           </button>
         </div>
       </PageContainer>
@@ -574,11 +594,10 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invoice Category</label>
-                  <select
-                    {...register('invoiceCategoryId')}
-                    onChange={(e) => {
-                      const selectedId = e.target.value;
+                  <SearchableSelect
+                    label="Invoice Category"
+                    value={watch('invoiceCategoryId') || ''}
+                    onChange={(selectedId) => {
                       setValue('invoiceCategoryId', selectedId);
                       const cat = categories.find((c: any) => c.id === selectedId);
                       if (cat) {
@@ -586,22 +605,41 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                         if (cat.defaultNumberingSeriesId) setValue('numberingSeriesId', cat.defaultNumberingSeriesId);
                       }
                     }}
-                    className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
-                  >
-                    <option value="">Standard / Default</option>
-                    {categories.map((c: any) => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                    ))}
-                  </select>
+                    options={categories}
+                    mapOption={(c) => ({
+                      label: `${c.name} (${c.code})`,
+                      value: c.id,
+                      description: c.description || undefined,
+                    })}
+                    placeholder="Standard / Default"
+                    searchPlaceholder="Search category..."
+                    allowClear
+                  />
                 </div>
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Customer *</label>
-                <select {...register('customerId')} disabled={custLoading} className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50">
-                  <option value="">Select Customer...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name} {c.gstNumber ? `(${c.gstNumber})` : ''}</option>)}
-                </select>
+                <SearchableSelect
+                  label="Customer *"
+                  value={watch('customerId') || ''}
+                  onChange={(val) => {
+                    setValue('customerId', val, { shouldValidate: true });
+                  }}
+                  disabled={custLoading}
+                  isLoading={custLoading}
+                  options={customers}
+                  mapOption={(c) => ({
+                    label: `${c.name || 'Unnamed'}${c.gstNumber ? ` (${c.gstNumber})` : ''}`,
+                    value: c.id,
+                    description: c.phone || c.email || (c.city ? `${c.city}, ${c.state || ''}` : c.state) || undefined,
+                  })}
+                  placeholder="Select Customer..."
+                  searchPlaceholder="Search customer by name, GSTIN, phone..."
+                  error={errors.customerId?.message as string}
+                  required
+                  onCreate={() => navigate('/customers/new')}
+                  createLabel="+ Add New Customer"
+                />
                 <FormErrorDisplay error={errors.customerId} />
               </div>
 
@@ -695,18 +733,30 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                     return (
                       <tr key={field.id} className="hover:bg-muted/10 transition-colors">
                         <td className="py-3 pr-4">
-                          <select
-                            {...register(`items.${index}.productId`)}
-                            disabled={prodLoading}
-                            onChange={(e) => {
-                              register(`items.${index}.productId`).onChange(e);
-                              handleProductSelect(index, e.target.value);
+                          <SearchableSelect
+                            value={watch(`items.${index}.productId`) || ''}
+                            onChange={(val) => {
+                              setValue(`items.${index}.productId`, val, { shouldValidate: true, shouldDirty: true });
+                              handleProductSelect(index, val);
                             }}
-                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-accent disabled:opacity-50"
-                          >
-                            <option value="">Select Item...</option>
-                            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
+                            options={products}
+                            mapOption={(p) => {
+                              const stock = p.stocks ? p.stocks.reduce((acc: number, s: any) => acc + Number(s.quantity || 0), 0) : 0;
+                              return {
+                                value: p.id,
+                                label: p.name,
+                                subLabel: [p.sku ? `SKU: ${p.sku}` : null, p.hsnCode ? `HSN: ${p.hsnCode}` : null, `Stock: ${stock}`].filter(Boolean).join(' • '),
+                                searchKeywords: [p.sku, p.hsnCode, p.barcode].filter(Boolean),
+                              };
+                            }}
+                            placeholder={prodLoading ? "Loading items..." : "Select Item..."}
+                            searchPlaceholder="Search by item name, SKU, HSN..."
+                            isLoading={prodLoading}
+                            triggerClassName="w-full text-sm"
+                            clearable
+                            onCreate={() => navigate('/products/new')}
+                            createLabel="Create Product"
+                          />
                           {errors.items?.[index]?.productId && <p className="text-red-500 text-xs mt-1">{errors.items[index].productId?.message}</p>}
 
                           {(() => {

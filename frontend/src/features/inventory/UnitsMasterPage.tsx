@@ -24,6 +24,7 @@ import { toast } from 'react-hot-toast';
 import { PageLayout } from '@/shared/components/layout/PageLayout';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Button } from '@/shared/components/ui/Button';
+import { SearchableSelect } from '@/shared/components/ui/SearchableSelect';
 
 export const UnitsMasterPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -345,35 +346,37 @@ export const UnitsMasterPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-foreground block mb-1">From Unit</label>
-                <select
+                <SearchableSelect
+                  label="From Unit"
+                  placeholder="Select unit..."
+                  searchPlaceholder="Search unit..."
                   value={calcFrom}
-                  onChange={(e) => setCalcFrom(e.target.value)}
-                  className="w-full px-3 py-2 bg-muted/40 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                >
-                  <option value="">Select unit...</option>
-                  {units.map((u) => (
-                    <option key={u.code} value={u.code}>
-                      {u.name} ({u.abbreviation || u.code})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setCalcFrom(val)}
+                  options={units}
+                  mapOption={(u) => ({
+                    label: `${u.name} (${u.abbreviation || u.code})`,
+                    value: u.code,
+                    searchKeywords: [u.name, u.abbreviation, u.code],
+                  })}
+                  clearable
+                />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-foreground block mb-1">To Unit</label>
-                <select
+                <SearchableSelect
+                  label="To Unit"
+                  placeholder="Select unit..."
+                  searchPlaceholder="Search unit..."
                   value={calcTo}
-                  onChange={(e) => setCalcTo(e.target.value)}
-                  className="w-full px-3 py-2 bg-muted/40 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                >
-                  <option value="">Select unit...</option>
-                  {units.map((u) => (
-                    <option key={u.code} value={u.code}>
-                      {u.name} ({u.abbreviation || u.code})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setCalcTo(val)}
+                  options={units}
+                  mapOption={(u) => ({
+                    label: `${u.name} (${u.abbreviation || u.code})`,
+                    value: u.code,
+                    searchKeywords: [u.name, u.abbreviation, u.code],
+                  })}
+                  clearable
+                />
               </div>
 
               <button
@@ -495,35 +498,35 @@ export const UnitsMasterPage: React.FC = () => {
             <div className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-foreground block mb-1">From Unit (Larger)</label>
-                  <select
+                  <SearchableSelect
+                    label="From Unit (Larger)"
+                    placeholder="Select Unit..."
+                    searchPlaceholder="Search unit..."
                     value={conversion.fromUnitId}
-                    onChange={(e) => setConversion({ ...conversion, fromUnitId: e.target.value })}
-                    className="w-full px-3 py-2 bg-muted/40 border border-border rounded-xl text-sm"
-                  >
-                    <option value="">Select Unit</option>
-                    {units.map((u) => (
-                      <option key={u.code} value={u.code}>
-                        {u.name} ({u.abbreviation || u.code})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setConversion({ ...conversion, fromUnitId: val })}
+                    options={units}
+                    mapOption={(u) => ({
+                      label: `${u.name} (${u.abbreviation || u.code})`,
+                      value: u.code,
+                      searchKeywords: [u.name, u.abbreviation, u.code],
+                    })}
+                  />
                 </div>
 
                 <div>
-                  <label className="font-bold text-foreground block mb-1">To Unit (Base)</label>
-                  <select
+                  <SearchableSelect
+                    label="To Unit (Base)"
+                    placeholder="Select Unit..."
+                    searchPlaceholder="Search unit..."
                     value={conversion.toUnitId}
-                    onChange={(e) => setConversion({ ...conversion, toUnitId: e.target.value })}
-                    className="w-full px-3 py-2 bg-muted/40 border border-border rounded-xl text-sm"
-                  >
-                    <option value="">Select Unit</option>
-                    {units.map((u) => (
-                      <option key={u.code} value={u.code}>
-                        {u.name} ({u.abbreviation || u.code})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setConversion({ ...conversion, toUnitId: val })}
+                    options={units}
+                    mapOption={(u) => ({
+                      label: `${u.name} (${u.abbreviation || u.code})`,
+                      value: u.code,
+                      searchKeywords: [u.name, u.abbreviation, u.code],
+                    })}
+                  />
                 </div>
               </div>
 

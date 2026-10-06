@@ -5,9 +5,10 @@ import { Users, Building } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/core/api';
 import { Select } from '@/shared/components/ui/Select';
+import { SearchableSelect } from '@/shared/components/ui';
 
 export const ReferralSection = ({ form }: { form: UseFormReturn<any> }) => {
-  const { watch, register } = form;
+  const { watch, register, setValue } = form;
   const sourceType = watch('referralSourceType');
 
   // Fetch employees
@@ -50,37 +51,45 @@ export const ReferralSection = ({ form }: { form: UseFormReturn<any> }) => {
         />
 
         {sourceType === 'EMPLOYEE' && (
-          <div className="relative">
-            <Users className="absolute left-3 top-8 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Select
-              label="Select Employee"
-              {...register('employeeId')}
-              className="pl-9"
-              options={[
-                { label: 'Select an employee...', value: '' },
-                ...employees.map((emp: any) => ({
-                  label: `${emp.firstName} ${emp.lastName}`,
-                  value: emp.id
-                }))
-              ]}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Select Employee
+            </label>
+            <SearchableSelect
+              value={watch('employeeId') || ''}
+              onChange={(val) => setValue('employeeId', val, { shouldValidate: true })}
+              options={employees}
+              mapOption={(emp: any) => ({
+                value: emp.id,
+                label: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.name,
+                subLabel: [emp.employeeCode, emp.department?.name].filter(Boolean).join(' • '),
+                searchKeywords: [emp.employeeCode, emp.email, emp.mobile].filter(Boolean),
+              })}
+              placeholder="Select an employee..."
+              searchPlaceholder="Search employees..."
+              clearable
             />
           </div>
         )}
 
         {sourceType === 'BUSINESS_PARTNER' && (
-          <div className="relative">
-            <Building className="absolute left-3 top-8 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Select
-              label="Select Partner / Agent"
-              {...register('referralPartnerId')}
-              className="pl-9"
-              options={[
-                { label: 'Select a partner...', value: '' },
-                ...partners.map((partner: any) => ({
-                  label: partner.name,
-                  value: partner.id
-                }))
-              ]}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Select Partner / Agent
+            </label>
+            <SearchableSelect
+              value={watch('referralPartnerId') || ''}
+              onChange={(val) => setValue('referralPartnerId', val, { shouldValidate: true })}
+              options={partners}
+              mapOption={(partner: any) => ({
+                value: partner.id,
+                label: partner.name,
+                subLabel: [partner.gstin, partner.phone].filter(Boolean).join(' • '),
+                searchKeywords: [partner.gstin, partner.phone, partner.email].filter(Boolean),
+              })}
+              placeholder="Select a partner..."
+              searchPlaceholder="Search partners/agents..."
+              clearable
             />
           </div>
         )}

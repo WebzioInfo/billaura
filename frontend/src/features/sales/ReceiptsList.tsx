@@ -11,11 +11,13 @@ import { usePagination } from '@/shared/hooks/usePagination';
 import { ColumnDef } from '@tanstack/react-table';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { formatIndianCurrency } from '@/lib/utils';
 
 export const ReceiptsList = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
@@ -94,6 +96,21 @@ export const ReceiptsList = () => {
     if (!receiptToVoid) return;
     try {
       await apiClient.delete(`/receipts/${receiptToVoid.rawId}`);
+      if (receiptToVoid.type === 'PURCHASE') {
+        await erpInvalidate.purchaseReceipt(queryClient, {
+          vendorId: receiptToVoid.businessPartnerId || receiptToVoid.vendorId,
+          accountId: receiptToVoid.bankAccountId || receiptToVoid.accountId,
+        });
+      } else if (receiptToVoid.type === 'EXPENSE') {
+        await erpInvalidate.expenseReceipt(queryClient, {
+          accountId: receiptToVoid.bankAccountId || receiptToVoid.accountId,
+        });
+      } else {
+        await erpInvalidate.salesReceipt(queryClient, {
+          customerId: receiptToVoid.businessPartnerId || receiptToVoid.customerId,
+          accountId: receiptToVoid.bankAccountId || receiptToVoid.accountId,
+        });
+      }
       notification.success('Receipt voided and reversed successfully');
       fetchReceipts();
     } catch {

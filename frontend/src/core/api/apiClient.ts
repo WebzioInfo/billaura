@@ -187,18 +187,45 @@ export class ApiClient {
     if (responseData && typeof responseData === 'object' && 'success' in responseData && 'data' in responseData) {
       const payload = responseData.data;
       if (payload && typeof payload === 'object' && payload !== null) {
-        if (!('data' in payload)) {
+        if (Array.isArray(payload)) {
+          if (!('data' in payload)) {
+            Object.defineProperty(payload, 'data', {
+              get() { return this; },
+              enumerable: false,
+              configurable: true
+            });
+          }
+          if (!('items' in payload)) {
+            Object.defineProperty(payload, 'items', {
+              get() { return this; },
+              enumerable: false,
+              configurable: true
+            });
+          }
+        } else if (Array.isArray(payload.items)) {
+          if (!('data' in payload)) {
+            Object.defineProperty(payload, 'data', {
+              get() { return this.items; },
+              enumerable: false,
+              configurable: true
+            });
+          }
+        } else if (!('data' in payload)) {
           Object.defineProperty(payload, 'data', {
             get() { return this; },
             enumerable: false,
             configurable: true
           });
         }
-        Object.defineProperty(payload, 'meta', {
-          value: responseData.meta,
-          enumerable: false,
-          writable: true
-        });
+
+        if (!('meta' in payload)) {
+          Object.defineProperty(payload, 'meta', {
+            value: responseData.meta,
+            enumerable: false,
+            writable: true,
+            configurable: true
+          });
+        }
       }
       return payload as T;
     }
@@ -308,7 +335,12 @@ export const apiClient = new ApiClient({
 export function ensureArray<T = any>(data: any): T[] {
   if (!data) return [];
   if (Array.isArray(data)) return data;
-  if (Array.isArray(data.data)) return data.data;
   if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (data.data && typeof data.data === 'object') {
+    if (Array.isArray(data.data.items)) return data.data.items;
+    if (Array.isArray(data.data.data)) return data.data.data;
+  }
   return [];
 }

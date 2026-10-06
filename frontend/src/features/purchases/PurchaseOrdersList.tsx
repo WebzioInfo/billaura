@@ -9,7 +9,7 @@ import { ColumnDef } from '@tanstack/react-table';
 
 import { PageLayout } from '@/shared/components/layout/PageLayout';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Button, IconButton, KpiCard, DeleteDialog, StatusBadge, CurrencyCell, DateCell } from '@/shared/components/ui';
+import { Button, IconButton, KpiCard, DeleteDialog, StatusBadge, CurrencyCell, DateCell, SearchableSelect } from '@/shared/components/ui';
 import { DataTable } from '@/shared/components/ui/data-table/DataTable';
 import { usePagination } from '@/shared/hooks/usePagination';
 import apiClient from '@/core/api';
@@ -302,17 +302,18 @@ export const PurchaseOrdersList = () => {
 
         {/* Expanded filters panel */}
         {showFilters && (
-          <div className="bg-surface border border-border p-3.5 rounded-xl shadow-xs shrink-0 mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-surface border border-border p-3.5 rounded-xl shadow-xs shrink-0 mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <div>
-              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Supplier</label>
-              <select
+              <SearchableSelect
+                label="Supplier"
+                placeholder="All Suppliers"
+                searchPlaceholder="Search supplier..."
                 value={vendorId}
-                onChange={e => { setVendorId(e.target.value); resetPage(); }}
-                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
-              >
-                <option value="">All Suppliers</option>
-                {vendors.map((v: any) => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
+                onChange={val => { setVendorId(val); resetPage(); }}
+                options={vendors}
+                mapOption={(v: any) => ({ label: v.name, value: v.id })}
+                clearable
+              />
             </div>
 
             <div>
@@ -320,7 +321,7 @@ export const PurchaseOrdersList = () => {
               <select
                 value={status}
                 onChange={e => { setStatus(e.target.value); resetPage(); }}
-                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
+                className="w-full h-9 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
               >
                 <option value="">All Statuses</option>
                 <option value="DRAFT">Draft</option>
@@ -333,15 +334,16 @@ export const PurchaseOrdersList = () => {
             </div>
 
             <div>
-              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Warehouse</label>
-              <select
+              <SearchableSelect
+                label="Warehouse"
+                placeholder="All Warehouses"
+                searchPlaceholder="Search warehouse..."
                 value={warehouseId}
-                onChange={e => { setWarehouseId(e.target.value); resetPage(); }}
-                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
-              >
-                <option value="">All Warehouses</option>
-                {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+                onChange={val => { setWarehouseId(val); resetPage(); }}
+                options={warehouses}
+                mapOption={(w: any) => ({ label: w.name, value: w.id })}
+                clearable
+              />
             </div>
 
             <div className="flex items-end">

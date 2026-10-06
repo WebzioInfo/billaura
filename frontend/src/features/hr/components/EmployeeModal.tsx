@@ -172,31 +172,47 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, i
               mapOption={(d: any) => ({ label: d.name, value: d.id })}
             />
             
-            <Select 
+            <SearchableSelect 
               label="Cost Centre" 
-              value={formData.costCenterId} 
-              onChange={(e) => handleChange('costCenterId', e.target.value)} 
-              options={[{label: 'Select Cost Centre', value: ''}, ...costCenters.map((c: any) => ({ label: c.name, value: c.id }))]} 
+              value={formData.costCenterId || ''} 
+              onChange={(val) => handleChange('costCenterId', val)} 
+              options={costCenters} 
+              mapOption={(c: any) => ({ label: c.name, value: c.id })}
+              placeholder="Select Cost Centre..."
+              searchPlaceholder="Search cost centres..."
+              clearable
             />
-            <Select 
+            <SearchableSelect 
               label="Employment Type" 
-              value={formData.employmentTypeId} 
-              onChange={(e) => handleChange('employmentTypeId', e.target.value)} 
+              value={formData.employmentTypeId || ''} 
+              onChange={(val) => handleChange('employmentTypeId', val)} 
               required 
-              options={[{label: 'Select Employment Type', value: ''}, ...employmentTypes.map((e: any) => ({ label: e.name, value: e.id }))]} 
+              options={employmentTypes} 
+              mapOption={(e: any) => ({ label: e.name, value: e.id })}
+              placeholder="Select Employment Type..."
+              searchPlaceholder="Search employment types..."
+              clearable
             />
             
-            <Select 
+            <SearchableSelect 
               label="Shift" 
-              value={formData.shiftId} 
-              onChange={(e) => handleChange('shiftId', e.target.value)} 
-              options={[{label: 'Select Shift', value: ''}, ...shifts.map((s: any) => ({ label: s.name, value: s.id }))]} 
+              value={formData.shiftId || ''} 
+              onChange={(val) => handleChange('shiftId', val)} 
+              options={shifts} 
+              mapOption={(s: any) => ({ label: s.name, value: s.id })}
+              placeholder="Select Shift..."
+              searchPlaceholder="Search shifts..."
+              clearable
             />
-            <Select 
+            <SearchableSelect 
               label="Branch" 
-              value={formData.branchId} 
-              onChange={(e) => handleChange('branchId', e.target.value)} 
-              options={[{label: 'Select Branch', value: ''}, ...branches.map((b: any) => ({ label: b.name, value: b.id }))]} 
+              value={formData.branchId || ''} 
+              onChange={(val) => handleChange('branchId', val)} 
+              options={branches} 
+              mapOption={(b: any) => ({ label: b.name, value: b.id })}
+              placeholder="Select Branch..."
+              searchPlaceholder="Search branches..."
+              clearable
             />
             
             <Input label="Basic Salary" type="number" value={formData.basicSalary} onChange={(e) => handleChange('basicSalary', e.target.value)} required />

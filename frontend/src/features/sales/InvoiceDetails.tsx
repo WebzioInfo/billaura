@@ -13,6 +13,7 @@ import { PageContainer } from '@/shared/components/ui/LayoutComponents';
 import { ConfirmDialog, JournalImpactView } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import { PdfDownloadButton, PdfDocumentProps } from '@/shared/components/pdf/PdfDownloadButton';
 import { RecordPaymentModal } from './components/RecordPaymentModal';
@@ -86,9 +87,12 @@ export const InvoiceDetails = () => {
     mutationFn: async () => {
       await apiClient.delete(`/sales/invoices/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success('Invoice cancelled and reversed from ledger accounts successfully');
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      await erpInvalidate.invoice(queryClient, {
+        customerId: invoice?.businessPartnerId || invoice?.businessPartner?.id,
+        invoiceId: id,
+      });
       navigate('/invoices');
     },
     onError: (err: any) => {
@@ -107,13 +111,16 @@ export const InvoiceDetails = () => {
         notes: paymentNotes || 'Recorded from Invoice Details page',
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success('Payment recorded and credited to customer receivables');
       setIsRecordPaymentOpen(false);
       setPaymentAmount('');
       setPaymentNotes('');
+      await erpInvalidate.salesReceipt(queryClient, {
+        customerId: invoice?.businessPartnerId || invoice?.businessPartner?.id,
+        invoiceIds: id ? [id] : undefined,
+      });
       refetch();
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to record payment');

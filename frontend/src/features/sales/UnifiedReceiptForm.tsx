@@ -12,6 +12,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { LedgerSearchSelect } from '@/shared/components/ui/LedgerSearchSelect';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 
 interface FormLineItem {
   keyId: string;
@@ -505,9 +506,15 @@ export const UnifiedReceiptForm = () => {
     },
     onSuccess: () => {
       notification.success('Receipt created successfully');
-      queryClient.invalidateQueries({ queryKey: ['receipts'] });
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
-      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      if (receiptType === 'SALES') {
+        erpInvalidate.salesReceipt(queryClient, { customerId: businessPartnerId, accountId });
+        erpInvalidate.invoice(queryClient, { customerId: businessPartnerId });
+      } else if (receiptType === 'PURCHASE') {
+        erpInvalidate.purchaseReceipt(queryClient, { vendorId: businessPartnerId, accountId });
+        erpInvalidate.purchaseBill(queryClient, { vendorId: businessPartnerId });
+      } else if (receiptType === 'EXPENSE') {
+        erpInvalidate.expenseReceipt(queryClient, { categoryId, accountId });
+      }
       navigate('/receipts');
     },
     onError: (err: any) => {

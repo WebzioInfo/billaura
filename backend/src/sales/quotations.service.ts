@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateQuotationDto } from './dto/quotation.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -49,6 +49,42 @@ export class QuotationsService {
     return toPaginatedResult(data, total, query);
   }
 
+  async getNextQuotationNumber() {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const sequence = await this.prisma.documentSequence.findFirst({
+      where: { companyId, documentType: 'QUOTATION' },
+    });
+
+    if (!sequence) {
+      const lastQuotation = await this.prisma.quotation.findFirst({
+        where: { companyId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (lastQuotation?.quotationNo) {
+        const match = lastQuotation.quotationNo.match(/(\d+)$/);
+        if (match) {
+          const nextCount = parseInt(match[1], 10) + 1;
+          const prefix = lastQuotation.quotationNo.replace(/\d+$/, '');
+          return { nextNumber: `${prefix}${String(nextCount).padStart(5, '0')}` };
+        }
+      }
+
+      return { nextNumber: 'QT-00001' };
+    }
+
+    const nextNum = sequence.currentNumber + 1;
+    let prefix = sequence.prefix || 'QT-';
+    if (!prefix.endsWith('-') && !prefix.endsWith('/')) {
+      prefix = `${prefix}-`;
+    }
+    return { nextNumber: `${prefix}${String(nextNum).padStart(sequence.padding || 5, '0')}` };
+  }
+
   async findOne(id: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
@@ -73,22 +109,37 @@ export class QuotationsService {
       throw new ConflictException('Company context is required');
     }
 
+    const customerId = (dto.customerId || dto.businessPartnerId) as string;
+    if (!customerId) {
+      throw new BadRequestException('Customer / Business Partner ID is required');
+    }
+
     const customer = await this.prisma.businessPartner.findFirst({
-      where: { id: dto.customerId, companyId },
+      where: { id: customerId, companyId },
     });
     if (!customer) {
-      throw new NotFoundException(`Customer with ID ${dto.customerId} not found`);
+      throw new NotFoundException(`Customer with ID ${customerId} not found`);
     }
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Generate quotation number
-      const quotationNo = await this.sequenceService.generateNextSequence(companyId, 'QUOTATION', tx);
+      let quotationNo = dto.quotationNo || dto.docNo;
+      if (!quotationNo) {
+        quotationNo = await this.sequenceService.generateUniversalSequence(companyId, 'QUOTATION', {}, tx);
+      } else {
+        const existing = await tx.quotation.findFirst({
+          where: { companyId, quotationNo, deletedAt: null },
+        });
+        if (existing) {
+          quotationNo = await this.sequenceService.generateUniversalSequence(companyId, 'QUOTATION', {}, tx);
+        }
+      }
 
       const company = await tx.company.findUnique({
         where: { id: companyId },
       });
       const companyState = company?.state?.trim().toLowerCase() || '';
-      const supplyState = customer.state?.trim().toLowerCase() || '';
+      const supplyState = (dto.placeOfSupply || customer.state)?.trim().toLowerCase() || companyState;
       const bpTaxPreference = customer.taxPreference || 'TAXABLE';
 
       // 2. Fetch items and calculate subtotal
@@ -112,7 +163,7 @@ export class QuotationsService {
         const qty = Number(item.qty);
         const lineTotal = rate * qty;
         
-        const taxRate = (item as any).taxPercent !== undefined ? Number((item as any).taxPercent) : Number(product.gstRate || 18);
+        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.gstRate || 18);
         
         const gstResult = GSTEngine.calculate({
            taxableAmount: lineTotal,
@@ -143,14 +194,18 @@ export class QuotationsService {
       }
 
       const grandTotal = subTotal + taxTotal;
+      const quotationStatus = dto.status === 'DRAFT' ? 'DRAFT' : 'SENT';
 
       return tx.quotation.create({
         data: {
           companyId,
-          businessPartnerId: dto.customerId,
+          businessPartnerId: customerId,
           quotationNo,
           date: new Date(dto.date),
-          status: 'SENT',
+          status: quotationStatus as any,
+          placeOfSupply: dto.placeOfSupply || customer.state || null,
+          companyStateCode: companyState || null,
+          customerStateCode: supplyState || null,
           subTotal,
           taxTotal,
           grandTotal,
@@ -159,6 +214,11 @@ export class QuotationsService {
           igstAmount: totalIgst,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
+          gstBreakup: {
+            notes: dto.notes || '',
+            termsConditions: dto.termsConditions || '',
+            invoiceCategoryId: dto.invoiceCategoryId || null,
+          },
           items: {
             create: itemsToCreate,
           },

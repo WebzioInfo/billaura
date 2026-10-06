@@ -8,8 +8,8 @@ import {
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { PageContainer, LoadingState, FinancialSummary, SummaryRow } from '@/shared/components/ui';
 import { Card } from '@/shared/components/ui/Card';
-import { Button, Input, Select, FormErrorDisplay } from '@/shared/components/ui';
-import apiClient from '@/core/api';
+import { Button, Input, Select, FormErrorDisplay, SearchableSelect } from '@/shared/components/ui';
+import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -116,21 +116,19 @@ export const PurchaseOrderForm = () => {
   ]);
 
   // Fetch Master Data
-  const { data: vendors = [], isLoading: loadingVendors } = useQuery<Vendor[]>({
+  const { data: vendors = [], isLoading: loadingVendors, isError: errorVendors, refetch: refetchVendors } = useQuery<Vendor[]>({
     queryKey: ['vendors'],
     queryFn: async () => {
       const res = await apiClient.get('/vendors');
-      const list = res.data?.data || res.data?.items || res.data || [];
-      return Array.isArray(list) ? list : [];
+      return ensureArray<Vendor>(res);
     }
   });
 
-  const { data: products = [], isLoading: loadingProducts } = useQuery<Product[]>({
+  const { data: products = [], isLoading: loadingProducts, isError: errorProducts, refetch: refetchProducts } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: async () => {
       const res = await apiClient.get('/products');
-      const list = res.data?.data || res.data?.items || res.data || [];
-      return Array.isArray(list) ? list : [];
+      return ensureArray<Product>(res);
     }
   });
 
@@ -420,16 +418,31 @@ export const PurchaseOrderForm = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <Select
-                label="Vendor Supplier"
-                required
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Vendor Supplier <span className="text-red-500">*</span>
+              </label>
+              <SearchableSelect
+                value={vendorId || ''}
+                onChange={(val) => {
+                  setValue('vendorId', val, { shouldValidate: true, shouldDirty: true });
+                  handleVendorChange(val);
+                }}
+                options={vendors}
+                mapOption={(v) => ({
+                  value: v.id,
+                  label: v.name,
+                  subLabel: [v.gstNumber || v.gstin, v.phone, v.state].filter(Boolean).join(' • '),
+                  searchKeywords: [v.gstNumber, v.gstin, v.phone, v.email, v.customerCode].filter(Boolean),
+                })}
+                placeholder="Select Vendor..."
+                searchPlaceholder="Search vendors by name, GSTIN, phone..."
                 disabled={isEditMode}
-                {...register('vendorId')}
-                onChange={(e: any) => handleVendorChange(e.target.value)}
-                options={[
-                  { value: "", label: "Select Vendor..." },
-                  ...vendors.map(v => ({ value: v.id, label: v.name }))
-                ]}
+                clearable
+                isLoading={loadingVendors}
+                isError={errorVendors}
+                onRetry={() => refetchVendors()}
+                onCreate={() => navigate('/vendors/new')}
+                createLabel="Create Vendor"
               />
               <FormErrorDisplay error={errors.vendorId} />
             </div>
@@ -565,16 +578,29 @@ export const PurchaseOrderForm = () => {
                   return (
                     <tr key={item.keyId} className="hover:bg-muted/10 transition-colors">
                       <td className="py-4 pr-3">
-                        <select
-                          value={item.productId}
-                          onChange={e => handleProductChange(index, e.target.value)}
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-accent"
-                        >
-                          <option value="">Select Product...</option>
-                          {products.map(p => (
-                            <option key={p.id} value={p.id}>{p.name} {p.sku ? `(SKU: ${p.sku})` : ''}</option>
-                          ))}
-                        </select>
+                        <SearchableSelect
+                          value={item.productId || ''}
+                          onChange={val => handleProductChange(index, val)}
+                          options={products}
+                          mapOption={p => {
+                            const totalStock = p.stocks ? p.stocks.reduce((acc: number, s: any) => acc + Number(s.quantity || 0), 0) : 0;
+                            return {
+                              value: p.id,
+                              label: p.name,
+                              subLabel: [p.sku ? `SKU: ${p.sku}` : null, p.hsnCode ? `HSN: ${p.hsnCode}` : null, `Stock: ${totalStock}`].filter(Boolean).join(' • '),
+                              searchKeywords: [p.sku, p.hsnCode, p.barcode].filter(Boolean),
+                            };
+                          }}
+                          placeholder="Select Product..."
+                          searchPlaceholder="Search product by name, SKU, HSN..."
+                          triggerClassName="w-full text-sm"
+                          clearable
+                          isLoading={loadingProducts}
+                          isError={errorProducts}
+                          onRetry={() => refetchProducts()}
+                          onCreate={() => navigate('/products/new')}
+                          createLabel="Create Product"
+                        />
 
                         {(() => {
                           const pObj = products.find(p => p.id === item.productId);

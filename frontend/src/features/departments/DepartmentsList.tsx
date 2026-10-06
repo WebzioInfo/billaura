@@ -595,48 +595,76 @@ export const DepartmentsList = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Work Shift</label>
-                  <select {...employeeForm.register('shiftId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
-                    <option value="">Select Shift...</option>
-                    {shifts.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.startTime}-{s.endTime})</option>)}
-                  </select>
+                  <SearchableSelect
+                    label="Work Shift"
+                    value={employeeForm.watch('shiftId')}
+                    onChange={(val: string) => employeeForm.setValue('shiftId', val)}
+                    options={shifts}
+                    mapOption={(s: any) => ({ label: `${s.name} (${s.startTime}-${s.endTime})`, value: s.id })}
+                    placeholder="Select Shift..."
+                    searchPlaceholder="Search shift..."
+                    clearable
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Employment Type</label>
-                  <select {...employeeForm.register('employmentTypeId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
-                    <option value="">Select Type...</option>
-                    {employmentTypes.map((et: any) => <option key={et.id} value={et.id}>{et.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    label="Employment Type"
+                    value={employeeForm.watch('employmentTypeId')}
+                    onChange={(val: string) => employeeForm.setValue('employmentTypeId', val)}
+                    options={employmentTypes}
+                    mapOption={(et: any) => ({ label: et.name, value: et.id })}
+                    placeholder="Select Type..."
+                    searchPlaceholder="Search employment type..."
+                    clearable
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Branch Location</label>
-                  <select {...employeeForm.register('branchId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
-                    <option value="">Select Branch...</option>
-                    {branches.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    label="Branch Location"
+                    value={employeeForm.watch('branchId')}
+                    onChange={(val: string) => employeeForm.setValue('branchId', val)}
+                    options={branches}
+                    mapOption={(b: any) => ({ label: b.name, value: b.id })}
+                    placeholder="Select Branch..."
+                    searchPlaceholder="Search branch..."
+                    clearable
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">System Role</label>
-                  <select {...employeeForm.register('roleId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
-                    <option value="">Select Role...</option>
-                    {roles.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    label="System Role"
+                    value={employeeForm.watch('roleId')}
+                    onChange={(val: string) => employeeForm.setValue('roleId', val)}
+                    options={roles}
+                    mapOption={(r: any) => ({ label: r.name, value: r.id })}
+                    placeholder="Select Role..."
+                    searchPlaceholder="Search role..."
+                    clearable
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">GL Cost Center</label>
-                  <select {...employeeForm.register('costCenterId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
-                    <option value="">Select Cost Center...</option>
-                    {costCenters.map((cc: any) => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    label="GL Cost Center"
+                    value={employeeForm.watch('costCenterId')}
+                    onChange={(val: string) => employeeForm.setValue('costCenterId', val)}
+                    options={costCenters}
+                    mapOption={(cc: any) => ({ label: cc.name, value: cc.id })}
+                    placeholder="Select Cost Center..."
+                    searchPlaceholder="Search cost center..."
+                    clearable
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Reporting Manager</label>
-                  <select {...employeeForm.register('reportingManagerId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
-                    <option value="">Select Manager...</option>
-                    {employees.filter((emp: any) => emp.id !== editingEmployee?.id).map((emp: any) => (
-                      <option key={emp.id} value={emp.id}>{emp.name}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    label="Reporting Manager"
+                    value={employeeForm.watch('reportingManagerId')}
+                    onChange={(val: string) => employeeForm.setValue('reportingManagerId', val)}
+                    options={employees.filter((emp: any) => emp.id !== editingEmployee?.id)}
+                    mapOption={(emp: any) => ({ label: emp.name, value: emp.id })}
+                    placeholder="Select Manager..."
+                    searchPlaceholder="Search manager..."
+                    clearable
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Basic Monthly Salary (INR) *</label>
@@ -672,11 +700,16 @@ export const DepartmentsList = () => {
 
             <form onSubmit={attendanceForm.handleSubmit(handleAttendanceSubmit)} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Employee *</label>
-                <select required {...attendanceForm.register('employeeId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none">
-                  <option value="">Select Employee...</option>
-                  {employees.map((emp: any) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
-                </select>
+                <SearchableSelect
+                  label="Employee *"
+                  required
+                  value={attendanceForm.watch('employeeId')}
+                  onChange={(val: string) => attendanceForm.setValue('employeeId', val, { shouldValidate: true })}
+                  options={employees}
+                  mapOption={(emp: any) => ({ label: emp.name, value: emp.id })}
+                  placeholder="Select Employee..."
+                  searchPlaceholder="Search employee..."
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Date *</label>
@@ -729,15 +762,20 @@ export const DepartmentsList = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Disburse From Bank Account *</label>
-                <select
+                <SearchableSelect
+                  label="Disburse From Bank Account *"
+                  required
                   value={selectedBankId}
-                  onChange={(e) => setSelectedBankId(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none"
-                >
-                  <option value="">Select Bank Account...</option>
-                  {bankAccounts.map((b: any) => <option key={b.id} value={b.id}>{b.name} (Bal: {formatCurrency(Number(b.currentBalance))})</option>)}
-                </select>
+                  onChange={(val: string) => setSelectedBankId(val)}
+                  options={bankAccounts}
+                  mapOption={(b: any) => ({
+                    label: b.name,
+                    value: b.id,
+                    subLabel: `Balance: ${formatCurrency(Number(b.currentBalance))}`
+                  })}
+                  placeholder="Select Bank Account..."
+                  searchPlaceholder="Search bank account..."
+                />
               </div>
 
               <div className="flex justify-end gap-2 border-t border-border pt-4 mt-6">

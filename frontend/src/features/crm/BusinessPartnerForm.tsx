@@ -5,8 +5,9 @@ import notification from '@/core/services/NotificationService';
 import { Save, Loader2 } from 'lucide-react';
 import { PageContainer, Section, FormSection } from '@/shared/components/ui/LayoutComponents';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Button, Input, Select, AutoGenerateInput, FormErrorDisplay } from '@/shared/components/ui';
-import apiClient from '@/core/api';
+import { Button, Input, Select, AutoGenerateInput, FormErrorDisplay, SearchableSelect } from '@/shared/components/ui';
+import apiClient, { ensureArray } from '@/core/api';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import { getCustomerDisplayName } from '@/shared/utils/entityNames';
 import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
@@ -102,20 +103,20 @@ export const BusinessPartnerForm = () => {
     enabled: isEditMode,
   });
 
-  const { data: segments } = useQuery({
+  const { data: segments, isLoading: loadingSegments } = useQuery({
     queryKey: ['customer-segments'],
     queryFn: async () => {
       const res = await apiClient.get('/customer-segments');
-      return res.data?.data || res.data || [];
+      return ensureArray(res);
     },
     enabled: !isVendor,
   });
 
-  const { data: departments } = useQuery({
+  const { data: departments, isLoading: loadingDepartments } = useQuery({
     queryKey: ['customer-departments'],
     queryFn: async () => {
       const res = await apiClient.get('/customer-departments');
-      return res.data?.data || res.data || [];
+      return ensureArray(res);
     },
     enabled: !isVendor,
   });
@@ -247,12 +248,14 @@ export const BusinessPartnerForm = () => {
       }
       return apiClient.post(`/${entityPath}`, submitData);
     },
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: [entityPath] });
-      queryClient.invalidateQueries({ queryKey: [entityPath, id] });
-      notification.success(isEditMode ? 'Customer updated successfully' : 'Customer created successfully');
-      
+    onSuccess: async (res) => {
       const newId = isEditMode ? id : (res.data?.id || res.data?.data?.id);
+      if (isVendor) {
+        await erpInvalidate.vendor(queryClient, { vendorId: newId || undefined });
+      } else {
+        await erpInvalidate.customer(queryClient, { customerId: newId || undefined });
+      }
+      notification.success(isEditMode ? `${entityLabel} updated successfully` : `${entityLabel} created successfully`);
       navigate(newId ? `/${entityPath}/${newId}` : `/${entityPath}`);
     },
     onError: (err: any) => {
@@ -353,36 +356,40 @@ export const BusinessPartnerForm = () => {
               </div>
               {!isVendor && (
                 <div>
-                  <Select
+                  <SearchableSelect
                     label="Customer Segment"
-                    {...register('customerSegmentId')}
-                    options={[
-                      { value: '', label: 'Select Segment...' },
-                      ...(segments || [])
-                        .filter((s: any) => s.isActive && (b2bMode ? s.segmentType !== 'B2C' : s.segmentType !== 'B2B'))
-                        .map((s: any) => ({
-                          value: s.id,
-                          label: s.name
-                        }))
-                    ]}
+                    value={watch('customerSegmentId') || ''}
+                    onChange={(val) => setValue('customerSegmentId', val, { shouldValidate: true, shouldDirty: true })}
+                    options={(segments || []).filter((s: any) => s.isActive && (b2bMode ? s.segmentType !== 'B2C' : s.segmentType !== 'B2B'))}
+                    mapOption={(s: any) => ({
+                      value: s.id,
+                      label: s.name,
+                      subLabel: s.code || s.segmentType || undefined,
+                    })}
+                    placeholder="Select Segment..."
+                    searchPlaceholder="Search segments..."
+                    isLoading={loadingSegments}
+                    clearable
                   />
                   <FormErrorDisplay error={errors.customerSegmentId} />
                 </div>
               )}
               {!isVendor && (
                 <div>
-                  <Select
+                  <SearchableSelect
                     label="Customer Department"
-                    {...register('customerDepartmentId')}
-                    options={[
-                      { value: '', label: 'Select Department...' },
-                      ...(departments || [])
-                        .filter((d: any) => d.isActive && (b2bMode ? d.customerType !== 'B2C' : d.customerType !== 'B2B'))
-                        .map((d: any) => ({
-                          value: d.id,
-                          label: d.name
-                        }))
-                    ]}
+                    value={watch('customerDepartmentId') || ''}
+                    onChange={(val) => setValue('customerDepartmentId', val, { shouldValidate: true, shouldDirty: true })}
+                    options={(departments || []).filter((d: any) => d.isActive && (b2bMode ? d.customerType !== 'B2C' : d.customerType !== 'B2B'))}
+                    mapOption={(d: any) => ({
+                      value: d.id,
+                      label: d.name,
+                      subLabel: d.code || undefined,
+                    })}
+                    placeholder="Select Department..."
+                    searchPlaceholder="Search departments..."
+                    isLoading={loadingDepartments}
+                    clearable
                   />
                   <FormErrorDisplay error={errors.customerDepartmentId} />
                 </div>

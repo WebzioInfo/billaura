@@ -8,9 +8,10 @@ import {
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { PageContainer, LoadingState } from '@/shared/components/ui/LayoutComponents';
 import { Card } from '@/shared/components/ui/Card';
-import { Button, Input, Select, FormErrorDisplay } from '@/shared/components/ui';
-import apiClient from '@/core/api';
+import { Button, Input, Select, FormErrorDisplay, SearchableSelect } from '@/shared/components/ui';
+import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -122,30 +123,27 @@ export const BillForm = () => {
   ]);
 
   // Fetch Master Data
-  const { data: vendors = [] } = useQuery<Vendor[]>({
+  const { data: vendors = [], isLoading: loadingVendors, isError: errorVendors, refetch: refetchVendors } = useQuery<Vendor[]>({
     queryKey: ['vendors'],
     queryFn: async () => {
       const res = await apiClient.get('/vendors');
-      const list = res.data?.data || res.data || [];
-      return Array.isArray(list) ? list : [];
+      return ensureArray<Vendor>(res);
     }
   });
 
-  const { data: products = [] } = useQuery<Product[]>({
+  const { data: products = [], isLoading: loadingProducts, isError: errorProducts, refetch: refetchProducts } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: async () => {
       const res = await apiClient.get('/products');
-      const list = res.data?.data || res.data || [];
-      return Array.isArray(list) ? list : [];
+      return ensureArray<Product>(res);
     }
   });
 
-  const { data: warehouses = [] } = useQuery<Warehouse[]>({
+  const { data: warehouses = [], isLoading: loadingWarehouses, isError: errorWarehouses, refetch: refetchWarehouses } = useQuery<Warehouse[]>({
     queryKey: ['warehouses'],
     queryFn: async () => {
       const res = await apiClient.get('/warehouses');
-      const list = res.data?.data || res.data || [];
-      return Array.isArray(list) ? list : [];
+      return ensureArray<Warehouse>(res);
     }
   });
 
@@ -404,9 +402,11 @@ export const BillForm = () => {
         await apiClient.post('/purchases', payload);
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success(isEditMode ? 'Vendor bill updated successfully' : 'Vendor bill created successfully');
-      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      await erpInvalidate.purchaseBill(queryClient, {
+        vendorId: vendorId || undefined,
+      });
       navigate('/bills');
     },
     onError: (err: any) => {
@@ -517,15 +517,30 @@ export const BillForm = () => {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Select
-                    label="Vendor"
-                    required
-                    {...register('vendorId')}
-                    onChange={(e: any) => handleVendorChange(e.target.value)}
-                    options={[
-                      { value: "", label: "Select Vendor" },
-                      ...vendors.map(v => ({ value: v.id, label: v.name }))
-                    ]}
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Vendor <span className="text-red-500">*</span>
+                  </label>
+                  <SearchableSelect
+                    value={vendorId || ''}
+                    onChange={(val) => {
+                      setValue('vendorId', val, { shouldValidate: true, shouldDirty: true });
+                      handleVendorChange(val);
+                    }}
+                    options={vendors}
+                    mapOption={(v) => ({
+                      value: v.id,
+                      label: v.name,
+                      subLabel: [v.gstin, v.state].filter(Boolean).join(' • '),
+                      searchKeywords: [v.gstin, v.state].filter(Boolean),
+                    })}
+                    placeholder="Select Vendor"
+                    searchPlaceholder="Search vendors by name, GSTIN..."
+                    clearable
+                    isLoading={loadingVendors}
+                    isError={errorVendors}
+                    onRetry={() => refetchVendors()}
+                    onCreate={() => navigate('/vendors/new')}
+                    createLabel="Create Vendor"
                   />
                   <FormErrorDisplay error={errors.vendorId} />
                 </div>
@@ -647,16 +662,26 @@ export const BillForm = () => {
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                         <div className="md:col-span-4 space-y-1">
                           <label className="text-[10px] font-bold text-muted-foreground uppercase">Product</label>
-                          <select
-                            value={item.productId}
-                            onChange={e => handleLineChange(index, 'productId', e.target.value)}
-                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                          >
-                            <option value="">Select Product</option>
-                            {products.map(p => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                          </select>
+                          <SearchableSelect
+                            value={item.productId || ''}
+                            onChange={(val) => handleLineChange(index, 'productId', val)}
+                            options={products}
+                            mapOption={(p) => ({
+                              value: p.id,
+                              label: p.name,
+                              subLabel: [p.sku ? `SKU: ${p.sku}` : null, p.hsnCode ? `HSN: ${p.hsnCode}` : null].filter(Boolean).join(' • '),
+                              searchKeywords: [p.sku, p.hsnCode, p.barcode].filter(Boolean),
+                            })}
+                            placeholder="Select Product"
+                            searchPlaceholder="Search product by name, SKU, HSN..."
+                            triggerClassName="w-full text-xs"
+                            clearable
+                            isLoading={loadingProducts}
+                            isError={errorProducts}
+                            onRetry={() => refetchProducts()}
+                            onCreate={() => navigate('/products/new')}
+                            createLabel="Create Product"
+                          />
                         </div>
 
                         <div className="md:col-span-3 space-y-1">
@@ -761,17 +786,19 @@ export const BillForm = () => {
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Destination Warehouse</label>
-                  <select
-                    value={warehouseId}
-                    onChange={e => setWarehouseId(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all font-semibold"
-                  >
-                    <option value="">Select Warehouse</option>
-                    {warehouses.map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    value={warehouseId || ''}
+                    onChange={(val) => setWarehouseId(val)}
+                    options={warehouses}
+                    mapOption={(w) => ({
+                      value: w.id,
+                      label: w.name,
+                      subLabel: w.code || w.location || undefined,
+                    })}
+                    placeholder="Select Warehouse"
+                    searchPlaceholder="Search warehouses..."
+                    clearable={false}
+                  />
                 </div>
 
                 <div className="space-y-1.5">

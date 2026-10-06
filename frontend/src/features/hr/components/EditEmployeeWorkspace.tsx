@@ -5,6 +5,7 @@ import notification from '@/core/services/NotificationService';
 import { Modal } from '@/shared/components/ui/Modal';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
+import { SearchableSelect } from '@/shared/components/ui';
 import { User, Briefcase, Building, Clock, DollarSign, Shield, FileText, Phone } from 'lucide-react';
 
 interface EditEmployeeWorkspaceProps {
@@ -286,31 +287,35 @@ export const EditEmployeeWorkspace: React.FC<EditEmployeeWorkspaceProps> = ({ is
                   </div>
                   <div>
                     <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Employment Type</label>
-                    <select 
-                      name="employmentTypeId" 
-                      value={formData.employmentTypeId || ''} 
-                      onChange={handleInputChange} 
-                      className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:border-accent"
-                    >
-                      <option value="">Select Employment Type...</option>
-                      {employmentTypes.map((et: any) => (
-                        <option key={et.id} value={et.id}>{et.name}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={formData.employmentTypeId || ''}
+                      onChange={(val) => setFormData((prev: any) => ({ ...prev, employmentTypeId: val }))}
+                      options={employmentTypes}
+                      mapOption={(et: any) => ({
+                        value: et.id,
+                        label: et.name,
+                      })}
+                      placeholder="Select Employment Type..."
+                      searchPlaceholder="Search employment types..."
+                      clearable
+                    />
                   </div>
                   <div className="col-span-2">
                     <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Reporting Manager</label>
-                    <select 
-                      name="reportingManagerId" 
-                      value={formData.reportingManagerId || ''} 
-                      onChange={handleInputChange} 
-                      className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:border-accent"
-                    >
-                      <option value="">None (Top Level / Executive)</option>
-                      {allEmployees.filter((e: any) => e.id !== employeeId).map((emp: any) => (
-                        <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeCode})</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={formData.reportingManagerId || ''}
+                      onChange={(val) => setFormData((prev: any) => ({ ...prev, reportingManagerId: val }))}
+                      options={allEmployees.filter((e: any) => e.id !== employeeId)}
+                      mapOption={(emp: any) => ({
+                        value: emp.id,
+                        label: emp.name,
+                        subLabel: emp.employeeCode ? `Code: ${emp.employeeCode}` : undefined,
+                        searchKeywords: [emp.employeeCode, emp.email].filter(Boolean),
+                      })}
+                      placeholder="None (Top Level / Executive)"
+                      searchPlaceholder="Search managers..."
+                      clearable
+                    />
                   </div>
                 </div>
               </div>
@@ -326,31 +331,33 @@ export const EditEmployeeWorkspace: React.FC<EditEmployeeWorkspaceProps> = ({ is
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
                     <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Department</label>
-                    <select 
-                      name="departmentId" 
-                      value={formData.departmentId || ''} 
-                      onChange={handleInputChange} 
-                      className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:border-accent"
-                    >
-                      <option value="">Select Department...</option>
-                      {departments.map((d: any) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={formData.departmentId || ''}
+                      onChange={(val) => setFormData((prev: any) => ({ ...prev, departmentId: val }))}
+                      options={departments}
+                      mapOption={(d: any) => ({
+                        value: d.id,
+                        label: d.name,
+                      })}
+                      placeholder="Select Department..."
+                      searchPlaceholder="Search departments..."
+                      clearable
+                    />
                   </div>
                   <div>
                     <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Designation / Title</label>
-                    <select 
-                      name="designationId" 
-                      value={formData.designationId || ''} 
-                      onChange={handleInputChange} 
-                      className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:border-accent"
-                    >
-                      <option value="">Select Designation...</option>
-                      {designations.map((d: any) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={formData.designationId || ''}
+                      onChange={(val) => setFormData((prev: any) => ({ ...prev, designationId: val }))}
+                      options={designations}
+                      mapOption={(d: any) => ({
+                        value: d.id,
+                        label: d.name,
+                      })}
+                      placeholder="Select Designation..."
+                      searchPlaceholder="Search designations..."
+                      clearable
+                    />
                   </div>
                 </div>
               </div>
@@ -366,17 +373,19 @@ export const EditEmployeeWorkspace: React.FC<EditEmployeeWorkspaceProps> = ({ is
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div className="col-span-2">
                     <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Assigned Work Shift</label>
-                    <select 
-                      name="shiftId" 
-                      value={formData.shiftId || ''} 
-                      onChange={handleInputChange} 
-                      className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm text-foreground focus:outline-none focus:border-accent"
-                    >
-                      <option value="">Select Work Shift...</option>
-                      {shifts.map((s: any) => (
-                        <option key={s.id} value={s.id}>{s.name} ({s.startTime || '09:00'} - {s.endTime || '18:00'})</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={formData.shiftId || ''}
+                      onChange={(val) => setFormData((prev: any) => ({ ...prev, shiftId: val }))}
+                      options={shifts}
+                      mapOption={(s: any) => ({
+                        value: s.id,
+                        label: s.name,
+                        subLabel: `${s.startTime || '09:00'} - ${s.endTime || '18:00'}`,
+                      })}
+                      placeholder="Select Work Shift..."
+                      searchPlaceholder="Search work shifts..."
+                      clearable
+                    />
                   </div>
                 </div>
               </div>

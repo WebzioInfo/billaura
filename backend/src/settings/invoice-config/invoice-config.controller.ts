@@ -1,17 +1,21 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, ConflictException } from '@nestjs/common';
 import { InvoiceConfigService } from './invoice-config.service';
 import { CompanyContext } from '../../common/context/company-context';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-// Adjust imports as necessary based on Billaura's actual structure
+import { TenantGuard } from '../../common/guards/tenant.guard';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('invoice-config')
 export class InvoiceConfigController {
   constructor(private readonly configService: InvoiceConfigService) {}
 
   @Get('categories')
   getCategories() {
-    return this.configService.getCategories(CompanyContext.getCompanyId()!);
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+    return this.configService.getCategories(companyId);
   }
 
   @Post('categories')

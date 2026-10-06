@@ -7,7 +7,7 @@ import {
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, 
   IconButton, PageHeader, KpiCard, LoadingState, TableLoader, TableSkeleton, 
-  SummaryCardLoader, StatusBadge, CurrencyCell, DateCell, RelativeDueCell 
+  SummaryCardLoader, StatusBadge, CurrencyCell, DateCell, RelativeDueCell, SearchableSelect
 } from '@/shared/components/ui';
 import { PageLayout } from '@/shared/components/layout/PageLayout';
 import { DataTable } from '@/shared/components/ui/data-table/DataTable';
@@ -17,6 +17,7 @@ import apiClient from '@/core/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import notification from '@/core/services/NotificationService';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { formatCurrency, formatDate } from '@/shared/utils/formatters';
 import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
 import { ExportService } from '@/core/services/ExportService';
@@ -193,9 +194,11 @@ export const BillsList = () => {
     mutationFn: async (id: string) => {
       await apiClient.delete(`/purchases/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success('Bill deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      await erpInvalidate.purchaseBill(queryClient, {
+        vendorId: billToDelete?.vendorId || undefined,
+      });
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to delete bill');
@@ -206,11 +209,13 @@ export const BillsList = () => {
     mutationFn: async (payload: any) => {
       await apiClient.post('/purchases/payments', payload);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success('Vendor payment recorded successfully');
       setIsPaymentModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['bills'] });
-      queryClient.invalidateQueries({ queryKey: ['bankAccounts'] });
+      await erpInvalidate.purchaseReceipt(queryClient, {
+        vendorId: paymentBill?.vendorId || undefined,
+        accountId: selectedBankAccountId || undefined,
+      });
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to record payment');
@@ -221,9 +226,11 @@ export const BillsList = () => {
     mutationFn: async (id: string) => {
       await apiClient.delete(`/purchases/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success('Bill cancelled and ledger entries reverted successfully');
-      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      await erpInvalidate.purchaseBill(queryClient, {
+        vendorId: billToCancel?.vendorId || undefined,
+      });
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to cancel bill');
@@ -681,19 +688,18 @@ export const BillsList = () => {
 
         {/* Expandable Filters Section */}
         {isFilterPanelOpen && (
-          <div className="bg-surface border border-border p-3.5 rounded-xl shadow-xs shrink-0 mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-surface border border-border p-3.5 rounded-xl shadow-xs shrink-0 mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <div>
-              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Vendor</label>
-              <select
+              <SearchableSelect
+                label="Vendor"
+                placeholder="All Vendors"
+                searchPlaceholder="Search vendor..."
                 value={selectedVendorId}
-                onChange={e => { setSelectedVendorId(e.target.value); resetPage(); }}
-                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
-              >
-                <option value="">All Vendors</option>
-                {vendors.map(v => (
-                  <option key={v.id} value={v.id}>{v.name}</option>
-                ))}
-              </select>
+                onChange={val => { setSelectedVendorId(val); resetPage(); }}
+                options={vendors}
+                mapOption={v => ({ label: v.name, value: v.id })}
+                clearable
+              />
             </div>
 
             <div>
@@ -856,19 +862,20 @@ export const BillsList = () => {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Source Bank / Cash Account</label>
-                <select
+              <div>
+                <SearchableSelect
+                  label="Source Bank / Cash Account *"
+                  placeholder="Select Account..."
+                  searchPlaceholder="Search bank or cash account..."
                   value={selectedBankAccountId}
-                  onChange={e => setSelectedBankAccountId(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-                >
-                  <option value="">Select Account</option>
-                  {bankAccounts.map(b => (
-                    <option key={b.id} value={b.id}>{b.name} (Bal: {formatCurrency(b.currentBalance)})</option>
-                  ))}
-                </select>
+                  onChange={val => setSelectedBankAccountId(val)}
+                  options={bankAccounts}
+                  mapOption={b => ({
+                    label: b.name,
+                    value: b.id,
+                    subLabel: `Balance: ${formatCurrency(b.currentBalance)}`
+                  })}
+                />
               </div>
 
               <div className="space-y-1.5">

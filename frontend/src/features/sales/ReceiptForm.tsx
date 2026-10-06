@@ -5,12 +5,13 @@ import {
   Banknote, HelpCircle, Loader2, ArrowLeft, Info, Landmark, Wallet,
   CheckCircle, FileCheck, AlertCircle, RefreshCw, Printer, Edit3
 } from 'lucide-react';
-import { PageContainer, LoadingState, FinancialSummary, SummaryRow, AsyncSelect } from '@/shared/components/ui';
+import { PageContainer, LoadingState, FinancialSummary, SummaryRow, AsyncSelect, SearchableSelect } from '@/shared/components/ui';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Button } from '@/shared/components/ui/Button';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import { UnifiedReceiptForm } from './UnifiedReceiptForm';
@@ -383,6 +384,7 @@ export const ReceiptForm = () => {
   }
 
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const queryCustomerId = searchParams.get('customerId');
@@ -736,9 +738,19 @@ export const ReceiptForm = () => {
           notes: notes || undefined,
           status
         });
+        await erpInvalidate.salesReceipt(queryClient, {
+          customerId: businessPartnerId,
+          invoiceIds: Object.keys(allocations),
+          accountId: bankAccountId || undefined,
+        });
         notification.success('Receipt updated successfully');
       } else {
         await apiClient.post('/receipts', payload);
+        await erpInvalidate.salesReceipt(queryClient, {
+          customerId: businessPartnerId,
+          invoiceIds: Object.keys(allocations),
+          accountId: bankAccountId || undefined,
+        });
         notification.success('Receipt recorded successfully');
       }
 
@@ -1155,27 +1167,21 @@ export const ReceiptForm = () => {
 
                 <div className="md:col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Customer *</label>
-                  <select
-                    value={businessPartnerId}
-                    onChange={(e) => setBusinessPartnerId(e.target.value)}
+                  <SearchableSelect
+                    value={businessPartnerId || ''}
+                    onChange={(val) => setBusinessPartnerId(val)}
                     disabled={isView || id !== undefined}
-                    className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accent disabled:opacity-60"
-                    required
-                  >
-                    <option value="">Select Customer...</option>
-                    {(customers || []).map((c: any) => {
-                      const details = [
-                        c.customerCode ? `Code: ${c.customerCode}` : null,
-                        c.gstin || c.gstNumber ? `GSTIN: ${c.gstin || c.gstNumber}` : null,
-                      ].filter(Boolean).join(' | ');
-
-                      return (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {details ? `(${details})` : ''}
-                        </option>
-                      );
+                    options={customers || []}
+                    mapOption={(c: any) => ({
+                      value: c.id,
+                      label: c.name,
+                      subLabel: [c.customerCode ? `Code: ${c.customerCode}` : null, c.gstin || c.gstNumber ? `GSTIN: ${c.gstin || c.gstNumber}` : null].filter(Boolean).join(' • '),
+                      searchKeywords: [c.customerCode, c.gstin, c.gstNumber, c.phone].filter(Boolean),
                     })}
-                  </select>
+                    placeholder="Select Customer..."
+                    searchPlaceholder="Search customers by name, code, GSTIN..."
+                    clearable={!isView && id === undefined}
+                  />
                   {!businessPartnerId && (
                     <p className="mt-1.5 text-[11px] text-red-500 flex items-center gap-1">
                       <AlertCircle className="w-3.5 h-3.5" /> Customer selection is required

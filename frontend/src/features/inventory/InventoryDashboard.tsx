@@ -12,6 +12,7 @@ import { apiClient as api } from '../../core/api/apiClient';
 import ProductFormModal from './ProductFormModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../shared/hooks/useApiList';
+import { SearchableSelect } from '../../shared/components/ui';
 
 // --- SCHEMAS ---
 const categorySchema = z.object({
@@ -748,10 +749,20 @@ export const InventoryDashboard = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Select Product *</label>
-                  <select {...adjustStockForm.register('productId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                    <option value="">Select product...</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={adjustStockForm.watch('productId') || ''}
+                    onChange={(val) => adjustStockForm.setValue('productId', val, { shouldValidate: true })}
+                    options={products}
+                    mapOption={(p) => ({
+                      value: p.id,
+                      label: p.name,
+                      subLabel: p.sku ? `SKU: ${p.sku}` : undefined,
+                      searchKeywords: [p.sku, p.barcode].filter(Boolean),
+                    })}
+                    placeholder="Select product..."
+                    searchPlaceholder="Search products by name, SKU..."
+                    clearable
+                  />
                 </div>
 
                 <div className="col-span-2">
@@ -759,10 +770,19 @@ export const InventoryDashboard = () => {
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Warehouse *</label>
                     <button type="button" onClick={() => setIsWarehouseModalOpen(true)} className="text-xs text-accent font-bold hover:underline cursor-pointer flex items-center gap-1"><Plus className="w-3 h-3" /> New</button>
                   </div>
-                  <select {...adjustStockForm.register('warehouseId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                    <option value="">Select warehouse...</option>
-                    {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={adjustStockForm.watch('warehouseId') || ''}
+                    onChange={(val) => adjustStockForm.setValue('warehouseId', val, { shouldValidate: true })}
+                    options={warehouses}
+                    mapOption={(w) => ({
+                      value: w.id,
+                      label: w.name,
+                      subLabel: w.location ? `Location: ${w.location}` : undefined,
+                    })}
+                    placeholder="Select warehouse..."
+                    searchPlaceholder="Search warehouses..."
+                    clearable
+                  />
                 </div>
 
                 <div className="col-span-2">

@@ -25,7 +25,7 @@ export class BankAccountsController {
 
     const items = await this.bankAccountsService.findAll(companyId, term, take, type);
 
-    return { success: true, data: { items } };
+    return { success: true, data: items };
   }
 
   @Post()

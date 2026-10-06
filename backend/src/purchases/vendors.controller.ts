@@ -12,6 +12,7 @@ import {
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 import { CompanyContext } from "../common/context/company-context";
+import { toPaginatedResult } from "../common/pagination";
 import { VendorsService } from "./vendors.service";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -26,12 +27,13 @@ export class VendorsController {
     @Query("limit") limit?: string,
   ) {
     const companyId = CompanyContext.getCompanyId() as string;
-    const data = await this.vendorsService.findAll(companyId, search, page, limit);
+    const result = await this.vendorsService.findAll(companyId, search, page, limit);
 
-    return {
-      success: true,
-      data,
-    };
+    return toPaginatedResult(result.items, result.total, {
+      page: result.page,
+      limit: result.limit,
+      sortOrder: "desc",
+    });
   }
 
   @Get(":id")

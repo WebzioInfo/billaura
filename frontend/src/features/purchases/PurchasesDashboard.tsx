@@ -14,7 +14,7 @@ import { DataTable, DataTableColumnHeader, FilterPanel } from '../../shared/comp
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LedgerSearchSelect } from '../../shared/components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer, TableLoader } from '../../shared/components/ui';
+import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer, TableLoader, SearchableSelect } from '../../shared/components/ui';
 import { useApiList } from '../../shared/hooks/useApiList';
 import { useBankAccounts } from '../../features/banking/hooks/useBankAccounts';
 
@@ -803,10 +803,20 @@ export const PurchasesDashboard = () => {
                 <div className="grid grid-cols-2 gap-4 shrink-0">
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Select Supplier *</label>
-                    <select {...purchaseForm.register('vendorId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                      <option value="">Choose Supplier...</option>
-                      {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                    </select>
+                    <SearchableSelect
+                      value={purchaseForm.watch('vendorId') || ''}
+                      onChange={(val) => purchaseForm.setValue('vendorId', val, { shouldValidate: true })}
+                      options={vendors}
+                      mapOption={(v) => ({
+                        value: v.id,
+                        label: v.name,
+                        subLabel: [v.gstin, v.contactDetails].filter(Boolean).join(' • '),
+                        searchKeywords: [v.gstin, v.contactDetails, v.vendorCode].filter(Boolean),
+                      })}
+                      placeholder="Choose Supplier..."
+                      searchPlaceholder="Search suppliers by name, code..."
+                      clearable
+                    />
                   </div>
 
                   <div>
@@ -833,14 +843,24 @@ export const PurchasesDashboard = () => {
                       <div key={field.id} className="grid grid-cols-12 gap-3 items-end bg-background bg-opacity-40 p-3 rounded-xl border border-border">
                         <div className="col-span-4">
                           <label className="block text-[10px] font-semibold text-muted-foreground uppercase mb-1">Product *</label>
-                          <select
-                            {...purchaseForm.register(`items.${index}.productId` as const)}
-                            onChange={(e) => handlePurchaseProductChange(index, e.target.value)}
-                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none"
-                          >
-                            <option value="">Select...</option>
-                            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
+                          <SearchableSelect
+                            value={purchaseForm.watch(`items.${index}.productId` as const) || ''}
+                            onChange={(val) => {
+                              purchaseForm.setValue(`items.${index}.productId` as any, val, { shouldValidate: true });
+                              handlePurchaseProductChange(index, val);
+                            }}
+                            options={products}
+                            mapOption={(p) => ({
+                              value: p.id,
+                              label: p.name,
+                              subLabel: [p.sku ? `SKU: ${p.sku}` : null, p.hsnCode ? `HSN: ${p.hsnCode}` : null].filter(Boolean).join(' • '),
+                              searchKeywords: [p.sku, p.hsnCode, p.barcode].filter(Boolean),
+                            })}
+                            placeholder="Select..."
+                            searchPlaceholder="Search product by name, SKU..."
+                            triggerClassName="w-full text-xs"
+                            clearable
+                          />
                         </div>
 
                         <div className="col-span-3">

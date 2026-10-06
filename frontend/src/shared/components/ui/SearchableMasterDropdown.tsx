@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Search, Loader2, Check, ChevronDown, Plus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import apiClient from '@/core/api';
+import apiClient, { ensureArray } from '@/core/api';
 
 export interface SearchableMasterDropdownProps {
   label?: string;
@@ -100,11 +100,7 @@ export const SearchableMasterDropdown = ({
       const res = await apiClient.get(apiPath, {
         params: { search: debouncedSearch.trim(), limit: 50, ...additionalParams }
       });
-      if (Array.isArray(res)) return res;
-      if (Array.isArray((res as any)?.items)) return (res as any).items;
-      if (Array.isArray((res as any)?.data)) return (res as any).data;
-      if (Array.isArray((res as any)?.data?.items)) return (res as any).data.items;
-      return [];
+      return ensureArray(res);
     },
     enabled: isOpen || !!value,
   });

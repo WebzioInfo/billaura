@@ -7,8 +7,9 @@ import notification from '@/core/services/NotificationService';
 import { Search, Plus, Trash2, Edit2, Download, AlertCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/core/api';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
-import { DeleteDialog, AsyncSelect, StatusBadge, CurrencyCell, DateCell, TableLoader, Button, IconButton } from '@/shared/components/ui';
+import { DeleteDialog, AsyncSelect, StatusBadge, CurrencyCell, DateCell, TableLoader, Button, IconButton, SearchableSelect } from '@/shared/components/ui';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { PageLayout } from '@/shared/components/layout/PageLayout';
 import { Pagination } from '@/shared/components/ui/Pagination';
@@ -220,9 +221,9 @@ export const ExpensesDashboard = () => {
       }
       return apiClient.post('/expenses', values);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success(editingId ? 'Expense updated successfully' : 'Expense created successfully');
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      await erpInvalidate.expenseReceipt(queryClient);
       setIsModalOpen(false);
       setEditingId(null);
       form.reset();
@@ -234,9 +235,9 @@ export const ExpensesDashboard = () => {
 
   const deleteExpense = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/expenses/${id}`),
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success('Expense claim cancelled & reversed successfully');
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      await erpInvalidate.expenseReceipt(queryClient);
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to cancel expense');
@@ -245,9 +246,9 @@ export const ExpensesDashboard = () => {
 
   const approveExpense = useMutation({
     mutationFn: async (id: string) => apiClient.put(`/expenses/${id}/approval`, { approvalStatus: 'APPROVED' }),
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success('Expense claim approved & posted successfully');
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      await erpInvalidate.expenseReceipt(queryClient);
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to approve expense');
@@ -634,21 +635,35 @@ export const ExpensesDashboard = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Expense Category *</label>
-                    <select {...form.register('categoryId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                      <option value="">Select Category</option>
-                      {categories.map((c: any) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={form.watch('categoryId') || ''}
+                      onChange={(val) => form.setValue('categoryId', val, { shouldValidate: true })}
+                      options={categories}
+                      mapOption={(c: any) => ({
+                        value: c.id,
+                        label: c.name,
+                        subLabel: c.description || undefined,
+                      })}
+                      placeholder="Select Category"
+                      searchPlaceholder="Search categories..."
+                      clearable
+                    />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Department *</label>
-                    <select required {...form.register('departmentId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                      <option value="">Select Department</option>
-                      {departments.map((d: any) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={form.watch('departmentId') || ''}
+                      onChange={(val) => form.setValue('departmentId', val, { shouldValidate: true })}
+                      options={departments}
+                      mapOption={(d: any) => ({
+                        value: d.id,
+                        label: d.name,
+                        subLabel: d.code || undefined,
+                      })}
+                      placeholder="Select Department"
+                      searchPlaceholder="Search departments..."
+                      clearable
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Posting Date *</label>
@@ -791,12 +806,20 @@ export const ExpensesDashboard = () => {
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">General Ledger Mapping Account *</label>
-                    <select {...categoryForm.register('accountId')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                      <option value="">Select Target Account</option>
-                      {expenseAccounts.map((a: any) => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={categoryForm.watch('accountId') || ''}
+                      onChange={(val) => categoryForm.setValue('accountId', val, { shouldValidate: true })}
+                      options={expenseAccounts}
+                      mapOption={(a: any) => ({
+                        value: a.id,
+                        label: a.name,
+                        subLabel: a.accountCode || a.type || undefined,
+                        searchKeywords: [a.accountCode].filter(Boolean),
+                      })}
+                      placeholder="Select Target Account"
+                      searchPlaceholder="Search accounts by name, code..."
+                      clearable
+                    />
                     {categoryForm.formState.errors.accountId && <span className="text-red-500 text-[10px] mt-1">{categoryForm.formState.errors.accountId.message}</span>}
                     <span className="text-[9px] text-muted-foreground/80 mt-1 block">Specify the general ledger target account to post approved expense debits to.</span>
                   </div>

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { X, Plus, Trash2, IndianRupee, CheckCircle2, Download, FileText } from 'lucide-react';
-import apiClient from '@/core/api';
-import { Button } from '@/shared/components/ui/Button';
+import apiClient, { ensureArray } from '@/core/api';
+import { Button, SearchableSelect } from '@/shared/components/ui';
 import notification from '@/core/services/NotificationService';
 
 interface RecordPaymentModalProps {
@@ -21,6 +22,7 @@ type PaymentSplit = {
 };
 
 export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, onClose, invoice, onSuccess }) => {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
@@ -35,11 +37,11 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
   }]);
 
   // Fetch Bank Accounts for dropdown
-  const { data: accounts } = useQuery({
+  const { data: accounts, isLoading: loadingAccounts } = useQuery({
     queryKey: ['bank-accounts'],
     queryFn: async () => {
       const res = await apiClient.get<any>('/finance/bank/accounts');
-      return (res as any).data || res;
+      return ensureArray(res);
     }
   });
 
@@ -120,6 +122,11 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
 
       const receiptObj = res.data?.data || res.data;
       setCreatedReceipt(receiptObj);
+      await erpInvalidate.salesReceipt(queryClient, {
+        customerId: invoice.businessPartnerId,
+        invoiceIds: [invoice.id],
+        accountId: splits.find(s => s.accountId)?.accountId,
+      });
       notification.success('Payment recorded successfully.');
       onSuccess();
     } catch (err: any) {
@@ -255,16 +262,22 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
 
                   <div className="col-span-4">
                     <label className="block text-xs text-gray-500 mb-1">Account</label>
-                    <select
-                      value={split.accountId}
-                      onChange={e => handleUpdateSplit(split.id, 'accountId', e.target.value)}
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                    >
-                      <option value="">Auto Select Ledger</option>
-                      {(accounts || []).map((acc: any) => (
-                        <option key={acc.id} value={acc.id}>{acc.bankName} - {acc.accountNumber}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={split.accountId || ''}
+                      onChange={val => handleUpdateSplit(split.id, 'accountId', val)}
+                      options={accounts || []}
+                      mapOption={(acc: any) => ({
+                        value: acc.id,
+                        label: acc.bankName ? `${acc.bankName}${acc.accountNumber ? ` - ${acc.accountNumber}` : ''}` : (acc.name || 'Bank Account'),
+                        subLabel: acc.accountType || undefined,
+                        searchKeywords: [acc.accountNumber, acc.bankName, acc.name, acc.ifscCode].filter(Boolean),
+                      })}
+                      placeholder="Auto Select Ledger"
+                      searchPlaceholder="Search accounts..."
+                      triggerClassName="w-full text-xs"
+                      isLoading={loadingAccounts}
+                      clearable
+                    />
                   </div>
 
                   <div className="col-span-4">

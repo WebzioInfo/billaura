@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { apiClient as api } from '../../core/api/apiClient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { StatusBadge, CurrencyCell, Button, DeleteDialog, Pagination } from '../../shared/components/ui';
 import { LedgerLookup } from '../../shared/components/ui/LedgerLookup';
 import { PageHeader } from '../../shared/components/ui/PageHeader';
@@ -598,12 +599,7 @@ export const ChartOfAccounts: React.FC = () => {
       await api.post('/journal-entries', values);
       notification.success('Journal entry posted successfully');
       setIsJournalModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
-      queryClient.invalidateQueries({ queryKey: ['accounts-tree'] });
-      queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
-      queryClient.invalidateQueries({ queryKey: ['profit-loss'] });
-      queryClient.invalidateQueries({ queryKey: ['balance-sheet'] });
-      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+      await erpInvalidate.journalEntry(queryClient);
     } catch (err: any) {
       notification.error(err.response?.data?.message || 'Posting failed');
     } finally {

@@ -17,13 +17,18 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
-@Controller("sales/quotations")
+@Controller(["sales/quotations", "quotations"])
 export class QuotationsController {
   constructor(private readonly quotationsService: QuotationsService) {}
 
   @Get()
   async findAll(@Query() query: PaginationQueryDto) {
     return this.quotationsService.findAll(query);
+  }
+
+  @Get("next-number")
+  async getNextNumber() {
+    return this.quotationsService.getNextQuotationNumber();
   }
 
   @Get(":id")

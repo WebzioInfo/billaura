@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck } from 'lucide-react';
-import { apiClient as api } from '../../core/api/apiClient';
+import { apiClient as api, ensureArray } from '../../core/api/apiClient';
 import notification from '@/core/services/NotificationService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAsyncForm } from '../../shared/hooks/useAsyncForm';
@@ -128,17 +128,17 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
 
   const { data: categories = [] } = useQuery<unknown[]>({
     queryKey: ['categories'],
-    queryFn: () => api.get('/inventory/categories').then(res => res.data || []),
+    queryFn: () => api.get('/inventory/categories').then(ensureArray),
   });
 
   const { data: brands = [] } = useQuery<unknown[]>({
     queryKey: ['brands'],
-    queryFn: () => api.get('/inventory/brands').then(res => res.data || []),
+    queryFn: () => api.get('/inventory/brands').then(ensureArray),
   });
 
-  const { data: units = [] } = useQuery<unknown[]>({
+  const { data: units = [], isLoading: loadingUnits } = useQuery<unknown[]>({
     queryKey: ['units'],
-    queryFn: () => api.get('/units').then(res => res.data || []),
+    queryFn: () => api.get('/units').then(ensureArray),
   });
 
 
@@ -438,6 +438,7 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                               };
                             }}
                             placeholder="Select Unit..."
+                            isLoading={loadingUnits}
                           />
                         )}
                       />

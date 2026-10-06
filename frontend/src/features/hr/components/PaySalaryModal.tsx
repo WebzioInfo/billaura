@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { usePaySalarySlip } from '../hooks/useHr';
 import { Button } from '@/shared/components/ui/Button';
-import { apiClient } from '@/core/api/apiClient';
+import { SearchableSelect } from '@/shared/components/ui';
+import { apiClient, ensureArray } from '@/core/api/apiClient';
 
 interface Props {
   onClose: () => void;
@@ -10,13 +11,16 @@ interface Props {
 }
 
 export const PaySalaryModal: React.FC<Props> = ({ onClose, salarySlipId }) => {
-  const { register, handleSubmit, setError } = useForm();
+  const { register, handleSubmit, setError, setValue, watch } = useForm();
   const paySlip = usePaySalarySlip(setError);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
 
   useEffect(() => {
     // Fetch bank accounts for selection
-    apiClient.get('/finance/bank/accounts').then((res) => setBankAccounts(res.data || []));
+    apiClient.get('/finance/bank/accounts')
+      .then((res) => setBankAccounts(ensureArray(res)))
+      .finally(() => setLoadingAccounts(false));
   }, []);
 
   const onSubmit = (data: any) => {
@@ -41,18 +45,22 @@ export const PaySalaryModal: React.FC<Props> = ({ onClose, salarySlipId }) => {
         <h2 className="mb-4 text-xl font-semibold">Pay Salary Slip</h2>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium">Pay From (Bank Account)</label>
-            <select
-              {...register('bankAccountId', { required: true })}
-              className="mt-1 block w-full rounded-md border-border bg-background p-2"
-            >
-              <option value="">Select Account</option>
-              {bankAccounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name} - Balance: {acc.currentBalance}
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium mb-1.5">Pay From (Bank Account) *</label>
+            <SearchableSelect
+              value={watch('bankAccountId') || ''}
+              onChange={(val) => setValue('bankAccountId', val, { shouldValidate: true })}
+              options={bankAccounts}
+              mapOption={(acc) => ({
+                value: acc.id,
+                label: acc.name,
+                subLabel: acc.currentBalance !== undefined ? `Balance: ₹${Number(acc.currentBalance).toLocaleString('en-IN')}` : undefined,
+                searchKeywords: [acc.accountNumber].filter(Boolean),
+              })}
+              placeholder="Select Account"
+              searchPlaceholder="Search bank accounts..."
+              isLoading={loadingAccounts}
+              clearable
+            />
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

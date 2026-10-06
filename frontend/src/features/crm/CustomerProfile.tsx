@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import {
   Building2, Phone, Mail, MapPin, Edit, FileText, IndianRupee,
   Activity, Hash, Shield, Printer, Download, Trash2, ArrowRight,
@@ -22,6 +23,7 @@ import { MigrationTable } from './components/MigrationTable';
 export const CustomerProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('overview');
 
   const { data: customer, isLoading } = useQuery({
@@ -70,6 +72,7 @@ export const CustomerProfile = () => {
     if (!confirmed) return;
     try {
       await apiClient.delete(`/customers/${id}`);
+      await erpInvalidate.customer(queryClient, { customerId: id });
       notification.success("Customer deleted successfully");
       navigate("/customers");
     } catch (e: any) {

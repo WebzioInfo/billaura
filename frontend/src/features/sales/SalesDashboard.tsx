@@ -15,7 +15,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../shared/hooks/useApiList';
 import { LedgerSearchSelect } from '../../shared/components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog } from '../../shared/components/ui';
+import { DeleteDialog, ConfirmDialog, SearchableSelect } from '../../shared/components/ui';
 
 // --- SCHEMAS ---
 const invoiceItemSchema = z.object({
@@ -528,10 +528,20 @@ export const SalesDashboard = () => {
               <div className="grid grid-cols-3 gap-4 shrink-0">
                 <div className="col-span-3 md:col-span-1">
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Select Customer *</label>
-                  <select {...invoiceForm.register('customerId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                    <option value="">Choose Customer...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={invoiceForm.watch('customerId') || ''}
+                    onChange={(val) => invoiceForm.setValue('customerId', val, { shouldValidate: true })}
+                    options={customers}
+                    mapOption={(c) => ({
+                      value: c.id,
+                      label: c.name,
+                      subLabel: [c.phone, c.gstin].filter(Boolean).join(' • '),
+                      searchKeywords: [c.phone, c.gstin, c.customerCode].filter(Boolean),
+                    })}
+                    placeholder="Choose Customer..."
+                    searchPlaceholder="Search customers by name, phone..."
+                    clearable
+                  />
                 </div>
 
                 <div>
@@ -563,14 +573,24 @@ export const SalesDashboard = () => {
                     <div key={field.id} className="grid grid-cols-12 gap-3 items-end bg-background bg-opacity-40 p-3 rounded-xl border border-border">
                       <div className="col-span-4">
                         <label className="block text-[10px] font-semibold text-muted-foreground uppercase mb-1">Product *</label>
-                        <select
-                          {...invoiceForm.register(`items.${index}.productId` as const)}
-                          onChange={(e) => handleInvoiceProductChange(index, e.target.value)}
-                          className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none"
-                        >
-                          <option value="">Select...</option>
-                          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
+                        <SearchableSelect
+                          value={invoiceForm.watch(`items.${index}.productId` as const) || ''}
+                          onChange={(val) => {
+                            invoiceForm.setValue(`items.${index}.productId` as any, val, { shouldValidate: true });
+                            handleInvoiceProductChange(index, val);
+                          }}
+                          options={products}
+                          mapOption={(p) => ({
+                            value: p.id,
+                            label: p.name,
+                            subLabel: [p.sku ? `SKU: ${p.sku}` : null, p.hsnCode ? `HSN: ${p.hsnCode}` : null].filter(Boolean).join(' • '),
+                            searchKeywords: [p.sku, p.hsnCode, p.barcode].filter(Boolean),
+                          })}
+                          placeholder="Select..."
+                          searchPlaceholder="Search product by name, SKU..."
+                          triggerClassName="w-full text-xs"
+                          clearable
+                        />
                       </div>
 
                       <div className="col-span-3">
@@ -660,14 +680,20 @@ export const SalesDashboard = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Customer *</label>
-                  <select {...paymentForm.register('customerId')} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent">
-                    <option value="">Select customer...</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} (Outstanding: {formatCurrency(Number(c.outstandingAmount))})
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    value={paymentForm.watch('customerId') || ''}
+                    onChange={(val) => paymentForm.setValue('customerId', val, { shouldValidate: true })}
+                    options={customers}
+                    mapOption={(c) => ({
+                      value: c.id,
+                      label: c.name,
+                      subLabel: `Outstanding: ${formatCurrency(Number(c.outstandingAmount))}`,
+                      searchKeywords: [c.phone, c.gstin, c.customerCode].filter(Boolean),
+                    })}
+                    placeholder="Select customer..."
+                    searchPlaceholder="Search customer by name..."
+                    clearable
+                  />
                 </div>
 
                 <div className="col-span-2">

@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/components/ui/Card';
 import { Button } from '../../shared/components/ui/Button';
 import { Input } from '../../shared/components/ui/Input';
+import { SearchableSelect } from '../../shared/components/ui';
 import notification from '@/core/services/NotificationService';
 import { apiClient as api } from '../../core/api/apiClient';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 const Label = (props: any) => <label className="block text-sm font-medium mb-1" {...props} />;
@@ -37,11 +39,11 @@ export const CapitalDashboard = () => {
         amount: Number(data.amount)
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success(formData.type === 'INTRODUCED' ? 'Capital recorded' : 'Drawing recorded');
-      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      await erpInvalidate.bankTransaction(queryClient, {
+        accountId: formData.bankAccountId || undefined,
+      });
       setFormData(prev => ({
         ...prev,
         amount: '',
@@ -113,16 +115,20 @@ export const CapitalDashboard = () => {
 
               <div className="space-y-2">
                 <Label>Bank Account *</Label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <SearchableSelect
                   value={formData.bankAccountId}
-                  onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
-                >
-                  <option value="">Select Bank Account</option>
-                  {bankAccounts.map((b: any) => (
-                    <option key={b.id} value={b.id}>{b.name} (Bal: {b.currentBalance})</option>
-                  ))}
-                </select>
+                  onChange={(val) => setFormData({ ...formData, bankAccountId: val })}
+                  options={bankAccounts}
+                  mapOption={(b: any) => ({
+                    value: b.id,
+                    label: b.name,
+                    subLabel: b.currentBalance !== undefined ? `Bal: ₹${Number(b.currentBalance).toLocaleString('en-IN')}` : undefined,
+                    searchKeywords: [b.accountNumber, b.bankName].filter(Boolean),
+                  })}
+                  placeholder="Select Bank Account"
+                  searchPlaceholder="Search bank accounts..."
+                  clearable
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

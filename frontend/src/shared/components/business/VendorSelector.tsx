@@ -1,38 +1,62 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Vendor } from '../../../shared/types';
-import { Select } from '../ui/Select';
-import { apiClient as api } from '../../../core/api/apiClient';
+import { SearchableSelect } from '../ui/SearchableSelect';
+import { apiClient as api, ensureArray } from '../../../core/api/apiClient';
 
 interface VendorSelectorProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, vendor?: any) => void;
   error?: string;
+  label?: string;
+  required?: boolean;
 }
 
-export const VendorSelector = ({ value, onChange, error }: VendorSelectorProps) => {
+export const VendorSelector = ({ value, onChange, error, label = "Vendor", required = false }: VendorSelectorProps) => {
+  const navigate = useNavigate();
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
 
-  useEffect(() => {
-    api.get('/vendors').then((res: any) => {
-      setVendors(Array.isArray(res) ? res : ((res as any)?.data || []));
-    });
+  const fetchVendors = useCallback(() => {
+    setIsLoading(true);
+    setIsError(false);
+    api.get('/vendors')
+      .then((res: any) => {
+        setVendors(ensureArray<Vendor>(res));
+      })
+      .catch(() => {
+        setIsError(true);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const options = [
-    { label: 'Select vendor...', value: '' },
-    ...vendors.map(v => ({
-      label: `${v.name} (${v.vendorCode})`,
-      value: v.id
-    }))
-  ];
+  useEffect(() => {
+    fetchVendors();
+  }, [fetchVendors]);
 
   return (
-    <Select
-      label="Vendor"
+    <SearchableSelect
+      label={label}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      options={options}
+      onChange={onChange}
+      options={vendors}
+      mapOption={(v: any) => ({
+        label: `${v.name || 'Unnamed'}${v.vendorCode ? ` (${v.vendorCode})` : ''}`,
+        value: v.id,
+        description: [v.gstNumber || v.gstin, v.phone, v.state].filter(Boolean).join(' • ') || undefined,
+        searchKeywords: [v.gstNumber, v.gstin, v.phone, v.email, v.vendorCode, v.customerCode].filter(Boolean),
+      })}
+      placeholder="Select vendor..."
+      searchPlaceholder="Search vendor by name, code, phone, GSTIN..."
       error={error}
+      required={required}
+      isLoading={isLoading}
+      isError={isError}
+      onRetry={fetchVendors}
+      onCreate={() => navigate('/vendors/new')}
+      createLabel="Create Vendor"
+      allowClear={!required}
     />
   );
 };

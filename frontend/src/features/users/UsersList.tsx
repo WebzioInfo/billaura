@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import notification from '@/core/services/NotificationService';
 import { Users, Search, Plus, Edit2, Trash2, Mail, Loader2, Shield } from 'lucide-react';
 import { apiClient } from '../../core/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DeleteDialog } from '../../shared/components/ui';
+import { DeleteDialog, SearchableSelect } from '../../shared/components/ui';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/components/ui/Table';
 import { StatusBadge } from '../../shared/components/ui/StatusBadge';
 import { useNavigate } from 'react-router-dom';
@@ -48,7 +48,7 @@ export const UsersList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<UserFormValues>({
+  const { register, handleSubmit, reset, watch, control, formState: { errors } } = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
     defaultValues: {
       email: '',
@@ -296,16 +296,22 @@ export const UsersList = () => {
 
                 {selectedRole === 'CUSTOM' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">Custom Role *</label>
-                    <select
-                      {...register('customRoleId')}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
-                    >
-                      <option value="">-- Select Custom Role --</option>
-                      {roles.map((r: any) => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
-                      ))}
-                    </select>
+                    <Controller
+                      name="customRoleId"
+                      control={control}
+                      render={({ field }) => (
+                        <SearchableSelect
+                          label="Custom Role *"
+                          placeholder="Select Custom Role..."
+                          searchPlaceholder="Search custom role..."
+                          value={field.value || ''}
+                          onChange={(val: string) => field.onChange(val)}
+                          options={roles}
+                          mapOption={(r: any) => ({ label: r.name, value: r.id })}
+                          clearable
+                        />
+                      )}
+                    />
                     {errors.customRoleId && <p className="text-xs text-destructive mt-1">{errors.customRoleId.message}</p>}
                   </div>
                 )}

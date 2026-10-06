@@ -72,7 +72,7 @@ export class VendorsService {
 
   async findOne(id: string, companyId: string) {
     const item = await this.prisma.businessPartner.findFirst({
-      where: { id, companyId, deletedAt: null, bpType: "VENDOR" },
+      where: { id, companyId, deletedAt: null, bpType: { in: ["VENDOR", "CUSTOMER_VENDOR"] } },
     });
     if (!item) {
       throw new NotFoundException("Vendor not found");

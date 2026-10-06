@@ -93,6 +93,30 @@ export const UserForm = () => {
     enabled: !!departmentId
   });
 
+  const { data: branches = [] } = useQuery({ 
+    queryKey: ['branches'], 
+    queryFn: async () => { 
+      const res: any = await apiClient.get('/branches'); 
+      return Array.isArray(res) ? res : res.data || []; 
+    }
+  });
+
+  const { data: users = [] } = useQuery({ 
+    queryKey: ['users-list'], 
+    queryFn: async () => { 
+      const res: any = await apiClient.get('/users'); 
+      return Array.isArray(res) ? res : res.data || []; 
+    }
+  });
+
+  const { data: roles = [] } = useQuery({ 
+    queryKey: ['roles'], 
+    queryFn: async () => { 
+      const res: any = await apiClient.get('/roles'); 
+      return Array.isArray(res) ? res : res.data || []; 
+    }
+  });
+
   const onSubmit = async (values: UserFormValues) => {
     try {
       setIsSubmitting(true);
@@ -205,11 +229,43 @@ export const UserForm = () => {
               <FormErrorDisplay error={errors.designation} />
             </div>
             <div>
-              <Input label="Branch / Location" {...register('branchId')} placeholder="Select branch..." />
+              <Controller
+                name="branchId"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Branch / Location"
+                    placeholder="Select branch..."
+                    value={field.value || ''}
+                    onChange={(val: string) => field.onChange(val)}
+                    options={branches}
+                    mapOption={(b: any) => ({ label: b.name || b.branchName, value: b.id })}
+                    clearable
+                  />
+                )}
+              />
               <FormErrorDisplay error={errors.branchId} />
             </div>
             <div>
-              <Input label="Reporting Manager" {...register('reportingManagerId')} placeholder="Search manager..." />
+              <Controller
+                name="reportingManagerId"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Reporting Manager"
+                    placeholder="Search manager..."
+                    value={field.value || ''}
+                    onChange={(val: string) => field.onChange(val)}
+                    options={users}
+                    mapOption={(u: any) => ({ 
+                      label: u.fullName || u.displayName || u.username, 
+                      value: u.id,
+                      subLabel: u.email
+                    })}
+                    clearable
+                  />
+                )}
+              />
               <FormErrorDisplay error={errors.reportingManagerId} />
             </div>
           </div>
@@ -238,13 +294,21 @@ export const UserForm = () => {
               </div>
               {selectedRole === 'CUSTOM' && (
                 <div>
-                  <Select 
-                    label="Custom Role" 
-                    required 
-                    {...register('customRoleId')}
-                    options={[
-                      { value: "", label: "Select Custom Role" }
-                    ]}
+                  <Controller
+                    name="customRoleId"
+                    control={control}
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Custom Role"
+                        required
+                        placeholder="Select Custom Role"
+                        value={field.value || ''}
+                        onChange={(val: string) => field.onChange(val)}
+                        options={roles}
+                        mapOption={(r: any) => ({ label: r.name, value: r.id, subLabel: r.description })}
+                        clearable
+                      />
+                    )}
                   />
                   <FormErrorDisplay error={errors.customRoleId} />
                 </div>
