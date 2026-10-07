@@ -77,6 +77,20 @@ export class BankAccountsService {
       orderBy: { name: "asc" },
     });
 
+    // Fetch the actual default cash and bank accounts for this company
+    const [defaultCashAccount, defaultBankAccount] = await Promise.all([
+      this.prisma.cashAccount.findFirst({
+        where: { companyId, isDefault: true, deletedAt: null },
+        select: { id: true, accountId: true, name: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.bankAccount.findFirst({
+        where: { companyId, isDefault: true, deletedAt: null, status: 'ACTIVE' },
+        select: { id: true, accountId: true, name: true, bankName: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
     let items = accounts
       .filter((account) => {
         const nameLower = account.name.toLowerCase();
@@ -92,6 +106,10 @@ export class BankAccountsService {
         const isCash = accountName.includes("cash") || parentName.includes("cash");
         const accountType = isCash ? "CASH" : accountName.includes("saving") ? "SAVINGS" : "CURRENT";
 
+        const isDefault = isCash
+          ? (defaultCashAccount ? defaultCashAccount.accountId === account.id : accountName === "cash")
+          : (defaultBankAccount ? defaultBankAccount.accountId === account.id : false);
+
         return {
           id: account.id,
           ledgerId: account.id,
@@ -102,7 +120,7 @@ export class BankAccountsService {
           accountNumber: account.code || "",
           accountType,
           currentBalance: account.balance,
-          isDefault: isCash,
+          isDefault: Boolean(isDefault),
           parent: account.parent,
         };
       });

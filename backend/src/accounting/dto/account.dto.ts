@@ -5,12 +5,22 @@ import {
   IsEnum,
   IsNumber,
   IsBoolean,
+  IsInt,
+  Min,
+  Max,
 } from "class-validator";
 import { Type } from "class-transformer";
 import { AccountCategory, AccountSubCategory } from "@prisma/client";
 import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
 
 export class AccountLookupQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  limit = 100;
+
   @IsOptional()
   @IsEnum(AccountCategory)
   category?: AccountCategory;

@@ -24,21 +24,38 @@ export interface ExtractedInvoice {
   referenceNumber?: ExtractionField<string>;
 }
 
+export type RowClassification = 'PRODUCT' | 'SERVICE' | 'TAX' | 'DISCOUNT' | 'CHARGE' | 'SUBTOTAL' | 'TOTAL' | 'OTHER';
+
 export interface ExtractedLineItem {
   id: string;
   name: ExtractionField<string>;
-  description?: ExtractionField<string>;
+  extractedDescription?: string; // Exact invoice description preserved
+  classification?: RowClassification;
   hsnSac?: ExtractionField<string>;
   quantity: ExtractionField<number>;
   unit: ExtractionField<string>;
   rate: ExtractionField<number>;
   discount: ExtractionField<number>;
+  taxableAmount?: ExtractionField<number>;
   gstRate: ExtractionField<number>; // %
+  cgstAmount?: ExtractionField<number>;
+  sgstAmount?: ExtractionField<number>;
+  igstAmount?: ExtractionField<number>;
   taxAmount: ExtractionField<number>;
   lineTotal: ExtractionField<number>;
   matchedProductId?: string;
   matchedProductName?: string;
+  matchStatus?: 'EXISTING' | 'NEW' | 'SKIPPED' | 'NEEDS_REVIEW';
   matchConfidence?: number;
+  candidateProduct?: {
+    name: string;
+    description?: string;
+    itemType: 'PRODUCT' | 'SERVICE';
+    hsnCode?: string;
+    gstRate: number;
+    unit?: string;
+    isInventoryItem: boolean;
+  };
 }
 
 export interface ExtractedTaxes {

@@ -33,17 +33,20 @@ export class ExpensesController {
 
   @Get("categories")
   async findCategories() {
-    return this.expensesService.findCategories();
+    const data = await this.expensesService.findCategories();
+    return { success: true, data };
   }
 
   @Get("categories/:id")
   async findCategory(@Param("id") id: string) {
-    return this.expensesService.findCategory(id);
+    const data = await this.expensesService.findCategory(id);
+    return { success: true, data };
   }
 
   @Post("categories")
   async createCategory(@Body() dto: CreateExpenseCategoryDto) {
-    return this.expensesService.createCategory(dto);
+    const data = await this.expensesService.createCategory(dto);
+    return { success: true, message: "Expense category created successfully", data };
   }
 
   @Put("categories/:id")
@@ -51,35 +54,41 @@ export class ExpensesController {
     @Param("id") id: string,
     @Body() dto: UpdateExpenseCategoryDto,
   ) {
-    return this.expensesService.updateCategory(id, dto);
+    const data = await this.expensesService.updateCategory(id, dto);
+    return { success: true, message: "Expense category updated successfully", data };
   }
 
   @Delete("categories/:id")
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async removeCategory(@Param("id") id: string) {
     await this.expensesService.removeCategory(id);
+    return { success: true, message: "Expense category deleted successfully" };
   }
 
   // --- Expense Claims Endpoints ---
 
   @Get()
   async findAll(@Query() query: PaginationQueryDto) {
-    return this.expensesService.findAll(query);
+    const result = await this.expensesService.findAll(query);
+    return { success: true, ...result };
   }
 
   @Get(":id")
   async findOne(@Param("id") id: string) {
-    return this.expensesService.findOne(id);
+    const data = await this.expensesService.findOne(id);
+    return { success: true, data };
   }
 
   @Post()
   async create(@Body() dto: CreateExpenseDto) {
-    return this.expensesService.create(dto);
+    const data = await this.expensesService.create(dto);
+    return { success: true, message: "Expense created successfully", data };
   }
 
   @Put(":id")
   async update(@Param("id") id: string, @Body() dto: UpdateExpenseDto) {
-    return this.expensesService.update(id, dto);
+    const data = await this.expensesService.update(id, dto);
+    return { success: true, message: "Expense updated successfully", data };
   }
 
   @Put(":id/approval")
@@ -88,12 +97,14 @@ export class ExpensesController {
     @Body() dto: UpdateExpenseApprovalDto,
     @Req() req: any,
   ) {
-    return this.expensesService.updateApproval(id, dto, req.user.sub);
+    const data = await this.expensesService.updateApproval(id, dto, req.user.sub);
+    return { success: true, message: "Expense approval updated successfully", data };
   }
 
   @Delete(":id")
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async remove(@Param("id") id: string) {
     await this.expensesService.remove(id);
+    return { success: true, message: "Expense deleted successfully" };
   }
 }

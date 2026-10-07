@@ -191,6 +191,7 @@ export class AccountsService {
             code: true,
             category: true,
             subCategory: true,
+            balance: true,
             isGroup: true,
             parentId: true,
             parent: {
@@ -233,14 +234,21 @@ export class AccountsService {
         const total = rankedData.length;
         const paginatedData = rankedData.slice((page - 1) * limit, page * limit);
 
-        const mappedData = paginatedData.map(item => ({
-          id: item.id,
-          name: item.name,
-          code: item.code,
-          accountType: item.subCategory || item.category,
-          category: item.category,
-          parent: item.parent ? { id: item.parent.id, name: item.parent.name, code: item.parent.code } : null
-        }));
+        const mappedData = paginatedData.map(item => {
+          const isAssetOrExp = item.category === 'ASSET' || item.category === 'EXPENSE';
+          const rawBal = Number(item.balance || 0);
+          const normalBal = isAssetOrExp ? rawBal : -rawBal;
+          return {
+            id: item.id,
+            name: item.name,
+            code: item.code,
+            accountType: item.subCategory || item.category,
+            category: item.category,
+            balance: normalBal,
+            rawBalance: rawBal,
+            parent: item.parent ? { id: item.parent.id, name: item.parent.name, code: item.parent.code } : null
+          };
+        });
 
         this.logger.log(`Lookup search successful. Found ${mappedData.length} records of ${total} total.`);
         return {
@@ -267,6 +275,7 @@ export class AccountsService {
               code: true,
               category: true,
               subCategory: true,
+              balance: true,
               isGroup: true,
               parentId: true,
               parent: {
@@ -282,14 +291,21 @@ export class AccountsService {
           this.prisma.account.count({ where }),
         ]);
 
-        const mappedData = data.map(item => ({
-          id: item.id,
-          name: item.name,
-          code: item.code,
-          accountType: item.subCategory || item.category,
-          category: item.category,
-          parent: item.parent ? { id: item.parent.id, name: item.parent.name, code: item.parent.code } : null
-        }));
+        const mappedData = data.map(item => {
+          const isAssetOrExp = item.category === 'ASSET' || item.category === 'EXPENSE';
+          const rawBal = Number(item.balance || 0);
+          const normalBal = isAssetOrExp ? rawBal : -rawBal;
+          return {
+            id: item.id,
+            name: item.name,
+            code: item.code,
+            accountType: item.subCategory || item.category,
+            category: item.category,
+            balance: normalBal,
+            rawBalance: rawBal,
+            parent: item.parent ? { id: item.parent.id, name: item.parent.name, code: item.parent.code } : null
+          };
+        });
 
         this.logger.log(`Lookup standard listing successful. Found ${mappedData.length} records of ${total} total.`);
         return {
@@ -465,6 +481,9 @@ export class AccountsService {
       });
     }
 
+    const isAssetOrExpense = account.category === 'ASSET' || account.category === 'EXPENSE';
+    const computedCurrentBalance = isAssetOrExpense ? Number(account.balance) : -Number(account.balance);
+
     return {
       success: true,
       data: {
@@ -474,14 +493,14 @@ export class AccountsService {
           code: account.code,
           category: account.category,
           subCategory: account.subCategory,
-          balance: Number(account.balance),
+          balance: computedCurrentBalance,
           parentName: account.parent?.name || 'Root Group',
           openingBalance,
-          currentBalance: Number(account.balance),
+          currentBalance: computedCurrentBalance,
         },
         summary: {
           openingBalance,
-          currentBalance: Number(account.balance),
+          currentBalance: computedCurrentBalance,
           totalDebit,
           totalCredit,
           netMovement,

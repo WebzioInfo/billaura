@@ -107,12 +107,56 @@ export class PurchasesService {
       const bpTaxPreference = vendor?.taxPreference || 'TAXABLE';
 
       for (const item of dto.items) {
-        const product = await tx.product.findFirst({
-          where: { id: item.productId, companyId },
-        });
+        let product: any = null;
 
-        if (!product) {
-          throw new NotFoundException(`Product with ID ${item.productId} not found`);
+        // 1. Transactional candidate product creation if requested by user
+        if (item.createAsNewProduct && item.newProductData?.name) {
+          const normName = item.newProductData.name.trim();
+          // Server-side duplicate protection check
+          const existing = await tx.product.findFirst({
+            where: {
+              companyId,
+              deletedAt: null,
+              name: { equals: normName, mode: 'insensitive' },
+            },
+          });
+
+          if (existing) {
+            product = existing;
+          } else {
+            const generatedSku = await this.sequenceService.generateNextSequence(companyId, 'SKU');
+            const isService = item.newProductData.itemType === 'SERVICE' || item.newProductData.isInventoryItem === false;
+            const finalItemType = isService ? 'SERVICE' : (item.newProductData.itemType as any || 'FINISHED_GOOD');
+            
+            product = await tx.product.create({
+              data: {
+                companyId,
+                name: normName,
+                sku: generatedSku,
+                unit: item.newProductData.unit || 'NOS',
+                itemType: finalItemType,
+                hsnCode: item.newProductData.hsnCode || null,
+                gstRate: item.newProductData.gstRate !== undefined ? Number(item.newProductData.gstRate) : Number(item.taxPercent || 18),
+                taxPreference: 'TAXABLE',
+                purchasePrice: Number(item.rate || 0),
+                sellingPrice: Number(item.rate || 0),
+                minStock: 0,
+                maxStock: 0,
+                reorderLevel: 0,
+                valuationMethod: isService ? 'NONE' : 'AVERAGE',
+                isPurchasable: true,
+                isSellable: true,
+                isInventoryItem: !isService,
+                isTrackStock: !isService,
+                isService: isService,
+                isActive: true,
+              },
+            });
+          }
+        } else if (item.productId) {
+          product = await tx.product.findFirst({
+            where: { id: item.productId, companyId },
+          });
         }
 
         const rate = Number(item.rate);
@@ -121,7 +165,7 @@ export class PurchasesService {
         const discountAmt = item.discount ? (lineSubtotal * Number(item.discount)) / 100 : 0;
         const lineTotalAfterDiscount = lineSubtotal - discountAmt;
         
-        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.gstRate || 18);
+        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product?.gstRate || 18);
         
         const gstResult = GSTEngine.calculate({
            taxableAmount: lineTotalAfterDiscount,
@@ -138,10 +182,11 @@ export class PurchasesService {
         totalIgst += gstResult.igstAmount;
 
         itemsToCreate.push({
-          productId: product.id,
+          productId: product ? product.id : null,
           description: JSON.stringify({
-            text: item.description || product.name,
+            text: item.description || product?.name || 'Bill Line Item',
             discount: item.discount || 0,
+            skippedProduct: !product,
           }),
           qty,
           rate,
@@ -153,17 +198,19 @@ export class PurchasesService {
           igstAmount: gstResult.igstAmount,
         });
 
-        let debitAccountId = product.purchaseAccountId || product.inventoryAccountId;
+        let debitAccountId = product?.purchaseAccountId || product?.inventoryAccountId;
         if (!debitAccountId) {
-          let inventoryAccount = await tx.account.findFirst({
-            where: { companyId, name: 'Inventory Asset' },
+          const defaultAccName = product ? 'Inventory Asset' : 'Direct Expenses';
+          const defaultAccCat = product ? 'ASSET' : 'EXPENSE';
+          let targetAccount = await tx.account.findFirst({
+            where: { companyId, name: defaultAccName },
           });
-          if (!inventoryAccount) {
-            inventoryAccount = await tx.account.create({
-              data: { companyId, name: 'Inventory Asset', category: 'ASSET', balance: 0 },
+          if (!targetAccount) {
+            targetAccount = await tx.account.create({
+              data: { companyId, name: defaultAccName, category: defaultAccCat, balance: 0 },
             });
           }
-          debitAccountId = inventoryAccount.id;
+          debitAccountId = targetAccount.id;
         }
         
         accountDebits[debitAccountId] = (accountDebits[debitAccountId] || 0) + lineTotalAfterDiscount;
@@ -237,6 +284,13 @@ export class PurchasesService {
 
       if (targetWarehouse && !skipStockUpdate) {
         for (const item of itemsToCreate) {
+          if (!item.productId) continue; // Skip non-catalog / skipped items
+
+          const prod = await tx.product.findFirst({
+            where: { id: item.productId, companyId },
+          });
+          if (prod && (prod.isService || !prod.isInventoryItem)) continue; // Skip services
+
           const stock = await tx.stock.findFirst({
             where: { companyId, productId: item.productId, warehouseId: targetWarehouse.id },
           });
@@ -462,12 +516,55 @@ export class PurchasesService {
       const bpTaxPreference = vendor?.taxPreference || 'TAXABLE';
 
       for (const item of dto.items) {
-        const product = await tx.product.findFirst({
-          where: { id: item.productId, companyId },
-        });
+        let product: any = null;
 
-        if (!product) {
-          throw new NotFoundException(`Product with ID ${item.productId} not found`);
+        // 1. Transactional candidate product creation if requested
+        if (item.createAsNewProduct && item.newProductData?.name) {
+          const normName = item.newProductData.name.trim();
+          const existing = await tx.product.findFirst({
+            where: {
+              companyId,
+              deletedAt: null,
+              name: { equals: normName, mode: 'insensitive' },
+            },
+          });
+
+          if (existing) {
+            product = existing;
+          } else {
+            const generatedSku = await this.sequenceService.generateNextSequence(companyId, 'SKU');
+            const isService = item.newProductData.itemType === 'SERVICE' || item.newProductData.isInventoryItem === false;
+            const finalItemType = isService ? 'SERVICE' : (item.newProductData.itemType as any || 'FINISHED_GOOD');
+            
+            product = await tx.product.create({
+              data: {
+                companyId,
+                name: normName,
+                sku: generatedSku,
+                unit: item.newProductData.unit || 'NOS',
+                itemType: finalItemType,
+                hsnCode: item.newProductData.hsnCode || null,
+                gstRate: item.newProductData.gstRate !== undefined ? Number(item.newProductData.gstRate) : Number(item.taxPercent || 18),
+                taxPreference: 'TAXABLE',
+                purchasePrice: Number(item.rate || 0),
+                sellingPrice: Number(item.rate || 0),
+                minStock: 0,
+                maxStock: 0,
+                reorderLevel: 0,
+                valuationMethod: isService ? 'NONE' : 'AVERAGE',
+                isPurchasable: true,
+                isSellable: true,
+                isInventoryItem: !isService,
+                isTrackStock: !isService,
+                isService: isService,
+                isActive: true,
+              },
+            });
+          }
+        } else if (item.productId) {
+          product = await tx.product.findFirst({
+            where: { id: item.productId, companyId },
+          });
         }
 
         const rate = Number(item.rate);
@@ -476,7 +573,7 @@ export class PurchasesService {
         const discountAmt = item.discount ? (lineSubtotal * Number(item.discount)) / 100 : 0;
         const lineTotalAfterDiscount = lineSubtotal - discountAmt;
         
-        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.gstRate || 18);
+        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product?.gstRate || 18);
         
         const gstResult = GSTEngine.calculate({
            taxableAmount: lineTotalAfterDiscount,
@@ -493,10 +590,11 @@ export class PurchasesService {
         totalIgst += gstResult.igstAmount;
 
         itemsToCreate.push({
-          productId: product.id,
+          productId: product ? product.id : null,
           description: JSON.stringify({
-            text: item.description || product.name,
+            text: item.description || product?.name || 'Bill Line Item',
             discount: item.discount || 0,
+            skippedProduct: !product,
           }),
           qty,
           rate,
@@ -508,17 +606,19 @@ export class PurchasesService {
           igstAmount: gstResult.igstAmount,
         });
 
-        let debitAccountId = product.purchaseAccountId || product.inventoryAccountId;
+        let debitAccountId = product?.purchaseAccountId || product?.inventoryAccountId;
         if (!debitAccountId) {
-          let inventoryAccount = await tx.account.findFirst({
-            where: { companyId, name: 'Inventory Asset' },
+          const defaultAccName = product ? 'Inventory Asset' : 'Direct Expenses';
+          const defaultAccCat = product ? 'ASSET' : 'EXPENSE';
+          let targetAccount = await tx.account.findFirst({
+            where: { companyId, name: defaultAccName },
           });
-          if (!inventoryAccount) {
-            inventoryAccount = await tx.account.create({
-              data: { companyId, name: 'Inventory Asset', category: 'ASSET', balance: 0 },
+          if (!targetAccount) {
+            targetAccount = await tx.account.create({
+              data: { companyId, name: defaultAccName, category: defaultAccCat, balance: 0 },
             });
           }
-          debitAccountId = inventoryAccount.id;
+          debitAccountId = targetAccount.id;
         }
         
         accountDebits[debitAccountId] = (accountDebits[debitAccountId] || 0) + lineTotalAfterDiscount;
@@ -588,6 +688,13 @@ export class PurchasesService {
 
       if (targetWarehouse) {
         for (const item of itemsToCreate) {
+          if (!item.productId) continue; // Skip non-catalog / skipped items
+
+          const prod = await tx.product.findFirst({
+            where: { id: item.productId, companyId },
+          });
+          if (prod && (prod.isService || !prod.isInventoryItem)) continue; // Skip services
+
           const stock = await tx.stock.findFirst({
             where: { companyId, productId: item.productId, warehouseId: targetWarehouse.id },
           });

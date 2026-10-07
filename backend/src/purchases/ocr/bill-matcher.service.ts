@@ -233,12 +233,14 @@ export class BillMatcherService {
       if (matchedProduct) {
         item.matchedProductId = matchedProduct.id;
         item.matchedProductName = matchedProduct.name;
+        item.matchStatus = 'EXISTING';
         item.matchConfidence = matchConfidence;
         // Suggest internal HSN if available
         if (matchedProduct.hsnCode && item.hsnSac?.value === 'N/A') {
           item.hsnSac = { value: matchedProduct.hsnCode, confidence: 0.9, source: 'matched' };
         }
       } else {
+        item.matchStatus = 'NEW';
         unmatchedCount++;
       }
     }

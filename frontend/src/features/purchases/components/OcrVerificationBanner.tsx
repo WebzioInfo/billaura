@@ -9,6 +9,7 @@ interface OcrVerificationBannerProps {
   isVerified: boolean;
   onVerify: () => void;
   onOpenViewer: () => void;
+  onOpenReview?: () => void;
   onResetOcr?: () => void;
   ocrTotal?: number;
   calculatedTotal: number;
@@ -26,6 +27,7 @@ export const OcrVerificationBanner: React.FC<OcrVerificationBannerProps> = ({
   isVerified,
   onVerify,
   onOpenViewer,
+  onOpenReview,
   onResetOcr,
   ocrTotal,
   calculatedTotal,
@@ -118,7 +120,20 @@ export const OcrVerificationBanner: React.FC<OcrVerificationBannerProps> = ({
         </div>
 
         {/* Right Side: Action Buttons */}
-        <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+        <div className="flex items-center gap-2 self-end md:self-center shrink-0 flex-wrap">
+          {onOpenReview && (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={onOpenReview}
+              className="flex items-center gap-1.5 text-xs font-bold shadow-sm"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Review Extracted Bill
+            </Button>
+          )}
+
           <Button
             type="button"
             variant="outline"

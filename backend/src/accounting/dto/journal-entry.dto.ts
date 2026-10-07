@@ -21,6 +21,10 @@ export class JournalLineDto {
   @IsNumber()
   @IsOptional()
   credit?: number;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
 }
 
 export class CreateJournalEntryDto {

@@ -10,10 +10,40 @@ import {
 } from "class-validator";
 import { Type } from "class-transformer";
 
-export class PurchaseItemDto {
+export class CreateProductCandidateDto {
   @IsString()
   @IsNotEmpty()
-  productId: string;
+  name: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  itemType?: string;
+
+  @IsString()
+  @IsOptional()
+  hsnCode?: string;
+
+  @IsNumber()
+  @IsOptional()
+  gstRate?: number;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isInventoryItem?: boolean;
+}
+
+export class PurchaseItemDto {
+  @IsString()
+  @IsOptional()
+  productId?: string;
 
   @IsString()
   @IsOptional()
@@ -34,6 +64,15 @@ export class PurchaseItemDto {
   @IsNumber()
   @IsOptional()
   discount?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  createAsNewProduct?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateProductCandidateDto)
+  newProductData?: CreateProductCandidateDto;
 }
 
 export class CreatePurchaseDto {

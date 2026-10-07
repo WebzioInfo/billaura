@@ -6,7 +6,7 @@ import * as z from 'zod';
 import notification from '@/core/services/NotificationService';
 import { Search, Plus, Trash2, Edit2, Download, AlertCircle, Loader2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '@/core/api';
+import apiClient, { ensureArray } from '@/core/api';
 import { erpInvalidate } from '@/core/query/erpConsistency';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import { DeleteDialog, AsyncSelect, StatusBadge, CurrencyCell, DateCell, TableLoader, Button, IconButton, SearchableSelect } from '@/shared/components/ui';
@@ -113,21 +113,15 @@ export const ExpensesDashboard = () => {
   });
 
   const watchedPaymentMethod = form.watch('paymentMethod');
+  const watchedBankAccountId = form.watch('bankAccountId');
   const prevPaymentMethodRef = React.useRef(watchedPaymentMethod);
-
-  useEffect(() => {
-    if (prevPaymentMethodRef.current !== watchedPaymentMethod) {
-      form.setValue('bankAccountId', '', { shouldValidate: true });
-      prevPaymentMethodRef.current = watchedPaymentMethod;
-    }
-  }, [watchedPaymentMethod]);
 
   // Queries
   const { data: expensesData, isLoading: loadingExpenses } = useQuery({
     queryKey: ['expenses'],
     queryFn: async () => {
       const res = await apiClient.get('/expenses');
-      return res.data || [];
+      return ensureArray(res);
     },
     enabled: activeTab === 'claims'
   });
@@ -137,7 +131,7 @@ export const ExpensesDashboard = () => {
     queryKey: ['expense-categories'],
     queryFn: async () => {
       const res = await apiClient.get('/expenses/categories');
-      return res.data || [];
+      return ensureArray(res);
     }
   });
   const categories = Array.isArray(categoriesData) ? categoriesData : [];
@@ -146,17 +140,34 @@ export const ExpensesDashboard = () => {
     queryKey: ['bank-accounts'],
     queryFn: async () => {
       const res = await apiClient.get('/bank-accounts');
-      return res.data?.items || res.data || [];
+      return ensureArray(res);
     }
   });
   const bankAccounts = Array.isArray(bankAccountsData) ? bankAccountsData : [];
+
+  // Automatically select the default or first valid source account for the payment method
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const isCash = watchedPaymentMethod === 'CASH';
+    const available = bankAccounts.filter((b: any) => isCash ? b.accountType === 'CASH' : b.accountType !== 'CASH');
+    
+    // Check if currently selected account is valid for the current payment method
+    const isCurrentValid = Boolean(watchedBankAccountId && available.some((b: any) => b.id === watchedBankAccountId));
+
+    if (!isCurrentValid && available.length > 0) {
+      const defaultAccount = available.find((b: any) => b.isDefault) || available[0];
+      if (defaultAccount) {
+        form.setValue('bankAccountId', defaultAccount.id, { shouldValidate: true });
+      }
+    }
+    prevPaymentMethodRef.current = watchedPaymentMethod;
+  }, [watchedPaymentMethod, bankAccounts, isModalOpen, watchedBankAccountId, form]);
 
   const { data: departmentsData } = useQuery({
     queryKey: ['departments-list'],
     queryFn: async () => {
       const res = await apiClient.get('/hr-masters/departments');
-      const list = res.data || res;
-      return Array.isArray(list) ? list : (list?.data || []);
+      return ensureArray(res);
     }
   });
   const departments = Array.isArray(departmentsData) ? departmentsData : [];
@@ -261,8 +272,8 @@ export const ExpensesDashboard = () => {
   };
 
   const onInvalidSubmit = (errors: FieldErrors<ExpenseFormValues>) => {
-    const errorList = Object.entries(errors)
-      .map(([_, err]) => err?.message)
+    const errorMessages = Object.entries(errors)
+      .map(([field, err]) => err?.message || `${field} is required`)
       .filter(Boolean);
     const firstErrorMessage =
       errors.categoryId?.message ||
@@ -270,9 +281,9 @@ export const ExpensesDashboard = () => {
       errors.bankAccountId?.message ||
       errors.date?.message ||
       errors.departmentId?.message ||
-      errorList[0] ||
+      errorMessages[0] ||
       'Please check all required fields';
-    notification.error(String(firstErrorMessage));
+    notification.error(String(firstErrorMessage), { title: 'Incomplete Expense Form' });
   };
 
   const deleteExpense = useMutation({
@@ -692,6 +703,12 @@ export const ExpensesDashboard = () => {
                 <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
               </div>
               <form onSubmit={form.handleSubmit(onValidSubmit, onInvalidSubmit)} className="p-6 space-y-4">
+                {Object.keys(form.formState.errors).length > 0 && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-2 text-red-500 text-xs">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Please complete the highlighted required fields to save this expense claim.</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <SearchableSelect
@@ -867,7 +884,7 @@ export const ExpensesDashboard = () => {
                     className="px-4 py-2 bg-accent text-white hover:bg-opacity-90 rounded-xl text-xs font-bold shadow-md shadow-accent/15 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   >
                     {saveExpense.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>{saveExpense.isPending ? 'Filing Claim...' : (editingId ? 'Update Claim' : 'File Claim')}</span>
+                    <span>{saveExpense.isPending ? 'Saving Expense...' : (editingId ? 'Update Expense' : 'Save Expense')}</span>
                   </button>
                 </div>
               </form>

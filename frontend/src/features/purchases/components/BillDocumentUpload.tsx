@@ -6,6 +6,7 @@ import {
 import { Button } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 export interface UploadedBillDocument {
   id: string;
@@ -40,9 +41,9 @@ export const BillDocumentUpload: React.FC<BillDocumentUploadProps> = ({
   const [stepState, setStepState] = useState<StepState>('IDLE');
   const [stepMessage, setStepMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = async (file: File) => {
     // 1. Validate file format
@@ -155,7 +156,7 @@ export const BillDocumentUpload: React.FC<BillDocumentUploadProps> = ({
 
   return (
     <div className="w-full">
-      {/* Hidden inputs */}
+      {/* Hidden file input */}
       <input
         type="file"
         ref={fileInputRef}
@@ -164,14 +165,12 @@ export const BillDocumentUpload: React.FC<BillDocumentUploadProps> = ({
         className="hidden"
         disabled={disabled || isBusy}
       />
-      <input
-        type="file"
-        ref={cameraInputRef}
-        onChange={handleFileChange}
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        disabled={disabled || isBusy}
+
+      {/* Real Web Media Capture Modal */}
+      <CameraCaptureModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={(file) => processFile(file)}
       />
 
       {/* State A: Processing Loader */}
@@ -335,7 +334,7 @@ export const BillDocumentUpload: React.FC<BillDocumentUploadProps> = ({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  cameraInputRef.current?.click();
+                  setIsCameraOpen(true);
                 }}
                 className="text-xs font-medium"
               >

@@ -17,6 +17,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { BillDocumentUpload, UploadedBillDocument } from './components/BillDocumentUpload';
 import { BillOcrReviewViewer } from './components/BillOcrReviewViewer';
+import { BillOcrReviewModal, OcrReviewItem } from './components/BillOcrReviewModal';
 import { OcrVerificationBanner } from './components/OcrVerificationBanner';
 import { OcrFieldBadge } from './components/OcrFieldBadge';
 
@@ -59,6 +60,19 @@ interface FormLineItem {
   keyId: string; // React list rendering unique key
   productId: string;
   description: string;
+  originalExtractedDescription?: string; // Exact invoice description preserved
+  classification?: string;
+  matchStatus?: 'EXISTING' | 'NEW' | 'SKIPPED' | 'NEEDS_REVIEW';
+  createAsNewProduct?: boolean;
+  newProductData?: {
+    name: string;
+    description?: string;
+    itemType: 'FINISHED_GOOD' | 'RAW_MATERIAL' | 'SERVICE';
+    hsnCode?: string;
+    gstRate: number;
+    unit: string;
+    isInventoryItem: boolean;
+  };
   hsnCode: string;
   qty: number;
   unit: string;
@@ -120,6 +134,7 @@ export const BillForm = () => {
 
   // Document Review Viewer Modal State
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ url: string; fileName: string; mimeType: string }>({
     url: '',
     fileName: '',
@@ -400,7 +415,12 @@ export const BillForm = () => {
         return {
           keyId: `ocr-item-${idx}-${Date.now()}`,
           productId: pId,
-          description: item.name?.value || item.description?.value || '',
+          description: item.name?.value || item.extractedDescription || '',
+          originalExtractedDescription: item.extractedDescription || item.name?.value || '',
+          classification: item.classification || 'PRODUCT',
+          matchStatus: item.matchStatus || (pId ? 'EXISTING' : 'NEW'),
+          createAsNewProduct: false,
+          newProductData: item.candidateProduct,
           hsnCode: hsn,
           qty: Number(item.quantity?.value || 1),
           unit,
@@ -414,6 +434,31 @@ export const BillForm = () => {
     }
 
     setFieldTracking(newTracking);
+    // Automatically open the side-by-side OCR Review Modal for instant visual verification
+    setIsReviewModalOpen(true);
+  };
+
+  const handleApplyVerification = (verifiedItems: OcrReviewItem[]) => {
+    setIsOcrVerified(true);
+    const mapped: FormLineItem[] = verifiedItems.map((v, idx) => ({
+      keyId: `verified-item-${idx}-${Date.now()}`,
+      productId: v.matchedProductId || '',
+      description: v.name || v.extractedDescription,
+      originalExtractedDescription: v.extractedDescription,
+      classification: v.classification,
+      matchStatus: v.matchStatus,
+      createAsNewProduct: v.createAsNewProduct,
+      newProductData: v.newProductData,
+      hsnCode: v.hsnSac && v.hsnSac !== 'N/A' ? v.hsnSac : 'N/A',
+      qty: Number(v.qty || 1),
+      unit: v.unit || 'PCS',
+      rate: Number(v.rate || 0),
+      discount: Number(v.discount || 0),
+      taxPercent: Number(v.gstRate || 18),
+      warehouseId: warehouseId || '',
+    }));
+    setItems(mapped);
+    notification.success('Extracted bill verified and auto-filled into form.');
   };
 
   const handleDocumentRemoved = () => {
@@ -574,9 +619,9 @@ export const BillForm = () => {
       notification.error('Please select a billing date');
       return;
     }
-    const emptyProductIdx = items.findIndex(i => !i.productId);
-    if (emptyProductIdx !== -1) {
-      notification.error(`Please select a product for line item ${emptyProductIdx + 1}`);
+    const invalidItemIdx = items.findIndex(i => !i.productId && !i.description && !i.originalExtractedDescription);
+    if (invalidItemIdx !== -1) {
+      notification.error(`Please select a product or enter description for line item ${invalidItemIdx + 1}`);
       return;
     }
     const zeroQtyIdx = items.findIndex(i => Number(i.qty) <= 0);
@@ -611,12 +656,14 @@ export const BillForm = () => {
         skipStockUpdate: shouldSkipStock || undefined
       },
       items: items.map(i => ({
-        productId: i.productId,
-        description: i.description,
+        productId: i.productId || undefined,
+        description: i.description || i.originalExtractedDescription || 'Bill Line Item',
         qty: Number(i.qty),
         rate: Number(i.rate),
         taxPercent: Number(i.taxPercent),
-        discount: Number(i.discount)
+        discount: Number(i.discount),
+        createAsNewProduct: Boolean(i.createAsNewProduct),
+        newProductData: i.createAsNewProduct ? i.newProductData : undefined,
       }))
     };
 
@@ -685,6 +732,7 @@ export const BillForm = () => {
             <OcrVerificationBanner
               isVerified={isOcrVerified}
               onVerify={() => setIsOcrVerified(!isOcrVerified)}
+              onOpenReview={() => setIsReviewModalOpen(true)}
               onOpenViewer={() => {
                 if (ocrDocument?.secureUrl) {
                   setViewerDoc({
@@ -884,14 +932,75 @@ export const BillForm = () => {
                   return (
                     <div key={item.keyId} className="p-4 border border-border/80 rounded-xl bg-muted/10 space-y-3 relative group">
                       {/* Row Header */}
-                      <div className="flex items-center justify-between border-b border-border/30 pb-2">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between border-b border-border/30 pb-2 flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Item line {index + 1}</span>
                           <OcrFieldBadge
                             status={fieldTracking[`item_${index}`]?.status}
                             confidence={fieldTracking[`item_${index}`]?.confidence}
                           />
+
+                          {/* Matching & Catalog Status Badges */}
+                          {item.productId ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
+                              ✓ Catalog Item
+                            </span>
+                          ) : item.createAsNewProduct ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full border border-blue-300 dark:border-blue-800">
+                              + Will Create New Product
+                            </span>
+                          ) : item.originalExtractedDescription ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-800">
+                              ⚠ Not in catalog (Bill charge only)
+                            </span>
+                          ) : null}
+
+                          {/* Raw invoice description badge */}
+                          {item.originalExtractedDescription && (
+                            <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-2 py-0.5 rounded truncate max-w-xs" title={`Original invoice description: "${item.originalExtractedDescription}"`}>
+                              Invoice: &ldquo;{item.originalExtractedDescription}&rdquo;
+                            </span>
+                          )}
                         </div>
+
+                        {/* Decision Toggle for non-catalog items */}
+                        {!item.productId && (item.originalExtractedDescription || item.description) && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-muted-foreground font-medium">Create product?</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextVal = !item.createAsNewProduct;
+                                setItems(prev => {
+                                  const copy = [...prev];
+                                  copy[index] = {
+                                    ...copy[index],
+                                    createAsNewProduct: nextVal,
+                                    matchStatus: nextVal ? 'NEW' : 'SKIPPED',
+                                    newProductData: nextVal && !copy[index].newProductData ? {
+                                      name: copy[index].description || copy[index].originalExtractedDescription || 'New Product',
+                                      description: copy[index].originalExtractedDescription || copy[index].description,
+                                      itemType: copy[index].classification === 'SERVICE' ? 'SERVICE' : 'FINISHED_GOOD',
+                                      hsnCode: copy[index].hsnCode !== 'N/A' ? copy[index].hsnCode : '',
+                                      gstRate: copy[index].taxPercent || 18,
+                                      unit: copy[index].unit || 'NOS',
+                                      isInventoryItem: copy[index].classification !== 'SERVICE',
+                                    } : copy[index].newProductData,
+                                  };
+                                  return copy;
+                                });
+                              }}
+                              className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-colors ${
+                                item.createAsNewProduct
+                                  ? 'bg-primary text-primary-foreground shadow-xs'
+                                  : 'bg-muted text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {item.createAsNewProduct ? 'Create as New: ON' : 'Create as New: OFF'}
+                            </button>
+                          </div>
+                        )}
+
                         <div className="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
@@ -1184,7 +1293,7 @@ export const BillForm = () => {
         </form>
       </div>
 
-      {/* Interactive Bill OCR Review Viewer Modal */}
+      {/* Interactive Bill OCR Review Viewer Modal (Source Document Inspection) */}
       <BillOcrReviewViewer
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
@@ -1192,6 +1301,46 @@ export const BillForm = () => {
         fileName={viewerDoc.fileName}
         mimeType={viewerDoc.mimeType}
       />
+
+      {/* Dedicated Side-by-Side OCR Verification Review Modal */}
+      {ocrDocument && (
+        <BillOcrReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          documentUrl={ocrDocument.secureUrl}
+          documentName={ocrDocument.originalFileName}
+          documentMime={ocrDocument.mimeType}
+          vendorName={ocrExtraction?.vendor?.name?.value || ''}
+          vendorGstin={ocrExtraction?.vendor?.gstin?.value}
+          matchedVendorName={ocrExtraction?.matchedVendor?.name}
+          invoiceNumber={reference || ocrExtraction?.invoice?.invoiceNumber?.value || ''}
+          invoiceDate={date || ocrExtraction?.invoice?.invoiceDate?.value || ''}
+          dueDate={dueDate || ocrExtraction?.invoice?.dueDate?.value}
+          subtotal={Number(ocrExtraction?.totals?.subtotal?.value || totals.subtotal)}
+          taxTotal={Number(ocrExtraction?.taxes?.totalTax?.value || totals.taxTotal)}
+          grandTotal={Number(ocrExtraction?.totals?.grandTotal?.value || totals.grandTotal)}
+          items={items.map((it, idx) => ({
+            id: it.keyId || `item-${idx}`,
+            name: it.description || it.originalExtractedDescription || `Item ${idx + 1}`,
+            extractedDescription: it.originalExtractedDescription || it.description || '',
+            classification: it.classification || 'PRODUCT',
+            matchedProductId: it.productId,
+            matchedProductName: products.find(p => p.id === it.productId)?.name,
+            matchStatus: it.matchStatus || (it.productId ? 'EXISTING' : (it.createAsNewProduct ? 'NEW' : (it.originalExtractedDescription ? 'SKIPPED' : 'NEEDS_REVIEW'))),
+            hsnSac: it.hsnCode,
+            qty: it.qty,
+            unit: it.unit,
+            rate: it.rate,
+            discount: it.discount,
+            gstRate: it.taxPercent,
+            taxAmount: (it.rate * it.qty * it.taxPercent) / 100,
+            lineTotal: (it.rate * it.qty) * (1 + it.taxPercent / 100),
+            createAsNewProduct: Boolean(it.createAsNewProduct),
+            newProductData: it.newProductData,
+          }))}
+          onApplyVerification={handleApplyVerification}
+        />
+      )}
     </PageContainer>
   );
 };

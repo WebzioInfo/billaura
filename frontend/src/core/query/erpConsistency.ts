@@ -271,6 +271,12 @@ export const erpInvalidate = {
     queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
     queryClient.invalidateQueries({ queryKey: ['bankAccounts'] });
     queryClient.invalidateQueries({ queryKey: ['reports'] });
+    queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
+    queryClient.invalidateQueries({ queryKey: ['profit-loss'] });
+    queryClient.invalidateQueries({ queryKey: ['balance-sheet'] });
+    queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+    queryClient.invalidateQueries({ queryKey: ['reports', 'day-book'] });
+    queryClient.invalidateQueries({ queryKey: ['reports', 'general-ledger'] });
     queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     queryClient.invalidateQueries({ queryKey: ['ledger-search'] });
     queryClient.invalidateQueries({ queryKey: ['ledger-inquiry'] });

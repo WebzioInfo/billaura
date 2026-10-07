@@ -5,6 +5,7 @@ export interface PostJournalLine {
   accountId: string;
   debit?: number;
   credit?: number;
+  description?: string;
 }
 
 export interface PostJournalPayload {
@@ -43,7 +44,7 @@ export class JournalPostingService {
     });
 
     if (accounts.length !== new Set(accountIds).size) {
-      throw new BadRequestException('One or more accounts are invalid, duplicated, or do not belong to the company context');
+      throw new BadRequestException('One or more accounts are invalid or do not belong to the company context');
     }
 
     const accountMap = new Map(accounts.map((a) => [a.id, a]));
@@ -84,7 +85,7 @@ export class JournalPostingService {
     }
 
     // Auto-generate reference if missing
-    let finalReference = payload.reference;
+    let finalReference = payload.reference?.trim();
     if (!finalReference) {
       const count = await tx.journalEntry.count({
         where: { companyId },
@@ -105,10 +106,17 @@ export class JournalPostingService {
             accountId: l.accountId,
             debit: l.debit || 0,
             credit: l.credit || 0,
+            description: l.description?.trim() || null,
           })),
         },
       },
-      include: { lines: true },
+      include: {
+        lines: {
+          include: {
+            account: true,
+          },
+        },
+      },
     });
 
     // Update balances
@@ -123,6 +131,35 @@ export class JournalPostingService {
           },
         },
       });
+
+      // Synchronize backing bankAccount or cashAccount if mapped to this ledger account
+      const linkedBank = await tx.bankAccount.findFirst({
+        where: { accountId: line.accountId, companyId },
+      });
+      if (linkedBank) {
+        await tx.bankAccount.update({
+          where: { id: linkedBank.id },
+          data: {
+            currentBalance: {
+              increment: change.toNumber(),
+            },
+          },
+        });
+      }
+
+      const linkedCash = await tx.cashAccount.findFirst({
+        where: { accountId: line.accountId, companyId },
+      });
+      if (linkedCash) {
+        await tx.cashAccount.update({
+          where: { id: linkedCash.id },
+          data: {
+            currentBalance: {
+              increment: change.toNumber(),
+            },
+          },
+        });
+      }
     }
 
     return entry;
