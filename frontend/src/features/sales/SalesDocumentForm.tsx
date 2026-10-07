@@ -482,8 +482,10 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       if (docType === 'CREDIT_NOTE') actualPayload.invoiceType = 'CREDIT_NOTE';
       
       const createdDoc: any = await apiClient.post(endpoint, actualPayload);
+      const resPayload = createdDoc?.data?.data || createdDoc?.data || createdDoc;
       if (docType === 'QUOTATION') {
-        queryClient.invalidateQueries({ queryKey: ['quotations'] });
+        await queryClient.invalidateQueries({ queryKey: ['quotations'] });
+        await queryClient.invalidateQueries({ queryKey: ['quotations-summary'] });
       } else {
         await erpInvalidate.invoice(queryClient, {
           customerId: data.customerId,
@@ -495,9 +497,13 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
           : `${docType} created and issued successfully!`
       );
       if (docType === 'QUOTATION') {
-        navigate('/quotations');
-      } else if (createdDoc?.id) {
-        navigate(`/invoices/${createdDoc.id}`);
+        if (resPayload?.id) {
+          navigate(`/quotations/${resPayload.id}`);
+        } else {
+          navigate('/quotations');
+        }
+      } else if (resPayload?.id) {
+        navigate(`/invoices/${resPayload.id}`);
       } else {
         navigate('/invoices');
       }

@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -11,8 +13,12 @@ import {
   HttpCode,
 } from "@nestjs/common";
 import { QuotationsService } from "./quotations.service";
-import { CreateQuotationDto } from "./dto/quotation.dto";
-import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
+import {
+  CreateQuotationDto,
+  UpdateQuotationDto,
+  UpdateQuotationStatusDto,
+  QuotationQueryDto,
+} from "./dto/quotation.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 
@@ -22,8 +28,13 @@ export class QuotationsController {
   constructor(private readonly quotationsService: QuotationsService) {}
 
   @Get()
-  async findAll(@Query() query: PaginationQueryDto) {
+  async findAll(@Query() query: QuotationQueryDto) {
     return this.quotationsService.findAll(query);
+  }
+
+  @Get("summary")
+  async getSummary() {
+    return this.quotationsService.getSummary();
   }
 
   @Get("next-number")
@@ -39,6 +50,19 @@ export class QuotationsController {
   @Post()
   async create(@Body() dto: CreateQuotationDto) {
     return this.quotationsService.create(dto);
+  }
+
+  @Put(":id")
+  async update(@Param("id") id: string, @Body() dto: UpdateQuotationDto) {
+    return this.quotationsService.update(id, dto);
+  }
+
+  @Patch(":id/status")
+  async updateStatus(
+    @Param("id") id: string,
+    @Body() dto: UpdateQuotationStatusDto
+  ) {
+    return this.quotationsService.updateStatus(id, dto.status);
   }
 
   @Delete(":id")

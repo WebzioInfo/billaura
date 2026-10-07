@@ -7,8 +7,12 @@ import {
   IsNumber,
   IsDateString,
   ArrayMinSize,
+  IsEnum,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { PartialType } from "@nestjs/mapped-types";
+import { DocumentStatus } from "@prisma/client";
+import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
 
 export class QuotationItemDto {
   @IsString()
@@ -126,4 +130,17 @@ export class CreateQuotationDto {
   @ValidateNested({ each: true })
   @Type(() => QuotationItemDto)
   items: QuotationItemDto[];
+}
+
+export class UpdateQuotationDto extends PartialType(CreateQuotationDto) {}
+
+export class UpdateQuotationStatusDto {
+  @IsEnum(DocumentStatus)
+  status: DocumentStatus;
+}
+
+export class QuotationQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsEnum(DocumentStatus)
+  status?: DocumentStatus;
 }

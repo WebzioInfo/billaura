@@ -61,6 +61,7 @@ const ReceiptForm = lazy(() => import('../features/sales/ReceiptForm').then(m =>
 const SalesOrdersList = lazy(() => import('../features/sales/SalesOrdersList').then(m => ({ default: m.SalesOrdersList })));
 const DeliveryNotesList = lazy(() => import('../features/sales/DeliveryNotesList').then(m => ({ default: m.DeliveryNotesList })));
 const QuotationsList = lazy(() => import('../features/sales/QuotationsList').then(m => ({ default: m.QuotationsList })));
+const QuotationDetails = lazy(() => import('../features/sales/QuotationDetails').then(m => ({ default: m.QuotationDetails })));
 const RecurringInvoicesList = lazy(() => import('../features/sales/RecurringInvoicesList').then(m => ({ default: m.RecurringInvoicesList })));
 
 const BillsList = lazy(() => import('../features/purchases/BillsList').then(m => ({ default: m.BillsList })));
@@ -290,6 +291,7 @@ export const router = createBrowserRouter([
       { path: 'sales', element: <SalesDashboard /> },
       { path: 'quotations', element: <QuotationsList /> },
       { path: 'quotations/new', element: <SalesDocumentForm initialDocType="QUOTATION" /> },
+      { path: 'quotations/:id', element: <QuotationDetails /> },
       { path: 'sales-orders', element: <SalesOrdersList /> },
       { path: 'sales-orders/new', element: <SalesDocumentForm initialDocType="SALES_ORDER" /> },
       { path: 'delivery-challans', element: <DeliveryNotesList /> },
