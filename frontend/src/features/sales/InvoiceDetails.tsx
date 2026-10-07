@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Printer, Copy, ArrowLeft, Mail, CreditCard, Ban,
+  Printer, Download, Copy, ArrowLeft, Mail, CreditCard, Ban,
   Calendar, Clock, DollarSign, CheckCircle2, Sparkles,
   AlertTriangle, Building2, MapPin, FileText,
   ShieldCheck, RefreshCw, Receipt, BookOpen, ExternalLink,
@@ -16,7 +16,7 @@ import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
-import { PdfDownloadButton, PdfDocumentProps } from '@/shared/components/pdf/PdfDownloadButton';
+import { downloadInvoicePdf, printInvoicePdf } from '@/shared/utils/invoicePdf';
 import { RecordPaymentModal } from './components/RecordPaymentModal';
 import {
   formatCurrency,
@@ -69,6 +69,8 @@ export const InvoiceDetails: React.FC = () => {
 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isPrintingPdf, setIsPrintingPdf] = useState(false);
 
   // Fetch invoice details with robust resolution
   const { data: rawData, isLoading, error, refetch, isFetching } = useQuery<any>({
@@ -256,75 +258,33 @@ export const InvoiceDetails: React.FC = () => {
   // Company details
   const company = invoice?.company || profileData?.company || profileData || {};
 
-  // PDF payload
-  const pdfData: PdfDocumentProps | null = useMemo(() => {
-    if (!invoice) return null;
+  const handleDownloadPdf = async () => {
+    if (!invoice?.id || isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    const toastId = notification.loading(`Preparing PDF for ${invoice.invoiceNo}...`);
+    try {
+      await downloadInvoicePdf(invoice.id, invoice.invoiceNo);
+      notification.success(`Downloaded ${invoice.invoiceNo}.pdf`, { id: toastId });
+    } catch (err: any) {
+      notification.error(err.message || 'Unable to generate invoice PDF. Please try again.', { id: toastId });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
-    const companyName = company.companyName || company.legalName || 'Bill Aura ERP';
-    const companyAddress = [company.address, company.city, company.state, company.country, company.pinCode]
-      .filter(Boolean)
-      .join(', ') || 'Registered Office';
-
-    const customerName =
-      invoice.businessPartner?.tradeName ||
-      invoice.businessPartner?.name ||
-      invoice.businessPartner?.legalName ||
-      'Valued Customer';
-
-    const customerAddress =
-      invoice.billingAddress ||
-      invoice.businessPartner?.address ||
-      [invoice.businessPartner?.state, invoice.businessPartner?.pinCode].filter(Boolean).join(', ') ||
-      'Billing Address';
-
-    return {
-      company: {
-        name: companyName,
-        address: companyAddress,
-        gstin: company.gstin,
-        pan: company.pan,
-        email: company.email,
-        phone: company.phone,
-        logo: company.logo,
-      },
-      customer: {
-        name: customerName,
-        address: customerAddress,
-        gstin: invoice.businessPartner?.gstin,
-        email: invoice.businessPartner?.email,
-        phone: invoice.businessPartner?.phone,
-      },
-      document: {
-        title: (invoice.invoiceType || 'TAX INVOICE').replace(/_/g, ' '),
-        documentNo: invoice.invoiceNo,
-        date: invoice.date,
-        dueDate: invoice.dueDate,
-        status: invoice.status,
-      },
-      items: items.map((item) => ({
-        id: item.id,
-        description: item.product?.name || item.description || 'Line Item',
-        hsn: item.product?.hsnCode,
-        qty: Number(item.qty || 0),
-        rate: Number(item.rate || 0),
-        taxPercent: Number(item.taxPercent || 0),
-        taxAmount: Number(item.taxAmount || 0),
-        total: Number(item.total || 0),
-      })),
-      totals: {
-        subTotal,
-        taxTotal,
-        cgstAmount,
-        sgstAmount,
-        igstAmount,
-        grandTotal,
-        amountPaid,
-        balance: outstanding,
-        currency: company.currency || 'INR',
-      },
-      watermark: invoice.status === 'CANCELLED' ? 'CANCELLED' : outstanding === 0 ? 'PAID' : undefined,
-    };
-  }, [invoice, company, items, subTotal, taxTotal, cgstAmount, sgstAmount, igstAmount, grandTotal, amountPaid, outstanding]);
+  const handlePrint = async () => {
+    if (!invoice?.id || isPrintingPdf) return;
+    setIsPrintingPdf(true);
+    const toastId = notification.loading(`Preparing ${invoice.invoiceNo} for printing...`);
+    try {
+      await printInvoicePdf(invoice.id);
+      notification.dismiss(toastId);
+    } catch (err: any) {
+      notification.error(err.message || 'Unable to prepare invoice for printing. Please try again.', { id: toastId });
+    } finally {
+      setIsPrintingPdf(false);
+    }
+  };
 
   const handleSendEmail = () => {
     notification.promise(
@@ -335,10 +295,6 @@ export const InvoiceDetails: React.FC = () => {
         error: 'Failed to deliver invoice email.',
       }
     );
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   // Loading state
@@ -464,22 +420,36 @@ export const InvoiceDetails: React.FC = () => {
                 <Copy className="w-3.5 h-3.5" /> Duplicate
               </Button>
 
-              {pdfData && (
-                <PdfDownloadButton
-                  data={pdfData}
-                  filename={`${invoice.invoiceNo}.pdf`}
-                  className="h-9 bg-surface text-foreground border border-border hover:bg-muted shadow-xs"
-                />
-              )}
+              <Button
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 bg-surface text-foreground border border-border hover:bg-muted shadow-xs"
+                title="Download PDF"
+              >
+                {isDownloadingPdf ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                Download PDF
+              </Button>
 
               <Button
                 onClick={handlePrint}
+                disabled={isPrintingPdf}
                 variant="outline"
                 size="sm"
                 className="h-9 gap-1.5"
                 title="Print Invoice"
               >
-                <Printer className="w-3.5 h-3.5" /> Print
+                {isPrintingPdf ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Printer className="w-3.5 h-3.5" />
+                )}
+                Print
               </Button>
 
               <Button

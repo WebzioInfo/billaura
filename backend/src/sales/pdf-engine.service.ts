@@ -14,10 +14,10 @@ export class PdfEngineService {
 
   async generateInvoicePdf(invoiceId: string, companyId: string): Promise<Buffer> {
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId, companyId },
+      where: { id: invoiceId, companyId, deletedAt: null },
       include: {
         businessPartner: true,
-        items: { include: { product: true } },
+        items: { include: { product: true }, orderBy: { id: 'asc' } },
         taxTreatment: true,
       },
     });
@@ -25,7 +25,14 @@ export class PdfEngineService {
     if (!invoice) throw new NotFoundException('Document not found');
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
-      include: { settings: true },
+      include: {
+        settings: true,
+        bankAccounts: {
+          where: { deletedAt: null },
+          orderBy: { isDefault: 'desc' },
+          take: 1,
+        },
+      },
     });
 
     const pdfData = PdfDataBuilder.fromInvoiceModel(invoice, company);

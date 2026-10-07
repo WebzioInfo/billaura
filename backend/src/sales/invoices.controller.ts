@@ -134,12 +134,21 @@ export class InvoicesController {
   }
 
   @Get(":id/pdf")
-  async exportPdf(@Param("id") id: string, @Req() req: any, @Res() res: Response) {
+  async exportPdf(
+    @Param("id") id: string,
+    @Query("inline") inline: string,
+    @Req() req: any,
+    @Res() res: Response
+  ) {
+    const invoice = await this.invoicesService.findOne(id);
     const pdfBuffer = await this.pdfEngineService.generateInvoicePdf(id, req.user.companyId);
+    const safeDocNo = (invoice?.invoiceNo || `Invoice_${id}`).replace(/[/\\:*?"<>|]/g, '_');
+    const dispositionType = inline === 'true' ? 'inline' : 'attachment';
+
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="Invoice_${id}.pdf"`,
-      'Content-Length': pdfBuffer.length,
+      'Content-Disposition': `${dispositionType}; filename="${safeDocNo}.pdf"`,
+      'Content-Length': String(pdfBuffer.length),
     });
     res.end(pdfBuffer);
   }

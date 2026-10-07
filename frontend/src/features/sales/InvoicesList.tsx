@@ -27,6 +27,7 @@ import { PageLayout } from '@/shared/components/layout/PageLayout';
 import apiClient from '@/core/api';
 import { useSessionStore } from '@/features/auth/stores/sessionStore';
 import { cn } from '@/lib/utils';
+import { downloadInvoicePdf, printInvoicePdf } from '@/shared/utils/invoicePdf';
 
 // ============================================================================
 // CONSTANTS & ENUMS
@@ -264,6 +265,7 @@ export const InvoicesList: React.FC = () => {
   // Action Loading states
   const [isExporting, setIsExporting] = useState(false);
   const [downloadingSingleId, setDownloadingSingleId] = useState<string | null>(null);
+  const [printingSingleId, setPrintingSingleId] = useState<string | null>(null);
 
   // Sync density changes to localStorage
   const handleDensityChange = (newDensity: 'comfortable' | 'compact') => {
@@ -670,10 +672,7 @@ export const InvoicesList: React.FC = () => {
         const item = invoices.find((inv: any) => inv.id === id);
         const invNo = item?.invoiceNo || id;
         try {
-          const res = await apiClient.get(`/sales/invoices/${id}/pdf`, {
-            responseType: 'blob',
-          });
-          downloadBlob(res.data, `${invNo}.pdf`);
+          await downloadInvoicePdf(id, invNo);
         } catch (err) {
           console.error(`Failed to download PDF for invoice ${invNo}`, err);
         }
@@ -688,18 +687,31 @@ export const InvoicesList: React.FC = () => {
 
   // Single PDF download
   const handleDownloadSinglePdf = async (id: string, invoiceNo: string) => {
+    if (downloadingSingleId) return;
     setDownloadingSingleId(id);
     const toastId = toast.loading(`Preparing PDF for ${invoiceNo}...`);
     try {
-      const res = await apiClient.get(`/sales/invoices/${id}/pdf`, {
-        responseType: 'blob',
-      });
-      downloadBlob(res.data, `${invoiceNo}.pdf`);
+      await downloadInvoicePdf(id, invoiceNo);
       toast.success(`Downloaded ${invoiceNo}.pdf`, { id: toastId });
-    } catch {
-      toast.error(`Failed to download ${invoiceNo}.pdf`, { id: toastId });
+    } catch (err: any) {
+      toast.error(err.message || `Failed to download ${invoiceNo}.pdf`, { id: toastId });
     } finally {
       setDownloadingSingleId(null);
+    }
+  };
+
+  // Single PDF print
+  const handlePrintSinglePdf = async (id: string, invoiceNo: string) => {
+    if (printingSingleId) return;
+    setPrintingSingleId(id);
+    const toastId = toast.loading(`Preparing ${invoiceNo} for printing...`);
+    try {
+      await printInvoicePdf(id);
+      toast.dismiss(toastId);
+    } catch (err: any) {
+      toast.error(err.message || `Failed to prepare print for ${invoiceNo}`, { id: toastId });
+    } finally {
+      setPrintingSingleId(null);
     }
   };
 
@@ -1271,7 +1283,7 @@ export const InvoicesList: React.FC = () => {
                               onView={() => navigate(`/invoices/${item.id}`)}
                               onDownload={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
                               isDownloading={isDownloadingThis}
-                              onPrint={() => window.open(`/invoices/${item.id}/print`, '_blank')}
+                              onPrint={() => handlePrintSinglePdf(item.id, item.invoiceNo)}
                               onEdit={
                                 item.status === 'DRAFT'
                                   ? () => navigate(`/invoices/${item.id}/edit`)
@@ -1344,7 +1356,8 @@ export const InvoicesList: React.FC = () => {
                         <RowActions
                           onView={() => navigate(`/invoices/${item.id}`)}
                           onDownload={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
-                          onPrint={() => window.open(`/invoices/${item.id}/print`, '_blank')}
+                          isDownloading={downloadingSingleId === item.id}
+                          onPrint={() => handlePrintSinglePdf(item.id, item.invoiceNo)}
                         />
                       </div>
                     </div>

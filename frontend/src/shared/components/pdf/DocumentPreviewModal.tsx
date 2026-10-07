@@ -54,27 +54,15 @@ export function DocumentPreviewModal({
   const handleDownload = async () => {
     if (!pdfUrl) return;
     try {
-      const response = await fetch(pdfUrl);
-      const blob = await response.blob();
-      const { DownloadDirectoryManager } = await import('@/shared/utils/downloadDirectoryManager');
-      const result = await DownloadDirectoryManager.saveDocument({
-        blob,
-        docTitle: data?.document?.title || title,
-        docType: (data as any)?.document?.type || data?.document?.title,
-        filename: filename || 'document.pdf',
-      });
-      if (result.mode === 'filesystem') {
-        notification.success(`PDF saved to ${result.relativePath}`);
-      } else {
-        notification.success('PDF downloaded successfully');
-      }
-    } catch (_) {
       const link = document.createElement('a');
       link.href = pdfUrl;
-      link.download = filename;
+      link.download = filename || 'document.pdf';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      notification.success('PDF downloaded successfully');
+    } catch (_) {
+      notification.error('Failed to download PDF');
     }
   };
 
