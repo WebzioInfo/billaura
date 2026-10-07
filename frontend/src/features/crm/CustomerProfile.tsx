@@ -8,7 +8,7 @@ import {
   TrendingUp, CreditCard, Clock, AlertCircle, BarChart3, List
 } from 'lucide-react';
 import { PageContainer, LoadingState, Breadcrumb } from '@/shared/components/ui/LayoutComponents';
-import { Badge, Button } from '@/shared/components/ui';
+import { Badge, Button, PageLoader } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import notification from '@/core/services/NotificationService';
@@ -61,7 +61,7 @@ export const CustomerProfile = () => {
     }
   });
 
-  if (isLoading) return <PageContainer><LoadingState variant="form" /></PageContainer>;
+  if (isLoading) return <PageContainer><PageLoader title="Loading Customer Profile..." description="Fetching account details and ledger balance..." /></PageContainer>;
   if (!customer) return <PageContainer><div className="p-8 text-center text-muted-foreground">Customer not found</div></PageContainer>;
 
   const handleDelete = async () => {

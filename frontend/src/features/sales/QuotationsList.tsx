@@ -232,7 +232,11 @@ export const QuotationsList = () => {
   );
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={isListLoading && !listData}
+      loadingTitle="Loading Quotations..."
+      loadingDescription="Fetching quotation pipeline and estimates..."
+    >
       <PageHeader
         title="Quotations"
         count={totalQuotations}

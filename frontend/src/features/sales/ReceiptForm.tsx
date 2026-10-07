@@ -5,7 +5,7 @@ import {
   Banknote, HelpCircle, Loader2, ArrowLeft, Info, Landmark, Wallet,
   CheckCircle, FileCheck, AlertCircle, RefreshCw, Printer, Edit3
 } from 'lucide-react';
-import { PageContainer, LoadingState, FinancialSummary, SummaryRow, AsyncSelect, SearchableSelect } from '@/shared/components/ui';
+import { PageContainer, LoadingState, FinancialSummary, SummaryRow, AsyncSelect, SearchableSelect, PageLoader } from '@/shared/components/ui';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Button } from '@/shared/components/ui/Button';
 import apiClient from '@/core/api';
@@ -786,7 +786,7 @@ export const ReceiptForm = () => {
   if (isLoadingMaster || isLoadingReceipt) {
     return (
       <PageContainer maxWidth="7xl">
-        <LoadingState variant="form" />
+        <PageLoader title="Loading Receipt Voucher..." description="Fetching payment accounts and allocations..." />
       </PageContainer>
     );
   }

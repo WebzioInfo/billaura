@@ -626,7 +626,11 @@ export const BillsList = () => {
 
   return (
     <>
-      <PageLayout>
+      <PageLayout
+        isLoading={loadingBills && bills.length === 0}
+        loadingTitle="Loading Bills..."
+        loadingDescription="Fetching vendor bills and expenses..."
+      >
         <PageHeader
           title="Bills"
           count={bills.length}

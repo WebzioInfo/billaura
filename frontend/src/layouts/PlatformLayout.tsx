@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, LogOut, Menu, X, ChevronDown, User, Bell, Shield,
@@ -7,6 +7,7 @@ import {
 import { useSessionStore } from '../features/auth/stores/sessionStore';
 import { authService } from '../core/api';
 import { AiCopilot } from '@/shared/components/workspace/AiCopilot';
+import { PageLoader } from '@/shared/components/ui';
 
 export default function PlatformLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -154,7 +155,9 @@ export default function PlatformLayout() {
         </header>
 
         <main className="flex-grow overflow-x-hidden overflow-y-auto bg-slate-50 p-6">
-          <Outlet />
+          <Suspense fallback={<PageLoader title="Loading Platform View..." description="Preparing administrative console..." />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <AiCopilot />

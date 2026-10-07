@@ -153,18 +153,11 @@ export const ExecutiveDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <PageLayout>
-        <div className="h-12 bg-muted/30 rounded-xl animate-pulse" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-28 bg-surface border border-border/60 rounded-2xl p-5 animate-pulse" />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-6 h-64 bg-surface border border-border/60 rounded-2xl animate-pulse" />
-          <div className="lg:col-span-6 h-64 bg-surface border border-border/60 rounded-2xl animate-pulse" />
-        </div>
-      </PageLayout>
+      <PageLayout
+        isLoading
+        loadingTitle="Loading Executive Dashboard..."
+        loadingDescription="Aggregating revenue, expenses, and cashflow metrics..."
+      />
     );
   }
 

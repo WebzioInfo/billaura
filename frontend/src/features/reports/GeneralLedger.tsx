@@ -3,6 +3,7 @@ import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
 import { Button } from '@/shared/components/ui/Button';
 import { CurrencyCell, DateCell } from '@/shared/components/ui/data-table/cells';
+import { PageContainer, PageLoader } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import { Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -17,8 +18,16 @@ export const GeneralLedger = () => {
     }
   });
 
+  if (loading && data.length === 0) {
+    return (
+      <PageContainer maxWidth="7xl">
+        <PageLoader title="Loading General Ledger..." description="Fetching full transaction history across accounts..." />
+      </PageContainer>
+    );
+  }
+
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <PageContainer maxWidth="7xl">
       <PageHeader
         title="General Ledger"
         description="Detailed transaction history across all accounts"
@@ -58,7 +67,7 @@ export const GeneralLedger = () => {
           ))}
         </TableBody>
       </Table>
-    </div>
+    </PageContainer>
   );
 };
 

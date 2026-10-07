@@ -35,7 +35,11 @@ export const BankTransactionsList = () => {
   });
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={isLoading && transactions.length === 0}
+      loadingTitle="Loading Bank Transactions..."
+      loadingDescription="Fetching cleared and pending bank transactions..."
+    >
       <PageHeader
         title="Bank Transactions"
         count={transactions.length}

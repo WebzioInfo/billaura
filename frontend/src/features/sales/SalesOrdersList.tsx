@@ -20,7 +20,12 @@ export const SalesOrdersList = () => {
   });
 
   return (
-    <PageContainer maxWidth="7xl">
+    <PageContainer
+      maxWidth="7xl"
+      isLoading={loading && data.length === 0}
+      loadingTitle="Loading Sales Orders..."
+      loadingDescription="Fetching customer orders and fulfillments..."
+    >
       <PageHeader
         title="Sales Orders"
         description="Manage your customer sales orders and fulfillments"

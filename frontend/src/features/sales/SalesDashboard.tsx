@@ -15,7 +15,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../shared/hooks/useApiList';
 import { LedgerSearchSelect } from '../../shared/components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog, SearchableSelect } from '../../shared/components/ui';
+import { DeleteDialog, ConfirmDialog, SearchableSelect, PageLoader } from '../../shared/components/ui';
 
 // --- SCHEMAS ---
 const invoiceItemSchema = z.object({
@@ -390,6 +390,14 @@ export const SalesDashboard = () => {
   const formSubTotal = watchedItems.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.rate || 0)), 0);
   const formTaxTotal = formSubTotal * 0.18; // Default 18% GST display
   const formGrandTotal = formSubTotal + formTaxTotal;
+
+  if (isLoading && invoices.length === 0 && payments.length === 0 && quotations.length === 0) {
+    return (
+      <div className="py-12">
+        <PageLoader title="Loading Sales Ledger..." description="Fetching invoices, receipts, and receivables..." />
+      </div>
+    );
+  }
 
   return (
     <>

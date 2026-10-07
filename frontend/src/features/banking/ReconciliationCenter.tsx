@@ -42,7 +42,11 @@ export const ReconciliationCenter = () => {
   });
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={loadingStatements && statements.length === 0}
+      loadingTitle="Loading Bank Reconciliation..."
+      loadingDescription="Fetching bank statements and ledger match rules..."
+    >
       <PageHeader
         title="Bank Reconciliation"
         description="Match bank statements with your ledger automatically"

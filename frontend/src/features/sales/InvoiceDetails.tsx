@@ -11,7 +11,7 @@ import {
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { PageContainer } from '@/shared/components/ui/LayoutComponents';
-import { ConfirmDialog, JournalImpactView } from '@/shared/components/ui';
+import { ConfirmDialog, JournalImpactView, PageLoader } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
@@ -301,27 +301,20 @@ export const InvoiceDetails: React.FC = () => {
   if (isLoading) {
     return (
       <PageContainer maxWidth="7xl">
-        <div className="space-y-6 animate-pulse py-4">
-          <div className="flex items-center justify-between pb-4 border-b border-border">
-            <div className="space-y-2">
-              <div className="h-6 w-48 bg-muted rounded"></div>
-              <div className="h-4 w-32 bg-muted/60 rounded"></div>
-            </div>
-            <div className="flex gap-2">
-              <div className="h-9 w-24 bg-muted rounded"></div>
-              <div className="h-9 w-28 bg-muted rounded"></div>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 bg-muted/50 rounded-xl"></div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 h-[600px] bg-muted/40 rounded-xl"></div>
-            <div className="h-[400px] bg-muted/40 rounded-xl"></div>
-          </div>
+        <div className="flex items-center gap-2 mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/invoices')}
+            className="gap-1.5"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back to Invoices
+          </Button>
         </div>
+        <PageLoader
+          title="Loading Invoice..."
+          description="Fetching invoice details, line items, and payment status..."
+        />
       </PageContainer>
     );
   }

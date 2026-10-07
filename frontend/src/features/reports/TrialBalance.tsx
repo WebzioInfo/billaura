@@ -37,7 +37,12 @@ export const TrialBalance = () => {
   };
 
   return (
-    <PageContainer maxWidth="7xl">
+    <PageContainer
+      maxWidth="7xl"
+      isLoading={loading && data.length === 0}
+      loadingTitle="Loading Trial Balance..."
+      loadingDescription="Compiling general ledger balances..."
+    >
       <PageHeader
         title="Trial Balance"
         description="Real-time trial balance reporting"

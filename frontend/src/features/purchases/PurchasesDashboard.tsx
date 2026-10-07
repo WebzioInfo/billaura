@@ -14,7 +14,7 @@ import { DataTable, DataTableColumnHeader, FilterPanel } from '../../shared/comp
 import { ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LedgerSearchSelect } from '../../shared/components/ui/LedgerSearchSelect';
-import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer, TableLoader, SearchableSelect } from '../../shared/components/ui';
+import { DeleteDialog, ConfirmDialog, AsyncSelect, PageContainer, TableLoader, SearchableSelect, PageLoader } from '../../shared/components/ui';
 import { useApiList } from '../../shared/hooks/useApiList';
 import { useBankAccounts } from '../../features/banking/hooks/useBankAccounts';
 
@@ -560,6 +560,14 @@ export const PurchasesDashboard = () => {
   const formGrandTotal = formSubTotal + formTaxTotal;
 
   const totalPayable = vendors.reduce((sum, v) => sum + Number(v.payableBalance || 0), 0);
+
+  if ((isLoadingPurchases || isLoadingPayments) && purchases.length === 0 && payments.length === 0) {
+    return (
+      <PageContainer maxWidth="7xl" className="px-6 py-6 space-y-6">
+        <PageLoader title="Loading Purchases..." description="Fetching bills, payouts, and vendor balances..." />
+      </PageContainer>
+    );
+  }
 
   return (
     <>

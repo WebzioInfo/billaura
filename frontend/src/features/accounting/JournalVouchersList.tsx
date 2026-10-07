@@ -74,7 +74,11 @@ export const JournalVouchersList = () => {
   const entriesData = journalEntries?.data || [];
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={isLoading && entriesData.length === 0}
+      loadingTitle="Loading Journal Entries..."
+      loadingDescription="Fetching double-entry journal vouchers..."
+    >
       <PageHeader
         title="Journal Entries"
         count={entriesData.length}

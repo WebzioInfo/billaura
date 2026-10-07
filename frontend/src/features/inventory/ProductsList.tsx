@@ -215,7 +215,11 @@ export const ProductsList = () => {
   });
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={loading && productsData.length === 0}
+      loadingTitle="Loading Products..."
+      loadingDescription="Fetching product catalog and stock levels..."
+    >
       <PageHeader
         title="Products"
         count={filteredProducts.length}

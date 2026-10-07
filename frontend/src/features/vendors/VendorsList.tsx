@@ -205,7 +205,11 @@ export const VendorsList = () => {
   );
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={isLoading && vendors.length === 0}
+      loadingTitle="Loading Vendors..."
+      loadingDescription="Fetching supplier directory and payables..."
+    >
       <PageHeader
         title="Vendors"
         count={serverTotal}

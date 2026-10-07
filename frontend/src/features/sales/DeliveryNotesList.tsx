@@ -20,7 +20,12 @@ export const DeliveryNotesList = () => {
   });
 
   return (
-    <PageContainer maxWidth="7xl">
+    <PageContainer
+      maxWidth="7xl"
+      isLoading={loading && data.length === 0}
+      loadingTitle="Loading Delivery Notes..."
+      loadingDescription="Fetching delivery notes and challans..."
+    >
       <PageHeader
         title="Delivery Notes"
         description="Track goods dispatched to customers"

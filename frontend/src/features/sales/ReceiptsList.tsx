@@ -264,7 +264,11 @@ export const ReceiptsList = () => {
   );
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={loading && !data}
+      loadingTitle="Loading Receipts..."
+      loadingDescription="Fetching payment records and vouchers..."
+    >
       <PageHeader
         title="Payments Received"
         count={serverTotal}

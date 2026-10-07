@@ -36,7 +36,12 @@ export const BalanceSheet = () => {
   };
 
   return (
-    <PageContainer maxWidth="7xl">
+    <PageContainer
+      maxWidth="7xl"
+      isLoading={loading && data.length === 0}
+      loadingTitle="Loading Balance Sheet..."
+      loadingDescription="Compiling balance sheet and equity statements..."
+    >
       <PageHeader
         title="Balance Sheet"
         description="Comprehensive asset and liability overview"

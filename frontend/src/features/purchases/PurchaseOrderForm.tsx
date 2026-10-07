@@ -6,7 +6,7 @@ import {
   Building, Calendar, FileText, Landmark, FileCheck, HelpCircle, Loader2, Info
 } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { PageContainer, LoadingState, FinancialSummary, SummaryRow } from '@/shared/components/ui';
+import { PageContainer, LoadingState, FinancialSummary, SummaryRow, PageLoader } from '@/shared/components/ui';
 import { Card } from '@/shared/components/ui/Card';
 import { Button, Input, Select, FormErrorDisplay, SearchableSelect } from '@/shared/components/ui';
 import apiClient, { ensureArray } from '@/core/api';
@@ -396,7 +396,7 @@ export const PurchaseOrderForm = () => {
   if (loading) {
     return (
       <PageContainer maxWidth="7xl">
-        <LoadingState variant="form" />
+        <PageLoader title="Loading Purchase Order..." description="Fetching vendors, product catalog, and order terms..." />
       </PageContainer>
     );
   }

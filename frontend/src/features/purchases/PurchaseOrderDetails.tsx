@@ -9,7 +9,7 @@ import {
   TrendingUp, Play, Clock, User, ShieldAlert, RotateCcw
 } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { PageContainer, LoadingState, EmptyState, FinancialSummary, SummaryRow } from '@/shared/components/ui';
+import { PageContainer, LoadingState, EmptyState, FinancialSummary, SummaryRow, PageLoader } from '@/shared/components/ui';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import apiClient from '@/core/api';
@@ -229,7 +229,7 @@ export const PurchaseOrderDetails = () => {
     });
   };
 
-  if (loadingPo) return <PageContainer maxWidth="7xl"><LoadingState variant="form" /></PageContainer>;
+  if (loadingPo) return <PageContainer maxWidth="7xl"><PageLoader title="Loading Purchase Order..." description="Fetching line items and terms..." /></PageContainer>;
   if (!po) return <PageContainer maxWidth="7xl"><EmptyState title="Purchase Order Not Found" description="The requested document does not exist." actionLabel="Back to PO List" onActionClick={() => navigate('/purchase-orders')} /></PageContainer>;
 
   const taxLabel = po.taxMode === 'IGST' ? 'IGST' : po.taxMode === 'CGST_SGST' ? 'CGST/SGST' : 'Exempt';

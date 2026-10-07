@@ -12,7 +12,7 @@ import { apiClient as api } from '../../core/api/apiClient';
 import ProductFormModal from './ProductFormModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiList } from '../../shared/hooks/useApiList';
-import { SearchableSelect } from '../../shared/components/ui';
+import { SearchableSelect, PageLoader } from '../../shared/components/ui';
 import { PageContainer } from '@/shared/components/ui/LayoutComponents';
 import { cn } from '@/lib/utils';
 
@@ -346,6 +346,14 @@ export const InventoryDashboard = () => {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
   };
+
+  if (isLoading && products.length === 0 && stocks.length === 0) {
+    return (
+      <PageContainer maxWidth="full" className="w-full space-y-5 text-left">
+        <PageLoader title="Loading Inventory..." description="Fetching stock levels, products, and warehouse locations..." />
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer maxWidth="full" className="w-full space-y-5 text-left">

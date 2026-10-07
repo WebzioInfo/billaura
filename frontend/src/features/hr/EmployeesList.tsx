@@ -51,7 +51,11 @@ export const EmployeesList = () => {
   });
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={isLoading && employees.length === 0}
+      loadingTitle="Loading Employees..."
+      loadingDescription="Fetching employee directory and payroll profiles..."
+    >
       <PageHeader
         title="Employees"
         count={employees.length}

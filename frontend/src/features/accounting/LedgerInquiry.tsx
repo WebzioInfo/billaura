@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import apiClient from '@/core/api';
 import { Card } from '@/shared/components/ui/Card';
-import { TableLoader } from '@/shared/components/ui/LoadingSystem';
+import { TableLoader, PageLoader } from '@/shared/components/ui/LoadingSystem';
 import { StatusBadge } from '@/shared/components/ui';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import notification from '@/core/services/NotificationService';
@@ -336,9 +336,8 @@ export function LedgerInquiry() {
           <p className="text-xs text-muted-foreground max-w-xs mt-1">Select an account in the search bar above to generate and inspect chronological transactional histories.</p>
         </Card>
       ) : isLoading ? (
-        <div className="flex-1 space-y-3">
-          <div className="h-10 bg-surface border border-border/50 rounded-xl animate-pulse" />
-          <TableLoader cols={8} rows={12} className="bg-surface border border-border/50 rounded-xl" />
+        <div className="flex-1 py-16 flex items-center justify-center">
+          <PageLoader title="Loading Ledger Inquiry..." description="Compiling journal lines and running balance..." />
         </div>
       ) : !inquiryData ? (
         <Card className="p-4 flex items-center gap-3 border border-red-200 bg-red-50 text-red-800 rounded-xl">

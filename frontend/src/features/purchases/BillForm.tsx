@@ -8,7 +8,7 @@ import {
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { PageContainer, LoadingState } from '@/shared/components/ui/LayoutComponents';
 import { Card } from '@/shared/components/ui/Card';
-import { Button, Input, Select, FormErrorDisplay, SearchableSelect } from '@/shared/components/ui';
+import { Button, Input, Select, FormErrorDisplay, SearchableSelect, PageLoader } from '@/shared/components/ui';
 import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
@@ -466,7 +466,11 @@ export const BillForm = () => {
   };
 
   if (loadBillId && loadingExisting) {
-    return <LoadingState variant="form" />;
+    return (
+      <PageContainer maxWidth="7xl">
+        <PageLoader title="Loading Bill..." description="Fetching bill details, vendor info, and line items..." />
+      </PageContainer>
+    );
   }
 
   return (

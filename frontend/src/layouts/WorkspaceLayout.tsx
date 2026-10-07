@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { useIsFetching } from '@tanstack/react-query';
 import { AppSidebar, SIDEBAR_NAVIGATION } from '@/shared/components/layout/AppSidebar';
 import { AppHeader } from '@/shared/components/layout/AppHeader';
 import { WorkspaceTabs } from '@/shared/components/workspace/WorkspaceTabs';
-import { TopProgressBar } from '@/shared/components/ui';
+import { TopProgressBar, PageLoader } from '@/shared/components/ui';
 import { CommandPalette } from '@/shared/components/workspace/CommandPalette';
 import { useWorkspaceStore } from '@/shared/stores/workspaceStore';
 import { useGlobalShortcuts } from '@/shared/hooks/useGlobalShortcuts';
@@ -15,6 +16,7 @@ export function WorkspaceLayout() {
   useGlobalShortcuts();
 
   const [isNavigating, setIsNavigating] = React.useState(false);
+  const isFetching = useIsFetching();
 
   // Persistent sidebar collapse state
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -151,7 +153,7 @@ export function WorkspaceLayout() {
           isCollapsed ? "lg:pl-[68px]" : "lg:pl-[260px]"
         )}
       >
-        <TopProgressBar isAnimating={isNavigating} />
+        <TopProgressBar isAnimating={isNavigating || isFetching > 0} />
 
         {/* Global Executive Header */}
         <AppHeader
@@ -167,7 +169,18 @@ export function WorkspaceLayout() {
 
         {/* Main Content Area - Primary vertical scroll container for document & form pages */}
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative bg-background flex flex-col">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex-1 min-h-[400px] flex items-center justify-center p-8">
+                <PageLoader
+                  title="Loading View..."
+                  description="Preparing workspace view..."
+                />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 

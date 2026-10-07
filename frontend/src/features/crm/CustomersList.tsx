@@ -215,7 +215,11 @@ export const CustomersList = () => {
   ], [navigate]);
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={loading && crm.length === 0}
+      loadingTitle="Loading Customers..."
+      loadingDescription="Fetching customer directory and accounts..."
+    >
       <PageHeader
         title="Customers"
         count={crm.length}

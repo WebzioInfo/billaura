@@ -6,6 +6,7 @@ import {
   ShoppingCart, CreditCard, Activity, ArrowUpRight, CheckCircle2, AlertCircle, FileText
 } from 'lucide-react';
 import { PageContainer, LoadingState, EmptyState, Breadcrumb } from '@/shared/components/ui/LayoutComponents';
+import { PageLoader } from '@/shared/components/ui';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { DataTable } from '@/shared/components/ui/data-table/DataTable';
@@ -112,7 +113,11 @@ export const VendorProfile = () => {
   ], []);
 
   if (loadingVendor) {
-    return <PageContainer maxWidth="6xl"><LoadingState variant="card" /></PageContainer>;
+    return (
+      <PageContainer maxWidth="6xl">
+        <PageLoader title="Loading Vendor Profile..." description="Fetching supplier details and payment history..." />
+      </PageContainer>
+    );
   }
 
   if (!vendor) {

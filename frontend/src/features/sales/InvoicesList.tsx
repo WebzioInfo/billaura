@@ -775,7 +775,14 @@ export const InvoicesList: React.FC = () => {
   const rowHeightClass = density === 'compact' ? 'h-10' : 'h-[52px]';
 
   return (
-    <PageLayout>
+    <PageLayout
+      isLoading={isLoading && !invoicesResponse}
+      loadingTitle="Loading Invoices..."
+      loadingDescription="Fetching invoices and financial metrics..."
+      isError={isError && !invoicesResponse}
+      errorMessage="Failed to retrieve invoice records from server."
+      onRetry={() => refetch()}
+    >
       {/* 1. STANDARDIZED PAGE HEADER + ACTIONS */}
       <PageHeader
         title="Invoices"

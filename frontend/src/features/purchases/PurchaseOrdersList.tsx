@@ -262,7 +262,11 @@ export const PurchaseOrdersList = () => {
 
   return (
     <>
-      <PageLayout>
+      <PageLayout
+        isLoading={loadingPo && poList.length === 0}
+        loadingTitle="Loading Purchase Orders..."
+        loadingDescription="Fetching purchase orders and commitments..."
+      >
         <PageHeader
           title="Purchase Orders"
           count={kpis.totalCount}

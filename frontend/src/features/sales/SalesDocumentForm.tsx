@@ -30,7 +30,7 @@ import { PageContainer, LoadingState, FormSection } from '@/shared/components/ui
 import { DocumentSummarySidebar } from '@/shared/components/ui/DocumentSummarySidebar';
 import { Button } from '@/shared/components/ui/Button';
 import { Card } from '@/shared/components/ui/Card';
-import { FormErrorDisplay, SearchableSelect } from '@/shared/components/ui';
+import { FormErrorDisplay, SearchableSelect, PageLoader } from '@/shared/components/ui';
 import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
 import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
@@ -536,7 +536,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
   if (isLoading) {
     return (
       <PageContainer maxWidth="7xl">
-        <LoadingState variant="form" />
+        <PageLoader title="Loading Document Form..." description="Fetching customer list, item catalog, and next sequence number..." />
       </PageContainer>
     );
   }

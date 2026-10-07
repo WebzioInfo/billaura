@@ -35,7 +35,12 @@ export const DepartmentalReport: React.FC = () => {
   const totalProfit = totalIncome - totalExpenses - totalSalary;
 
   return (
-    <PageContainer maxWidth="7xl">
+    <PageContainer
+      maxWidth="7xl"
+      isLoading={isLoading && summary.length === 0}
+      loadingTitle="Loading Departmental Report..."
+      loadingDescription="Aggregating department headcount and cost allocations..."
+    >
       <PageHeader
         title="Departmental Performance Report"
         description="Headcount division, payroll cost allocations, department expenses, and net profit margins."

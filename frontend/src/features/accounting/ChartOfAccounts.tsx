@@ -614,6 +614,9 @@ export const ChartOfAccounts: React.FC = () => {
   return (
     <>
       <PageLayout
+        isLoading={isLoadingAccounts && (!rawTreeData || (rawTreeData as any)?.length === 0)}
+        loadingTitle="Loading Chart of Accounts..."
+        loadingDescription="Fetching general ledger account hierarchy..."
         header={
           <PageHeader
             title="Chart of Accounts"

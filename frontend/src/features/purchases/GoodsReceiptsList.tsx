@@ -23,7 +23,12 @@ export const GoodsReceiptsList = () => {
   });
 
   return (
-    <PageContainer maxWidth="7xl">
+    <PageContainer
+      maxWidth="7xl"
+      isLoading={loading && data.length === 0}
+      loadingTitle="Loading Goods Receipts..."
+      loadingDescription="Fetching incoming inventory shipments..."
+    >
       <PageHeader
         title="Goods Receipts"
         description="Manage stock incoming from vendors"

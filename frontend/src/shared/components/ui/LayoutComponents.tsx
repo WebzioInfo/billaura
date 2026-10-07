@@ -4,12 +4,25 @@ import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './Button';
 
+import { PageLoader } from './LoadingSystem';
+
 // 1. PageContainer
 interface PageContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   maxWidth?: 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl' | 'full';
+  isLoading?: boolean;
+  loadingTitle?: string;
+  loadingDescription?: string;
 }
 
-export const PageContainer = ({ className, maxWidth = 'full', children, ...props }: PageContainerProps) => {
+export const PageContainer = ({ 
+  className, 
+  maxWidth = 'full', 
+  isLoading = false,
+  loadingTitle,
+  loadingDescription,
+  children, 
+  ...props 
+}: PageContainerProps) => {
   const maxWidthClasses = {
     xl: 'max-w-screen-xl',
     '2xl': 'max-w-screen-2xl',
@@ -20,6 +33,7 @@ export const PageContainer = ({ className, maxWidth = 'full', children, ...props
     '7xl': 'max-w-[1680px]',
     full: 'max-w-none',
   };
+
   return (
     <div
       className={cn(
@@ -29,7 +43,11 @@ export const PageContainer = ({ className, maxWidth = 'full', children, ...props
       )}
       {...props}
     >
-      {children}
+      {isLoading ? (
+        <PageLoader title={loadingTitle} description={loadingDescription} />
+      ) : (
+        children
+      )}
     </div>
   );
 };
@@ -60,9 +78,11 @@ export { EmptyState, type EmptyStateProps } from './EmptyState';
 // 5. LoadingState
 interface LoadingStateProps {
   variant?: 'default' | 'table' | 'form' | 'card';
+  title?: string;
+  description?: string;
 }
 
-export const LoadingState = ({ variant = 'default' }: LoadingStateProps) => {
+export const LoadingState = ({ variant = 'default', title, description }: LoadingStateProps) => {
   if (variant === 'table') {
     return (
       <div className="space-y-4 w-full animate-pulse p-4">
@@ -99,11 +119,7 @@ export const LoadingState = ({ variant = 'default' }: LoadingStateProps) => {
       </div>
     );
   }
-  return (
-    <div className="flex items-center justify-center py-12 w-full">
-      <Loader2 className="w-6 h-6 animate-spin text-accent" />
-    </div>
-  );
+  return <PageLoader title={title} description={description} />;
 };
 
 // 6. BackNavigation
