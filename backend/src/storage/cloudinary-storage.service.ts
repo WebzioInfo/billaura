@@ -4,10 +4,11 @@ import * as crypto from 'crypto';
 
 export interface ImageUploadOptions {
   companyId: string;
-  entityType: 'branding' | 'users' | 'customers' | 'suppliers' | 'employees' | 'distributors' | 'products' | 'brands' | 'inventory';
+  entityType: 'branding' | 'users' | 'customers' | 'suppliers' | 'employees' | 'distributors' | 'products' | 'brands' | 'inventory' | 'bills';
   entityId?: string;
   filename?: string;
   transformation?: string;
+  resourceType?: 'image' | 'raw' | 'auto';
 }
 
 export interface ImageUploadResult {
@@ -67,7 +68,8 @@ export class CloudinaryStorageService {
     formData.append('overwrite', overwrite);
     formData.append('signature', signature);
 
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    const endpoint = options.resourceType === 'raw' ? 'raw' : 'image';
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${endpoint}/upload`, {
       method: 'POST',
       body: formData,
     });

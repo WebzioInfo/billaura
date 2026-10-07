@@ -42,7 +42,7 @@ export class PurchasesService {
         where,
         skip,
         take,
-        include: { businessPartner: true, items: { include: { product: true } } },
+        include: { businessPartner: true, items: { include: { product: true } }, attachments: true },
         orderBy: { date: 'desc' },
       }),
       this.prisma.purchase.count({ where }),
@@ -59,7 +59,7 @@ export class PurchasesService {
 
     const purchase = await this.prisma.purchase.findFirst({
       where: { id },
-      include: { businessPartner: true, items: { include: { product: true } } },
+      include: { businessPartner: true, items: { include: { product: true } }, attachments: true },
     });
 
     if (!purchase) {
@@ -201,6 +201,14 @@ export class PurchasesService {
         },
         include: { items: true },
       });
+
+      // Link source invoice document attachment if present
+      if (dto.attachmentId) {
+        await tx.purchaseAttachment.updateMany({
+          where: { id: dto.attachmentId, companyId },
+          data: { purchaseId: purchase.id },
+        });
+      }
 
       // 4. Update vendor payable balance
       await tx.businessPartner.update({
@@ -545,6 +553,14 @@ export class PurchasesService {
         },
         include: { items: true },
       });
+
+      // Link source invoice document attachment if present
+      if (dto.attachmentId) {
+        await tx.purchaseAttachment.updateMany({
+          where: { id: dto.attachmentId, companyId },
+          data: { purchaseId: id },
+        });
+      }
 
       // 5. Update vendor payable balance
       await tx.businessPartner.update({

@@ -98,6 +98,7 @@ model Company {
   purchaseOrders         PurchaseOrder[]
   purchaseReturns        PurchaseReturn[]
   purchases              Purchase[]
+  purchaseAttachments    PurchaseAttachment[]
   quotations             Quotation[]
   receipts               Receipt[]
   recurringInvoices      RecurringInvoice[]
@@ -1128,6 +1129,7 @@ model Purchase {
   allocations       PaymentAllocation[]
   items             PurchaseItem[]
   purchaseReturns   PurchaseReturn[]
+  attachments       PurchaseAttachment[]
   businessPartner   BusinessPartner     @relation(fields: [businessPartnerId], references: [id], onDelete: Cascade)
   company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   updatedAt         DateTime            @default(now()) @updatedAt
@@ -1138,6 +1140,42 @@ model Purchase {
   @@index([companyId, date])
   @@index([companyId, status])
   @@map("purchases")
+}
+
+enum OcrStatus {
+  UPLOADED
+  PROCESSING
+  EXTRACTED
+  VERIFICATION_REQUIRED
+  VERIFIED
+  FAILED
+}
+
+model PurchaseAttachment {
+  id                 String     @id @default(cuid())
+  companyId          String
+  purchaseId         String?
+  originalFileName   String
+  cloudinaryPublicId String
+  secureUrl          String
+  resourceType       String     @default("image")
+  mimeType           String
+  fileSize           Int
+  ocrStatus          OcrStatus  @default(UPLOADED)
+  ocrData            Json?
+  confidence         Decimal?   @db.Decimal(5, 2)
+  uploadedBy         String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @default(now()) @updatedAt
+  deletedAt          DateTime?
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([purchaseId])
+  @@index([companyId, ocrStatus])
+  @@map("purchase_attachments")
 }
 
 model PurchaseItem {

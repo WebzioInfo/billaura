@@ -15,6 +15,10 @@ import { erpInvalidate } from '@/core/query/erpConsistency';
 import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { BillDocumentUpload, UploadedBillDocument } from './components/BillDocumentUpload';
+import { BillOcrReviewViewer } from './components/BillOcrReviewViewer';
+import { OcrVerificationBanner } from './components/OcrVerificationBanner';
+import { OcrFieldBadge } from './components/OcrFieldBadge';
 
 const billSchema = z.object({
   vendorId: z.string().min(1, 'Vendor is required'),
@@ -106,6 +110,30 @@ export const BillForm = () => {
   const [isRcm, setIsRcm] = useState(false);
   const [warehouseId, setWarehouseId] = useState('');
   const [notes, setNotes] = useState('');
+
+  // OCR Document, Extraction, & Verification State
+  const [ocrDocument, setOcrDocument] = useState<UploadedBillDocument | null>(null);
+  const [ocrExtraction, setOcrExtraction] = useState<any | null>(null);
+  const [isOcrAssisted, setIsOcrAssisted] = useState(false);
+  const [isOcrVerified, setIsOcrVerified] = useState(false);
+  const [fieldTracking, setFieldTracking] = useState<Record<string, { status: 'extracted' | 'modified' | 'unmodified'; confidence?: number }>>({});
+
+  // Document Review Viewer Modal State
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{ url: string; fileName: string; mimeType: string }>({
+    url: '',
+    fileName: '',
+    mimeType: '',
+  });
+
+  const markFieldModified = (fieldName: string) => {
+    setFieldTracking(prev => {
+      if (prev[fieldName]?.status === 'extracted') {
+        return { ...prev, [fieldName]: { status: 'modified' } };
+      }
+      return prev;
+    });
+  };
   
   const [items, setItems] = useState<FormLineItem[]>([
     {
@@ -233,6 +261,17 @@ export const BillForm = () => {
       });
       setItems(mappedItems.length > 0 ? mappedItems : items);
     }
+
+    // Populate source invoice document attachment if present
+    if (existingBill.attachments && Array.isArray(existingBill.attachments) && existingBill.attachments.length > 0) {
+      const att = existingBill.attachments[0];
+      setOcrDocument(att);
+      if (att.ocrData) {
+        setOcrExtraction(att.ocrData);
+        setIsOcrAssisted(true);
+        setIsOcrVerified(true);
+      }
+    }
   }, [existingBill, isDuplicateMode]);
 
   // Populate from PO
@@ -277,9 +316,119 @@ export const BillForm = () => {
     }
   }, [warehouses]);
 
+  // Handle successful OCR extraction and form auto-fill
+  const handleOcrExtractionSuccess = (extractionData: any, doc: UploadedBillDocument) => {
+    setOcrDocument(doc);
+    if (!extractionData) return;
+
+    setOcrExtraction(extractionData);
+    setIsOcrAssisted(true);
+    setIsOcrVerified(false); // Explicit manual verification required!
+
+    const newTracking: Record<string, { status: 'extracted' | 'modified' | 'unmodified'; confidence?: number }> = {};
+
+    // 1. Auto-fill Reference / Invoice Number
+    if (extractionData.invoice?.invoiceNumber?.value) {
+      setValue('reference', extractionData.invoice.invoiceNumber.value, { shouldDirty: true });
+      newTracking.reference = { status: 'extracted', confidence: extractionData.invoice.invoiceNumber.confidence };
+    }
+
+    // 2. Auto-fill Billing Date
+    if (extractionData.invoice?.invoiceDate?.value) {
+      setValue('date', extractionData.invoice.invoiceDate.value, { shouldDirty: true });
+      newTracking.date = { status: 'extracted', confidence: extractionData.invoice.invoiceDate.confidence };
+    }
+
+    // 3. Auto-fill Due Date
+    if (extractionData.invoice?.dueDate?.value) {
+      setValue('dueDate', extractionData.invoice.dueDate.value, { shouldDirty: true });
+      newTracking.dueDate = { status: 'extracted', confidence: extractionData.invoice.dueDate.confidence };
+    }
+
+    // 4. Auto-fill Place of Supply
+    if (extractionData.vendor?.state?.value) {
+      setValue('placeOfSupply', extractionData.vendor.state.value, { shouldDirty: true });
+      newTracking.placeOfSupply = { status: 'extracted', confidence: extractionData.vendor.state.confidence };
+    }
+
+    // 5. Auto-set Tax Mode
+    if (extractionData.taxes?.igst?.value > 0) {
+      setTaxMode('IGST');
+    } else {
+      setTaxMode('CGST_SGST');
+    }
+
+    // 6. RCM
+    if (extractionData.taxes?.isRcm?.value) {
+      setIsRcm(true);
+    }
+
+    // 7. Auto-fill Vendor if matched
+    if (extractionData.matchedVendor?.id) {
+      setValue('vendorId', extractionData.matchedVendor.id, { shouldValidate: true, shouldDirty: true });
+      newTracking.vendor = { status: 'extracted', confidence: extractionData.matchedVendor.confidence };
+      const v = vendors.find(item => item.id === extractionData.matchedVendor.id);
+      if (v?.address) {
+        setValue('billingAddress', v.address, { shouldDirty: true });
+        setValue('shippingAddress', v.address, { shouldDirty: true });
+      }
+    } else {
+      newTracking.vendor = { status: 'extracted', confidence: extractionData.vendor?.name?.confidence || 0.4 };
+    }
+
+    // 8. Auto-fill Line items
+    if (extractionData.items && Array.isArray(extractionData.items) && extractionData.items.length > 0) {
+      const mappedItems: FormLineItem[] = extractionData.items.map((item: any, idx: number) => {
+        let pId = item.matchedProductId || '';
+        let hsn = item.hsnSac?.value || 'N/A';
+        let unit = item.unit?.value || 'PCS';
+        let rate = Number(item.rate?.value || 0);
+        let taxPercent = Number(item.gstRate?.value !== undefined ? item.gstRate.value : 18);
+
+        if (pId) {
+          const p = products.find(prod => prod.id === pId);
+          if (p) {
+            hsn = p.hsnCode || hsn;
+            unit = p.unit || unit;
+            if (rate === 0) rate = Number(p.purchasePrice || 0);
+            if (item.gstRate?.value === undefined) taxPercent = Number(p.gstRate || 18);
+          }
+        }
+
+        newTracking[`item_${idx}`] = { status: 'extracted', confidence: item.name?.confidence || 0.8 };
+
+        return {
+          keyId: `ocr-item-${idx}-${Date.now()}`,
+          productId: pId,
+          description: item.name?.value || item.description?.value || '',
+          hsnCode: hsn,
+          qty: Number(item.quantity?.value || 1),
+          unit,
+          rate,
+          discount: Number(item.discount?.value || 0),
+          taxPercent,
+          warehouseId: warehouseId || '',
+        };
+      });
+      setItems(mappedItems);
+    }
+
+    setFieldTracking(newTracking);
+  };
+
+  const handleDocumentRemoved = () => {
+    setOcrDocument(null);
+    setOcrExtraction(null);
+    setIsOcrAssisted(false);
+    setIsOcrVerified(false);
+    setFieldTracking({});
+    notification.info('Attached vendor bill removed. Form remains editable.');
+  };
+
   // Set default place of supply & addresses when vendor is selected
   const handleVendorChange = (id: string) => {
     setValue('vendorId', id);
+    markFieldModified('vendor');
     const v = vendors.find(vendor => vendor.id === id);
     if (v) {
       setValue('billingAddress', v.address || '');
@@ -301,6 +450,7 @@ export const BillForm = () => {
   const handleLineChange = (index: number, field: keyof FormLineItem, value: any, itemObj?: any) => {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
+    markFieldModified(`item_${index}`);
 
     // Auto populate rate/details when product changes
     if (field === 'productId') {
@@ -435,6 +585,13 @@ export const BillForm = () => {
       return;
     }
 
+    // Explicit Verification check for AI OCR bills
+    if (isOcrAssisted && !isOcrVerified) {
+      notification.error('Please verify the extracted bill fields by clicking "Verify & Continue" before saving.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     // Build Payload
     const payload = {
       vendorId: data.vendorId,
@@ -445,6 +602,7 @@ export const BillForm = () => {
       placeOfSupply: data.placeOfSupply,
       taxMode,
       isRcm,
+      attachmentId: ocrDocument?.id || undefined,
       gstBreakup: {
         dueDate: data.dueDate || undefined,
         warehouseId: warehouseId || undefined,
@@ -510,6 +668,42 @@ export const BillForm = () => {
           </div>
         </div>
 
+        {/* Prominent Vendor Bill Upload Section */}
+        <div className="space-y-4">
+          <BillDocumentUpload
+            currentDocument={ocrDocument}
+            onExtractionSuccess={handleOcrExtractionSuccess}
+            onDocumentRemoved={handleDocumentRemoved}
+            onOpenViewer={(url, fileName, mimeType) => {
+              setViewerDoc({ url, fileName, mimeType });
+              setIsViewerOpen(true);
+            }}
+            disabled={saveMutation.isPending}
+          />
+
+          {isOcrAssisted && (
+            <OcrVerificationBanner
+              isVerified={isOcrVerified}
+              onVerify={() => setIsOcrVerified(!isOcrVerified)}
+              onOpenViewer={() => {
+                if (ocrDocument?.secureUrl) {
+                  setViewerDoc({
+                    url: ocrDocument.secureUrl,
+                    fileName: ocrDocument.originalFileName,
+                    mimeType: ocrDocument.mimeType,
+                  });
+                  setIsViewerOpen(true);
+                }
+              }}
+              ocrTotal={ocrExtraction?.totals?.grandTotal?.value}
+              calculatedTotal={totals.grandTotal}
+              warnings={ocrExtraction?.warnings}
+              duplicateInfo={ocrExtraction?.duplicateCheck}
+              matchedVendorName={ocrExtraction?.matchedVendor?.name}
+            />
+          )}
+        </div>
+
         <form id="billForm" onSubmit={handleFormSubmit(handleSave as any)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Info Blocks (Left 2 cols) */}
           <div className="lg:col-span-2 space-y-6">
@@ -521,8 +715,16 @@ export const BillForm = () => {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
+                  <div className="flex items-center justify-between pb-0.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Vendor / Supplier <span className="text-red-500">*</span>
+                    </label>
+                    <OcrFieldBadge
+                      status={fieldTracking.vendor?.status}
+                      confidence={fieldTracking.vendor?.confidence}
+                    />
+                  </div>
                   <SearchableSelect
-                    label="Vendor / Supplier"
                     required
                     value={vendorId || ''}
                     onChange={(val) => {
@@ -552,9 +754,19 @@ export const BillForm = () => {
                 </div>
 
                 <div className="space-y-1.5">
+                  <div className="flex items-center justify-between pb-0.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Place of Supply / State
+                    </label>
+                    <OcrFieldBadge
+                      status={fieldTracking.placeOfSupply?.status}
+                      confidence={fieldTracking.placeOfSupply?.confidence}
+                    />
+                  </div>
                   <Input
-                    label="Place of Supply / State"
-                    {...register('placeOfSupply')}
+                    {...register('placeOfSupply', {
+                      onChange: () => markFieldModified('placeOfSupply'),
+                    })}
                     placeholder="Auto-filled state code"
                   />
                   <FormErrorDisplay error={errors.placeOfSupply} />
@@ -563,28 +775,58 @@ export const BillForm = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
+                  <div className="flex items-center justify-between pb-0.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Billing Date <span className="text-red-500">*</span>
+                    </label>
+                    <OcrFieldBadge
+                      status={fieldTracking.date?.status}
+                      confidence={fieldTracking.date?.confidence}
+                    />
+                  </div>
                   <Input
-                    label="Billing Date"
                     type="date"
                     required
-                    {...register('date')}
+                    {...register('date', {
+                      onChange: () => markFieldModified('date'),
+                    })}
                   />
                   <FormErrorDisplay error={errors.date} />
                 </div>
 
                 <div className="space-y-1.5">
+                  <div className="flex items-center justify-between pb-0.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Due Date
+                    </label>
+                    <OcrFieldBadge
+                      status={fieldTracking.dueDate?.status}
+                      confidence={fieldTracking.dueDate?.confidence}
+                    />
+                  </div>
                   <Input
-                    label="Due Date"
                     type="date"
-                    {...register('dueDate')}
+                    {...register('dueDate', {
+                      onChange: () => markFieldModified('dueDate'),
+                    })}
                   />
                   <FormErrorDisplay error={errors.dueDate} />
                 </div>
 
                 <div className="space-y-1.5">
+                  <div className="flex items-center justify-between pb-0.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Vendor Reference / Invoice No
+                    </label>
+                    <OcrFieldBadge
+                      status={fieldTracking.reference?.status}
+                      confidence={fieldTracking.reference?.confidence}
+                    />
+                  </div>
                   <Input
-                    label="Vendor Reference / Invoice No"
-                    {...register('reference')}
+                    {...register('reference', {
+                      onChange: () => markFieldModified('reference'),
+                    })}
                     placeholder="e.g. INV/2026/001"
                   />
                   <FormErrorDisplay error={errors.reference} />
@@ -643,7 +885,13 @@ export const BillForm = () => {
                     <div key={item.keyId} className="p-4 border border-border/80 rounded-xl bg-muted/10 space-y-3 relative group">
                       {/* Row Header */}
                       <div className="flex items-center justify-between border-b border-border/30 pb-2">
-                        <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Item line {index + 1}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Item line {index + 1}</span>
+                          <OcrFieldBadge
+                            status={fieldTracking[`item_${index}`]?.status}
+                            confidence={fieldTracking[`item_${index}`]?.confidence}
+                          />
+                        </div>
                         <div className="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
@@ -935,6 +1183,15 @@ export const BillForm = () => {
           </div>
         </form>
       </div>
+
+      {/* Interactive Bill OCR Review Viewer Modal */}
+      <BillOcrReviewViewer
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        documentUrl={viewerDoc.url}
+        fileName={viewerDoc.fileName}
+        mimeType={viewerDoc.mimeType}
+      />
     </PageContainer>
   );
 };

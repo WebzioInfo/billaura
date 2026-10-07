@@ -14,10 +14,16 @@ import { GoodsReceiptsService } from "./goods-receipts.service";
 import { AccountingModule } from "../accounting/accounting.module";
 import { SharedModule } from "../shared/shared.module";
 
+import { PurchasesDocumentController } from "./purchases-document.controller";
+import { PurchasesDocumentService } from "./purchases-document.service";
+import { TesseractBillExtractor } from "./ocr/providers/tesseract-bill-extractor";
+import { BillMatcherService } from "./ocr/bill-matcher.service";
+
 @Module({
   imports: [DatabaseModule, AccountingModule, SharedModule],
   controllers: [
     PurchasesController,
+    PurchasesDocumentController,
     PurchasePaymentsController,
     VendorsController,
     PurchaseOrdersController,
@@ -25,6 +31,9 @@ import { SharedModule } from "../shared/shared.module";
   ],
   providers: [
     PurchasesService,
+    PurchasesDocumentService,
+    TesseractBillExtractor,
+    BillMatcherService,
     PurchasePaymentsService,
     PurchaseOrdersService,
     GoodsReceiptsService,
@@ -32,6 +41,9 @@ import { SharedModule } from "../shared/shared.module";
   ],
   exports: [
     PurchasesService,
+    PurchasesDocumentService,
+    TesseractBillExtractor,
+    BillMatcherService,
     PurchasePaymentsService,
     PurchaseOrdersService,
     GoodsReceiptsService,

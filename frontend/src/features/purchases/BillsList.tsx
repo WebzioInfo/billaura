@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Receipt, Search, Filter, Eye, Edit, Copy, DollarSign, 
   Trash2, X, Download, FileText, Calendar, Building, ListFilter,
-  CheckCircle, AlertTriangle, ShieldAlert, Sparkles, Send, Briefcase, Printer, ArrowRight
+  CheckCircle, AlertTriangle, ShieldAlert, Sparkles, Send, Briefcase, Printer, ArrowRight, ExternalLink
 } from 'lucide-react';
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, 
@@ -24,6 +24,7 @@ import { ExportService } from '@/core/services/ExportService';
 import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 import { DeleteDialog, ConfirmDialog } from '@/shared/components/ui';
 import { PdfDownloadButton } from '../../shared/components/pdf/PdfDownloadButton';
+import { BillOcrReviewViewer } from './components/BillOcrReviewViewer';
 
 interface Vendor {
   id: string;
@@ -86,11 +87,13 @@ interface Purchase {
   vendor: Vendor;
   items: PurchaseItem[];
   allocations?: any[];
+  attachments?: any[];
 }
 
 export const BillsList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [viewingDoc, setViewingDoc] = useState<{ url: string; fileName: string; mimeType: string } | null>(null);
 
   // Filters State
   const [search, setSearch] = useState('');
@@ -1015,6 +1018,65 @@ export const BillsList = () => {
                 </div>
               </div>
 
+              {/* Source Document Attachment Info */}
+              {selectedBill.attachments && selectedBill.attachments.length > 0 && (() => {
+                const firstAttachment = selectedBill.attachments[0];
+                return (
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-foreground">Original Vendor Bill Document</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                              Cloudinary Archived
+                            </span>
+                            {firstAttachment.ocrStatus === 'VERIFIED' && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                                OCR Verified
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {firstAttachment.originalFileName}
+                            {firstAttachment.confidence && ` • Confidence: ${Math.round(Number(firstAttachment.confidence) * 100)}%`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setViewingDoc({
+                            url: firstAttachment.secureUrl,
+                            fileName: firstAttachment.originalFileName,
+                            mimeType: firstAttachment.mimeType || 'image/jpeg',
+                          })}
+                          className="text-xs font-semibold h-8"
+                        >
+                          <Eye className="w-3.5 h-3.5 mr-1 text-primary" />
+                          Preview Bill
+                        </Button>
+                        <a
+                          href={firstAttachment.secureUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center text-xs font-semibold h-8 px-2.5 rounded-lg border border-border bg-background hover:bg-muted text-foreground transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                          Fullscreen
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Items Grid */}
               <div className="space-y-2">
                 <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider">Itemized Line Entries</h4>
@@ -1180,6 +1242,17 @@ export const BillsList = () => {
       )}
       <ConfirmDialog isOpen={!!billToCancel} onClose={() => setBillToCancel(null)} onConfirm={async () => { cancelMutation.mutate(billToCancel!.id); setBillToCancel(null); }} title="Cancel Purchase Bill" message={<span>Cancel bill <strong>{billToCancel?.purchaseNo}</strong>? This will reverse ledger accounts and stock changes.</span>} confirmText="Cancel Bill" variant="danger" />
       <DeleteDialog isOpen={!!billToDelete} onClose={() => setBillToDelete(null)} onConfirm={async () => { deleteMutation.mutate(billToDelete!.id); setBillToDelete(null); }} entityName="Purchase Bill" entityId={billToDelete?.purchaseNo} warningText="This action is irreversible." />
+      
+      {/* Interactive Bill OCR Review Viewer Modal */}
+      {viewingDoc && (
+        <BillOcrReviewViewer
+          isOpen={!!viewingDoc}
+          onClose={() => setViewingDoc(null)}
+          documentUrl={viewingDoc.url}
+          fileName={viewingDoc.fileName}
+          mimeType={viewingDoc.mimeType}
+        />
+      )}
     </>
   );
 };

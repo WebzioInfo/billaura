@@ -76,6 +76,10 @@ export class CreatePurchaseDto {
 
   @IsOptional()
   gstBreakup?: any;
+
+  @IsString()
+  @IsOptional()
+  attachmentId?: string;
 }
 
 export class UpdatePurchaseDto extends CreatePurchaseDto {}
