@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import notification from '@/core/services/NotificationService';
-import { Search, Plus, Trash2, Edit2, Download, AlertCircle } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, Download, AlertCircle, Loader2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/core/api';
 import { erpInvalidate } from '@/core/query/erpConsistency';
@@ -17,10 +17,11 @@ import { usePagination } from '@/shared/hooks/usePagination';
 import { useTaxEngine } from '@/features/taxes/hooks/useTaxEngine';
 
 const expenseSchema = z.object({
-  categoryId: z.string().min(1, 'Select a category'),
-  bankAccountId: z.string().min(1, 'Select payment source'),
-  date: z.string().min(1, 'Select date'),
-  amount: z.number().min(0.01, 'Amount must be greater than zero'),
+  categoryId: z.string().min(1, 'Please select an expense category'),
+  departmentId: z.string().optional(),
+  bankAccountId: z.string().min(1, 'Please select a source account ledger'),
+  date: z.string().min(1, 'Please select a posting date'),
+  amount: z.number().min(0.01, 'Base amount must be greater than zero'),
   taxAmount: z.number().min(0),
   paymentMethod: z.string().optional(),
   billNumber: z.string().optional(),
@@ -37,7 +38,6 @@ const expenseSchema = z.object({
   sgstAmount: z.number().optional(),
   igstAmount: z.number().optional(),
   cessAmount: z.number().optional(),
-  departmentId: z.string().min(1, 'Select a department'),
 });
 
 type ExpenseFormValues = z.infer<typeof expenseSchema>;
@@ -216,22 +216,64 @@ export const ExpensesDashboard = () => {
   // Claim Mutations
   const saveExpense = useMutation({
     mutationFn: async (values: ExpenseFormValues) => {
+      const payload = {
+        ...values,
+        amount: Number(values.amount),
+        taxAmount: Number(values.taxAmount || 0),
+        departmentId: values.departmentId?.trim() ? values.departmentId.trim() : undefined,
+        bankAccountId: values.bankAccountId?.trim() ? values.bankAccountId.trim() : undefined,
+        categoryId: values.categoryId?.trim() ? values.categoryId.trim() : undefined,
+        description: values.description?.trim() ? values.description.trim() : undefined,
+        paymentMethod: values.paymentMethod || 'BANK_TRANSFER',
+        taxApplicable: Boolean(values.taxApplicable),
+        gstRate: Number(values.gstRate || 0),
+        taxPreference: values.taxPreference || 'TAXABLE',
+        taxMode: values.taxMode || 'EXCLUDING_TAX',
+        taxType: values.taxType || 'CGST_SGST',
+        taxableAmount: values.taxableAmount !== undefined ? Number(values.taxableAmount) : undefined,
+        cgstAmount: values.cgstAmount !== undefined ? Number(values.cgstAmount) : undefined,
+        sgstAmount: values.sgstAmount !== undefined ? Number(values.sgstAmount) : undefined,
+        igstAmount: values.igstAmount !== undefined ? Number(values.igstAmount) : undefined,
+        cessAmount: values.cessAmount !== undefined ? Number(values.cessAmount) : undefined,
+      };
       if (editingId) {
-        return apiClient.put(`/expenses/${editingId}`, values);
+        return apiClient.put(`/expenses/${editingId}`, payload);
       }
-      return apiClient.post('/expenses', values);
+      return apiClient.post('/expenses', payload);
     },
     onSuccess: async () => {
       notification.success(editingId ? 'Expense updated successfully' : 'Expense created successfully');
       await erpInvalidate.expenseReceipt(queryClient);
+      await queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setIsModalOpen(false);
       setEditingId(null);
       form.reset();
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to save expense');
+      const msg = err.response?.data?.message || err.message || 'Failed to save expense';
+      const formattedMsg = Array.isArray(msg) ? msg.join(', ') : msg;
+      notification.error(formattedMsg);
     }
   });
+
+  const onValidSubmit = (data: ExpenseFormValues) => {
+    saveExpense.mutate(data);
+  };
+
+  const onInvalidSubmit = (errors: FieldErrors<ExpenseFormValues>) => {
+    const errorList = Object.entries(errors)
+      .map(([_, err]) => err?.message)
+      .filter(Boolean);
+    const firstErrorMessage =
+      errors.categoryId?.message ||
+      errors.amount?.message ||
+      errors.bankAccountId?.message ||
+      errors.date?.message ||
+      errors.departmentId?.message ||
+      errorList[0] ||
+      'Please check all required fields';
+    notification.error(String(firstErrorMessage));
+  };
 
   const deleteExpense = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/expenses/${id}`),
@@ -396,8 +438,26 @@ export const ExpensesDashboard = () => {
                 onClick={() => {
                   setEditingId(null);
                   form.reset({
-                    categoryId: '', bankAccountId: '', date: new Date().toISOString().split('T')[0],
-                    amount: 0, taxAmount: 0, paymentMethod: 'BANK_TRANSFER', billNumber: '', description: '', notes: ''
+                    categoryId: '',
+                    bankAccountId: '',
+                    date: new Date().toISOString().split('T')[0],
+                    amount: 0,
+                    taxAmount: 0,
+                    paymentMethod: 'BANK_TRANSFER',
+                    billNumber: '',
+                    description: '',
+                    notes: '',
+                    departmentId: '',
+                    taxApplicable: false,
+                    gstRate: 0,
+                    taxPreference: 'TAXABLE',
+                    taxMode: 'EXCLUDING_TAX',
+                    taxType: 'CGST_SGST',
+                    taxableAmount: 0,
+                    cgstAmount: 0,
+                    sgstAmount: 0,
+                    igstAmount: 0,
+                    cessAmount: 0,
                   });
                   prevPaymentMethodRef.current = 'BANK_TRANSFER';
                   setIsModalOpen(true);
@@ -631,7 +691,7 @@ export const ExpensesDashboard = () => {
                 <h2 className="font-bold text-sm text-foreground">{editingId ? 'Edit Expense Claim' : 'File Expense Claim'}</h2>
                 <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
               </div>
-              <form onSubmit={form.handleSubmit((d) => saveExpense.mutate(d))} className="p-6 space-y-4">
+              <form onSubmit={form.handleSubmit(onValidSubmit, onInvalidSubmit)} className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <SearchableSelect
@@ -649,11 +709,12 @@ export const ExpensesDashboard = () => {
                       searchPlaceholder="Search categories..."
                       clearable
                       quickCreateEntity="expenseCategory"
+                      error={form.formState.errors.categoryId?.message}
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Department *</label>
                     <SearchableSelect
+                      label="Department"
                       value={form.watch('departmentId') || ''}
                       onChange={(val) => form.setValue('departmentId', val, { shouldValidate: true })}
                       options={departments}
@@ -665,11 +726,21 @@ export const ExpensesDashboard = () => {
                       placeholder="Select Department"
                       searchPlaceholder="Search departments..."
                       clearable
+                      error={form.formState.errors.departmentId?.message}
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Posting Date *</label>
-                    <input type="date" {...form.register('date')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
+                    <input
+                      type="date"
+                      {...form.register('date')}
+                      className={`w-full p-2 bg-background border rounded-lg text-xs outline-none focus:border-accent ${
+                        form.formState.errors.date ? 'border-red-500' : 'border-border/80'
+                      }`}
+                    />
+                    {form.formState.errors.date && (
+                      <p className="text-[10px] text-red-500 mt-1">{form.formState.errors.date.message}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Payment Method</label>
@@ -681,7 +752,18 @@ export const ExpensesDashboard = () => {
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Base Amount *</label>
-                    <input type="number" step="0.01" {...form.register('amount', { valueAsNumber: true })} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      {...form.register('amount', { valueAsNumber: true })}
+                      className={`w-full p-2 bg-background border rounded-lg text-xs outline-none focus:border-accent ${
+                        form.formState.errors.amount ? 'border-red-500' : 'border-border/80'
+                      }`}
+                    />
+                    {form.formState.errors.amount && (
+                      <p className="text-[10px] text-red-500 mt-1">{form.formState.errors.amount.message}</p>
+                    )}
                   </div>
                   <div className="col-span-2 mt-4 pt-4 border-t border-border/40">
                     <h3 className="text-xs font-bold mb-3 flex items-center justify-between">
@@ -779,8 +861,13 @@ export const ExpensesDashboard = () => {
                 </div>
                 <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-border/40">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-border hover:bg-muted/50 rounded-xl text-xs font-bold cursor-pointer">Cancel</button>
-                  <button type="submit" disabled={saveExpense.isPending} className="px-4 py-2 bg-accent text-white hover:bg-opacity-90 rounded-xl text-xs font-bold shadow-md shadow-accent/15 cursor-pointer">
-                    {saveExpense.isPending ? 'Filing Claim...' : 'File Claim'}
+                  <button
+                    type="submit"
+                    disabled={saveExpense.isPending}
+                    className="px-4 py-2 bg-accent text-white hover:bg-opacity-90 rounded-xl text-xs font-bold shadow-md shadow-accent/15 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  >
+                    {saveExpense.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>{saveExpense.isPending ? 'Filing Claim...' : (editingId ? 'Update Claim' : 'File Claim')}</span>
                   </button>
                 </div>
               </form>

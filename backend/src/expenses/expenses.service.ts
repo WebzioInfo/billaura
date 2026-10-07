@@ -41,7 +41,7 @@ export class ExpensesService {
         where,
         skip,
         take,
-        include: { bankAccount: true, cashAccount: true, category: true, employee: true, vendor: true },
+        include: { bankAccount: true, cashAccount: true, category: true, employee: true, vendor: true, department: true },
         orderBy: { date: 'desc' },
       }),
       this.prisma.expense.count({ where }),
@@ -58,7 +58,7 @@ export class ExpensesService {
 
     const expense = await this.prisma.expense.findFirst({
       where: { id },
-      include: { bankAccount: true, cashAccount: true, category: true, employee: true, vendor: true, attachments: true, history: true, comments: true },
+      include: { bankAccount: true, cashAccount: true, category: true, employee: true, vendor: true, department: true, attachments: true, history: true, comments: true },
     });
 
     if (!expense) {
@@ -66,6 +66,141 @@ export class ExpensesService {
     }
 
     return expense;
+  }
+
+  private async resolvePaymentSource(
+    companyId: string,
+    dto: { bankAccountId?: string; cashAccountId?: string; paidFromType?: any; paidFromId?: string; paymentMethod?: any },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ bankAccountId: string | null; cashAccountId: string | null; paidFromType: any; paidFromId: string | null }> {
+    const rawBankId = dto.bankAccountId?.trim() || (dto.paidFromType === 'BANK' ? dto.paidFromId?.trim() : null);
+    const rawCashId = dto.cashAccountId?.trim() || (dto.paidFromType === 'CASH' ? dto.paidFromId?.trim() : null);
+    const candidateId = rawBankId || rawCashId;
+
+    if (!candidateId) {
+      return {
+        bankAccountId: null,
+        cashAccountId: null,
+        paidFromType: dto.paidFromType || null,
+        paidFromId: dto.paidFromId || null,
+      };
+    }
+
+    // 1. Is it a BankAccount?
+    const bankAccount = await tx.bankAccount.findFirst({
+      where: { id: candidateId, companyId, deletedAt: null },
+    });
+    if (bankAccount) {
+      return {
+        bankAccountId: bankAccount.id,
+        cashAccountId: null,
+        paidFromType: 'BANK',
+        paidFromId: bankAccount.id,
+      };
+    }
+
+    // 2. Is it a CashAccount?
+    const cashAccount = await tx.cashAccount.findFirst({
+      where: { id: candidateId, companyId },
+    });
+    if (cashAccount) {
+      return {
+        bankAccountId: null,
+        cashAccountId: cashAccount.id,
+        paidFromType: 'CASH',
+        paidFromId: cashAccount.id,
+      };
+    }
+
+    // 3. Is it an Account (General Ledger account from chart of accounts)?
+    const ledger = await tx.account.findFirst({
+      where: { id: candidateId, companyId },
+    });
+    if (ledger) {
+      const isCash =
+        dto.paymentMethod === 'CASH' ||
+        dto.paidFromType === 'CASH' ||
+        ledger.name.toLowerCase().includes('cash');
+
+      if (isCash) {
+        let cash = await tx.cashAccount.findFirst({
+          where: {
+            companyId,
+            OR: [{ accountId: ledger.id }, { name: ledger.name }],
+          },
+        });
+        if (!cash) {
+          cash = await tx.cashAccount.create({
+            data: {
+              companyId,
+              name: ledger.name,
+              accountId: ledger.id,
+              openingBalance: 0,
+              currentBalance: 0,
+              isDefault: false,
+            },
+          });
+        } else if (!cash.accountId) {
+          cash = await tx.cashAccount.update({
+            where: { id: cash.id },
+            data: { accountId: ledger.id },
+          });
+        }
+        return {
+          bankAccountId: null,
+          cashAccountId: cash.id,
+          paidFromType: 'CASH',
+          paidFromId: cash.id,
+        };
+      } else {
+        let bank = await tx.bankAccount.findFirst({
+          where: {
+            companyId,
+            deletedAt: null,
+            OR: [
+              { accountId: ledger.id },
+              { name: ledger.name },
+              { bankName: ledger.name },
+              ...(ledger.code ? [{ accountNumber: ledger.code }] : []),
+            ],
+          },
+        });
+        if (!bank) {
+          bank = await tx.bankAccount.create({
+            data: {
+              companyId,
+              name: ledger.name,
+              accountName: ledger.name,
+              bankName: ledger.name,
+              accountNumber: ledger.code || null,
+              accountType: 'CURRENT',
+              openingBalance: 0,
+              currentBalance: 0,
+              status: 'ACTIVE',
+              accountId: ledger.id,
+            },
+          });
+        } else if (!bank.accountId) {
+          bank = await tx.bankAccount.update({
+            where: { id: bank.id },
+            data: { accountId: ledger.id },
+          });
+        }
+        return {
+          bankAccountId: bank.id,
+          cashAccountId: null,
+          paidFromType: 'BANK',
+          paidFromId: bank.id,
+        };
+      }
+    }
+
+    return {
+      bankAccountId: null,
+      cashAccountId: null,
+      paidFromType: dto.paidFromType || null,
+      paidFromId: dto.paidFromId || null,
+    };
   }
 
   async create(dto: CreateExpenseDto, txClient?: Prisma.TransactionClient) {
@@ -82,25 +217,32 @@ export class ExpensesService {
       throw new NotFoundException(`Expense Category not found`);
     }
 
-    // Resolve paidFrom fields
-    let bankAccountId = dto.bankAccountId || null;
-    let cashAccountId = dto.cashAccountId || null;
     let employeeId = dto.employeeId || null;
     let vendorId = dto.vendorId || null;
-
-    if (dto.paidFromType === 'BANK' && dto.paidFromId) bankAccountId = dto.paidFromId;
-    if (dto.paidFromType === 'CASH' && dto.paidFromId) cashAccountId = dto.paidFromId;
     if (dto.paidFromType === 'EMPLOYEE' && dto.paidFromId) employeeId = dto.paidFromId;
     if (dto.paidFromType === 'VENDOR' && dto.paidFromId) vendorId = dto.paidFromId;
 
     const execute = async (tx: Prisma.TransactionClient) => {
-      // 1. Generate expense sequence number
+      // 1. Resolve payment source (Bank, Cash, or Ledger Account)
+      const { bankAccountId, cashAccountId, paidFromType, paidFromId } =
+        await this.resolvePaymentSource(companyId, dto, tx);
+
+      // 2. Validate department if provided
+      let departmentId = dto.departmentId?.trim() || null;
+      if (departmentId) {
+        const dept = await tx.department.findFirst({
+          where: { id: departmentId, companyId },
+        });
+        if (!dept) departmentId = null;
+      }
+
+      // 3. Generate expense sequence number
       const expenseNo = await this.sequenceService.generateNextSequence(companyId, 'EXPENSE', tx);
       const amount = Number(dto.amount);
       const taxAmount = Number(dto.taxAmount || 0);
       const totalAmount = amount + taxAmount;
 
-      // 2. Create Expense record (starts as PENDING)
+      // 4. Create Expense record (starts as PENDING)
       const expense = await tx.expense.create({
         data: {
           companyId,
@@ -110,9 +252,9 @@ export class ExpensesService {
           cashAccountId,
           employeeId,
           vendorId,
-          departmentId: dto.departmentId || null,
-          paidFromType: dto.paidFromType || null,
-          paidFromId: dto.paidFromId || null,
+          departmentId,
+          paidFromType,
+          paidFromId,
           expenseNo,
           billNumber: dto.billNumber || null,
           date: new Date(dto.date),
@@ -160,11 +302,47 @@ export class ExpensesService {
     const totalAmount = (dto.amount !== undefined ? dto.amount : Number(existing.amount)) + 
                         (dto.taxAmount !== undefined ? dto.taxAmount : Number(existing.taxAmount));
 
+    let bankAccountId = existing.bankAccountId;
+    let cashAccountId = existing.cashAccountId;
+    let paidFromType = existing.paidFromType;
+    let paidFromId = existing.paidFromId;
+
+    if (dto.bankAccountId !== undefined || dto.paymentMethod !== undefined) {
+      const resolved = await this.resolvePaymentSource(
+        companyId,
+        {
+          bankAccountId: dto.bankAccountId !== undefined ? dto.bankAccountId : (existing.bankAccountId || undefined),
+          paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod : existing.paymentMethod,
+        },
+        this.prisma,
+      );
+      bankAccountId = resolved.bankAccountId;
+      cashAccountId = resolved.cashAccountId;
+      paidFromType = resolved.paidFromType;
+      paidFromId = resolved.paidFromId;
+    }
+
+    let departmentId = existing.departmentId;
+    if (dto.departmentId !== undefined) {
+      const dId = dto.departmentId?.trim() || null;
+      if (dId) {
+        const dept = await this.prisma.department.findFirst({
+          where: { id: dId, companyId },
+        });
+        departmentId = dept ? dept.id : null;
+      } else {
+        departmentId = null;
+      }
+    }
+
     return this.prisma.expense.update({
       where: { id },
       data: {
         categoryId: dto.categoryId !== undefined ? dto.categoryId : undefined,
-        bankAccountId: dto.bankAccountId !== undefined ? dto.bankAccountId : undefined,
+        bankAccountId,
+        cashAccountId,
+        paidFromType,
+        paidFromId,
         date: dto.date !== undefined ? new Date(dto.date) : undefined,
         amount: dto.amount !== undefined ? dto.amount : undefined,
         taxAmount: dto.taxAmount !== undefined ? dto.taxAmount : undefined,
@@ -183,7 +361,7 @@ export class ExpensesService {
         billNumber: dto.billNumber !== undefined ? dto.billNumber : undefined,
         description: dto.description !== undefined ? dto.description : undefined,
         notes: dto.notes !== undefined ? dto.notes : undefined,
-        departmentId: dto.departmentId !== undefined ? dto.departmentId : undefined,
+        departmentId,
       }
     });
   }
