@@ -19,7 +19,7 @@ import { TenantGuard } from "../common/guards/tenant.guard";
 import { PdfEngineService } from "./pdf-engine.service";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
-@Controller("receipts")
+@Controller(["sales/receipts", "receipts"])
 export class ReceiptsController {
   constructor(
     private readonly receiptsService: ReceiptsService,

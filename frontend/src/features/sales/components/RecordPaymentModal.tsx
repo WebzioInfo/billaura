@@ -95,6 +95,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (totalPayment <= 0) {
       notification.error('Payment amount must be greater than 0.');
       return;
@@ -120,12 +121,12 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
         }))
       });
 
-      const receiptObj = res.data?.data || res.data;
+      const receiptObj = res?.data?.data || res?.data || res;
       setCreatedReceipt(receiptObj);
       await erpInvalidate.salesReceipt(queryClient, {
         customerId: invoice.businessPartnerId,
         invoiceIds: [invoice.id],
-        accountId: splits.find(s => s.accountId)?.accountId,
+        accountId: splits.find(s => Boolean(s.accountId))?.accountId,
       });
       notification.success('Payment recorded successfully.');
       onSuccess();
@@ -267,7 +268,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
                       onChange={val => handleUpdateSplit(split.id, 'accountId', val)}
                       options={accounts || []}
                       mapOption={(acc: any) => ({
-                        value: acc.id,
+                        value: acc.accountId || acc.id,
                         label: acc.bankName ? `${acc.bankName}${acc.accountNumber ? ` - ${acc.accountNumber}` : ''}` : (acc.name || 'Bank Account'),
                         subLabel: acc.accountType || undefined,
                         searchKeywords: [acc.accountNumber, acc.bankName, acc.name, acc.ifscCode].filter(Boolean),

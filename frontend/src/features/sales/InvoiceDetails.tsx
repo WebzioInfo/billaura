@@ -1173,7 +1173,6 @@ export const InvoiceDetails: React.FC = () => {
           onClose={() => setIsRecordPaymentOpen(false)}
           invoice={invoice}
           onSuccess={() => {
-            setIsRecordPaymentOpen(false);
             refetch();
             queryClient.invalidateQueries({ queryKey: ['invoices'] });
           }}

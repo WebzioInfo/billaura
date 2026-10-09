@@ -160,7 +160,7 @@ export class ReceiptsService {
       0,
     );
 
-    if (Number(dto.amount) > totalOutstanding) {
+    if (Number(dto.amount) > totalOutstanding + 0.01) {
       throw new BadRequestException('Receipt amount exceeds outstanding balance');
     }
 
@@ -198,9 +198,44 @@ export class ReceiptsService {
         }
         split.accountId = resolvedAccount.id;
       } else {
-        const account = await this.prisma.account.findFirst({
+        let account = await this.prisma.account.findFirst({
           where: { id: split.accountId, companyId },
         });
+        if (!account) {
+          const bankAccount = await this.prisma.bankAccount.findFirst({
+            where: { id: split.accountId, companyId },
+          });
+          if (bankAccount) {
+            if (bankAccount.accountId) {
+              account = await this.prisma.account.findFirst({
+                where: { id: bankAccount.accountId, companyId },
+              });
+            }
+            if (!account) {
+              const ledgerName = bankAccount.bankName || bankAccount.name || 'Bank Accounts';
+              let resolved = await this.prisma.account.findFirst({
+                where: { companyId, name: ledgerName },
+              });
+              if (!resolved) {
+                resolved = await this.prisma.account.create({
+                  data: {
+                    companyId,
+                    name: ledgerName,
+                    category: 'ASSET',
+                    subCategory: 'CURRENT_ASSET',
+                    balance: 0,
+                  },
+                });
+              }
+              await this.prisma.bankAccount.update({
+                where: { id: bankAccount.id },
+                data: { accountId: resolved.id },
+              });
+              account = resolved;
+            }
+            split.accountId = account.id;
+          }
+        }
         if (!account) {
           throw new NotFoundException(`Account with ID ${split.accountId} not found`);
         }
