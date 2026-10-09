@@ -11,6 +11,7 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PartialType } from '@nestjs/swagger';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export class InvoiceItemDto {
@@ -103,6 +104,10 @@ export class CreateInvoiceDto {
   @IsNumber()
   @IsOptional()
   grandTotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  roundOff?: number;
 
   @IsString()
   @IsOptional()
@@ -204,10 +209,28 @@ export class CreateInvoiceDto {
   items: InvoiceItemDto[];
 }
 
+export class UpdateInvoiceDto extends PartialType(CreateInvoiceDto) {
+  @IsString()
+  @IsOptional()
+  status?: string;
+}
+
 export class UpdateInvoiceStatusDto {
   @IsString()
   @IsNotEmpty()
   status: string; // DocumentStatus enum
+}
+
+export class CancelInvoiceDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Cancellation reason is mandatory' })
+  reason: string;
+}
+
+export class RestoreInvoiceDto {
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 export class InvoiceQueryDto extends PaginationQueryDto {
@@ -218,6 +241,10 @@ export class InvoiceQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @IsOptional()
+  @IsString()
+  archived?: string;
 
   @IsOptional()
   @IsString()

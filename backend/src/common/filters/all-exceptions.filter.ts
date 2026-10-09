@@ -35,7 +35,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     } else if (exception && typeof exception === 'object') {
       const err = exception as any;
-      if (
+      if (err.code === 'P2002') {
+        status = HttpStatus.CONFLICT;
+        const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : err.meta?.target;
+        message = target
+          ? `A record with this ${target} already exists.`
+          : 'A duplicate record already exists.';
+      } else if (err.code === 'P2025') {
+        status = HttpStatus.NOT_FOUND;
+        message = 'The requested record was not found or has already been removed.';
+      } else if (err.code === 'P2003') {
+        status = HttpStatus.BAD_REQUEST;
+        message = 'Foreign key constraint failed. Related record does not exist.';
+      } else if (
         err.name === 'PayloadTooLargeError' ||
         err.type === 'entity.too.large' ||
         err.code === 'LIMIT_FILE_SIZE' ||

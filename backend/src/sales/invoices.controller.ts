@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
@@ -15,7 +16,13 @@ import {
 } from "@nestjs/common";
 import { Response } from 'express';
 import { InvoicesService } from "./invoices.service";
-import { CreateInvoiceDto, InvoiceQueryDto, BulkDownloadInvoicesDto } from "./dto/invoice.dto";
+import {
+  CreateInvoiceDto,
+  InvoiceQueryDto,
+  BulkDownloadInvoicesDto,
+  UpdateInvoiceDto,
+  RestoreInvoiceDto,
+} from "./dto/invoice.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 import { PdfEngineService } from "./pdf-engine.service";
@@ -70,6 +77,43 @@ export class InvoicesController {
   async create(@Body() dto: CreateInvoiceDto, @Req() req: any) {
     return this.invoicesService.create(dto, undefined, req?.user?.id);
   }
+
+  @Put(":id")
+  async update(
+    @Param("id") id: string,
+    @Body() dto: UpdateInvoiceDto,
+    @Req() req: any
+  ) {
+    return this.invoicesService.update(id, dto, req?.user?.id);
+  }
+
+  @Post(":id/archive")
+  async archive(
+    @Param("id") id: string,
+    @Body() dto: any,
+    @Req() req: any
+  ) {
+    return this.invoicesService.archive(id, dto, req?.user?.id || req?.user?.userId);
+  }
+
+  @Post(":id/correct")
+  async correct(
+    @Param("id") id: string,
+    @Body() dto: any,
+    @Req() req: any
+  ) {
+    return this.invoicesService.correct(id, dto, req?.user?.id || req?.user?.userId);
+  }
+
+  @Post(":id/restore")
+  async restore(
+    @Param("id") id: string,
+    @Body() dto: RestoreInvoiceDto,
+    @Req() req: any
+  ) {
+    return this.invoicesService.restore(id, req?.user?.id || req?.user?.userId, dto?.reason);
+  }
+
 
   @Post(":id/payments")
   async receivePayment(
@@ -127,10 +171,41 @@ export class InvoicesController {
     };
   }
 
+  @Delete(":id/allocations/:allocationId")
+  async removeInvoiceAllocation(
+    @Param("allocationId") allocationId: string,
+    @Query("deleteReceipt") deleteReceipt: string,
+    @Req() req: any
+  ) {
+    return this.receiptsService.removeAllocation(
+      allocationId,
+      { deleteReceipt: deleteReceipt === "true" },
+      req?.user?.id || req?.user?.userId
+    );
+  }
+
+  @Delete(":id/payments/:allocationId")
+  async removeInvoicePayment(
+    @Param("allocationId") allocationId: string,
+    @Query("deleteReceipt") deleteReceipt: string,
+    @Req() req: any
+  ) {
+    return this.receiptsService.removeAllocation(
+      allocationId,
+      { deleteReceipt: deleteReceipt === "true" },
+      req?.user?.id || req?.user?.userId
+    );
+  }
+
   @Delete(":id")
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param("id") id: string) {
-    await this.invoicesService.remove(id);
+  @HttpCode(HttpStatus.OK)
+  async remove(
+    @Param("id") id: string,
+    @Query("purge") purge: string,
+    @Req() req: any
+  ) {
+    const allowPurge = purge === 'true';
+    return this.invoicesService.remove(id, req?.user?.id || req?.user?.userId, { allowPurge });
   }
 
   @Get(":id/pdf")

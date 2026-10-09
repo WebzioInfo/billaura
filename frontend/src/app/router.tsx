@@ -302,6 +302,7 @@ export const router = createBrowserRouter([
       { path: 'credit-notes/new', element: <SalesDocumentForm initialDocType="CREDIT_NOTE" /> },
       { path: 'invoices', element: <InvoicesList /> },
       { path: 'invoices/:id', element: <InvoiceDetails /> },
+      { path: 'invoices/:id/edit', element: <SalesDocumentForm initialDocType="INVOICE" /> },
       { path: 'invoices/:id/print', element: <InvoicePrintView /> },
       { path: 'invoices/new', element: <SalesDocumentForm initialDocType="INVOICE" /> },
       { path: 'proformas/new', element: <SalesDocumentForm initialDocType="PROFORMA" /> },

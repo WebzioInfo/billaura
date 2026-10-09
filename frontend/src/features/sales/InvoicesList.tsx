@@ -5,9 +5,11 @@ import {
   AlertTriangle,
   ChevronUp,
   ChevronDown,
+  RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
 import {
@@ -22,12 +24,14 @@ import {
   ColumnVisibilityMenu,
   PageHeader,
   Button,
+  ConfirmDialog,
 } from '@/shared/components/ui';
 import { PageLayout } from '@/shared/components/layout/PageLayout';
 import apiClient from '@/core/api';
 import { useSessionStore } from '@/features/auth/stores/sessionStore';
 import { cn } from '@/lib/utils';
 import { downloadInvoicePdf, printInvoicePdf } from '@/shared/utils/invoicePdf';
+import { erpInvalidate } from '@/core/query/erpConsistency';
 
 // ============================================================================
 // CONSTANTS & ENUMS
@@ -59,6 +63,7 @@ const QUICK_STATUS_TABS = [
   { id: 'PAID', label: 'Paid' },
   { id: 'OVERDUE', label: 'Overdue' },
   { id: 'DRAFT', label: 'Draft' },
+  { id: 'ARCHIVED', label: 'Archived' },
 ];
 
 const DATE_PRESETS = [
@@ -200,8 +205,11 @@ const calculateDatePreset = (preset: string): { fromDate: string; toDate: string
 
 export const InvoicesList: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
+  const [invoiceToRestore, setInvoiceToRestore] = useState<any | null>(null);
+  const [invoiceToDeletePermanently, setInvoiceToDeletePermanently] = useState<any | null>(null);
 
   // Session & Permissions
   const user = useSessionStore((state) => state.user);
@@ -210,6 +218,13 @@ export const InvoicesList: React.FC = () => {
     user?.globalRole === 'SUPER_ADMIN' ||
     user?.role === 'ADMIN' ||
     permissions?.includes('sales.create' as any);
+  const canDelete =
+    user?.globalRole === 'SUPER_ADMIN' ||
+    user?.role === 'ADMIN' ||
+    permissions?.includes('sales.delete' as any) ||
+    permissions?.includes('sales.invoices.delete' as any) ||
+    !permissions ||
+    permissions.length === 0;
 
   // --------------------------------------------------------------------------
   // URL QUERY STATE
@@ -370,18 +385,22 @@ export const InvoicesList: React.FC = () => {
       const res = await apiClient.get('/sales/invoices', { params });
       return res.data;
     },
-    staleTime: 30000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const invoices = useMemo(() => {
     if (!invoicesResponse) return [];
     if (Array.isArray(invoicesResponse.data)) return invoicesResponse.data;
     if (Array.isArray(invoicesResponse.data?.data)) return invoicesResponse.data.data;
+    if (Array.isArray(invoicesResponse.data?.items)) return invoicesResponse.data.items;
+    if (Array.isArray(invoicesResponse.items)) return invoicesResponse.items;
+    if (Array.isArray(invoicesResponse)) return invoicesResponse;
     return [];
   }, [invoicesResponse]);
 
   const meta = invoicesResponse?.meta || invoicesResponse?.data?.meta || {};
-  const totalCount = meta.total || invoices.length;
+  const totalCount = meta.total ?? meta.totalItems ?? invoices.length;
   const totalPages = meta.totalPages || Math.ceil(totalCount / limit) || 1;
 
   // 2. Summary KPI Query
@@ -411,7 +430,8 @@ export const InvoicesList: React.FC = () => {
       const res = await apiClient.get('/sales/invoices/summary', { params });
       return res.data;
     },
-    staleTime: 60000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const summaryData = summaryResponse?.data || {};
@@ -443,12 +463,13 @@ export const InvoicesList: React.FC = () => {
     const counts = summaryData?.statusCounts || {};
     return QUICK_STATUS_TABS.map((tab) => {
       let count: number | undefined = undefined;
-      if (tab.id === '') count = summaryData?.totalInvoices;
-      else if (tab.id === 'SENT') count = counts.SENT || counts.ISSUED;
-      else if (tab.id === 'PARTIAL') count = counts.PARTIAL || counts.PARTIALLY_PAID;
+      if (tab.id === '') count = counts.ALL ?? summaryData?.totalInvoices;
+      else if (tab.id === 'SENT') count = counts.SENT ?? counts.ISSUED;
+      else if (tab.id === 'PARTIAL') count = counts.PARTIAL ?? counts.PARTIALLY_PAID;
       else if (tab.id === 'PAID') count = counts.PAID;
-      else if (tab.id === 'OVERDUE') count = summaryData?.overdueCount || counts.OVERDUE;
+      else if (tab.id === 'OVERDUE') count = counts.OVERDUE ?? summaryData?.overdueCount;
       else if (tab.id === 'DRAFT') count = counts.DRAFT;
+      else if (tab.id === 'ARCHIVED') count = counts.ARCHIVED;
 
       return {
         ...tab,
@@ -748,6 +769,9 @@ export const InvoicesList: React.FC = () => {
   // STATUS HELPER FOR TABLE ROWS
   // --------------------------------------------------------------------------
   const getResolvedStatus = (item: any) => {
+    if (item.deletedAt) {
+      return 'ARCHIVED';
+    }
     if (item.status === 'CANCELLED' || item.status === 'VOID') {
       return 'CANCELLED';
     }
@@ -1286,32 +1310,72 @@ export const InvoicesList: React.FC = () => {
                               stickyCellBgClass
                             )}
                           >
-                            <RowActions
-                              onView={() => navigate(`/invoices/${item.id}`)}
-                              onDownload={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
-                              isDownloading={isDownloadingThis}
-                              onPrint={() => handlePrintSinglePdf(item.id, item.invoiceNo)}
-                              onEdit={
-                                item.status === 'DRAFT'
-                                  ? () => navigate(`/invoices/${item.id}/edit`)
-                                  : undefined
-                              }
-                              onDuplicate={() => navigate(`/invoices/new?duplicateFrom=${item.id}`)}
-                              onRecordPayment={
-                                outstanding > 0.01
-                                  ? () => navigate(`/receipts/new?invoiceId=${item.id}`)
-                                  : undefined
-                              }
-                              onSendReminder={
-                                outstanding > 0.01
-                                  ? () => toast.success(`Payment reminder sent for ${item.invoiceNo}`)
-                                  : undefined
-                              }
-                              onShareLink={() => {
-                                navigator.clipboard.writeText(`${window.location.origin}/invoices/${item.id}`);
-                                toast.success('Invoice link copied to clipboard');
-                              }}
-                            />
+                            {item.deletedAt ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInvoiceToRestore(item);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300 border border-amber-500/30 transition-colors"
+                                  title="Restore this archived invoice"
+                                >
+                                  <RefreshCw className="w-3 h-3" /> Restore
+                                </button>
+                                {canDelete && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInvoiceToDeletePermanently(item);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md bg-rose-500/10 text-rose-700 hover:bg-rose-500/20 dark:text-rose-300 border border-rose-500/30 transition-colors"
+                                    title="Permanently delete this archived invoice"
+                                  >
+                                    <Trash2 className="w-3 h-3" /> Delete
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/invoices/${item.id}`);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
+                                  title="View details"
+                                >
+                                  View
+                                </button>
+                              </div>
+                            ) : (
+                              <RowActions
+                                onView={() => navigate(`/invoices/${item.id}`)}
+                                onDownload={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
+                                isDownloading={isDownloadingThis}
+                                onPrint={() => handlePrintSinglePdf(item.id, item.invoiceNo)}
+                                onEdit={
+                                  item.status === 'DRAFT'
+                                    ? () => navigate(`/invoices/${item.id}/edit`)
+                                    : undefined
+                                }
+                                onDuplicate={() => navigate(`/invoices/new?duplicateFrom=${item.id}`)}
+                                onRecordPayment={
+                                  outstanding > 0.01
+                                    ? () => navigate(`/receipts/new?invoiceId=${item.id}`)
+                                    : undefined
+                                }
+                                onSendReminder={
+                                  outstanding > 0.01
+                                    ? () => toast.success(`Payment reminder sent for ${item.invoiceNo}`)
+                                    : undefined
+                                }
+                                onShareLink={() => {
+                                  navigator.clipboard.writeText(`${window.location.origin}/invoices/${item.id}`);
+                                  toast.success('Invoice link copied to clipboard');
+                                }}
+                              />
+                            )}
                           </td>
                         )}
                       </tr>
@@ -1360,12 +1424,41 @@ export const InvoicesList: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={resolvedStatus} />
-                        <RowActions
-                          onView={() => navigate(`/invoices/${item.id}`)}
-                          onDownload={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
-                          isDownloading={downloadingSingleId === item.id}
-                          onPrint={() => handlePrintSinglePdf(item.id, item.invoiceNo)}
-                        />
+                        {item.deletedAt ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInvoiceToRestore(item);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                              title="Restore this archived invoice"
+                            >
+                              <RefreshCw className="w-3 h-3" /> Restore
+                            </button>
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setInvoiceToDeletePermanently(item);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30"
+                                title="Permanently delete this archived invoice"
+                              >
+                                <Trash2 className="w-3 h-3" /> Delete
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <RowActions
+                            onView={() => navigate(`/invoices/${item.id}`)}
+                            onDownload={() => handleDownloadSinglePdf(item.id, item.invoiceNo)}
+                            isDownloading={downloadingSingleId === item.id}
+                            onPrint={() => handlePrintSinglePdf(item.id, item.invoiceNo)}
+                          />
+                        )}
                       </div>
                     </div>
 
@@ -1610,6 +1703,77 @@ export const InvoicesList: React.FC = () => {
           </div>
         </div>
       </FiltersDrawer>
+
+      {/* Restore Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!invoiceToRestore}
+        onClose={() => setInvoiceToRestore(null)}
+        onConfirm={async () => {
+          if (!invoiceToRestore) return;
+          try {
+            await apiClient.post(`/sales/invoices/${invoiceToRestore.id}/restore`);
+            toast.success('Invoice restored successfully.');
+            setInvoiceToRestore(null);
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['invoices-summary'] });
+          } catch (err: any) {
+            toast.error(
+              err.response?.data?.message ||
+              err.message ||
+              'Invoice could not be restored because its accounting entries do not balance. Please try again after the accounting issue is fixed.'
+            );
+          }
+        }}
+        title="Restore Archived Invoice"
+        message={`Are you sure you want to restore invoice "${invoiceToRestore?.invoiceNo}"? This will reactivate the document, preserve its document number and payment history, and safely restore general ledger and stock movements.`}
+        confirmText="Restore Invoice"
+        variant="primary"
+      />
+
+      {/* Delete Permanently Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!invoiceToDeletePermanently}
+        onClose={() => setInvoiceToDeletePermanently(null)}
+        onConfirm={async () => {
+          if (!invoiceToDeletePermanently) return;
+          try {
+            await apiClient.delete(`/sales/invoices/${invoiceToDeletePermanently.id}`);
+            toast.success('Invoice deleted successfully. Related balances updated.');
+            const custId = invoiceToDeletePermanently.businessPartnerId || invoiceToDeletePermanently.businessPartner?.id;
+            const invId = invoiceToDeletePermanently.id;
+            setInvoiceToDeletePermanently(null);
+            await erpInvalidate.invoice(queryClient, {
+              customerId: custId,
+              invoiceId: invId,
+            });
+            queryClient.invalidateQueries({ queryKey: ['receipts'] });
+            queryClient.invalidateQueries({ queryKey: ['payments'] });
+            if (custId) {
+              queryClient.invalidateQueries({ queryKey: ['customer', custId] });
+            }
+          } catch (err: any) {
+            const serverMsg = String(err.response?.data?.message || err?.message || '');
+            toast.error(serverMsg || 'Invoice could not be deleted. No changes were saved.');
+          }
+        }}
+        title="Delete Invoice Permanently"
+        message={
+          <div className="space-y-3">
+            <p>
+              Are you sure you want to permanently delete invoice{' '}
+              <strong className="text-foreground">{invoiceToDeletePermanently?.invoiceNo}</strong>
+              {invoiceToDeletePermanently?.businessPartner?.name ? (
+                <> for customer <strong className="text-foreground">{invoiceToDeletePermanently.businessPartner.name}</strong></>
+              ) : ''}?
+            </p>
+            <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-800 dark:text-rose-200 text-xs">
+              <strong>Notice:</strong> This action is permanent and cannot be undone. Associated items, general ledger entries, and dependent allocations will be safely removed, and customer balances will be updated.
+            </div>
+          </div>
+        }
+        confirmText="Delete Permanently"
+        variant="danger"
+      />
     </PageLayout>
   );
 };

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Printer, Download, Copy, ArrowLeft, Mail, CreditCard, Ban,
+  Printer, Download, Copy, ArrowLeft, Mail, CreditCard, Ban, Trash2, Archive,
   Calendar, Clock, DollarSign, CheckCircle2, Sparkles,
   AlertTriangle, Building2, MapPin, FileText,
   ShieldCheck, RefreshCw, Receipt, BookOpen, ExternalLink,
@@ -11,11 +11,12 @@ import {
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { PageContainer } from '@/shared/components/ui/LayoutComponents';
-import { ConfirmDialog, JournalImpactView, PageLoader } from '@/shared/components/ui';
+import { ConfirmDialog, JournalImpactView, PageLoader, Modal } from '@/shared/components/ui';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
+import { useSessionStore } from '@/features/auth/stores/sessionStore';
 import { downloadInvoicePdf, printInvoicePdf } from '@/shared/utils/invoicePdf';
 import { RecordPaymentModal } from './components/RecordPaymentModal';
 import {
@@ -67,10 +68,26 @@ export const InvoiceDetails: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [showDeletePermanentlyDialog, setShowDeletePermanentlyDialog] = useState(false);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [selectedPaymentToDelete, setSelectedPaymentToDelete] = useState<any>(null);
+  const [deleteReceiptEntirely, setDeleteReceiptEntirely] = useState(false);
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isPrintingPdf, setIsPrintingPdf] = useState(false);
+
+  // Session & Permissions
+  const user = useSessionStore((state) => state.user);
+  const permissions = useSessionStore((state) => state.permissions);
+  const canDelete =
+    user?.globalRole === 'SUPER_ADMIN' ||
+    user?.role === 'ADMIN' ||
+    permissions?.includes('sales.delete' as any) ||
+    permissions?.includes('sales.invoices.delete' as any) ||
+    permissions?.includes('sales.receipts.delete' as any) ||
+    !permissions ||
+    permissions.length === 0;
 
   // Fetch invoice details with robust resolution
   const { data: rawData, isLoading, error, refetch, isFetching } = useQuery<any>({
@@ -111,23 +128,114 @@ export const InvoiceDetails: React.FC = () => {
 
   useDynamicTitle(invoice?.invoiceNo ? `Invoice: ${invoice.invoiceNo}` : 'Invoice Details');
 
-  // Cancel invoice mutation
-  const cancelMutation = useMutation({
+  // Restore archived invoice mutation
+  const restoreMutation = useMutation({
+    mutationFn: async (reason?: string | void) => {
+      if (!id) return;
+      await apiClient.post(`/sales/invoices/${id}/restore`, { reason: reason || undefined });
+    },
+    onSuccess: async () => {
+      notification.success('Invoice restored successfully.');
+      await erpInvalidate.invoice(queryClient, {
+        customerId: invoice?.businessPartnerId || invoice?.businessPartner?.id,
+        invoiceId: id,
+      });
+      refetch();
+    },
+    onError: (err: any) => {
+      const serverMsg = String(err.response?.data?.message || err?.message || '');
+      if (serverMsg.includes('entries do not balance') || serverMsg.includes('unbalanced')) {
+        notification.error('Invoice could not be restored because its accounting entries do not balance. Please try again after the accounting issue is fixed.');
+      } else {
+        notification.error(serverMsg || 'Invoice could not be restored because its accounting entries do not balance. Please try again after the accounting issue is fixed.');
+      }
+    }
+  });
+
+  // Permanently delete invoice mutation
+  const deletePermanentlyMutation = useMutation({
     mutationFn: async () => {
       if (!id) return;
       await apiClient.delete(`/sales/invoices/${id}`);
     },
     onSuccess: async () => {
-      notification.success('Invoice cancelled and reversed from general ledger successfully');
+      notification.success('Invoice deleted successfully. Related balances updated.');
+      const custId = invoice?.businessPartnerId || invoice?.businessPartner?.id;
+      const invId = id;
+      await erpInvalidate.invoice(queryClient, {
+        customerId: custId,
+        invoiceId: invId,
+      });
+      queryClient.invalidateQueries({ queryKey: ['receipts'], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['payments'], refetchType: 'all' });
+      if (custId) {
+        queryClient.invalidateQueries({ queryKey: ['customer', custId], refetchType: 'all' });
+      }
+      navigate('/invoices');
+    },
+    onError: (err: any) => {
+      const serverMsg = String(err.response?.data?.message || err?.message || '');
+      notification.error(serverMsg || 'Invoice could not be deleted. No changes were saved.');
+    }
+  });
+
+  // Archive invoice mutation (safely reverses ledger/stock and unlinks allocations if financial records exist)
+  const archiveMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) return;
+      const res = await apiClient.post(`/sales/invoices/${id}/archive`, {
+        reason: 'Archived from invoice details',
+      });
+      return res.data;
+    },
+    onSuccess: async (res: any) => {
+      const msg = res?.message || 'Invoice archived successfully.';
+      notification.success(msg);
       await erpInvalidate.invoice(queryClient, {
         customerId: invoice?.businessPartnerId || invoice?.businessPartner?.id,
         invoiceId: id,
       });
-      navigate('/invoices');
+      setShowArchiveDialog(false);
+      refetch();
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || err?.message || 'Failed to cancel invoice');
+      const serverMsg = String(err.response?.data?.message || err?.message || '');
+      notification.error(serverMsg || 'Correction failed. No changes were saved.');
     }
+  });
+
+  // Delete payment / allocation mutation
+  const deletePaymentMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedPaymentToDelete) return;
+      const allocId = selectedPaymentToDelete.id || selectedPaymentToDelete.allocationId;
+      const res = await apiClient.delete(
+        `/sales/invoices/${id}/allocations/${allocId}?deleteReceipt=${deleteReceiptEntirely}`
+      );
+      return res.data;
+    },
+    onSuccess: async (res: any) => {
+      const msg =
+        res?.message ||
+        (deleteReceiptEntirely
+          ? 'Payment record removed and balances updated.'
+          : 'Payment allocation removed. The receipt remains available for other invoices.');
+      notification.success(msg);
+      await erpInvalidate.invoice(queryClient, {
+        customerId: invoice?.businessPartnerId || invoice?.businessPartner?.id,
+        invoiceId: id,
+      });
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-ledger'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+      setSelectedPaymentToDelete(null);
+      setDeleteReceiptEntirely(false);
+      refetch();
+    },
+    onError: (err: any) => {
+      const serverMsg = String(err.response?.data?.message || err?.message || '');
+      notification.error(serverMsg || 'Payment could not be removed. No changes were saved.');
+    },
   });
 
   // Authoritative calculations directly from database values
@@ -143,12 +251,14 @@ export const InvoiceDetails: React.FC = () => {
   const roundOff = Number(invoice?.roundOff || 0);
 
   const isOverdue = Boolean(
+    !invoice?.deletedAt &&
     invoice?.dueDate &&
     isValidDate(invoice.dueDate) &&
     new Date(invoice.dueDate) < new Date() &&
     outstanding > 0 &&
     invoice?.status !== 'CANCELLED' &&
-    invoice?.status !== 'VOID'
+    invoice?.status !== 'VOID' &&
+    invoice?.status !== 'DRAFT'
   );
 
   const overdueDays = useMemo(() => {
@@ -174,6 +284,8 @@ export const InvoiceDetails: React.FC = () => {
       runningBalance -= allocAmt;
       return {
         id: alloc.id,
+        allocationId: alloc.id,
+        receiptId: alloc.receipt?.id,
         date: alloc.receipt?.date || alloc.createdAt,
         receiptNo: alloc.receipt?.receiptNo || 'REC-N/A',
         amount: allocAmt,
@@ -188,6 +300,10 @@ export const InvoiceDetails: React.FC = () => {
   // Status badge config
   const statusInfo = useMemo(() => {
     if (!invoice) return { label: 'Unknown', bg: 'bg-muted/50 text-muted-foreground border-border' };
+
+    if (invoice.deletedAt) {
+      return { label: 'Archived', bg: 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/20' };
+    }
 
     const status = String(invoice.status || '').toUpperCase();
     if (status === 'CANCELLED' || status === 'VOID') {
@@ -403,6 +519,41 @@ export const InvoiceDetails: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {invoice.deletedAt ? (
+                <>
+                  <Button
+                    onClick={() => setShowRestoreDialog(true)}
+                    variant="primary"
+                    size="sm"
+                    className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white shadow-xs"
+                    title="Restore this archived invoice"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Restore Invoice
+                  </Button>
+                  {canDelete && (
+                    <Button
+                      onClick={() => setShowDeletePermanentlyDialog(true)}
+                      variant="danger"
+                      size="sm"
+                      className="h-9 gap-1.5 bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
+                      title="Permanently delete this archived invoice from database"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete Permanently
+                    </Button>
+                  )}
+                </>
+              ) : invoice.status === 'DRAFT' ? (
+                <Button
+                  onClick={() => navigate(`/invoices/${id}/edit`)}
+                  variant="primary"
+                  size="sm"
+                  className="h-9 gap-1.5 shadow-sm"
+                  title="Resume and edit this draft invoice"
+                >
+                  <FileText className="w-3.5 h-3.5" /> Resume Draft
+                </Button>
+              ) : null}
+
               <Button
                 onClick={() => navigate(`/invoices/new?duplicateId=${id}`)}
                 variant="outline"
@@ -455,7 +606,7 @@ export const InvoiceDetails: React.FC = () => {
                 <Mail className="w-3.5 h-3.5" /> Email
               </Button>
 
-              {outstanding > 0 && invoice.status !== 'CANCELLED' && invoice.status !== 'VOID' && (
+              {!invoice.deletedAt && outstanding > 0 && invoice.status !== 'CANCELLED' && invoice.status !== 'VOID' && invoice.status !== 'DRAFT' && (
                 <Button
                   onClick={() => setIsRecordPaymentOpen(true)}
                   variant="primary"
@@ -466,18 +617,99 @@ export const InvoiceDetails: React.FC = () => {
                 </Button>
               )}
 
-              {invoice.status !== 'CANCELLED' && invoice.status !== 'VOID' && (
+              {!invoice.deletedAt && (
                 <Button
-                  onClick={() => setShowCancelDialog(true)}
+                  onClick={() => setShowArchiveDialog(true)}
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 text-amber-600 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30 shadow-xs"
+                  title="Archive this invoice"
+                >
+                  <Archive className="w-3.5 h-3.5" /> Archive
+                </Button>
+              )}
+
+              {canDelete && !invoice.deletedAt && (
+                <Button
+                  onClick={() => setShowDeletePermanentlyDialog(true)}
                   variant="outline"
                   size="sm"
                   className="h-9 gap-1.5 text-rose-600 border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                  title="Permanently delete this invoice"
                 >
-                  <Ban className="w-3.5 h-3.5" /> Cancel
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Permanently
                 </Button>
               )}
             </div>
           </div>
+
+          {/* 1.5 STATUS BANNERS */}
+          {invoice.deletedAt && (
+            <div className="no-print p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm">Archived Document (Read-Only Mode)</p>
+                    {invoice.archiveActor && (
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300">
+                        Archived by: {invoice.archiveActor}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                    Archived on {formatDateTime(invoice.archivedAt || invoice.deletedAt)}
+                    {invoice.archiveReason && (
+                      <> • <span className="font-medium">Reason: {invoice.archiveReason}</span></>
+                    )}
+                    . Statutory document number is preserved. Ledger effects and inventory are unlinked while archived.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  onClick={() => setShowRestoreDialog(true)}
+                  variant="primary"
+                  size="sm"
+                  className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Restore Invoice
+                </Button>
+                {canDelete && (
+                  <Button
+                    onClick={() => setShowDeletePermanentlyDialog(true)}
+                    variant="danger"
+                    size="sm"
+                    className="gap-1.5 bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete Permanently
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {invoice.status === 'DRAFT' && !invoice.deletedAt && (
+            <div className="no-print p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+                <div>
+                  <p className="font-semibold text-sm">Draft Document</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    This invoice is saved as an unposted draft. It has not affected accounts receivable, inventory stocks, or the general ledger. You can resume editing and issue it whenever ready.
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => navigate(`/invoices/${id}/edit`)}
+                variant="primary"
+                size="sm"
+                className="gap-1.5 shrink-0"
+              >
+                Resume / Edit Draft
+              </Button>
+            </div>
+          )}
 
           {/* 2. INVOICE SUMMARY KPI CARDS */}
           <div className="no-print grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -881,6 +1113,7 @@ export const InvoiceDetails: React.FC = () => {
                           <th className="py-2.5 px-3">Reference</th>
                           <th className="py-2.5 px-3 text-right">Allocated Amount</th>
                           <th className="py-2.5 px-3 text-right">Remaining Balance</th>
+                          <th className="py-2.5 px-3 text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -905,6 +1138,21 @@ export const InvoiceDetails: React.FC = () => {
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-semibold text-foreground">
                               {formatCurrency(alloc.balanceAfter)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedPaymentToDelete(alloc);
+                                    setDeleteReceiptEntirely(false);
+                                  }}
+                                  className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
+                                  title={`Remove payment ${alloc.receiptNo}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -1178,16 +1426,167 @@ export const InvoiceDetails: React.FC = () => {
           }}
         />
 
-        {/* Cancel Confirmation Dialog */}
+        {/* Restore Confirmation Dialog */}
         <ConfirmDialog
-          isOpen={showCancelDialog}
-          onClose={() => setShowCancelDialog(false)}
-          onConfirm={async () => cancelMutation.mutate()}
-          title="Cancel Invoice"
-          message="Are you sure you want to cancel this invoice? This will roll back accounting double entry ledgers and restore warehouse stock levels."
-          confirmText="Cancel Invoice"
+          isOpen={showRestoreDialog}
+          onClose={() => setShowRestoreDialog(false)}
+          onConfirm={async () => {
+            await restoreMutation.mutateAsync();
+          }}
+          title="Restore Archived Invoice"
+          message={`Are you sure you want to restore invoice "${invoice.invoiceNo}"? This will restore the document to active status, preserve its document number, maintain valid payment history, and safely re-post double-entry accounting ledgers.`}
+          confirmText="Restore Invoice"
+          variant="primary"
+        />
+
+        {/* Archive Confirmation Dialog */}
+        <ConfirmDialog
+          isOpen={showArchiveDialog}
+          onClose={() => setShowArchiveDialog(false)}
+          onConfirm={async () => {
+            await archiveMutation.mutateAsync();
+          }}
+          title="Archive Invoice"
+          message={
+            <div className="space-y-2">
+              <p>
+                Are you sure you want to archive invoice{' '}
+                <strong className="text-foreground">{invoice.invoiceNo}</strong>?
+              </p>
+              {amountPaid > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Recorded payments ({formatCurrency(amountPaid)}) will remain safely credited on customer account as available credit.
+                </p>
+              )}
+            </div>
+          }
+          confirmText="Archive Invoice"
+          variant="primary"
+        />
+
+        {/* Permanent Deletion Confirmation Dialog */}
+        <ConfirmDialog
+          isOpen={showDeletePermanentlyDialog}
+          onClose={() => setShowDeletePermanentlyDialog(false)}
+          onConfirm={async () => {
+            await deletePermanentlyMutation.mutateAsync();
+          }}
+          title="Delete Invoice Permanently"
+          message={
+            <div className="space-y-3">
+              <p>
+                Are you sure you want to permanently delete invoice{' '}
+                <strong className="text-foreground">{invoice.invoiceNo}</strong> for customer{' '}
+                <strong className="text-foreground">{customerName}</strong>?
+              </p>
+              <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-800 dark:text-rose-200 text-xs">
+                <strong>Notice:</strong> This action is permanent and cannot be undone. Associated items, general ledger entries, and dependent allocations will be safely removed, and customer balances will be updated.
+              </div>
+            </div>
+          }
+          confirmText="Delete Permanently"
           variant="danger"
         />
+
+        {/* Delete Payment Record Modal */}
+        <Modal
+          isOpen={!!selectedPaymentToDelete}
+          onClose={() => {
+            setSelectedPaymentToDelete(null);
+            setDeleteReceiptEntirely(false);
+          }}
+          title="Remove Payment Record"
+          maxWidth="md"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-foreground">
+              Are you sure you want to remove this payment allocation from invoice <strong className="font-semibold">{invoice?.invoiceNo}</strong>?
+            </p>
+
+            <div className="p-3 rounded-lg border border-border bg-muted/30 text-xs space-y-1.5 font-mono">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Receipt Number:</span>
+                <span className="font-bold text-foreground">{selectedPaymentToDelete?.receiptNo}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Payment Amount:</span>
+                <span className="font-bold text-emerald-600">{formatCurrency(selectedPaymentToDelete?.amount || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Payment Mode:</span>
+                <span className="text-foreground">{(selectedPaymentToDelete?.paymentMethod || 'BANK_TRANSFER').replace(/_/g, ' ')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Customer:</span>
+                <span className="text-foreground">{customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Invoice:</span>
+                <span className="text-foreground">{invoice?.invoiceNo}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <label className="text-xs font-semibold text-foreground block">
+                Correction Mode
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border hover:bg-muted/40 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="correctionMode"
+                    checked={!deleteReceiptEntirely}
+                    onChange={() => setDeleteReceiptEntirely(false)}
+                    className="mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <span className="font-semibold text-foreground block">Remove allocation only (Recommended)</span>
+                    <span className="text-muted-foreground">
+                      Unlinks this payment from invoice {invoice?.invoiceNo}. The funds remain credited to customer {customerName}&apos;s account as available credit for other invoices.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="correctionMode"
+                    checked={deleteReceiptEntirely}
+                    onChange={() => setDeleteReceiptEntirely(true)}
+                    className="mt-0.5 text-rose-600"
+                  />
+                  <div className="text-xs">
+                    <span className="font-semibold text-rose-600 block">Entire receipt was entered by mistake</span>
+                    <span className="text-muted-foreground">
+                      Reverses the receipt completely, including bank/cash ledger postings and journal entries. Use only if no money was actually received.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedPaymentToDelete(null);
+                  setDeleteReceiptEntirely(false);
+                }}
+              >
+                Dismiss
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={deletePaymentMutation.isPending}
+                onClick={() => deletePaymentMutation.mutate()}
+              >
+                {deletePaymentMutation.isPending ? 'Removing...' : 'Confirm Remove'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       </PageContainer>
     </>
   );

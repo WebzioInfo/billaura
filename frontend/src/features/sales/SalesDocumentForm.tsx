@@ -10,9 +10,9 @@ const formatIndianCurrency = (amount: number) => {
   }).format(rounded);
 };
 import { z } from 'zod';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import {
-  Plus, Trash2, ArrowLeft, Save, FileText, Eye, X, Loader2, Info, AlertCircle, BookOpen
+  Plus, Trash2, ArrowLeft, Save, FileText, Eye, X, Loader2, Info, AlertCircle, BookOpen, RotateCcw, RefreshCw
 } from 'lucide-react';
 
 const mapUnit = (unitStr: string) => {
@@ -106,11 +106,17 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = Boolean(id);
+
   const queryCustomerId = searchParams.get('customerId');
+  const duplicateId = searchParams.get('duplicateId');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'DRAFT' | 'SENT'>('SENT');
   const [docType, setDocType] = useState<SalesDocumentType>(initialDocType);
+  const FORM_STORAGE_KEY = 'billaura_sales_form_draft';
+  const [savedFormState, setSavedFormState] = useState<any>(null);
 
   const form = useAsyncForm<InvoiceFormValues>(
     {
@@ -209,29 +215,128 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
     return meData?.company || meData?.data?.company || null;
   }, [meData]);
 
-  const isLoading = meLoading || custLoading || prodLoading || unitsLoading || nextNoLoading;
+  const { data: draftData, isLoading: draftLoading } = useQuery<any>({
+    queryKey: ['sales-draft-edit', id],
+    queryFn: async () => {
+      if (!id) return null;
+      const res = await apiClient.get<any>(`/sales/invoices/${id}`);
+      return res?.data?.data || res?.data || res;
+    },
+    enabled: !!id,
+    staleTime: 0,
+  });
+
+  const isLoading = meLoading || custLoading || prodLoading || unitsLoading || (!isEditMode && nextNoLoading) || (isEditMode && draftLoading);
 
   const errorDetails = useMemo(() => {
     const list: string[] = [];
     if (meError) list.push("Company profile could not be loaded");
     if (custError) list.push("Customer master records could not be loaded");
     if (prodError) list.push("Product catalog could not be loaded");
-    if (nextNoError) list.push(`Unable to generate ${docType.toLowerCase().replace('_', ' ')} sequence number`);
+    if (!isEditMode && nextNoError) list.push(`Unable to generate ${docType.toLowerCase().replace('_', ' ')} sequence number`);
     return list;
-  }, [meError, custError, prodError, nextNoError, docType]);
+  }, [meError, custError, prodError, nextNoError, docType, isEditMode]);
 
-  const hasError = Boolean(meError || custError || prodError || nextNoError);
+  const hasError = Boolean(meError || custError || prodError || (!isEditMode && nextNoError));
   useEffect(() => {
     if (hasError && errorDetails.length > 0) {
       notification.error(errorDetails.join(". "));
     }
   }, [hasError, errorDetails]);
 
+  // If new invoice, assign next sequence number if not manually set
   useEffect(() => {
-    if (nextNoData?.nextNumber) {
+    if (!isEditMode && nextNoData?.nextNumber && !watch('invoiceNo')) {
       setValue('invoiceNo', nextNoData.nextNumber);
     }
-  }, [nextNoData, setValue]);
+  }, [nextNoData, setValue, isEditMode]);
+
+  // If editing an existing draft, pre-populate all form fields
+  useEffect(() => {
+    if (isEditMode && draftData && customers.length > 0 && products.length > 0) {
+      if (draftData.businessPartnerId) setValue('customerId', draftData.businessPartnerId);
+      if (draftData.invoiceType) {
+        setValue('invoiceType', draftData.invoiceType === 'BILL_OF_SUPPLY' ? 'NO_TAX' : (draftData.invoiceType === 'RETAIL_INVOICE' ? 'B2C' : 'B2B'));
+      }
+      if (draftData.invoiceNo) setValue('invoiceNo', draftData.invoiceNo);
+      if (draftData.placeOfSupply) setValue('placeOfSupply', draftData.placeOfSupply);
+      if (draftData.date) setValue('date', new Date(draftData.date).toISOString().split('T')[0]);
+      if (draftData.dueDate) setValue('dueDate', new Date(draftData.dueDate).toISOString().split('T')[0]);
+      if (draftData.currency) setValue('currency', draftData.currency);
+      if (draftData.invoiceCategoryId) setValue('invoiceCategoryId', draftData.invoiceCategoryId);
+      if (draftData.taxTreatmentId) setValue('taxTreatmentId', draftData.taxTreatmentId);
+      if (draftData.numberingSeriesId) setValue('numberingSeriesId', draftData.numberingSeriesId);
+
+      const extraMeta = typeof draftData.gstBreakup === 'string'
+        ? (function() { try { return JSON.parse(draftData.gstBreakup); } catch { return {}; } })()
+        : (draftData.gstBreakup || {});
+      setValue('notes', extraMeta.notes || draftData.notes || '');
+      setValue('termsConditions', extraMeta.termsConditions || draftData.termsConditions || '');
+
+      if (Array.isArray(draftData.items) && draftData.items.length > 0) {
+        setValue('items', draftData.items.map((it: any) => ({
+          productId: it.productId || '',
+          description: it.description || '',
+          qty: Number(it.qty || 1),
+          rate: Number(it.rate || 0),
+          taxPercent: Number(it.taxPercent || 18),
+          discount: 0,
+          unit: it.product?.unit || 'Pcs',
+        })));
+      }
+    }
+  }, [isEditMode, draftData, customers, products, setValue]);
+
+  // Session storage unsaved form recovery on mount (for new invoices only)
+  useEffect(() => {
+    if (!isEditMode && !duplicateId) {
+      try {
+        const raw = sessionStorage.getItem(FORM_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.customerId || (parsed.items && parsed.items.length > 0 && parsed.items[0]?.productId))) {
+            setSavedFormState(parsed);
+          }
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+    }
+  }, [isEditMode, duplicateId]);
+
+  const handleRestoreSavedForm = () => {
+    if (!savedFormState) return;
+    if (savedFormState.customerId) setValue('customerId', savedFormState.customerId);
+    if (savedFormState.invoiceType) setValue('invoiceType', savedFormState.invoiceType);
+    if (savedFormState.placeOfSupply) setValue('placeOfSupply', savedFormState.placeOfSupply);
+    if (savedFormState.notes) setValue('notes', savedFormState.notes);
+    if (savedFormState.termsConditions) setValue('termsConditions', savedFormState.termsConditions);
+    if (savedFormState.date) setValue('date', savedFormState.date);
+    if (savedFormState.dueDate) setValue('dueDate', savedFormState.dueDate);
+    if (savedFormState.currency) setValue('currency', savedFormState.currency);
+    if (savedFormState.items && Array.isArray(savedFormState.items) && savedFormState.items.length > 0) {
+      setValue('items', savedFormState.items);
+    }
+    notification.success('Unsaved form entries restored successfully');
+    setSavedFormState(null);
+  };
+
+  const handleDiscardSavedForm = () => {
+    sessionStorage.removeItem(FORM_STORAGE_KEY);
+    setSavedFormState(null);
+    notification.info('Unsaved draft discarded');
+  };
+
+  // Auto-persist form values to sessionStorage as user types
+  const watchedValues = watch();
+  useEffect(() => {
+    if (!isEditMode && !duplicateId) {
+      const hasMeaningfulData = watchedValues.customerId || (watchedValues.items && watchedValues.items.some((it: any) => it.productId || it.rate > 0));
+      if (hasMeaningfulData) {
+        sessionStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(watchedValues));
+      }
+    }
+  }, [watchedValues, isEditMode, duplicateId]);
 
 
 
@@ -262,7 +367,6 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
     }
   }, [queryCustomerId, customers, setValue]);
 
-  const duplicateId = searchParams.get('duplicateId');
   useEffect(() => {
     if (duplicateId && customers.length > 0 && products.length > 0) {
       const fetchDuplicateData = async () => {
@@ -481,8 +585,27 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       if (docType === 'DEBIT_NOTE') actualPayload.invoiceType = 'DEBIT_NOTE';
       if (docType === 'CREDIT_NOTE') actualPayload.invoiceType = 'CREDIT_NOTE';
       
+      let resPayload: any;
+      if (isEditMode) {
+        const updatedDoc: any = await apiClient.put(`/sales/invoices/${id}`, actualPayload);
+        resPayload = updatedDoc?.data?.data || updatedDoc?.data || updatedDoc;
+        await erpInvalidate.invoice(queryClient, {
+          customerId: data.customerId,
+          invoiceId: id,
+        });
+        sessionStorage.removeItem(FORM_STORAGE_KEY);
+        notification.success(
+          submitStatus === 'DRAFT'
+            ? 'Draft updated successfully!'
+            : 'Draft finalized and invoice issued successfully!'
+        );
+        navigate(`/invoices/${id}`);
+        return;
+      }
+
       const createdDoc: any = await apiClient.post(endpoint, actualPayload);
-      const resPayload = createdDoc?.data?.data || createdDoc?.data || createdDoc;
+      resPayload = createdDoc?.data?.data || createdDoc?.data || createdDoc;
+      sessionStorage.removeItem(FORM_STORAGE_KEY);
       if (docType === 'QUOTATION') {
         await queryClient.invalidateQueries({ queryKey: ['quotations'] });
         await queryClient.invalidateQueries({ queryKey: ['quotations-summary'] });
@@ -509,7 +632,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
       }
     } catch (err: any) {
       console.error(err);
-      let errorMsg = `Failed to create ${docType.toLowerCase()}`;
+      let errorMsg = `Failed to ${isEditMode ? 'update' : 'create'} ${docType.toLowerCase()}`;
       if (err.response?.data?.message) {
         const m = err.response.data.message;
         errorMsg = Array.isArray(m) ? m.join(', ') : m;
@@ -577,10 +700,44 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
   return (
     <PageContainer maxWidth="7xl">
       <PageHeader
-        title={`Create ${docType.replace('_', ' ')}`}
-        description={`Draft or issue a premium ${docType.toLowerCase().replace('_', ' ')}`}
+        title={isEditMode ? `Edit Draft: ${draftData?.invoiceNo || 'Draft'}` : `Create ${docType.replace('_', ' ')}`}
+        description={isEditMode ? 'Modify unposted draft invoice and line items before final issuance' : `Draft or issue a premium ${docType.toLowerCase().replace('_', ' ')}`}
         backTo={{ label: 'Documents', path: docType === 'QUOTATION' ? '/quotations' : '/invoices' }}
       />
+
+      {savedFormState && (
+        <div className="mb-6 p-4 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-950 dark:text-indigo-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <Info className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <div>
+              <p className="font-semibold text-sm">Unsaved Form Entries Recovered</p>
+              <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                You have unsaved line items or customer data from a previous session. Would you like to restore them?
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              onClick={handleRestoreSavedForm}
+              variant="primary"
+              size="sm"
+              className="gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Restore Entries
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDiscardSavedForm}
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleFormSubmit(onSubmit)} className="flex flex-col xl:flex-row gap-6 items-start">
         <div className="flex-1 min-w-0 space-y-6">
@@ -674,12 +831,30 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Document # *</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Document # *</label>
+                  {!isEditMode && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await refetchNextNo();
+                        if (res.data?.nextNumber) {
+                          setValue('invoiceNo', res.data.nextNumber);
+                          notification.info(`Assigned next available sequence: ${res.data.nextNumber}`);
+                        }
+                      }}
+                      className="text-[11px] text-accent hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                      title="Fetch next available document number"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Get Next #
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   {...register('invoiceNo')}
                   placeholder="DOC-XXXXX"
-                  disabled={nextNoLoading}
+                  disabled={!isEditMode && nextNoLoading}
                   className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-50"
                 />
                 <FormErrorDisplay error={errors.invoiceNo} />
@@ -1015,12 +1190,12 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
               {isSubmitting && submitStatus === 'SENT' ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
+                  {isEditMode ? 'Issuing Invoice...' : 'Saving...'}
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Save & Issue Invoice
+                  {isEditMode ? 'Finalize & Issue Invoice' : 'Save & Issue Invoice'}
                 </>
               )}
             </button>
@@ -1032,7 +1207,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
               className="w-full justify-center px-6 py-2.5 rounded-xl border border-accent/20 bg-accent/5 hover:bg-accent/10 text-accent text-sm font-semibold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
             >
               {isSubmitting && submitStatus === 'DRAFT' && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save Draft
+              {isEditMode ? 'Update Draft' : 'Save Draft'}
             </button>
 
             <div className="grid grid-cols-2 gap-3">

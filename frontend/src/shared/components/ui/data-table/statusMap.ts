@@ -65,6 +65,7 @@ export const STATUS_MAP: Record<string, { type: SemanticStatusType; defaultLabel
   ISSUED: { type: 'info', defaultLabel: 'Issued' },
   POSTED: { type: 'info', defaultLabel: 'Posted' },
   DRAFT: { type: 'neutral', defaultLabel: 'Draft' },
+  ARCHIVED: { type: 'neutral', defaultLabel: 'Archived' },
   CANCELLED: { type: 'danger', defaultLabel: 'Cancelled' },
   VOID: { type: 'neutral', defaultLabel: 'Void' },
   UNPAID: { type: 'warning', defaultLabel: 'Unpaid' },

@@ -96,7 +96,33 @@ function publish(kind: NotificationKind, message: any, options: NotificationOpti
       }
     }
   }
-  
+
+  // Normalize long technical backend errors into concise, actionable messages
+  if (kind === 'error' && typeof safeMessage === 'string') {
+    const lower = safeMessage.toLowerCase();
+    if (lower.includes('unbalanced journal entry') || lower.includes('entries do not balance')) {
+      console.error('[NotificationService Developer Log - Journal Imbalance]:', message);
+      safeMessage = 'Invoice could not be restored because its accounting entries do not balance. Please try again after the accounting issue is fixed.';
+    } else if (lower.includes('entries need correction')) {
+      console.error('[NotificationService Developer Log - Accounting Correction Needed]:', message);
+      safeMessage = 'Deletion failed because the accounting entries need correction.';
+    } else if (
+      lower.includes('financial records') ||
+      lower.includes('statutory accounting and tax compliance prohibits physical deletion') ||
+      lower.includes('protected records') ||
+      lower.includes('payment and accounting records')
+    ) {
+      console.error('[NotificationService Developer Log - Delete Blocker]:', message);
+      safeMessage = 'This invoice has financial records and cannot be permanently deleted.';
+    } else if (
+      lower.includes('invoice could not be deleted') ||
+      lower.includes('unable to delete invoice')
+    ) {
+      console.error('[NotificationService Developer Log - Delete Failure]:', message);
+      safeMessage = 'Invoice could not be deleted. No changes were saved.';
+    }
+  }
+
   return toast.custom(
     (t) => (
       <CustomToast

@@ -98,6 +98,41 @@ export class ReceiptsController {
     return this.receiptsService.update(id, dto, req.user.userId);
   }
 
+  @Post(":id/allocate")
+  async allocate(
+    @Param("id") id: string,
+    @Body() dto: { invoiceId: string; amount: number; notes?: string },
+    @Req() req: any,
+  ) {
+    return this.receiptsService.allocate(id, dto, req.user.userId);
+  }
+
+  @Delete("allocations/:allocationId")
+  async removeAllocation(
+    @Param("allocationId") allocationId: string,
+    @Query("deleteReceipt") deleteReceipt: string,
+    @Req() req: any
+  ) {
+    return this.receiptsService.removeAllocation(
+      allocationId,
+      { deleteReceipt: deleteReceipt === "true" },
+      req.user.userId
+    );
+  }
+
+  @Delete(":id/allocations/:allocationId")
+  async removeReceiptAllocation(
+    @Param("allocationId") allocationId: string,
+    @Query("deleteReceipt") deleteReceipt: string,
+    @Req() req: any
+  ) {
+    return this.receiptsService.removeAllocation(
+      allocationId,
+      { deleteReceipt: deleteReceipt === "true" },
+      req.user.userId
+    );
+  }
+
   @Delete(":id")
   async remove(@Param("id") id: string, @Req() req: any) {
     return this.receiptsService.remove(id, req.user.userId);

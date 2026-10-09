@@ -102,6 +102,8 @@ describe('Receipts Module - Production Test Suite', () => {
       },
       receiptAllocation: {
         create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'alloc-1', ...data })),
+        findMany: jest.fn().mockResolvedValue([]),
+        delete: jest.fn().mockResolvedValue({ id: 'alloc-1' }),
       },
       businessPartner: {
         update: jest.fn().mockResolvedValue(mockCustomer),
@@ -174,6 +176,9 @@ describe('Receipts Module - Production Test Suite', () => {
       receipt: {
         findFirst: jest.fn().mockResolvedValue({ id: 'rec-1', receiptNo: 'REC/01/26-27' }),
       },
+      receiptAllocation: {
+        findUnique: jest.fn(),
+      },
     };
 
     mockAccountingEngine = {
@@ -181,6 +186,7 @@ describe('Receipts Module - Production Test Suite', () => {
         journalEntries.push(entry);
         return Promise.resolve({ id: 'entry-1', ...entry });
       }),
+      reverseTransaction: jest.fn().mockResolvedValue({ id: 'rev-entry-1' }),
     };
 
     mockSequenceService = {
@@ -290,8 +296,8 @@ describe('Receipts Module - Production Test Suite', () => {
       );
 
       expect(result).toBeDefined();
-      expect(result.receiptNo).toBe('REC/01/26-27');
-      expect(result.amount).toBe(1000);
+      expect((result as any).receiptNo).toBe('REC/01/26-27');
+      expect((result as any).amount).toBe(1000);
       expect(mockAccountingEngine.postTransaction).toHaveBeenCalled();
     });
 
@@ -364,6 +370,123 @@ describe('Receipts Module - Production Test Suite', () => {
           allocations: [{ invoiceId: mockInvoice.id, amount: 1500 }], // unpaid is 1000
         } as any, mockUserId)
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('11. Removes one allocation from a receipt shared across invoices, preserving receipt and other allocations', async () => {
+      const targetAllocation = {
+        id: 'alloc-target-1',
+        receiptId: 'rec-shared-1',
+        invoiceId: mockInvoice.id,
+        amount: 400,
+        invoice: {
+          id: mockInvoice.id,
+          companyId: mockCompanyId,
+          grandTotal: 1000,
+          amountPaid: 1000,
+          invoiceNo: 'B2BF/69/26-27',
+        },
+        receipt: {
+          id: 'rec-shared-1',
+          receiptNo: 'REC-00001',
+          amount: 1000,
+          allocations: [
+            { id: 'alloc-target-1', invoiceId: mockInvoice.id, amount: 400 },
+            { id: 'alloc-other-2', invoiceId: 'inv-other-99', amount: 600 },
+          ],
+        },
+      };
+
+      mockPrisma.receiptAllocation.findUnique.mockResolvedValueOnce(targetAllocation);
+
+      const result = await service.removeAllocation(targetAllocation.id, { deleteReceipt: false }, mockUserId);
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Payment allocation removed. The receipt remains available for other invoices.');
+      expect(result.data.amountRemoved).toBe(400);
+      expect(result.data.receiptDeleted).toBe(false);
+    });
+
+    it('12. Prevents deleting entire shared receipt when it has allocations linked to other invoices', async () => {
+      const sharedAllocation = {
+        id: 'alloc-shared-attempt',
+        receiptId: 'rec-shared-multi',
+        invoiceId: mockInvoice.id,
+        amount: 500,
+        invoice: {
+          id: mockInvoice.id,
+          companyId: mockCompanyId,
+          grandTotal: 1000,
+        },
+        receipt: {
+          id: 'rec-shared-multi',
+          receiptNo: 'REC-MULTI',
+          allocations: [
+            { id: 'alloc-shared-attempt', invoiceId: mockInvoice.id, amount: 500 },
+            { id: 'alloc-other-inv', invoiceId: 'inv-unrelated-2', amount: 500 },
+          ],
+        },
+      };
+
+      mockPrisma.receiptAllocation.findUnique.mockResolvedValueOnce(sharedAllocation);
+
+      await expect(
+        service.removeAllocation(sharedAllocation.id, { deleteReceipt: true }, mockUserId)
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('13. Corrects entire mistakenly recorded receipt when deleteReceipt is true', async () => {
+      const singleAllocation = {
+        id: 'alloc-mistake-1',
+        receiptId: 'rec-mistake-1',
+        invoiceId: mockInvoice.id,
+        amount: 5000,
+        invoice: {
+          id: mockInvoice.id,
+          companyId: mockCompanyId,
+          grandTotal: 17653,
+          amountPaid: 5000,
+        },
+        receipt: {
+          id: 'rec-mistake-1',
+          companyId: mockCompanyId,
+          receiptNo: 'REC-MISTAKE',
+          amount: 5000,
+          allocations: [
+            { id: 'alloc-mistake-1', invoiceId: mockInvoice.id, amount: 5000 },
+          ],
+          payments: [
+            { id: 'pay-1', accountId: mockHdfcLedgerAccount.id, amount: 5000 },
+          ],
+          businessPartnerId: mockCustomer.id,
+          businessPartner: mockCustomer,
+        },
+      };
+
+      mockPrisma.receiptAllocation.findUnique.mockResolvedValueOnce(singleAllocation);
+      jest.spyOn(service, 'remove').mockResolvedValueOnce({ success: true } as any);
+
+      const result = await service.removeAllocation(singleAllocation.id, { deleteReceipt: true }, mockUserId);
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Payment record removed and balances updated.');
+      expect(result.data.receiptDeleted).toBe(true);
+      expect(service.remove).toHaveBeenCalledWith(singleAllocation.receiptId, mockUserId);
+    });
+
+    it('14. Blocks cross-tenant allocation removal', async () => {
+      const foreignAllocation = {
+        id: 'alloc-foreign',
+        invoice: {
+          id: 'inv-foreign',
+          companyId: 'cmp-other-tenant',
+        },
+      };
+
+      mockPrisma.receiptAllocation.findUnique.mockResolvedValueOnce(foreignAllocation);
+
+      await expect(
+        service.removeAllocation(foreignAllocation.id, { deleteReceipt: false }, mockUserId)
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

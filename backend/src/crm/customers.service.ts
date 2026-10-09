@@ -75,6 +75,24 @@ export class CustomersService {
       orderBy: { date: 'desc' },
     });
 
+    const receipts = await this.prisma.receipt.findMany({
+      where: { businessPartnerId: id, companyId, deletedAt: null, NOT: { status: 'VOID' } },
+      orderBy: { date: 'desc' },
+    });
+
+    const totalInvoiced = invoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0);
+    const totalReceipts = receipts.reduce((sum, rec) => sum + Number(rec.amount), 0);
+    const totalPayments = payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
+    const calculatedBalance = Number((totalInvoiced - (totalReceipts + totalPayments)).toFixed(2));
+
+    if (Math.abs(Number(customer.receivableBalance) - calculatedBalance) > 0.01) {
+      await this.prisma.businessPartner.update({
+        where: { id },
+        data: { receivableBalance: calculatedBalance },
+      });
+      customer.receivableBalance = calculatedBalance as any;
+    }
+
     const transactions = [
       ...invoices.map(inv => ({
         id: inv.id,
@@ -83,6 +101,14 @@ export class CustomersService {
         reference: inv.invoiceNo,
         amount: Number(inv.grandTotal),
         balanceImpact: Number(inv.grandTotal)
+      })),
+      ...receipts.map(rec => ({
+        id: rec.id,
+        date: rec.date,
+        type: 'RECEIPT',
+        reference: rec.receiptNo,
+        amount: Number(rec.amount),
+        balanceImpact: -Number(rec.amount)
       })),
       ...payments.map(pay => ({
         id: pay.id,
@@ -96,7 +122,9 @@ export class CustomersService {
 
     return {
       transactions,
-      receivableBalance: customer.receivableBalance
+      receivableBalance: customer.receivableBalance,
+      totalInvoiced,
+      totalReceived: totalReceipts + totalPayments,
     };
   }
 

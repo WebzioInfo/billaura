@@ -145,14 +145,14 @@ export const erpInvalidate = {
     meta?: { invoiceId?: string; customerId?: string; productIds?: string[] }
   ) {
     // 1. Invoices & Sales documents
-    queryClient.invalidateQueries({ queryKey: ['invoices'] });
-    queryClient.invalidateQueries({ queryKey: ['invoices-summary'] });
-    queryClient.invalidateQueries({ queryKey: ['sales-documents'] });
-    queryClient.invalidateQueries({ queryKey: ['quotations'] });
+    queryClient.invalidateQueries({ queryKey: ['invoices'], refetchType: 'all' });
+    queryClient.invalidateQueries({ queryKey: ['invoices-summary'], refetchType: 'all' });
+    queryClient.invalidateQueries({ queryKey: ['sales-documents'], refetchType: 'all' });
+    queryClient.invalidateQueries({ queryKey: ['quotations'], refetchType: 'all' });
     if (meta?.invoiceId) {
-      queryClient.invalidateQueries({ queryKey: ['invoices', meta.invoiceId] });
-      queryClient.invalidateQueries({ queryKey: ['invoice', meta.invoiceId] });
-      queryClient.invalidateQueries({ queryKey: ['journal-entries-reference'] });
+      queryClient.removeQueries({ queryKey: ['invoices', meta.invoiceId] });
+      queryClient.removeQueries({ queryKey: ['invoice', meta.invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['journal-entries-reference'], refetchType: 'all' });
     }
 
     // 2. Customer receivables, balances & ledger statements

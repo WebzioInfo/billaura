@@ -1022,4 +1022,225 @@ export class ReceiptsService {
       }
     };
   }
+
+  async allocate(
+    receiptId: string,
+    dto: { invoiceId: string; amount: number; notes?: string },
+    userId?: string
+  ) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const receipt = await this.prisma.receipt.findFirst({
+      where: { id: receiptId, companyId, deletedAt: null, NOT: { status: 'VOID' } },
+      include: { allocations: true },
+    });
+    if (!receipt) {
+      throw new NotFoundException(`Receipt with ID "${receiptId}" not found or void`);
+    }
+
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: dto.invoiceId, companyId, deletedAt: null, NOT: { status: { in: ['CANCELLED', 'DRAFT'] } } },
+    });
+    if (!invoice) {
+      throw new NotFoundException(`Target invoice with ID "${dto.invoiceId}" not found or ineligible`);
+    }
+
+    if (receipt.businessPartnerId !== invoice.businessPartnerId) {
+      throw new BadRequestException('Receipt customer does not match invoice customer');
+    }
+
+    const allocateAmount = Number(Number(dto.amount).toFixed(2));
+    if (isNaN(allocateAmount) || allocateAmount <= 0) {
+      throw new BadRequestException('Allocation amount must be greater than zero');
+    }
+
+    // Check currently allocated amount across active allocations
+    const currentAllocated = receipt.allocations.reduce((sum, a) => sum + Number(a.amount), 0);
+    const availableOnReceipt = Number((Number(receipt.amount) - currentAllocated).toFixed(2));
+    if (allocateAmount > availableOnReceipt + 0.01) {
+      throw new BadRequestException(
+        `Allocation amount ₹${allocateAmount.toFixed(2)} exceeds available unallocated receipt balance of ₹${availableOnReceipt.toFixed(2)}`
+      );
+    }
+
+    // Check remaining unpaid balance on invoice
+    const unpaidOnInvoice = Number((Number(invoice.grandTotal) - Number(invoice.amountPaid)).toFixed(2));
+    if (allocateAmount > unpaidOnInvoice + 0.01) {
+      throw new BadRequestException(
+        `Allocation amount ₹${allocateAmount.toFixed(2)} exceeds unpaid balance of ₹${unpaidOnInvoice.toFixed(2)} on Invoice ${invoice.invoiceNo}`
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const newAmountPaid = Number((Number(invoice.amountPaid) + allocateAmount).toFixed(2));
+      const newStatus = newAmountPaid >= Number(invoice.grandTotal) - 0.005 ? 'PAID' : 'PARTIAL';
+
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          amountPaid: newAmountPaid,
+          status: newStatus as any,
+        },
+      });
+
+      const allocation = await tx.receiptAllocation.create({
+        data: {
+          receiptId: receipt.id,
+          invoiceId: invoice.id,
+          amount: allocateAmount,
+        },
+      });
+
+      await tx.receiptAudit.create({
+        data: {
+          receiptId: receipt.id,
+          userId: userId || 'system',
+          action: 'ALLOCATE',
+          details: {
+            invoiceId: invoice.id,
+            invoiceNo: invoice.invoiceNo,
+            amount: allocateAmount,
+            notes: dto.notes,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: `Allocated ₹${allocateAmount.toFixed(2)} from Receipt ${receipt.receiptNo} to Invoice ${invoice.invoiceNo}`,
+        data: {
+          allocationId: allocation.id,
+          receiptNo: receipt.receiptNo,
+          invoiceNo: invoice.invoiceNo,
+          amountAllocated: allocateAmount,
+          invoiceAmountPaid: newAmountPaid,
+          invoiceStatus: newStatus,
+          invoiceBalanceDue: Math.max(0, Number((Number(invoice.grandTotal) - newAmountPaid).toFixed(2))),
+        },
+      };
+    });
+  }
+
+  async removeAllocation(
+    allocationId: string,
+    options?: { deleteReceipt?: boolean },
+    userId?: string
+  ) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const allocation = await this.prisma.receiptAllocation.findUnique({
+      where: { id: allocationId },
+      include: {
+        receipt: {
+          include: {
+            allocations: true,
+            payments: true,
+            businessPartner: true,
+          },
+        },
+        invoice: true,
+      },
+    });
+
+    if (!allocation || allocation.invoice.companyId !== companyId) {
+      throw new NotFoundException(`Receipt allocation with ID "${allocationId}" not found`);
+    }
+
+    // Option B: User chose to delete the entire receipt as an erroneous entry
+    if (options?.deleteReceipt) {
+      const otherAllocations = (allocation.receipt.allocations || []).filter(
+        (a) => a.id !== allocation.id
+      );
+
+      if (otherAllocations.length > 0) {
+        throw new BadRequestException(
+          `Cannot delete entire receipt: it has ${otherAllocations.length} other allocation(s) linked to other invoices. Remove those allocations first or choose "Remove allocation only".`
+        );
+      }
+
+      await this.remove(allocation.receiptId, userId || 'system');
+      return {
+        success: true,
+        message: 'Payment record removed and balances updated.',
+        data: {
+          allocationId,
+          receiptId: allocation.receiptId,
+          invoiceId: allocation.invoiceId,
+          receiptDeleted: true,
+        },
+      };
+    }
+
+    // Option A: Remove allocation only, preserving the receipt on customer account
+    return this.prisma.$transaction(
+      async (tx) => {
+        // 1. Delete this allocation
+        await tx.receiptAllocation.delete({
+          where: { id: allocation.id },
+        });
+
+        // 2. Recalculate invoice amountPaid and status
+        const remainingAllocs = await tx.receiptAllocation.findMany({
+          where: { invoiceId: allocation.invoiceId },
+        });
+
+        const newAmountPaid = remainingAllocs.reduce((sum, a) => sum + Number(a.amount), 0);
+        const grandTotal = Number(allocation.invoice.grandTotal);
+        const newStatus =
+          newAmountPaid <= 0
+            ? 'SENT'
+            : newAmountPaid >= grandTotal - 0.005
+            ? 'PAID'
+            : 'PARTIAL';
+
+        await tx.invoice.update({
+          where: { id: allocation.invoiceId },
+          data: {
+            amountPaid: newAmountPaid,
+            status: newStatus as any,
+          },
+        });
+
+        // 3. Log receipt audit
+        await tx.receiptAudit.create({
+          data: {
+            receiptId: allocation.receiptId,
+            userId: userId || 'system',
+            action: 'UNALLOCATE',
+            details: {
+              allocationId: allocation.id,
+              invoiceId: allocation.invoiceId,
+              invoiceNo: allocation.invoice.invoiceNo,
+              amount: Number(allocation.amount),
+              reason: 'Allocation removed from invoice',
+            },
+          },
+        });
+
+        return {
+          success: true,
+          message: 'Payment allocation removed. The receipt remains available for other invoices.',
+          data: {
+            allocationId: allocation.id,
+            receiptId: allocation.receiptId,
+            receiptNo: allocation.receipt.receiptNo,
+            invoiceId: allocation.invoiceId,
+            invoiceNo: allocation.invoice.invoiceNo,
+            amountRemoved: Number(allocation.amount),
+            newAmountPaid,
+            newStatus,
+            balanceDue: Math.max(0, grandTotal - newAmountPaid),
+            receiptDeleted: false,
+          },
+        };
+      },
+      { timeout: 30000 }
+    );
+  }
 }
