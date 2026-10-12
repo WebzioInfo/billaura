@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from '../shared/sequence/sequence.service';
-import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { CreateProductDto, UpdateProductDto, ProductQueryDto } from './dto/product.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
+import { AccountCategory } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -14,27 +14,72 @@ export class ProductsService {
     private readonly sequenceService: SequenceService
   ) { }
 
-  async findAll(query: PaginationQueryDto) {
+  private async validateAccountEligibility(
+    companyId: string,
+    accountId: string | null | undefined,
+    field: string,
+    allowedCategories: AccountCategory[]
+  ): Promise<string | null> {
+    if (!accountId || accountId.trim() === '') return null;
+    const trimmedId = accountId.trim();
+    const account = await this.prisma.account.findFirst({
+      where: { id: trimmedId, companyId, deletedAt: null },
+    });
+    if (!account) {
+      throw new BadRequestException(`Account specified for ${field} was not found or does not belong to active company.`);
+    }
+    if (account.isGroup) {
+      throw new BadRequestException(`Account specified for ${field} is a group account. Please select a posting ledger account.`);
+    }
+    if (!allowedCategories.includes(account.category)) {
+      throw new BadRequestException(`Account '${account.name}' (${account.category}) is not eligible for ${field}. Expected ${allowedCategories.join(' or ')}.`);
+    }
+    return account.id;
+  }
+
+  async findAll(query?: ProductQueryDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
 
-    const { skip, take } = getPagination(query);
-
+    const search = query?.search?.trim();
     const where: Prisma.ProductWhereInput = {
       companyId,
       deletedAt: null,
-      ...(query.search
+      ...(search
         ? {
           OR: [
-            { name: { contains: query.search } },
-            { sku: { contains: query.search } },
-            { barcode: { contains: query.search } },
+            { name: { contains: search, mode: 'insensitive' } },
+            { sku: { contains: search, mode: 'insensitive' } },
+            { barcode: { contains: search, mode: 'insensitive' } },
           ],
         }
         : {}),
     };
+
+    const allowedSortFields = ['name', 'sku', 'sellingPrice', 'purchasePrice', 'createdAt', 'updatedAt'];
+    const sortBy = query?.sortBy && allowedSortFields.includes(query.sortBy) ? query.sortBy : 'createdAt';
+    const sortOrder = query?.sortOrder || 'desc';
+    const orderBy: Prisma.ProductOrderByWithRelationInput = { [sortBy]: sortOrder };
+
+    const isPaginated = query?.page !== undefined || query?.limit !== undefined;
+
+    if (!isPaginated) {
+      const [data, total] = await this.prisma.$transaction([
+        this.prisma.product.findMany({
+          where,
+          include: { stocks: true, category: true, brand: true },
+          orderBy,
+          take: 1000,
+        }),
+        this.prisma.product.count({ where }),
+      ]);
+
+      return toPaginatedResult(data, total, { page: 1, limit: total > 0 ? total : 25 } as any);
+    }
+
+    const { skip, take } = getPagination(query as any);
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.product.findMany({
@@ -42,12 +87,12 @@ export class ProductsService {
         skip,
         take,
         include: { stocks: true, category: true, brand: true },
-        orderBy: { name: 'asc' },
+        orderBy,
       }),
       this.prisma.product.count({ where }),
     ]);
 
-    return toPaginatedResult(data, total, query);
+    return toPaginatedResult(data, total, query as any);
   }
 
   async findOne(id: string) {
@@ -108,6 +153,27 @@ export class ProductsService {
       finalValuationMethod = 'NONE';
     }
 
+    const validatedSalesAccountId = await this.validateAccountEligibility(
+      companyId,
+      dto.salesAccountId,
+      'Sales Account',
+      [AccountCategory.REVENUE]
+    );
+
+    const validatedPurchaseAccountId = await this.validateAccountEligibility(
+      companyId,
+      dto.purchaseAccountId,
+      'Purchase Account',
+      [AccountCategory.EXPENSE, AccountCategory.ASSET]
+    );
+
+    const validatedInventoryAccountId = await this.validateAccountEligibility(
+      companyId,
+      dto.inventoryAccountId,
+      'Inventory Asset Account',
+      [AccountCategory.ASSET]
+    );
+
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.product.create({
         data: {
@@ -133,9 +199,9 @@ export class ProductsService {
           reorderLevel: finalReorderLevel,
           pluNo: dto.pluNo || null,
           valuationMethod: finalValuationMethod,
-          salesAccountId: dto.salesAccountId || null,
-          purchaseAccountId: dto.purchaseAccountId || null,
-          inventoryAccountId: dto.inventoryAccountId || null,
+          salesAccountId: validatedSalesAccountId,
+          purchaseAccountId: validatedPurchaseAccountId,
+          inventoryAccountId: validatedInventoryAccountId,
           isPurchasable: dto.isPurchasable !== undefined ? dto.isPurchasable : true,
           isSellable: dto.isSellable !== undefined ? dto.isSellable : true,
           isInventoryItem: dto.isInventoryItem !== undefined ? dto.isInventoryItem : true,
@@ -171,7 +237,12 @@ export class ProductsService {
         });
       }
 
-      return product;
+      const fullProduct = await tx.product.findUnique({
+        where: { id: product.id },
+        include: { stocks: true, category: true, brand: true },
+      });
+
+      return fullProduct || product;
     });
   }
 
@@ -231,6 +302,36 @@ export class ProductsService {
       finalValuationMethod = 'NONE';
     }
 
+    let validatedSalesAccountId: string | null | undefined = undefined;
+    if (dto.salesAccountId !== undefined) {
+      validatedSalesAccountId = await this.validateAccountEligibility(
+        companyId,
+        dto.salesAccountId,
+        'Sales Account',
+        [AccountCategory.REVENUE]
+      );
+    }
+
+    let validatedPurchaseAccountId: string | null | undefined = undefined;
+    if (dto.purchaseAccountId !== undefined) {
+      validatedPurchaseAccountId = await this.validateAccountEligibility(
+        companyId,
+        dto.purchaseAccountId,
+        'Purchase Account',
+        [AccountCategory.EXPENSE, AccountCategory.ASSET]
+      );
+    }
+
+    let validatedInventoryAccountId: string | null | undefined = undefined;
+    if (dto.inventoryAccountId !== undefined) {
+      validatedInventoryAccountId = await this.validateAccountEligibility(
+        companyId,
+        dto.inventoryAccountId,
+        'Inventory Asset Account',
+        [AccountCategory.ASSET]
+      );
+    }
+
     const dataToUpdate: Prisma.ProductUncheckedUpdateInput = {
       ...(dto.name !== undefined && { name: dto.name }),
       ...(dto.alias !== undefined && { alias: dto.alias || null }),
@@ -244,9 +345,9 @@ export class ProductsService {
       ...(dto.purchasePrice !== undefined && { purchasePrice: dto.purchasePrice }),
       ...(dto.sellingPrice !== undefined && { sellingPrice: dto.sellingPrice }),
       ...(dto.pluNo !== undefined && { pluNo: dto.pluNo || null }),
-      ...(dto.salesAccountId !== undefined && { salesAccountId: dto.salesAccountId || null }),
-      ...(dto.purchaseAccountId !== undefined && { purchaseAccountId: dto.purchaseAccountId || null }),
-      ...(dto.inventoryAccountId !== undefined && { inventoryAccountId: dto.inventoryAccountId || null }),
+      ...(dto.salesAccountId !== undefined && { salesAccountId: validatedSalesAccountId }),
+      ...(dto.purchaseAccountId !== undefined && { purchaseAccountId: validatedPurchaseAccountId }),
+      ...(dto.inventoryAccountId !== undefined && { inventoryAccountId: validatedInventoryAccountId }),
       ...(dto.isPurchasable !== undefined && { isPurchasable: dto.isPurchasable }),
       ...(dto.isSellable !== undefined && { isSellable: dto.isSellable }),
       ...(dto.isInventoryItem !== undefined && { isInventoryItem: dto.isInventoryItem }),

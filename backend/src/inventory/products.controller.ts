@@ -13,8 +13,7 @@ import {
   HttpCode,
 } from "@nestjs/common";
 import { ProductsService } from "./products.service";
-import { CreateProductDto, UpdateProductDto } from "./dto/product.dto";
-import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
+import { CreateProductDto, UpdateProductDto, ProductQueryDto } from "./dto/product.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 
@@ -24,7 +23,7 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
-  async findAll(@Query() query: PaginationQueryDto) {
+  async findAll(@Query() query: ProductQueryDto) {
     return this.productsService.findAll(query);
   }
 

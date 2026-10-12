@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoa
 import { EmptyState } from '@/shared/components/ui/LayoutComponents';
 import { Pagination } from '@/shared/components/ui/Pagination';
 import { usePagination } from '@/shared/hooks/usePagination';
-import apiClient from '@/core/api';
+import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { dialog } from '@/core/services/DialogService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,12 +53,11 @@ export const ProductsList = () => {
   });
   const [isColumnChooserOpen, setIsColumnChooserOpen] = useState(false);
 
-  const { data: productsData = [], isLoading: loading } = useQuery({
+  const { data: productsData = [], isLoading: loading, isError: isProductsError, refetch: refetchProducts } = useQuery<any[]>({
     queryKey: ['products'],
     queryFn: async () => {
       const res = await apiClient.get('/products');
-      const items = res.data?.data?.items || res.data || [];
-      return Array.isArray(items) ? items : [];
+      return ensureArray(res);
     }
   });
 
@@ -115,9 +114,37 @@ export const ProductsList = () => {
     setSelectedProduct(null);
   };
 
-  const handleModalSuccess = () => {
+  const handleModalSuccess = (savedProduct?: any) => {
     handleModalClose();
     queryClient.invalidateQueries({ queryKey: ['products'] });
+
+    if (savedProduct && !selectedProduct) {
+      // Check if newly created product matches current filters
+      const matchesSearch = !searchTerm || (
+        (savedProduct.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (savedProduct.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (savedProduct.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (savedProduct.hsnCode || '').toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      const matchesType = selectedType === 'ALL' || savedProduct.itemType === selectedType;
+      const matchesCategory = selectedCategory === 'ALL' ||
+        savedProduct.categoryId === selectedCategory ||
+        savedProduct.category?.id === selectedCategory;
+
+      if (!matchesSearch || !matchesType || !matchesCategory) {
+        const filters: string[] = [];
+        if (!matchesSearch) filters.push(`search: "${searchTerm}"`);
+        if (!matchesType) filters.push(`type: "${selectedType}"`);
+        if (!matchesCategory) filters.push('category');
+
+        notification.info(
+          `Product "${savedProduct.name}" created successfully, but is hidden by active filter (${filters.join(', ')}). Click "All Items" to view it.`
+        );
+      } else {
+        // Reset to first page so the new product is visible at the top
+        setPage(1);
+      }
+    }
   };
 
   // Filter products logic
@@ -401,6 +428,15 @@ export const ProductsList = () => {
       {/* Main Product Intelligence Grid */}
       {loading ? (
         <TableLoader cols={7} rows={6} className="mt-6 border border-border/80 bg-surface rounded-2xl" />
+      ) : isProductsError ? (
+        <div className="mt-6 p-8 bg-surface rounded-xl border border-border text-center space-y-3">
+          <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto" />
+          <h3 className="text-sm font-semibold text-foreground">Failed to Load Products</h3>
+          <p className="text-xs text-muted-foreground">Could not retrieve the product catalog from the server.</p>
+          <Button variant="secondary" size="sm" onClick={() => refetchProducts()}>
+            Retry
+          </Button>
+        </div>
       ) : filteredProducts.length === 0 ? (
         <div className="mt-6 bg-surface rounded-xl border border-border shadow-sm overflow-hidden">
           <EmptyState

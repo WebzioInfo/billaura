@@ -169,5 +169,34 @@ export class CreateProductDto {
 }
 
 import { PartialType } from "@nestjs/mapped-types";
+import { Type } from "class-transformer";
+import { IsIn, IsInt, Min, Max } from "class-validator";
 
 export class UpdateProductDto extends PartialType(CreateProductDto) {}
+
+export class ProductQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @IsOptional()
+  @IsIn(["asc", "desc"])
+  sortOrder?: "asc" | "desc";
+}

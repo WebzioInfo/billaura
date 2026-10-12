@@ -145,6 +145,8 @@ export class AccountsService {
       throw new ConflictException('Company context is required');
     }
 
+    await this.ensureDefaultChartOfAccounts(companyId);
+
     const search = query.search?.trim();
     const categories: AccountCategory[] = [];
     const subCategories: AccountSubCategory[] = [];
@@ -163,6 +165,7 @@ export class AccountsService {
 
     const where: Prisma.AccountWhereInput = {
       companyId,
+      deletedAt: null,
       ...(query.isGroup !== undefined ? { isGroup: query.isGroup } : { isGroup: false }),
       ...(search ? {
         OR: [

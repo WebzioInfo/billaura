@@ -402,7 +402,7 @@ describe('Receipts Module - Production Test Suite', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Payment allocation removed. The receipt remains available for other invoices.');
-      expect(result.data.amountRemoved).toBe(400);
+      expect((result.data as any).amountRemoved).toBe(400);
       expect(result.data.receiptDeleted).toBe(false);
     });
 

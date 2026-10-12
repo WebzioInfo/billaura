@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { apiClient as api, ensureArray } from '../../core/api/apiClient';
 import notification from '@/core/services/NotificationService';
@@ -17,6 +17,14 @@ import { SearchableMasterDropdown } from '../../shared/components/ui/SearchableM
 import { CategoryFormModal } from '../../shared/components/ui/CategoryFormModal';
 import { BrandFormModal } from './BrandFormModal';
 import { isValidHsnOrSac } from '../../shared/utils/business-rules';
+
+const mapToPrismaItemType = (type?: string): string => {
+  if (type === 'RAW_MATERIAL') return 'RAW_MATERIAL';
+  if (type === 'SERVICE') return 'SERVICE';
+  if (type === 'SEMI_FINISHED') return 'SEMI_FINISHED';
+  if (type === 'CONSUMABLE') return 'CONSUMABLE';
+  return 'FINISHED_GOOD';
+};
 
 const PRODUCT_TYPE_CONFIG: Record<string, any> = {
   INVENTORY: { isInventoryItem: true, isService: false, isAsset: false, isExpense: false, isDigital: false, isTrackStock: true, isPurchasable: true, isSellable: true },
@@ -114,7 +122,7 @@ type ProductFormValues = z.infer<typeof productSchema>;
 
 interface ProductFormModalProps {
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (savedProduct?: any) => void;
   product?: any;
 }
 
@@ -140,6 +148,50 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
     queryKey: ['units'],
     queryFn: () => api.get('/units').then(ensureArray),
   });
+
+  const {
+    data: accountsData = [],
+    isLoading: loadingAccounts,
+    isError: errorAccounts,
+    refetch: refetchAccounts,
+  } = useQuery<any[]>({
+    queryKey: ['accounts-lookup'],
+    queryFn: async () => {
+      const res = await api.get('/accounts/lookup', {
+        params: { limit: 300 },
+      });
+      return ensureArray(res);
+    },
+    staleTime: 60000,
+  });
+
+  useEffect(() => {
+    if (errorAccounts) {
+      notification.error('Failed to load chart of accounts. Please check your network and retry.');
+    }
+  }, [errorAccounts]);
+
+  const { salesAccounts, purchaseAccounts, inventoryAssetAccounts } = useMemo(() => {
+    const list = Array.isArray(accountsData) ? accountsData : [];
+    return {
+      salesAccounts: list.filter((a: any) =>
+        a.category === 'REVENUE' ||
+        a.accountType === 'SALES_REVENUE' ||
+        a.accountType === 'SERVICE_REVENUE' ||
+        a.accountType === 'OTHER_INCOME'
+      ),
+      purchaseAccounts: list.filter((a: any) =>
+        a.category === 'EXPENSE' ||
+        a.accountType === 'COGS' ||
+        a.accountType === 'OPERATING_EXPENSE' ||
+        a.accountType === 'OTHER_EXPENSE'
+      ),
+      inventoryAssetAccounts: list.filter((a: any) =>
+        a.category === 'ASSET' ||
+        a.accountType === 'CURRENT_ASSET'
+      ),
+    };
+  }, [accountsData]);
 
 
 
@@ -411,26 +463,40 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   const onSubmit = async (data: ProductFormValues) => {
     if (isLoading) return;
     setIsLoading(true);
+    let savedProduct: any = null;
     try {
-      const payload = {
+      const payload: any = {
         ...data,
+        itemType: mapToPrismaItemType(data.itemType),
+        salesAccountId: data.salesAccountId && data.salesAccountId.trim() !== '' ? data.salesAccountId.trim() : null,
+        purchaseAccountId: data.purchaseAccountId && data.purchaseAccountId.trim() !== '' ? data.purchaseAccountId.trim() : null,
+        inventoryAccountId: data.isInventoryItem && data.inventoryAccountId && data.inventoryAccountId.trim() !== '' ? data.inventoryAccountId.trim() : null,
       };
 
       if (product?.id) {
-        await api.patch(`/products/${product.id}`, payload);
+        const res = await api.patch(`/products/${product.id}`, payload);
+        savedProduct = res?.data || res;
         notification.success('Product updated successfully');
       } else {
-        await api.post('/products', payload);
+        const res = await api.post('/products', payload);
+        savedProduct = res?.data || res;
         notification.success('Product created successfully');
       }
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      onSuccess();
-      onClose();
     } catch (err: any) {
       handleApiFormError(err, setError as any);
+      return;
     } finally {
       setIsLoading(false);
     }
+
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+    } catch {
+      notification.warning('Product was saved, but the product list could not refresh automatically.');
+    }
+
+    onSuccess(savedProduct);
+    onClose();
   };
 
   return (
@@ -737,9 +803,18 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                         value={field.value || ''}
                         onChange={(val) => field.onChange(val)}
                         error={errors.salesAccountId?.message as string}
-                        options={[]}
-                        mapOption={() => ({ label: '', value: '' })}
-                        placeholder="Default (Sales Income)"
+                        options={salesAccounts}
+                        isLoading={loadingAccounts}
+                        isError={errorAccounts}
+                        onRetry={refetchAccounts}
+                        clearable={true}
+                        emptyMessage="No eligible sales revenue accounts found"
+                        mapOption={(acc: any) => ({
+                          label: acc.code ? `${acc.code} - ${acc.name}` : acc.name,
+                          value: acc.id,
+                          description: acc.accountType || acc.category,
+                        })}
+                        placeholder="Default (Sales Revenue)"
                       />
                     )}
                   />
@@ -752,9 +827,18 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                         value={field.value || ''}
                         onChange={(val) => field.onChange(val)}
                         error={errors.purchaseAccountId?.message as string}
-                        options={[]}
-                        mapOption={() => ({ label: '', value: '' })}
-                        placeholder="Default (Cost of Goods Sold)"
+                        options={purchaseAccounts}
+                        isLoading={loadingAccounts}
+                        isError={errorAccounts}
+                        onRetry={refetchAccounts}
+                        clearable={true}
+                        emptyMessage="No eligible expense accounts found"
+                        mapOption={(acc: any) => ({
+                          label: acc.code ? `${acc.code} - ${acc.name}` : acc.name,
+                          value: acc.id,
+                          description: acc.accountType || acc.category,
+                        })}
+                        placeholder="Default (Cost of Goods Sold / Expense)"
                       />
                     )}
                   />
@@ -767,8 +851,18 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                         value={field.value || ''}
                         onChange={(val) => field.onChange(val)}
                         error={errors.inventoryAccountId?.message as string}
-                        options={[]}
-                        mapOption={() => ({ label: '', value: '' })}
+                        options={inventoryAssetAccounts}
+                        isLoading={loadingAccounts}
+                        isError={errorAccounts}
+                        onRetry={refetchAccounts}
+                        clearable={true}
+                        disabled={!isInventoryItem}
+                        emptyMessage="No eligible inventory asset accounts found"
+                        mapOption={(acc: any) => ({
+                          label: acc.code ? `${acc.code} - ${acc.name}` : acc.name,
+                          value: acc.id,
+                          description: acc.accountType || acc.category,
+                        })}
                         placeholder="Default (Inventory Asset)"
                       />
                     )}
