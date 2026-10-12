@@ -87,15 +87,24 @@ export const QuotationsList = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/sales/quotations/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['quotations'] });
-      queryClient.invalidateQueries({ queryKey: ['quotations-summary'] });
+    onSuccess: async () => {
+      try {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['quotations'] }),
+          queryClient.invalidateQueries({ queryKey: ['quotations-summary'] }),
+        ]);
+      } catch {
+        notification.warning('Quotation deactivated successfully, but could not refresh list. Please refresh the page.');
+        setIsDeleteDialogOpen(false);
+        setQuotationToDelete(null);
+        return;
+      }
       notification.success('Quotation deactivated successfully');
       setIsDeleteDialogOpen(false);
+      setQuotationToDelete(null);
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to deactivate quotation');
-      setIsDeleteDialogOpen(false);
+      notification.error(err.response?.data?.message || 'Unable to deactivate quotation. Please try again.');
     },
   });
 
@@ -107,9 +116,9 @@ export const QuotationsList = () => {
     setIsDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (quotationToDelete) {
-      deleteMutation.mutate(quotationToDelete.id);
+      await deleteMutation.mutateAsync(quotationToDelete.id);
     }
   };
 
@@ -180,10 +189,12 @@ export const QuotationsList = () => {
             />
             <IconButton
               icon={Trash2}
-              aria-label="Deactivate Quotation"
-              tooltip="Deactivate Quotation"
+              aria-label={deleteMutation.isPending && quotationToDelete?.id === q.id ? "Deactivating Quotation..." : "Deactivate Quotation"}
+              tooltip={deleteMutation.isPending && quotationToDelete?.id === q.id ? "Deactivating Quotation..." : "Deactivate Quotation"}
               size="dense"
               variant="danger-ghost"
+              isLoading={deleteMutation.isPending && quotationToDelete?.id === q.id}
+              disabled={deleteMutation.isPending}
               onClick={() => handleDeleteRequest(q)}
             />
           </div>
@@ -325,12 +336,19 @@ export const QuotationsList = () => {
 
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
+        onClose={() => {
+          if (!deleteMutation.isPending) {
+            setIsDeleteDialogOpen(false);
+            setQuotationToDelete(null);
+          }
+        }}
         onConfirm={confirmDelete}
         title="Deactivate Quotation"
         message={`Are you sure you want to deactivate the quotation "${quotationToDelete?.quotationNo}"?`}
         confirmText="Deactivate"
+        loadingText="Deactivating..."
         variant="danger"
+        isLoading={deleteMutation.isPending}
       />
     </PageLayout>
   );

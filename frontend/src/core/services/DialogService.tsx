@@ -27,6 +27,8 @@ interface DialogOptions {
   inputValue?: string;
   inputPlaceholder?: string;
   clickOutsideToClose?: boolean;
+  onConfirm?: () => Promise<any> | any;
+  loadingText?: string;
 }
 
 interface DialogState {
@@ -42,6 +44,8 @@ interface DialogState {
   resolve: ((value: any) => void) | null;
   isLoading: boolean;
   clickOutsideToClose: boolean;
+  onConfirm?: (() => Promise<any> | any) | null;
+  loadingText?: string;
   
   openDialog: (options: DialogOptions) => Promise<any>;
   closeDialog: (confirmed: boolean, value?: string) => void;
@@ -61,6 +65,8 @@ export const useDialogStore = create<DialogState>((set, get) => ({
   resolve: null,
   isLoading: false,
   clickOutsideToClose: true,
+  onConfirm: null,
+  loadingText: undefined,
 
   openDialog: (options) => {
     return new Promise((resolve) => {
@@ -77,6 +83,8 @@ export const useDialogStore = create<DialogState>((set, get) => ({
         resolve: resolve as any,
         isLoading: false,
         clickOutsideToClose: options.clickOutsideToClose !== false,
+        onConfirm: options.onConfirm || null,
+        loadingText: options.loadingText,
       });
     });
   },
@@ -90,7 +98,7 @@ export const useDialogStore = create<DialogState>((set, get) => ({
         resolve(showInput ? null : false);
       }
     }
-    set({ isOpen: false, resolve: null, isLoading: false });
+    set({ isOpen: false, resolve: null, isLoading: false, onConfirm: null });
   },
 
   setLoading: (isLoading) => set({ isLoading }),
@@ -148,7 +156,7 @@ export const GlobalDialog: React.FC = () => {
   const { 
     isOpen, type, title, body, confirmText, cancelText, 
     showInput, inputValue, inputPlaceholder, isLoading, clickOutsideToClose,
-    closeDialog 
+    onConfirm, loadingText, setLoading, closeDialog 
   } = useDialogStore();
 
   const [promptVal, setPromptVal] = useState('');
@@ -179,11 +187,24 @@ export const GlobalDialog: React.FC = () => {
 
   if (!isOpen) return null;
 
-  const handleConfirm = () => {
-    closeDialog(true, showInput ? promptVal : undefined);
+  const handleConfirm = async () => {
+    if (isLoading) return;
+    if (onConfirm) {
+      setLoading(true);
+      try {
+        await onConfirm();
+        closeDialog(true, showInput ? promptVal : undefined);
+      } catch (err) {
+        console.error('Dialog onConfirm error:', err);
+        setLoading(false);
+      }
+    } else {
+      closeDialog(true, showInput ? promptVal : undefined);
+    }
   };
 
   const handleCancel = () => {
+    if (isLoading) return;
     closeDialog(false);
   };
 
@@ -318,8 +339,12 @@ export const GlobalDialog: React.FC = () => {
             disabled={isLoading}
             className={`w-full sm:w-auto px-5 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${getConfirmButtonClass()}`}
           >
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {confirmText}
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin shrink-0" />}
+            <span>
+              {isLoading
+                ? (loadingText || (type === 'delete' || type === 'danger' ? 'Deleting...' : 'Processing...'))
+                : confirmText}
+            </span>
           </button>
         </div>
       </div>

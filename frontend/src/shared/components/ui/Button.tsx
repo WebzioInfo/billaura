@@ -6,10 +6,26 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'danger-ghost' | 'link' | 'accent';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
+  loading?: boolean;
+  loadingText?: string;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className = '', variant = 'primary', size = 'md', isLoading = false, children, disabled, ...props }, ref) => {
+  (
+    {
+      className = '',
+      variant = 'primary',
+      size = 'md',
+      isLoading = false,
+      loading = false,
+      loadingText,
+      children,
+      disabled,
+      ...props
+    },
+    ref
+  ) => {
+    const isBusy = isLoading || loading;
     const baseStyles = 'inline-flex items-center justify-center font-medium rounded-[8px] select-none transition-colors duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap';
     
     const variants = {
@@ -41,14 +57,14 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(baseStyles, variants[variant], variant !== 'link' && sizes[size], className)}
-        disabled={isLoading || disabled}
-        aria-busy={isLoading}
+        disabled={isBusy || disabled}
+        aria-busy={isBusy}
         {...props}
       >
-        {isLoading ? (
+        {isBusy ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-            <span>{children}</span>
+            <span>{loadingText || children}</span>
           </>
         ) : (
           children

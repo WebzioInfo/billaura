@@ -34,6 +34,7 @@ export interface RowActionsProps {
   onSendReminder?: () => void;
   onShareLink?: () => void;
   onCancel?: () => void;
+  isDeleting?: boolean;
   customActions?: RowActionCustomItem[];
   className?: string;
 }
@@ -51,6 +52,7 @@ export const RowActions: React.FC<RowActionsProps> = ({
   onSendReminder,
   onShareLink,
   onCancel,
+  isDeleting = false,
   customActions,
   className,
 }) => {
@@ -131,9 +133,14 @@ export const RowActions: React.FC<RowActionsProps> = ({
   const dangerActions = [
     onCancel && {
       key: 'cancel',
-      label: 'Delete',
-      icon: <Trash2 className="w-3.5 h-3.5 text-[#DC2626] dark:text-[#EF4444]" />,
+      label: isDeleting ? 'Deleting...' : 'Delete',
+      icon: isDeleting ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#DC2626] dark:text-[#EF4444]" />
+      ) : (
+        <Trash2 className="w-3.5 h-3.5 text-[#DC2626] dark:text-[#EF4444]" />
+      ),
       onClick: onCancel,
+      disabled: isDeleting,
     },
     ...customDanger,
   ].filter(Boolean) as Array<{
@@ -317,10 +324,16 @@ export const RowActions: React.FC<RowActionsProps> = ({
               'w-[30px] h-[30px] rounded-[6px] text-[#6B7280] hover:text-[#111827] dark:hover:text-[#EDEDED] hover:bg-[#E5E7EB] dark:hover:bg-[#374151] flex items-center justify-center cursor-pointer transition-colors duration-120 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#34303F]',
               isMenuOpen && 'bg-[#E5E7EB] dark:bg-[#374151] text-[#111827] dark:text-[#EDEDED]'
             )}
-            title="More actions"
+            disabled={isDeleting}
+            title={isDeleting ? 'Deleting record...' : 'More actions'}
+            aria-busy={isDeleting}
             aria-expanded={isMenuOpen}
           >
-            <MoreHorizontal className="w-4 h-4" />
+            {isDeleting ? (
+              <Loader2 className="w-4 h-4 animate-spin text-[#DC2626] dark:text-[#EF4444]" />
+            ) : (
+              <MoreHorizontal className="w-4 h-4" />
+            )}
           </button>
 
           {isMenuOpen &&

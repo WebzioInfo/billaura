@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 
-interface ConfirmDialogProps {
+export interface ConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void | Promise<void>;
@@ -11,6 +11,8 @@ interface ConfirmDialogProps {
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'primary' | 'secondary';
+  isLoading?: boolean;
+  loadingText?: string;
 }
 
 export const ConfirmDialog = ({
@@ -21,24 +23,30 @@ export const ConfirmDialog = ({
   message,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
-  variant = 'primary'
+  variant = 'primary',
+  isLoading: externalLoading = false,
+  loadingText,
 }: ConfirmDialogProps) => {
-  const [isLoading, setIsLoading] = useState(false);
+  const [internalLoading, setInternalLoading] = useState(false);
+  const isBusy = externalLoading || internalLoading;
 
   const handleConfirm = async () => {
-    setIsLoading(true);
+    if (isBusy) return;
+    setInternalLoading(true);
     try {
       await onConfirm();
       onClose();
     } catch (error) {
-      console.error(error);
+      console.error('Confirmation action failed:', error);
     } finally {
-      setIsLoading(false);
+      setInternalLoading(false);
     }
   };
 
+  const defaultLoadingText = variant === 'danger' ? 'Deleting...' : 'Processing...';
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth="sm">
+    <Modal isOpen={isOpen} onClose={isBusy ? () => {} : onClose} title={title} maxWidth="sm">
       <div className="space-y-6">
         <div className="text-sm text-muted-foreground leading-relaxed">
           {message}
@@ -48,14 +56,15 @@ export const ConfirmDialog = ({
           <Button 
             variant="outline" 
             onClick={onClose} 
-            disabled={isLoading}
+            disabled={isBusy}
           >
             {cancelText}
           </Button>
           <Button 
             variant={variant} 
             onClick={handleConfirm} 
-            isLoading={isLoading}
+            isLoading={isBusy}
+            loadingText={loadingText || defaultLoadingText}
           >
             {confirmText}
           </Button>

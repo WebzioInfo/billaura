@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Edit, Trash2, Search, Download, RefreshCw, BarChart2, CheckCircle2, XCircle, Package } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge } from '@/shared/components/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, IconButton } from '@/shared/components/ui';
 import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
@@ -28,19 +28,25 @@ export const CategoriesList = () => {
     mutationFn: async (id: string) => {
       return apiClient.delete(`/inventory/categories/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ['categories'] });
+      } catch {
+        notification.warning('Category deleted successfully, but could not refresh list. Please refresh the page.');
+        return;
+      }
       notification.success('Category deleted successfully');
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to delete category');
+      notification.error(err.response?.data?.message || 'Unable to delete category. Please try again.');
     }
   });
 
   const handleDelete = async (id: string, name: string) => {
+    if (deleteMutation.isPending) return;
     const confirmed = await dialog.confirmDelete(
       'Delete Category?',
-      `Are you sure you want to delete category "${name}"?`
+      `Are you sure you want to permanently delete category "${name}"?`
     );
     if (confirmed) {
       deleteMutation.mutate(id);
@@ -224,20 +230,24 @@ export const CategoriesList = () => {
                 </TableCell>
                 <TableCell align="right" className="pr-6 pl-4">
                   <div className="flex items-center justify-end gap-1">
-                    <button
-                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
-                      title="Edit Category"
+                    <IconButton
+                      icon={Edit}
+                      aria-label="Edit Category"
+                      tooltip="Edit Category"
+                      size="dense"
+                      disabled={deleteMutation.isPending && deleteMutation.variables === c.id}
                       onClick={() => handleEdit(c)}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-rose-600 hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
-                      title="Delete Category"
+                    />
+                    <IconButton
+                      icon={Trash2}
+                      aria-label={deleteMutation.isPending && deleteMutation.variables === c.id ? "Deleting Category..." : "Delete Category"}
+                      tooltip={deleteMutation.isPending && deleteMutation.variables === c.id ? "Deleting Category..." : "Delete Category"}
+                      size="dense"
+                      variant="danger-ghost"
+                      isLoading={deleteMutation.isPending && deleteMutation.variables === c.id}
+                      disabled={deleteMutation.isPending}
                       onClick={() => handleDelete(c.id, c.name)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    />
                   </div>
                 </TableCell>
               </TableRow>

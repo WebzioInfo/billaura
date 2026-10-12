@@ -1,13 +1,15 @@
 import React from 'react';
 import { ConfirmDialog } from './ConfirmDialog';
 
-interface DeleteDialogProps {
+export interface DeleteDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void | Promise<void>;
   entityName: string;
   entityId?: string;
   warningText?: string;
+  isLoading?: boolean;
+  loadingText?: string;
 }
 
 export const DeleteDialog = ({
@@ -16,13 +18,17 @@ export const DeleteDialog = ({
   onConfirm,
   entityName,
   entityId,
-  warningText = 'This action cannot be undone.'
+  warningText = 'This action cannot be undone.',
+  isLoading,
+  loadingText = 'Deleting...',
 }: DeleteDialogProps) => {
   return (
     <ConfirmDialog
       isOpen={isOpen}
       onClose={onClose}
       onConfirm={onConfirm}
+      isLoading={isLoading}
+      loadingText={loadingText}
       title={`Delete ${entityName}`}
       variant="danger"
       confirmText="Delete"

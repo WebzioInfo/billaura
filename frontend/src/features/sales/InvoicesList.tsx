@@ -1727,6 +1727,7 @@ export const InvoicesList: React.FC = () => {
         title="Restore Archived Invoice"
         message={`Are you sure you want to restore invoice "${invoiceToRestore?.invoiceNo}"? This will reactivate the document, preserve its document number and payment history, and safely restore general ledger and stock movements.`}
         confirmText="Restore Invoice"
+        loadingText="Restoring..."
         variant="primary"
       />
 
@@ -1772,6 +1773,7 @@ export const InvoicesList: React.FC = () => {
           </div>
         }
         confirmText="Delete Permanently"
+        loadingText="Deleting..."
         variant="danger"
       />
     </PageLayout>

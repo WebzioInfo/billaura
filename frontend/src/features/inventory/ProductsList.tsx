@@ -78,20 +78,26 @@ export const ProductsList = () => {
     mutationFn: async (id: string) => {
       return apiClient.delete(`/products/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ['products'] });
+      } catch {
+        notification.warning('Product deleted successfully, but could not refresh list. Please refresh the page.');
+        return;
+      }
       notification.success('Product deleted successfully');
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to delete product');
+      notification.error(err.response?.data?.message || 'Unable to delete product. Please try again.');
     }
   });
 
   const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation();
+    if (deleteMutation.isPending) return;
     const confirmed = await dialog.confirmDelete(
       'Delete Product?',
-      `Are you sure you want to delete product "${name}"?`
+      `Are you sure you want to permanently delete "${name}"? This action cannot be undone.`
     );
     if (confirmed) {
       deleteMutation.mutate(id);
@@ -557,6 +563,7 @@ export const ProductsList = () => {
                         aria-label="View Details"
                         tooltip="View Details"
                         size="dense"
+                        disabled={deleteMutation.isPending && deleteMutation.variables === p.id}
                         onClick={(e) => {
                           e.stopPropagation();
                           setInspectProductId(p.id);
@@ -567,14 +574,17 @@ export const ProductsList = () => {
                         aria-label="Edit Product"
                         tooltip="Edit Product"
                         size="dense"
+                        disabled={deleteMutation.isPending && deleteMutation.variables === p.id}
                         onClick={(e) => openEditModal(e, p)}
                       />
                       <IconButton
                         icon={Trash2}
-                        aria-label="Delete Product"
-                        tooltip="Delete Product"
+                        aria-label={deleteMutation.isPending && deleteMutation.variables === p.id ? "Deleting Product..." : "Delete Product"}
+                        tooltip={deleteMutation.isPending && deleteMutation.variables === p.id ? "Deleting Product..." : "Delete Product"}
                         size="dense"
                         variant="danger-ghost"
+                        isLoading={deleteMutation.isPending && deleteMutation.variables === p.id}
+                        disabled={deleteMutation.isPending}
                         onClick={(e) => handleDelete(e, p.id, p.name)}
                       />
                     </div>

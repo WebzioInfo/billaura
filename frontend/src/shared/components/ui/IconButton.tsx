@@ -8,6 +8,7 @@ export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
   size?: 'sm' | 'md' | 'dense';
   tooltip?: string;
   isLoading?: boolean;
+  loading?: boolean;
   'aria-label': string; // strictly required for accessibility
 }
 
@@ -19,6 +20,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
       size = 'md',
       tooltip,
       isLoading = false,
+      loading = false,
       icon: Icon,
       children,
       disabled,
@@ -27,6 +29,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     },
     ref
   ) => {
+    const isBusy = isLoading || loading;
     const baseStyles =
       'inline-flex items-center justify-center rounded-[8px] transition-colors duration-120 select-none cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed shrink-0';
 
@@ -52,14 +55,14 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     return (
       <button
         ref={ref}
-        title={tooltip || ariaLabel}
-        aria-label={ariaLabel}
-        aria-busy={isLoading}
-        disabled={isLoading || disabled}
+        title={isBusy ? 'Processing...' : tooltip || ariaLabel}
+        aria-label={isBusy ? `${ariaLabel} (Processing)` : ariaLabel}
+        aria-busy={isBusy}
+        disabled={isBusy || disabled}
         className={cn(baseStyles, variants[variant], sizes[size], className)}
         {...props}
       >
-        {isLoading ? (
+        {isBusy ? (
           <Loader2 className={cn(iconSize, 'animate-spin')} />
         ) : React.isValidElement(Icon) ? (
           Icon

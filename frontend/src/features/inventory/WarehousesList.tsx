@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Search, Building2, Edit2, Trash2, Loader2, X, Check } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, Button } from '@/shared/components/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, Button, IconButton } from '@/shared/components/ui';
 import { PageContainer } from '@/shared/components/ui/LayoutComponents';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { dialog } from '@/core/services/DialogService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const WarehousesList = () => {
@@ -89,21 +90,37 @@ export const WarehousesList = () => {
     }
   };
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/warehouses/${id}`);
+    },
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+      } catch {
+        notification.warning('Warehouse deleted successfully, but could not refresh list. Please refresh the page.');
+        return;
+      }
+      notification.success('Warehouse deleted successfully');
+    },
+    onError: (err: any) => {
+      notification.error(err.response?.data?.message || 'Unable to delete warehouse. Please try again.');
+    }
+  });
+
   const handleDelete = async (warehouse: any) => {
     if (warehouse.isDefault) {
       notification.error('Cannot delete the default warehouse');
       return;
     }
-    if (!window.confirm(`Are you sure you want to delete warehouse "${warehouse.name}"?`)) {
-      return;
-    }
+    if (deleteMutation.isPending) return;
 
-    try {
-      await apiClient.delete(`/warehouses/${warehouse.id}`);
-      notification.success('Warehouse deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-    } catch (err: any) {
-      notification.error(err.response?.data?.message || 'Failed to delete warehouse');
+    const confirmed = await dialog.confirmDelete(
+      'Delete Warehouse?',
+      `Are you sure you want to permanently delete warehouse "${warehouse.name}"? This action cannot be undone.`
+    );
+    if (confirmed) {
+      deleteMutation.mutate(warehouse.id);
     }
   };
 
@@ -199,21 +216,24 @@ export const WarehousesList = () => {
                   </TableCell>
                   <TableCell className="pr-5 pl-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button
+                      <IconButton
+                        icon={Edit2}
+                        aria-label="Edit Warehouse"
+                        tooltip="Edit Warehouse"
+                        size="dense"
+                        disabled={deleteMutation.isPending && deleteMutation.variables === warehouse.id}
                         onClick={() => handleOpenEditModal(warehouse)}
-                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-lg transition-colors cursor-pointer"
-                        title="Edit Warehouse"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
+                      />
+                      <IconButton
+                        icon={Trash2}
+                        aria-label={deleteMutation.isPending && deleteMutation.variables === warehouse.id ? "Deleting Warehouse..." : "Delete Warehouse"}
+                        tooltip={deleteMutation.isPending && deleteMutation.variables === warehouse.id ? "Deleting Warehouse..." : (warehouse.isDefault ? "Cannot delete default warehouse" : "Delete Warehouse")}
+                        size="dense"
+                        variant="danger-ghost"
+                        disabled={warehouse.isDefault || deleteMutation.isPending}
+                        isLoading={deleteMutation.isPending && deleteMutation.variables === warehouse.id}
                         onClick={() => handleDelete(warehouse)}
-                        disabled={warehouse.isDefault}
-                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                        title={warehouse.isDefault ? "Cannot delete default warehouse" : "Delete Warehouse"}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      />
                     </div>
                   </TableCell>
                 </TableRow>

@@ -92,8 +92,11 @@ export const ReceiptsList = () => {
     }
   };
 
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+
   const handleVoid = async () => {
-    if (!receiptToVoid) return;
+    if (!receiptToVoid || voidingId) return;
+    setVoidingId(receiptToVoid.rawId);
     try {
       await apiClient.delete(`/receipts/${receiptToVoid.rawId}`);
       if (receiptToVoid.type === 'PURCHASE') {
@@ -112,11 +115,12 @@ export const ReceiptsList = () => {
         });
       }
       notification.success('Receipt voided and reversed successfully');
+      setReceiptToVoid(null);
       fetchReceipts();
     } catch {
-      notification.error('Failed to void receipt');
+      notification.error('Unable to void receipt. Please try again.');
     } finally {
-      setReceiptToVoid(null);
+      setVoidingId(null);
     }
   };
 
@@ -209,10 +213,12 @@ export const ReceiptsList = () => {
             {r.status === 'COMPLETED' && (
               <IconButton
                 icon={Trash2}
-                aria-label="Delete Receipt"
-                tooltip="Delete Receipt"
+                aria-label={voidingId === r.rawId ? "Voiding Receipt..." : "Delete Receipt"}
+                tooltip={voidingId === r.rawId ? "Voiding Receipt..." : "Delete Receipt"}
                 size="dense"
                 variant="danger-ghost"
+                isLoading={voidingId === r.rawId}
+                disabled={!!voidingId}
                 onClick={() => setReceiptToVoid(r)}
               />
             )}
@@ -437,8 +443,11 @@ export const ReceiptsList = () => {
 
       <DeleteDialog
         isOpen={!!receiptToVoid}
-        onClose={() => setReceiptToVoid(null)}
+        onClose={() => {
+          if (!voidingId) setReceiptToVoid(null);
+        }}
         onConfirm={handleVoid}
+        isLoading={!!voidingId}
         entityName="Receipt"
         entityId={receiptToVoid?.receiptNo}
         warningText="This action cannot be undone. This will void the payment receipt and reverse all general ledger entry balances."

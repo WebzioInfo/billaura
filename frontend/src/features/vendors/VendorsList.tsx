@@ -57,12 +57,19 @@ export const VendorsList = () => {
     mutationFn: async (id: string) => {
       await apiClient.delete(`/vendors/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      } catch {
+        notification.warning('Vendor deleted successfully, but could not refresh list. Please refresh the page.');
+        setVendorToDelete(null);
+        return;
+      }
       notification.success('Vendor deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      setVendorToDelete(null);
     },
     onError: (error: any) => {
-      notification.error(error.response?.data?.message || 'Failed to delete vendor');
+      notification.error(error.response?.data?.message || 'Unable to delete vendor. Please try again.');
     }
   });
 
@@ -174,10 +181,12 @@ export const VendorsList = () => {
             />
             <IconButton
               icon={Trash2}
-              aria-label="Delete Vendor"
-              tooltip="Delete Vendor"
+              aria-label={deleteMutation.isPending && vendorToDelete?.id === v.id ? "Deleting Vendor..." : "Delete Vendor"}
+              tooltip={deleteMutation.isPending && vendorToDelete?.id === v.id ? "Deleting Vendor..." : "Delete Vendor"}
               size="dense"
               variant="danger-ghost"
+              isLoading={deleteMutation.isPending && vendorToDelete?.id === v.id}
+              disabled={deleteMutation.isPending}
               onClick={() => setVendorToDelete(v)}
             />
           </div>
@@ -267,13 +276,17 @@ export const VendorsList = () => {
 
       <DeleteDialog
         isOpen={!!vendorToDelete}
-        onClose={() => setVendorToDelete(null)}
-        onConfirm={async () => {
-          if (vendorToDelete) {
-            deleteMutation.mutate(vendorToDelete.id);
+        onClose={() => {
+          if (!deleteMutation.isPending) {
             setVendorToDelete(null);
           }
         }}
+        onConfirm={async () => {
+          if (vendorToDelete) {
+            await deleteMutation.mutateAsync(vendorToDelete.id);
+          }
+        }}
+        isLoading={deleteMutation.isPending}
         entityName="Vendor"
         entityId={vendorToDelete?.name}
         warningText="WARNING: Deleting a vendor will remove them from the system. Ensure there are no active purchase orders or pending bills."

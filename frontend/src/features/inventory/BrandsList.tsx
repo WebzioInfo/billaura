@@ -8,7 +8,7 @@ import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponen
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Badge } from '@/shared/components/ui/Badge';
-import { StatusBadge, DateCell } from '@/shared/components/ui';
+import { StatusBadge, DateCell, IconButton } from '@/shared/components/ui';
 import { ConfirmDialog } from '@/shared/components/ui/action-system/ConfirmDialog';
 import { BrandFormModal } from './BrandFormModal';
 import apiClient from '@/core/api';
@@ -49,14 +49,21 @@ export const BrandsList = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/inventory/brands/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['brands'] });
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ['brands'] });
+      } catch {
+        notification.warning('Brand deactivated successfully, but could not refresh list. Please refresh the page.');
+        setIsDeleteDialogOpen(false);
+        setBrandToDelete(null);
+        return;
+      }
       notification.success('Brand deactivated successfully');
       setIsDeleteDialogOpen(false);
+      setBrandToDelete(null);
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to deactivate brand');
-      setIsDeleteDialogOpen(false);
+      notification.error(err.response?.data?.message || 'Unable to deactivate brand. Please try again.');
     }
   });
 
@@ -75,9 +82,9 @@ export const BrandsList = () => {
     setIsDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (brandToDelete) {
-      deleteMutation.mutate(brandToDelete.id);
+      await deleteMutation.mutateAsync(brandToDelete.id);
     }
   };
 
@@ -215,20 +222,24 @@ export const BrandsList = () => {
                 <DateCell date={brand.createdAt} />
                 <TableCell align="right" className="pr-6 pl-4">
                   <div className="flex items-center justify-end gap-1">
-                    <button
-                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
-                      title="Edit Brand"
+                    <IconButton
+                      icon={Edit}
+                      aria-label="Edit Brand"
+                      tooltip="Edit Brand"
+                      size="dense"
+                      disabled={deleteMutation.isPending && brandToDelete?.id === brand.id}
                       onClick={() => handleEdit(brand)}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-rose-600 hover:bg-[#EAEAEA] dark:hover:bg-neutral-800 transition-colors"
-                      title="Deactivate Brand"
+                    />
+                    <IconButton
+                      icon={Trash2}
+                      aria-label={deleteMutation.isPending && brandToDelete?.id === brand.id ? "Deactivating Brand..." : "Deactivate Brand"}
+                      tooltip={deleteMutation.isPending && brandToDelete?.id === brand.id ? "Deactivating Brand..." : "Deactivate Brand"}
+                      size="dense"
+                      variant="danger-ghost"
+                      isLoading={deleteMutation.isPending && brandToDelete?.id === brand.id}
+                      disabled={deleteMutation.isPending}
                       onClick={() => handleDeleteRequest(brand)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    />
                   </div>
                 </TableCell>
               </TableRow>
@@ -246,13 +257,19 @@ export const BrandsList = () => {
 
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
+        onClose={() => {
+          if (!deleteMutation.isPending) {
+            setIsDeleteDialogOpen(false);
+            setBrandToDelete(null);
+          }
+        }}
         onConfirm={confirmDelete}
         title="Deactivate Brand"
         message={`Are you sure you want to deactivate the brand "${brandToDelete?.brandName}"? It will no longer be available for new products.`}
         confirmText="Deactivate"
+        loadingText="Deactivating..."
         variant="danger"
-        
+        isLoading={deleteMutation.isPending}
       />
     </PageContainer>
   );

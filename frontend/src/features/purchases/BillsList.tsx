@@ -605,20 +605,22 @@ export const BillsList = () => {
             />
             <IconButton
               icon={X}
-              aria-label="Cancel Bill"
-              tooltip="Cancel & Reverse Entries"
+              aria-label={cancelMutation.isPending && cancelMutation.variables === bill.id ? "Cancelling Bill..." : "Cancel Bill"}
+              tooltip={cancelMutation.isPending && cancelMutation.variables === bill.id ? "Cancelling Bill..." : "Cancel & Reverse Entries"}
               size="dense"
               variant="danger-ghost"
-              disabled={bill.status === 'PAID'}
+              disabled={bill.status === 'PAID' || cancelMutation.isPending || deleteMutation.isPending}
+              isLoading={cancelMutation.isPending && cancelMutation.variables === bill.id}
               onClick={() => setBillToCancel(bill)}
             />
             <IconButton
               icon={Trash2}
-              aria-label="Delete Bill"
-              tooltip="Delete Bill"
+              aria-label={deleteMutation.isPending && deleteMutation.variables === bill.id ? "Deleting Bill..." : "Delete Bill"}
+              tooltip={deleteMutation.isPending && deleteMutation.variables === bill.id ? "Deleting Bill..." : "Delete Bill"}
               size="dense"
               variant="danger-ghost"
-              disabled={bill.status === 'PAID'}
+              disabled={bill.status === 'PAID' || cancelMutation.isPending || deleteMutation.isPending}
+              isLoading={deleteMutation.isPending && deleteMutation.variables === bill.id}
               onClick={() => setBillToDelete(bill)}
             />
           </div>
@@ -1240,8 +1242,40 @@ export const BillsList = () => {
           </div>
         </div>
       )}
-      <ConfirmDialog isOpen={!!billToCancel} onClose={() => setBillToCancel(null)} onConfirm={async () => { cancelMutation.mutate(billToCancel!.id); setBillToCancel(null); }} title="Cancel Purchase Bill" message={<span>Cancel bill <strong>{billToCancel?.purchaseNo}</strong>? This will reverse ledger accounts and stock changes.</span>} confirmText="Cancel Bill" variant="danger" />
-      <DeleteDialog isOpen={!!billToDelete} onClose={() => setBillToDelete(null)} onConfirm={async () => { deleteMutation.mutate(billToDelete!.id); setBillToDelete(null); }} entityName="Purchase Bill" entityId={billToDelete?.purchaseNo} warningText="This action is irreversible." />
+      <ConfirmDialog
+        isOpen={!!billToCancel}
+        onClose={() => {
+          if (!cancelMutation.isPending) setBillToCancel(null);
+        }}
+        onConfirm={async () => {
+          if (billToCancel) {
+            await cancelMutation.mutateAsync(billToCancel.id);
+            setBillToCancel(null);
+          }
+        }}
+        title="Cancel Purchase Bill"
+        message={<span>Cancel bill <strong>{billToCancel?.purchaseNo}</strong>? This will reverse ledger accounts and stock changes.</span>}
+        confirmText="Cancel Bill"
+        loadingText="Cancelling..."
+        variant="danger"
+        isLoading={cancelMutation.isPending}
+      />
+      <DeleteDialog
+        isOpen={!!billToDelete}
+        onClose={() => {
+          if (!deleteMutation.isPending) setBillToDelete(null);
+        }}
+        onConfirm={async () => {
+          if (billToDelete) {
+            await deleteMutation.mutateAsync(billToDelete.id);
+            setBillToDelete(null);
+          }
+        }}
+        isLoading={deleteMutation.isPending}
+        entityName="Purchase Bill"
+        entityId={billToDelete?.purchaseNo}
+        warningText="This action is irreversible."
+      />
       
       {/* Interactive Bill OCR Review Viewer Modal */}
       {viewingDoc && (
