@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Plus, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck, ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { X, Package, Tag, Hash, RefreshCw, IndianRupee, ShieldCheck, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { apiClient as api, ensureArray } from '../../core/api/apiClient';
 import notification from '@/core/services/NotificationService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,6 @@ import { Controller } from 'react-hook-form';
 import { SearchableSelect } from '../../shared/components/ui/SearchableSelect';
 import { SearchableMasterDropdown } from '../../shared/components/ui/SearchableMasterDropdown';
 import { CategoryFormModal } from '../../shared/components/ui/CategoryFormModal';
-import { BrandFormModal } from './BrandFormModal';
 import { isValidHsnOrSac } from '../../shared/utils/business-rules';
 
 const mapToPrismaItemType = (type?: string): string => {
@@ -130,18 +129,12 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   const [activeTab, setActiveTab] = useState('general');
   const [isLoading, setIsLoading] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
   const { data: categories = [] } = useQuery<unknown[]>({
     queryKey: ['categories'],
     queryFn: () => api.get('/inventory/categories').then(ensureArray),
-  });
-
-  const { data: brands = [] } = useQuery<unknown[]>({
-    queryKey: ['brands'],
-    queryFn: () => api.get('/inventory/brands').then(ensureArray),
   });
 
   const { data: units = [], isLoading: loadingUnits } = useQuery<unknown[]>({
@@ -316,8 +309,8 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   }, [availableSteps, activeTab]);
 
   const STEP_FIELDS: Record<string, (keyof ProductFormValues)[]> = {
-    general: ['name', 'sku', 'alias', 'barcode', 'itemType', 'categoryId', 'brandId', 'unit'],
-    inventory: ['minStock', 'maxStock', 'reorderLevel', 'valuationMethod', 'salesAccountId', 'purchaseAccountId', 'inventoryAccountId'],
+    general: ['name', 'sku', 'alias', 'itemType', 'categoryId', 'unit'],
+    inventory: ['valuationMethod', 'salesAccountId', 'purchaseAccountId', 'inventoryAccountId'],
     rates: ['sellingPrice', 'purchasePrice'],
     compliance: ['hsnCode', 'eInvoiceHsn', 'gstRate', 'taxPreference'],
   };
@@ -448,8 +441,8 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
       const firstError = Object.keys(errors)[0];
-      const generalFields = ['name', 'sku', 'alias', 'barcode', 'itemType', 'categoryId', 'brandId', 'unit'];
-      const inventoryFields = ['minStock', 'maxStock', 'reorderLevel', 'valuationMethod', 'salesAccountId', 'purchaseAccountId', 'inventoryAccountId'];
+      const generalFields = ['name', 'sku', 'alias', 'itemType', 'categoryId', 'unit'];
+      const inventoryFields = ['valuationMethod', 'salesAccountId', 'purchaseAccountId', 'inventoryAccountId'];
       const ratesFields = ['sellingPrice', 'purchasePrice'];
       const complianceFields = ['hsnCode', 'eInvoiceHsn', 'gstRate', 'taxPreference'];
 
@@ -568,17 +561,14 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                 <div className="space-y-4">
                   <Input label="Item Name" required {...register('name')} error={errors.name?.message as string} placeholder="e.g. Potassium" />
                   <Input label="Alias / Print Name" {...register('alias')} error={errors.alias?.message as string} placeholder="Alias name" />
-                  <div className="grid grid-cols-2 gap-4">
-                    <AutoGenerateInput 
-                      label="Item Code (SKU)" 
-                      documentType="SKU"
-                      onGenerate={(code) => setValue('sku', code, { shouldValidate: true })}
-                      {...register('sku')} 
-                      error={errors.sku?.message as string} 
-                      placeholder="e.g. 0001" 
-                    />
-                    <Input label="Barcode / PLU" {...register('barcode')} error={errors.barcode?.message as string} placeholder="Scan barcode..." />
-                  </div>
+                  <AutoGenerateInput 
+                    label="Item Code (SKU)" 
+                    documentType="SKU"
+                    onGenerate={(code) => setValue('sku', code, { shouldValidate: true })}
+                    {...register('sku')} 
+                    error={errors.sku?.message as string} 
+                    placeholder="e.g. 0001" 
+                  />
                   <Select label="Item Type" {...register('itemType')} onChange={handleItemTypeChange} error={errors.itemType?.message as string} options={[
                     { label: 'Inventory Product', value: 'INVENTORY' },
                     { label: 'Non-Inventory Product', value: 'NON_INVENTORY' },
@@ -612,25 +602,6 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
                         />
                       )}
                     />
-                    <div className="mt-4">
-                      <Controller
-                        control={control}
-                        name="brandId"
-                        render={({ field }) => (
-                          <SearchableMasterDropdown
-                            label="Brand"
-                            value={field.value || ''}
-                            onChange={(val) => field.onChange(val)}
-                            error={errors.brandId?.message as string}
-                            apiPath="/inventory/brands"
-                            queryKeyPrefix="brands"
-                            mapOption={(b: any) => ({ label: b.brandName || b.name, value: b.id })}
-                            placeholder="Select Brand..."
-                            quickCreateEntity="brand"
-                          />
-                        )}
-                      />
-                    </div>
                     <div className="mt-4">
                       <Controller
                         control={control}
@@ -782,11 +753,6 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2"><Package className="w-4 h-4 text-emerald-500" /> Stock Control</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Input type="number" step="0.01" label="Min Stock" {...register('minStock')} error={errors.minStock?.message as string} />
-                    <Input type="number" step="0.01" label="Max Stock" {...register('maxStock')} error={errors.maxStock?.message as string} />
-                  </div>
-                  <Input type="number" step="0.01" label="Reorder Level (Qty)" {...register('reorderLevel')} error={errors.reorderLevel?.message as string} />
                   <Select label="Valuation Method" {...register('valuationMethod')} error={errors.valuationMethod?.message as string} options={[
                     { label: 'Average Cost', value: 'AVERAGE' },
                     { label: 'First In, First Out (FIFO)', value: 'FIFO' },
@@ -1137,14 +1103,6 @@ export default function ProductFormModal({ onClose, onSuccess, product }: Produc
           setValue('categoryId', newCat.id, { shouldValidate: true });
           setIsCategoryModalOpen(false);
         }} 
-      />
-      
-      <BrandFormModal 
-        isOpen={isBrandModalOpen} 
-        onClose={() => setIsBrandModalOpen(false)} 
-        brand={null}
-        // onSuccess is not directly exposed by BrandFormModal, but it invalidates queries.
-        // We'll just rely on the user to re-select it if needed, or we can update BrandFormModal to return onSuccess.
       />
     </div>
   );
