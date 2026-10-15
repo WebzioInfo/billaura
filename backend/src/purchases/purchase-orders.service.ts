@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
@@ -56,9 +56,9 @@ export class PurchaseOrdersService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.purchaseOrder.findMany({
         where,
-        skip,
-        take,
-        include: { businessPartner: true, items: true },
+        skip: Number(skip),
+        take: Number(take),
+        include: { businessPartner: true, items: { include: { product: true } } },
         orderBy: { date: 'desc' },
       }),
       this.prisma.purchaseOrder.count({ where }),
@@ -80,7 +80,6 @@ export class PurchaseOrdersService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
 
-    // Generate preview using SequenceService
     const config = await this.sequenceService.getConfig(companyId, 'PURCHASE_ORDER');
     if (config) {
       const nextNum = config.currentNumber + 1;
@@ -97,12 +96,33 @@ export class PurchaseOrdersService {
       include: { businessPartner: true, items: { include: { product: true } } },
     });
     if (!order) throw new NotFoundException('Purchase Order not found');
-    return order;
+
+    const metadata = (order.gstBreakup as any) || {};
+    const itemsMeta = metadata.itemsMeta || [];
+
+    // Augment items with unit and discount if preserved in metadata
+    const augmentedItems = order.items.map((item, idx) => {
+      const metaItem = itemsMeta[idx] || itemsMeta.find((m: any) => m.productId === item.productId && m.description === item.description);
+      return {
+        ...item,
+        unit: item.product?.unit || metaItem?.unit || 'Pcs',
+        discount: metaItem?.discount || 0,
+      };
+    });
+
+    return {
+      ...order,
+      items: augmentedItems,
+    };
   }
 
   async create(dto: CreatePurchaseOrderDto, userId?: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context required');
+
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('At least one item is required in the Purchase Order');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       let orderNo = dto.orderNo;
@@ -110,17 +130,48 @@ export class PurchaseOrdersService {
         const existing = await tx.purchaseOrder.findFirst({
           where: { companyId, orderNo },
         });
-        if (existing) throw new ConflictException('Purchase Order number already in use');
+        if (existing) throw new ConflictException(`Purchase Order number "${orderNo}" is already in use`);
       } else {
-        // Auto-generate order number
         orderNo = await this.sequenceService.generateNextSequence(companyId, 'PURCHASE_ORDER', tx);
       }
 
       const user = userId ? await tx.user.findUnique({ where: { id: userId } }) : null;
 
-      const subTotal = dto.items.reduce((sum, item) => sum + (item.qty * item.rate), 0);
-      const taxTotal = dto.items.reduce((sum, item) => sum + ((item.qty * item.rate * item.taxPercent) / 100), 0);
-      const grandTotal = subTotal + taxTotal;
+      // Process line items with discount, tax, and precision calculations
+      const processedItems = dto.items.map(item => {
+        const qty = Number(item.qty);
+        const rate = Number(item.rate);
+        const discount = Number(item.discount || 0);
+        const taxPercent = Number(item.taxPercent || 0);
+
+        const gross = qty * rate;
+        const discAmt = gross * (discount / 100);
+        const taxable = gross - discAmt;
+        const taxAmount = Number(((taxable * taxPercent) / 100).toFixed(2));
+        const total = Number((taxable + taxAmount).toFixed(2));
+
+        return {
+          productId: item.productId || null,
+          description: item.description,
+          qty,
+          rate,
+          taxPercent,
+          taxAmount,
+          total,
+          discount,
+          unit: item.unit || 'Pcs',
+          taxable,
+          gross,
+          discAmt,
+        };
+      });
+
+      const subTotal = processedItems.reduce((sum, item) => sum + item.gross, 0);
+      const totalDiscount = processedItems.reduce((sum, item) => sum + item.discAmt, 0);
+      const taxableTotal = subTotal - totalDiscount;
+      const taxTotal = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
+      const grandTotal = Math.round(taxableTotal + taxTotal);
+
       const metadata = {
         expectedDeliveryDate: dto.expectedDeliveryDate,
         warehouseId: dto.warehouseId,
@@ -128,45 +179,51 @@ export class PurchaseOrdersService {
         notes: dto.notes,
         referenceNo: dto.referenceNo,
         createdByName: user?.name || user?.email || 'System Admin',
-        receivedQty: {}
+        receivedQty: {},
+        itemsMeta: processedItems.map(p => ({
+          productId: p.productId,
+          description: p.description,
+          discount: p.discount,
+          unit: p.unit,
+        })),
       };
 
-    const po = await tx.purchaseOrder.create({
-      data: {
-        companyId,
-        businessPartnerId: dto.businessPartnerId,
-        orderNo,
-        date: new Date(dto.date),
-        taxMode: dto.taxMode || 'CGST_SGST',
-        placeOfSupply: dto.placeOfSupply,
-        billingAddress: dto.billingAddress,
-        shippingAddress: dto.shippingAddress,
-        subTotal,
-        taxTotal,
-        totalTaxAmount: taxTotal,
-        grandTotal,
-        status: dto.status || 'DRAFT',
-        gstBreakup: metadata as any,
-        items: {
-          create: dto.items.map(item => ({
-            productId: item.productId,
-            description: item.description,
-            qty: item.qty,
-            rate: item.rate,
-            taxPercent: item.taxPercent,
-            taxAmount: (item.qty * item.rate * item.taxPercent) / 100,
-            total: (item.qty * item.rate) + ((item.qty * item.rate * item.taxPercent) / 100),
-          })),
+      const po = await tx.purchaseOrder.create({
+        data: {
+          companyId,
+          businessPartnerId: dto.businessPartnerId,
+          orderNo,
+          date: new Date(dto.date),
+          taxMode: dto.taxMode || 'CGST_SGST',
+          placeOfSupply: dto.placeOfSupply,
+          billingAddress: dto.billingAddress,
+          shippingAddress: dto.shippingAddress,
+          subTotal,
+          taxTotal,
+          totalTaxAmount: taxTotal,
+          grandTotal,
+          status: dto.status || 'DRAFT',
+          gstBreakup: metadata as any,
+          items: {
+            create: processedItems.map(item => ({
+              productId: item.productId,
+              description: item.description,
+              qty: item.qty,
+              rate: item.rate,
+              taxPercent: item.taxPercent,
+              taxAmount: item.taxAmount,
+              total: item.total,
+            })),
+          },
         },
-      },
-      include: { items: true, businessPartner: true },
-    });
+        include: { items: { include: { product: true } }, businessPartner: true },
+      });
 
-    if (userId) {
-      await this.logAudit(companyId, userId, 'CREATE', 'PurchaseOrder', null, po);
-    }
+      if (userId) {
+        await this.logAudit(companyId, userId, 'CREATE', 'PurchaseOrder', null, po);
+      }
 
-    return po;
+      return po;
     });
   }
 
@@ -181,16 +238,23 @@ export class PurchaseOrdersService {
     if (!po) throw new NotFoundException('Purchase Order not found');
 
     const oldPo = JSON.parse(JSON.stringify(po));
+    const existingMeta = (po.gstBreakup as any) || {};
+    const receivedMap = existingMeta.receivedQty || {};
 
-    // Handle full updates of items
+    // Validate cancellation
+    if (dto.status === 'CANCELLED') {
+      const anyReceived = Object.values(receivedMap).some((qty: any) => Number(qty) > 0);
+      if (anyReceived) {
+        throw new ConflictException('Cannot cancel a Purchase Order that has received goods. Revert goods receipts first or handle via purchase return.');
+      }
+    }
+
     const updateData: any = {};
     if (dto.status) updateData.status = dto.status;
     if (dto.date) updateData.date = new Date(dto.date);
     if (dto.billingAddress) updateData.billingAddress = dto.billingAddress;
     if (dto.shippingAddress) updateData.shippingAddress = dto.shippingAddress;
 
-    // Load existing metadata from gstBreakup
-    const existingMeta = (po.gstBreakup as any) || {};
     const newMeta = {
       ...existingMeta,
       ...(dto.expectedDeliveryDate && { expectedDeliveryDate: dto.expectedDeliveryDate }),
@@ -199,40 +263,96 @@ export class PurchaseOrdersService {
       ...(dto.notes && { notes: dto.notes }),
       ...(dto.referenceNo && { referenceNo: dto.referenceNo }),
     };
-    updateData.gstBreakup = newMeta;
 
     if (dto.items) {
-      const subTotal = dto.items.reduce((sum, item) => sum + (item.qty * item.rate), 0);
-      const taxTotal = dto.items.reduce((sum, item) => sum + ((item.qty * item.rate * item.taxPercent) / 100), 0);
-      const grandTotal = subTotal + taxTotal;
+      if (po.status === 'CONVERTED') {
+        throw new ConflictException('Cannot modify items of a fully received Purchase Order');
+      }
+
+      // Verify that no line with already received goods has ordered qty reduced below received qty
+      for (const oldItem of po.items) {
+        const received = Number(receivedMap[oldItem.id] || 0);
+        if (received > 0) {
+          const matchedNew = dto.items.find(i => (i as any).id === oldItem.id || i.productId === oldItem.productId);
+          if (!matchedNew) {
+            throw new ConflictException(`Cannot remove item "${oldItem.description}" because ${received} units have already been received`);
+          }
+          if (Number(matchedNew.qty) < received) {
+            throw new ConflictException(`Ordered quantity for "${oldItem.description}" cannot be reduced below received quantity (${received})`);
+          }
+        }
+      }
+
+      const processedItems = dto.items.map(item => {
+        const qty = Number(item.qty);
+        const rate = Number(item.rate);
+        const discount = Number(item.discount || 0);
+        const taxPercent = Number(item.taxPercent || 0);
+
+        const gross = qty * rate;
+        const discAmt = gross * (discount / 100);
+        const taxable = gross - discAmt;
+        const taxAmount = Number(((taxable * taxPercent) / 100).toFixed(2));
+        const total = Number((taxable + taxAmount).toFixed(2));
+
+        return {
+          productId: item.productId || null,
+          description: item.description,
+          qty,
+          rate,
+          taxPercent,
+          taxAmount,
+          total,
+          discount,
+          unit: item.unit || 'Pcs',
+          taxable,
+          gross,
+          discAmt,
+        };
+      });
+
+      const subTotal = processedItems.reduce((sum, item) => sum + item.gross, 0);
+      const totalDiscount = processedItems.reduce((sum, item) => sum + item.discAmt, 0);
+      const taxableTotal = subTotal - totalDiscount;
+      const taxTotal = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
+      const grandTotal = Math.round(taxableTotal + taxTotal);
 
       updateData.subTotal = subTotal;
       updateData.taxTotal = taxTotal;
       updateData.totalTaxAmount = taxTotal;
       updateData.grandTotal = grandTotal;
 
-      // Wipe existing items and recreate
+      newMeta.itemsMeta = processedItems.map(p => ({
+        productId: p.productId,
+        description: p.description,
+        discount: p.discount,
+        unit: p.unit,
+      }));
+
+      // Delete existing and recreate
       await this.prisma.purchaseOrderItem.deleteMany({
         where: { orderId: id },
       });
 
       updateData.items = {
-        create: dto.items.map(item => ({
+        create: processedItems.map(item => ({
           productId: item.productId,
           description: item.description,
           qty: item.qty,
           rate: item.rate,
           taxPercent: item.taxPercent,
-          taxAmount: (item.qty * item.rate * item.taxPercent) / 100,
-          total: (item.qty * item.rate) + ((item.qty * item.rate * item.taxPercent) / 100),
+          taxAmount: item.taxAmount,
+          total: item.total,
         })),
       };
     }
 
+    updateData.gstBreakup = newMeta;
+
     const updated = await this.prisma.purchaseOrder.update({
       where: { id },
       data: updateData,
-      include: { items: true, businessPartner: true },
+      include: { items: { include: { product: true } }, businessPartner: true },
     });
 
     if (userId) {
@@ -247,6 +367,21 @@ export class PurchaseOrdersService {
     if (!companyId) throw new ConflictException('Company context required');
 
     const po = await this.findOne(id);
+    const metadata = (po.gstBreakup as any) || {};
+    const receivedMap = metadata.receivedQty || {};
+    const anyReceived = Object.values(receivedMap).some((qty: any) => Number(qty) > 0);
+
+    if (anyReceived) {
+      throw new ConflictException('Cannot delete a Purchase Order that has received inventory. Please revert goods receipts first.');
+    }
+
+    const linkedReceipts = await this.prisma.goodsReceipt.count({
+      where: { companyId, purchaseOrderId: id },
+    });
+    if (linkedReceipts > 0) {
+      throw new ConflictException('Cannot delete a Purchase Order with linked Goods Receipts. Delete the receipts first.');
+    }
+
     const deleted = await this.prisma.purchaseOrder.delete({
       where: { id },
     });

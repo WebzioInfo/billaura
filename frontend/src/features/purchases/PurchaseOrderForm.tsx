@@ -106,6 +106,7 @@ export const PurchaseOrderForm = () => {
   const placeOfSupply = watch('placeOfSupply');
 
   const [notes, setNotes] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
   const [taxMode, setTaxMode] = useState<'CGST_SGST' | 'IGST' | 'NO_TAX'>('CGST_SGST');
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [status, setStatus] = useState<'DRAFT' | 'SENT' | 'ACCEPTED' | 'CANCELLED'>('DRAFT');
@@ -131,6 +132,22 @@ export const PurchaseOrderForm = () => {
       return ensureArray<Product>(res);
     }
   });
+
+  const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery<any[]>({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const res = await apiClient.get('/warehouses');
+      const list = res.data?.data || res.data?.items || res.data || [];
+      return Array.isArray(list) ? list : [];
+    }
+  });
+
+  useEffect(() => {
+    if (warehouses.length > 0 && !warehouseId) {
+      const defWh = warehouses.find((w: any) => w.isDefault) || warehouses[0];
+      if (defWh) setWarehouseId(defWh.id);
+    }
+  }, [warehouses, warehouseId]);
 
   const { data: meData } = useQuery<any>({
     queryKey: ['auth', 'me'],
@@ -192,6 +209,9 @@ export const PurchaseOrderForm = () => {
     const meta = existingPo.gstBreakup || {};
     setValue('referenceNo', meta.referenceNo || '');
     setNotes(meta.notes || '');
+    if (meta.warehouseId) {
+      setWarehouseId(meta.warehouseId);
+    }
 
     if (existingPo.items && Array.isArray(existingPo.items)) {
       setItems(existingPo.items.map((i: any, index: number) => ({
@@ -199,9 +219,9 @@ export const PurchaseOrderForm = () => {
         productId: i.productId || '',
         description: i.description || '',
         qty: Number(i.qty),
-        unit: i.product?.unit || i.unit || 'Pcs',
+        unit: i.unit || i.product?.unit || 'Pcs',
         rate: Number(i.rate),
-        discount: 0,
+        discount: Number(i.discount || 0),
         taxPercent: Number(i.taxPercent || 0)
       })));
     }
@@ -365,6 +385,7 @@ export const PurchaseOrderForm = () => {
         shippingAddress: data.shippingAddress,
         notes: notes || undefined,
         referenceNo: data.referenceNo || undefined,
+        warehouseId: warehouseId || undefined,
         status: isEditMode ? undefined : 'DRAFT',
         items: items.map(i => ({
           productId: i.productId,
@@ -372,6 +393,8 @@ export const PurchaseOrderForm = () => {
           qty: i.qty,
           rate: i.rate,
           taxPercent: i.taxPercent,
+          discount: i.discount || 0,
+          unit: i.unit || 'Pcs',
         }))
       };
 
@@ -493,7 +516,7 @@ export const PurchaseOrderForm = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="md:col-span-1">
               <Input
                 label="Ref Number / Quotation"
@@ -501,6 +524,24 @@ export const PurchaseOrderForm = () => {
                 placeholder="e.g. Supplier Quote Ref"
               />
               <FormErrorDisplay error={errors.referenceNo} />
+            </div>
+
+            <div className="md:col-span-1">
+              <SearchableSelect
+                label="Destination Warehouse"
+                value={warehouseId}
+                onChange={val => setWarehouseId(val)}
+                options={warehouses}
+                mapOption={(w: any) => ({
+                  value: w.id,
+                  label: w.name,
+                  subLabel: w.location ? `Location: ${w.location}` : undefined,
+                })}
+                placeholder="Select Warehouse..."
+                searchPlaceholder="Search warehouse..."
+                clearable
+                isLoading={loadingWarehouses}
+              />
             </div>
 
             <div className="md:col-span-1">

@@ -6,7 +6,7 @@ import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 import { 
   ArrowLeft, FileText, Calendar, Building, Landmark, Save, Plus, Trash2, 
   Printer, Mail, AlertCircle, CheckCircle, FileCheck, HelpCircle, ArrowRight,
-  TrendingUp, Play, Clock, User, ShieldAlert, RotateCcw
+  TrendingUp, Play, Clock, User, ShieldAlert, RotateCcw, Loader2
 } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { PageContainer, LoadingState, EmptyState, FinancialSummary, SummaryRow, PageLoader } from '@/shared/components/ui';
@@ -25,6 +25,7 @@ export const PurchaseOrderDetails = () => {
   const [emailing, setEmailing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [grnModalOpen, setGrnModalOpen] = useState(false);
+  const [isSubmittingGrn, setIsSubmittingGrn] = useState(false);
   const [showCancelPoDialog, setShowCancelPoDialog] = useState(false);
 
   // GRN Modal Fields
@@ -32,7 +33,17 @@ export const PurchaseOrderDetails = () => {
   const [grnDate, setGrnDate] = useState(new Date().toISOString().split('T')[0]);
   const [grnWarehouseId, setGrnWarehouseId] = useState('');
   const [grnVehicleNo, setGrnVehicleNo] = useState('');
-  const [grnItems, setGrnItems] = useState<Array<{ productId: string; name: string; orderedQty: number; receivedQty: number; currentReceiveQty: number; description: string }>>([]);
+  const [grnItems, setGrnItems] = useState<Array<{
+    poItemId: string;
+    productId: string;
+    name: string;
+    orderedQty: number;
+    receivedQty: number;
+    currentReceiveQty: number;
+    description: string;
+    unit: string;
+    isService: boolean;
+  }>>([]);
 
   const { data: po, isLoading: loadingPo, refetch: refetchPo } = useQuery<any>({
     queryKey: ['purchase-order', id],
@@ -88,20 +99,29 @@ export const PurchaseOrderDetails = () => {
     // Auto suggest receipt number
     setGrnReceiptNo(`GRN-${po.orderNo.replace('PO-', '')}-${Date.now().toString().slice(-4)}`);
     setGrnWarehouseId(meta.warehouseId || '');
+
+    // Attempt to fetch sequential next receipt number from server
+    apiClient.get('/goods-receipts/next-number').then((res: any) => {
+      const nextNum = res.data?.data?.nextNumber || res.data?.nextNumber;
+      if (nextNum) setGrnReceiptNo(nextNum);
+    }).catch(() => {});
     
     // Map items, computing pending quantities
     const mapped = po.items.map((i: any) => {
       const ord = Number(i.qty);
       const rec = Number(receivedQtyMap[i.id] || 0);
-      const pend = Math.max(0, ord - rec);
+      const pend = Math.max(0, Number((ord - rec).toFixed(3)));
 
       return {
-        productId: i.productId,
+        poItemId: i.id,
+        productId: i.productId || '',
         name: i.product?.name || i.description,
         description: i.description || '',
         orderedQty: ord,
         receivedQty: rec,
         currentReceiveQty: pend, // default to receive full pending quantity
+        unit: i.product?.unit || i.unit || 'PCS',
+        isService: Boolean(i.product?.isService),
       };
     });
 
@@ -111,7 +131,7 @@ export const PurchaseOrderDetails = () => {
 
   const handleGrnItemQtyChange = (index: number, val: number) => {
     const list = [...grnItems];
-    const maxAllowed = list[index].orderedQty - list[index].receivedQty;
+    const maxAllowed = Number((list[index].orderedQty - list[index].receivedQty).toFixed(3));
     list[index].currentReceiveQty = Math.max(0, Math.min(maxAllowed, val));
     setGrnItems(list);
   };
@@ -125,6 +145,7 @@ export const PurchaseOrderDetails = () => {
       return;
     }
 
+    setIsSubmittingGrn(true);
     try {
       const payload = {
         businessPartnerId: po.businessPartnerId,
@@ -134,7 +155,8 @@ export const PurchaseOrderDetails = () => {
         vehicleNumber: grnVehicleNo || undefined,
         warehouseId: grnWarehouseId || undefined,
         items: itemsToSubmit.map(i => ({
-          productId: i.productId,
+          poItemId: i.poItemId,
+          productId: i.productId || undefined,
           description: i.description,
           qty: i.currentReceiveQty
         }))
@@ -143,10 +165,22 @@ export const PurchaseOrderDetails = () => {
       await apiClient.post('/goods-receipts', payload);
       notification.success('Goods Receipt recorded and stock balances updated!');
       setGrnModalOpen(false);
-      refetchPo();
-      queryClient.invalidateQueries({ queryKey: ['linked-grns', id] });
+
+      await Promise.all([
+        refetchPo(),
+        queryClient.invalidateQueries({ queryKey: ['purchase-order', id] }),
+        queryClient.invalidateQueries({ queryKey: ['purchase-order-audit', id] }),
+        queryClient.invalidateQueries({ queryKey: ['linked-grns', id] }),
+        queryClient.invalidateQueries({ queryKey: ['purchase-orders'] }),
+        queryClient.invalidateQueries({ queryKey: ['goods-receipts'] }),
+        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['stocks'] }),
+        queryClient.invalidateQueries({ queryKey: ['inventory'] }),
+      ]);
     } catch (err: any) {
       notification.error(err.response?.data?.message || 'Failed to create Goods Receipt');
+    } finally {
+      setIsSubmittingGrn(false);
     }
   };
 
@@ -353,12 +387,17 @@ export const PurchaseOrderDetails = () => {
                   return (
                     <tr key={item.id} className="text-right">
                       <td className="py-4 text-left font-sans">
-                        <p className="font-bold text-foreground">{item.product?.name || item.description}</p>
+                        <p className="font-bold text-foreground flex items-center gap-1.5">
+                          {item.product?.name || item.description}
+                          {item.product?.isService && (
+                            <span className="text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">Service</span>
+                          )}
+                        </p>
                         <p className="text-[10px] text-muted-foreground">{item.description}</p>
                       </td>
-                      <td className="py-4 font-semibold text-foreground">{ord.toLocaleString()}</td>
-                      <td className="py-4 font-semibold text-green-600">{rec.toLocaleString()}</td>
-                      <td className="py-4 font-semibold text-amber-600">{pend.toLocaleString()}</td>
+                      <td className="py-4 font-semibold text-foreground">{ord.toLocaleString()} <span className="text-[10px] text-muted-foreground">{item.product?.unit || item.unit || ''}</span></td>
+                      <td className="py-4 font-semibold text-green-600">{rec.toLocaleString()} <span className="text-[10px] text-muted-foreground">{item.product?.unit || item.unit || ''}</span></td>
+                      <td className="py-4 font-semibold text-amber-600">{pend.toLocaleString()} <span className="text-[10px] text-muted-foreground">{item.product?.unit || item.unit || ''}</span></td>
                       <td className="py-4">₹{rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                       <td className="py-4">{Number(item.taxPercent)}%</td>
                       <td className="py-4 font-bold text-foreground">₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -524,26 +563,35 @@ export const PurchaseOrderDetails = () => {
               <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Quantities to Receive</h4>
               <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
                 {grnItems.map((item, idx) => {
-                  const maxAllowed = item.orderedQty - item.receivedQty;
+                  const maxAllowed = Number((item.orderedQty - item.receivedQty).toFixed(3));
 
                   return (
-                    <div key={item.productId} className="grid grid-cols-12 gap-3 items-center bg-muted/20 p-2 rounded-lg border border-border/60 text-xs">
+                    <div key={item.poItemId || item.productId || idx} className="grid grid-cols-12 gap-3 items-center bg-muted/20 p-2.5 rounded-lg border border-border/60 text-xs">
                       <div className="col-span-6">
-                        <p className="font-semibold text-foreground">{item.name}</p>
-                        <p className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">Ordered: {item.orderedQty} | Received: {item.receivedQty}</p>
+                        <p className="font-semibold text-foreground flex items-center gap-1.5">
+                          {item.name}
+                          {item.isService && (
+                            <span className="text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1 py-0.2 rounded font-semibold">Service</span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                          Ordered: {item.orderedQty} {item.unit} | Received: {item.receivedQty} {item.unit} | Pending: {maxAllowed} {item.unit}
+                        </p>
                       </div>
                       <div className="col-span-6 flex items-center justify-end gap-2">
                         <span className="text-muted-foreground">Receive Qty:</span>
                         <input
                           type="number"
+                          step="any"
                           min="0"
                           max={maxAllowed}
                           value={item.currentReceiveQty}
                           onChange={e => handleGrnItemQtyChange(idx, Number(e.target.value))}
-                          disabled={maxAllowed === 0}
-                          className="w-20 px-2 py-1 text-right bg-background border border-border rounded focus:outline-none text-xs font-bold"
+                          disabled={maxAllowed === 0 || isSubmittingGrn}
+                          className="w-24 px-2 py-1 text-right bg-background border border-border rounded focus:outline-none text-xs font-bold font-mono"
                         />
-                        {maxAllowed === 0 && <span className="text-green-600 font-semibold text-[10px]">Fully Received</span>}
+                        <span className="text-[11px] text-muted-foreground font-medium">{item.unit}</span>
+                        {maxAllowed === 0 && <span className="text-green-600 font-semibold text-[10px] ml-1">Fully Received</span>}
                       </div>
                     </div>
                   );
@@ -552,11 +600,12 @@ export const PurchaseOrderDetails = () => {
             </div>
 
             <div className="pt-4 border-t border-border flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => setGrnModalOpen(false)}>
+              <Button type="button" variant="outline" disabled={isSubmittingGrn} onClick={() => setGrnModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold">
-                Approve & Receive Stock
+              <Button type="submit" disabled={isSubmittingGrn} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center gap-1.5">
+                {isSubmittingGrn && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isSubmittingGrn ? 'Processing Receipt...' : 'Approve & Receive Stock'}
               </Button>
             </div>
           </form>

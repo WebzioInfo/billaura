@@ -59,6 +59,15 @@ export class PurchaseOrdersController {
     return this.purchaseOrdersService.update(id, dto, req.user?.userId);
   }
 
+  @Patch(":id/status")
+  async updateStatus(
+    @Param("id") id: string,
+    @Body() body: { status: any },
+    @Req() req: any
+  ) {
+    return this.purchaseOrdersService.update(id, { status: body.status }, req.user?.userId);
+  }
+
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param("id") id: string, @Req() req: any) {

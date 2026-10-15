@@ -11,8 +11,8 @@ export interface PaginatedResult<T> {
 }
 
 export function getPagination(query: PaginationQueryDto) {
-  const page = query.page ?? 1;
-  const limit = query.limit ?? 25;
+  const page = Math.max(1, Number(query.page) || 1);
+  const limit = Math.max(1, Number(query.limit) || 25);
 
   return {
     page,

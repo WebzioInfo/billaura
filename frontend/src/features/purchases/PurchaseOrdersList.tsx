@@ -194,12 +194,17 @@ export const PurchaseOrdersList = () => {
     },
     {
       accessorKey: 'status',
-      header: () => <div className="text-center">Status</div>,
-      cell: ({ row }) => (
-        <div className="text-center">
-          <StatusBadge status={row.original.status} />
-        </div>
-      )
+      header: () => <div className="text-center">Receipt Status</div>,
+      cell: ({ row }) => {
+        const po = row.original;
+        const status = po.status;
+        const label = status === 'CONVERTED' ? 'Fully Received' : status === 'PARTIAL' ? 'Partially Received' : undefined;
+        return (
+          <div className="text-center">
+            <StatusBadge status={status} label={label} />
+          </div>
+        );
+      }
     },
     {
       id: 'actions',

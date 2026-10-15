@@ -27,6 +27,14 @@ export class PurchaseOrderItemDto {
 
   @IsNumber()
   taxPercent: number;
+
+  @IsNumber()
+  @IsOptional()
+  discount?: number;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
 }
 
 export class CreatePurchaseOrderDto {

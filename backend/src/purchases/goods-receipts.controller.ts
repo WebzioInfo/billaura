@@ -31,6 +31,11 @@ export class GoodsReceiptsController {
     return this.goodsReceiptsService.findAll(query);
   }
 
+  @Get("next-number")
+  async getNextNumber() {
+    return this.goodsReceiptsService.getNextNumber();
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     return this.goodsReceiptsService.findOne(id);

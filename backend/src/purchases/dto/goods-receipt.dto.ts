@@ -16,6 +16,10 @@ export class GoodsReceiptItemDto {
   productId?: string;
 
   @IsString()
+  @IsOptional()
+  poItemId?: string;
+
+  @IsString()
   @IsNotEmpty()
   description: string;
 
@@ -29,8 +33,8 @@ export class CreateGoodsReceiptDto {
   businessPartnerId: string;
 
   @IsString()
-  @IsNotEmpty()
-  receiptNo: string;
+  @IsOptional()
+  receiptNo?: string;
 
   @IsString()
   @IsOptional()
