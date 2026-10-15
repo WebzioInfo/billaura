@@ -64,7 +64,7 @@ const PAYMENT_TERMS_OPTIONS = [
 const invoiceItemSchema = z.object({
   productId: z.string().min(1, 'Select a product'),
   description: z.string().optional(),
-  qty: z.coerce.number().min(1, 'Qty must be >= 1'),
+  qty: z.coerce.number().min(0.0001, 'Qty must be greater than zero'),
   rate: z.coerce.number().min(0, 'Rate must be >= 0'),
   taxPercent: z.coerce.number().min(0).default(0),
   discount: z.coerce.number().min(0).max(100, 'Discount must be <= 100').default(0),
@@ -525,6 +525,44 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
   const onSubmit = async (data: InvoiceFormValues) => {
     setIsSubmitting(true);
     try {
+      // Validate requested quantities against available stock for stock-tracked products when issuing
+      if (submitStatus !== 'DRAFT' && docType !== 'QUOTATION' && docType !== 'CREDIT_NOTE') {
+        const aggregatedQty = new Map<string, number>();
+        for (const item of data.items) {
+          if (item.productId) {
+            aggregatedQty.set(
+              item.productId,
+              (aggregatedQty.get(item.productId) || 0) + Number(item.qty || 0)
+            );
+          }
+        }
+
+        for (const [prodId, reqQty] of aggregatedQty.entries()) {
+          const product = products.find((p) => p.id === prodId);
+          if (
+            product &&
+            product.isTrackStock !== false &&
+            !product.isService &&
+            product.isInventoryItem !== false
+          ) {
+            const availableStock = product.stocks
+              ? product.stocks.reduce(
+                  (acc: number, s: any) => acc + Number(s.availableQuantity ?? s.quantity ?? 0),
+                  0
+                )
+              : 0;
+
+            if (reqQty > availableStock) {
+              notification.error(
+                `Insufficient stock for product "${product.name}". Available: ${availableStock}, Requested: ${reqQty}`
+              );
+              setIsSubmitting(false);
+              return;
+            }
+          }
+        }
+      }
+
       let backendType = 'TAX_INVOICE';
       if (data.invoiceType === 'B2C') backendType = 'RETAIL_INVOICE';
       if (data.invoiceType === 'NO_TAX') backendType = 'BILL_OF_SUPPLY';
@@ -593,6 +631,9 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
           customerId: data.customerId,
           invoiceId: id,
         });
+        await queryClient.invalidateQueries({ queryKey: ['products'] });
+        await queryClient.invalidateQueries({ queryKey: ['stocks'] });
+        await queryClient.invalidateQueries({ queryKey: ['inventory'] });
         sessionStorage.removeItem(FORM_STORAGE_KEY);
         notification.success(
           submitStatus === 'DRAFT'
@@ -613,6 +654,9 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
         await erpInvalidate.invoice(queryClient, {
           customerId: data.customerId,
         });
+        await queryClient.invalidateQueries({ queryKey: ['products'] });
+        await queryClient.invalidateQueries({ queryKey: ['stocks'] });
+        await queryClient.invalidateQueries({ queryKey: ['inventory'] });
       }
       notification.success(
         submitStatus === 'DRAFT'
@@ -971,12 +1015,17 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                             const prodId = watch(`items.${index}.productId`);
                             const pObj = products.find(p => p.id === prodId);
                             if (!pObj) return null;
-                            const totalStock = pObj.stocks ? pObj.stocks.reduce((acc: number, s: any) => acc + Number(s.quantity || 0), 0) : 0;
+                            const isStockTracked = pObj.isTrackStock !== false && !pObj.isService && pObj.isInventoryItem !== false;
+                            const totalStock = pObj.stocks ? pObj.stocks.reduce((acc: number, s: any) => acc + Number(s.availableQuantity ?? s.quantity ?? 0), 0) : 0;
                             return (
-                              <div className="text-[10px] text-muted-foreground mt-1 flex gap-2 pl-1 select-none">
+                              <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-2 pl-1 select-none">
                                 <span>HSN: <strong className="text-foreground">{pObj.hsnCode || 'N/A'}</strong></span>
                                 <span>•</span>
-                                <span>Stock: <strong className={totalStock > 0 ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{totalStock}</strong></span>
+                                {isStockTracked ? (
+                                  <span>Available Stock: <strong className={totalStock > 0 ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{totalStock}</strong></span>
+                                ) : (
+                                  <span className="text-slate-400 italic">Service / Non-inventory</span>
+                                )}
                               </div>
                             );
                           })()}
@@ -988,12 +1037,37 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({ initialDoc
                             className="w-full mt-1.5 px-3 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:border-accent text-muted-foreground"
                           />
                         </td>
-                        <td className="py-3 px-1">
+                        <td className="py-3 px-1 align-top">
                           <input
                             type="number"
+                            min="0.001"
+                            step="any"
                             {...register(`items.${index}.qty`)}
-                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-right focus:outline-none focus:border-accent"
+                            className={`w-full px-3 py-2 bg-background border rounded-lg text-sm text-right focus:outline-none focus:border-accent ${
+                              (() => {
+                                const prodId = watch(`items.${index}.productId`);
+                                const pObj = products.find(p => p.id === prodId);
+                                if (!pObj || pObj.isService || pObj.isTrackStock === false || pObj.isInventoryItem === false) return 'border-border';
+                                const totalStock = pObj.stocks ? pObj.stocks.reduce((acc: number, s: any) => acc + Number(s.availableQuantity ?? s.quantity ?? 0), 0) : 0;
+                                return qty > totalStock ? 'border-red-500 bg-red-500/5 focus:border-red-500' : 'border-border';
+                              })()
+                            }`}
                           />
+                          {(() => {
+                            const prodId = watch(`items.${index}.productId`);
+                            const pObj = products.find(p => p.id === prodId);
+                            if (!pObj || pObj.isService || pObj.isTrackStock === false || pObj.isInventoryItem === false) return null;
+                            const totalStock = pObj.stocks ? pObj.stocks.reduce((acc: number, s: any) => acc + Number(s.availableQuantity ?? s.quantity ?? 0), 0) : 0;
+                            if (qty > totalStock) {
+                              return (
+                                <p className="text-[10px] text-red-500 font-semibold mt-1 flex items-center justify-end gap-1">
+                                  <AlertCircle className="w-3 h-3 inline shrink-0" />
+                                  Exceeds stock ({totalStock})
+                                </p>
+                              );
+                            }
+                            return null;
+                          })()}
                         </td>
                         <td className="py-3 px-1">
                           <select

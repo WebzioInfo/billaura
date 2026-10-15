@@ -542,6 +542,201 @@ export class InvoicesService {
     };
   }
 
+  /**
+   * Concurrency-safe, atomic inventory stock deduction and ledger logging for sales invoices.
+   * Enforces strict multi-tenancy, negative stock prevention, duplicate deduction protection,
+   * service-item exclusion, and audit ledger integrity.
+   */
+  private async deductInventoryStock(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    invoice: { id: string; invoiceNo: string },
+    items: { productId?: string | null; qty: number; description?: string }[],
+    docType: string,
+    isCreditNote: boolean,
+    specifiedWarehouseId?: string,
+  ) {
+    // 1. Idempotency check: has stock already been deducted for this invoice?
+    const existingMovement = (tx.stockLedger as any)?.findFirst
+      ? await tx.stockLedger.findFirst({
+          where: {
+            companyId,
+            referenceId: invoice.id,
+            referenceType: 'INVOICE',
+            type: isCreditNote ? 'RETURN' : 'SALE',
+          },
+        })
+      : null;
+    if (existingMovement) {
+      this.logger.warn(`Stock already posted for invoice ${invoice.invoiceNo} (${invoice.id}). Skipping duplicate deduction.`);
+      return;
+    }
+
+    // 2. Identify default / fallback warehouse
+    let defaultWarehouse: { id: string; name: string } | null = null;
+    if (specifiedWarehouseId) {
+      defaultWarehouse = await tx.warehouse.findFirst({
+        where: { id: specifiedWarehouseId, companyId },
+      });
+    }
+    if (!defaultWarehouse) {
+      defaultWarehouse = await tx.warehouse.findFirst({
+        where: { companyId, isDefault: true },
+      });
+    }
+    if (!defaultWarehouse) {
+      defaultWarehouse = await tx.warehouse.findFirst({
+        where: { companyId },
+      });
+    }
+    if (!defaultWarehouse) {
+      defaultWarehouse = await tx.warehouse.create({
+        data: { companyId, name: 'Main Warehouse', isDefault: true },
+      });
+    }
+
+    const warehouseId = defaultWarehouse.id;
+
+    // 3. Filter for physical stock-tracked products and aggregate requested quantities
+    const physicalItems: { item: typeof items[0]; product: any }[] = [];
+    const aggregatedQtyPerProduct = new Map<string, { totalQty: number; product: any }>();
+
+    for (const item of items) {
+      if (!item.productId) continue;
+      const product = await tx.product.findFirst({
+        where: { id: item.productId, companyId, deletedAt: null },
+      });
+      if (!product) continue;
+
+      // Exclude services, non-inventory items, and products where stock tracking is disabled
+      if (product.isService || !product.isInventoryItem || !product.isTrackStock) {
+        continue;
+      }
+
+      physicalItems.push({ item, product });
+
+      const existing = aggregatedQtyPerProduct.get(product.id) || { totalQty: 0, product };
+      existing.totalQty += Number(item.qty);
+      aggregatedQtyPerProduct.set(product.id, existing);
+    }
+
+    if (physicalItems.length === 0) {
+      return; // No physical stock items to deduct
+    }
+
+    // 4. Pre-validate stock availability for outgoing sales
+    if (!isCreditNote) {
+      for (const [productId, { totalQty, product }] of aggregatedQtyPerProduct.entries()) {
+        const stock = await tx.stock.findFirst({
+          where: { companyId, productId: product.id, warehouseId },
+        });
+
+        const availableQty = stock ? Number(stock.availableQuantity ?? stock.quantity) : 0;
+        if (availableQty < totalQty) {
+          throw new BadRequestException(
+            `Insufficient stock for product "${product.name}". Available: ${availableQty}, Requested: ${totalQty}`
+          );
+        }
+      }
+    }
+
+    // 5. Execute atomic updates and ledger creation
+    for (const { item, product } of physicalItems) {
+      const itemQty = Number(item.qty);
+      const qtyDelta = isCreditNote ? itemQty : -itemQty;
+
+      let stock = await tx.stock.findFirst({
+        where: { companyId, productId: product.id, warehouseId },
+      });
+
+      if (!stock) {
+        if (!isCreditNote) {
+          throw new BadRequestException(
+            `Insufficient stock for product "${product.name}". Available: 0, Requested: ${itemQty}`
+          );
+        }
+        stock = await tx.stock.create({
+          data: {
+            companyId,
+            productId: product.id,
+            warehouseId,
+            quantity: 0,
+            availableQuantity: 0,
+          },
+        });
+      }
+
+      const currentQty = Number(stock.quantity);
+
+      if (!isCreditNote) {
+        // Atomic deduction with conditional lock to eliminate race conditions
+        let updateResult = { count: 1 };
+        if ((tx.stock as any)?.updateMany) {
+          updateResult = await tx.stock.updateMany({
+            where: {
+              id: stock.id,
+              companyId,
+              quantity: { gte: itemQty },
+              availableQuantity: { gte: itemQty },
+            },
+            data: {
+              quantity: { decrement: itemQty },
+              availableQuantity: { decrement: itemQty },
+            },
+          });
+        } else {
+          await tx.stock.update({
+            where: { id: stock.id },
+            data: {
+              quantity: currentQty - itemQty,
+              availableQuantity: currentQty - itemQty,
+            },
+          });
+        }
+
+        if (updateResult.count === 0) {
+          const refreshed = (tx.stock as any)?.findUnique
+            ? await tx.stock.findUnique({ where: { id: stock.id } })
+            : null;
+          const refreshedQty = refreshed ? Number(refreshed.availableQuantity ?? refreshed.quantity) : 0;
+          throw new BadRequestException(
+            `Insufficient stock for product "${product.name}". Available: ${refreshedQty}, Requested: ${itemQty}`
+          );
+        }
+      } else {
+        // Return / Credit Note: increment stock
+        await tx.stock.update({
+          where: { id: stock.id },
+          data: {
+            quantity: { increment: itemQty },
+            availableQuantity: { increment: itemQty },
+          },
+        });
+      }
+
+      // Authoritative post-update balance
+      const updatedStock = (tx.stock as any)?.findUnique
+        ? await tx.stock.findUnique({ where: { id: stock.id } })
+        : null;
+      const newQty = updatedStock ? Number(updatedStock.quantity) : currentQty + qtyDelta;
+
+      // Create auditable StockLedger entry
+      await tx.stockLedger.create({
+        data: {
+          companyId,
+          productId: product.id,
+          type: isCreditNote ? 'RETURN' : 'SALE',
+          quantityBefore: currentQty,
+          quantityChange: qtyDelta,
+          quantityAfter: newQty,
+          notes: `Issued via ${docType} ${invoice.invoiceNo} [Warehouse: ${warehouseId}]`,
+          referenceId: invoice.id,
+          referenceType: 'INVOICE',
+        },
+      });
+    }
+  }
+
   async create(dto: CreateInvoiceDto, txClient?: Prisma.TransactionClient, userId?: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
@@ -898,68 +1093,16 @@ export class InvoicesService {
           },
         });
 
-        // C. Update stock ledger if physical inventory items exist
-        for (const item of itemsToCreate) {
-          if (item.productId) {
-            const prod = await tx.product.findUnique({ where: { id: item.productId } });
-            if (prod && (prod.isService || !prod.isInventoryItem || !prod.isTrackStock)) {
-              continue; // Services and non-inventory items strictly bypass stock ledgers & warehouse updates
-            }
-
-            let wh = await tx.warehouse.findFirst({
-              where: { companyId, isDefault: true },
-            });
-            if (!wh) {
-              wh = await tx.warehouse.findFirst({
-                where: { companyId },
-              });
-            }
-            if (!wh) {
-              wh = await tx.warehouse.create({
-                data: { companyId, name: 'Main Warehouse', isDefault: true },
-              });
-            }
-
-            const stock = await tx.stock.findFirst({
-              where: { companyId, productId: item.productId, warehouseId: wh.id },
-            });
-
-            const currentQty = stock ? Number(stock.quantity) : 0;
-            const qtyDelta = isCreditNote ? item.qty : -item.qty;
-            const newQty = currentQty + qtyDelta;
-
-            if (stock) {
-              await tx.stock.update({
-                where: { id: stock.id },
-                data: { quantity: newQty, availableQuantity: newQty },
-              });
-            } else {
-              await tx.stock.create({
-                data: {
-                  companyId,
-                  productId: item.productId,
-                  warehouseId: wh.id,
-                  quantity: newQty,
-                  availableQuantity: newQty,
-                },
-              });
-            }
-
-            await tx.stockLedger.create({
-              data: {
-                companyId,
-                productId: item.productId,
-                type: isCreditNote ? 'RETURN' : 'SALE',
-                quantityBefore: currentQty,
-                quantityChange: qtyDelta,
-                quantityAfter: newQty,
-                notes: `Issued via ${docType} ${invoiceNo}`,
-                referenceId: invoice.id,
-                referenceType: 'INVOICE',
-              },
-            });
-          }
-        }
+        // C. Concurrency-safe atomic inventory deduction for physical items
+        await this.deductInventoryStock(
+          tx,
+          companyId,
+          invoice,
+          itemsToCreate,
+          docType,
+          isCreditNote,
+          dto.warehouseId,
+        );
 
         // D. Post Balanced Journal Entry to General Ledger
         let arAccount = await tx.account.findFirst({
@@ -1345,18 +1488,36 @@ export class InvoicesService {
         where: { referenceId: invoice.id },
       });
 
-      for (const ledger of stockLedgers) {
-        if (ledger.referenceType === 'INVOICE' || ledger.referenceType === 'SALE') {
-          const qtyToRestore = Number(ledger.quantityChange) * -1;
-          const stock = await tx.stock.findFirst({
-            where: { companyId: invoice.companyId, productId: ledger.productId },
-          });
-          if (stock) {
-            const newQty = Number(stock.quantity) + qtyToRestore;
-            await tx.stock.update({
-              where: { id: stock.id },
-              data: { quantity: newQty, availableQuantity: newQty },
-            });
+      const alreadyCancelled =
+        invoice.status === 'CANCELLED' ||
+        stockLedgers.some((l) => l.referenceType === 'INVOICE_CANCELLATION');
+
+      if (!alreadyCancelled) {
+        for (const ledger of stockLedgers) {
+          if (ledger.referenceType === 'INVOICE' || ledger.referenceType === 'SALE') {
+            const qtyToRestore = Number(ledger.quantityChange) * -1;
+
+            let whId: string | null = null;
+            if (ledger.notes) {
+              const match = ledger.notes.match(/\[Warehouse:\s*([^\]]+)\]/);
+              if (match && match[1]) whId = match[1].trim();
+            }
+
+            const stock = whId
+              ? await tx.stock.findFirst({
+                  where: { companyId: invoice.companyId, productId: ledger.productId, warehouseId: whId },
+                })
+              : await tx.stock.findFirst({
+                  where: { companyId: invoice.companyId, productId: ledger.productId },
+                });
+
+            if (stock) {
+              const newQty = Number(stock.quantity) + qtyToRestore;
+              await tx.stock.update({
+                where: { id: stock.id },
+                data: { quantity: newQty, availableQuantity: newQty },
+              });
+            }
           }
         }
       }
@@ -1502,35 +1663,55 @@ export class InvoicesService {
         },
       });
 
-      for (const ledger of stockLedgers) {
-        const changeQty = Number(ledger.quantityChange) * -1; // reverse the decrement
+      const existingCancellations = await tx.stockLedger.findMany({
+        where: {
+          companyId: invoice.companyId,
+          referenceId: invoice.id,
+          referenceType: 'INVOICE_CANCELLATION',
+        },
+      });
 
-        const stock = await tx.stock.findFirst({
-          where: { companyId: invoice.companyId, productId: ledger.productId },
-        });
+      if (existingCancellations.length === 0) {
+        for (const ledger of stockLedgers) {
+          const changeQty = Number(ledger.quantityChange) * -1; // reverse the decrement
 
-        if (stock) {
-          const currentQty = Number(stock.quantity);
-          const newQty = currentQty + changeQty;
+          let whId: string | null = null;
+          if (ledger.notes) {
+            const match = ledger.notes.match(/\[Warehouse:\s*([^\]]+)\]/);
+            if (match && match[1]) whId = match[1].trim();
+          }
 
-          await tx.stock.update({
-            where: { id: stock.id },
-            data: { quantity: newQty, availableQuantity: newQty },
-          });
+          const stock = whId
+            ? await tx.stock.findFirst({
+                where: { companyId: invoice.companyId, productId: ledger.productId, warehouseId: whId },
+              })
+            : await tx.stock.findFirst({
+                where: { companyId: invoice.companyId, productId: ledger.productId },
+              });
 
-          await tx.stockLedger.create({
-            data: {
-              companyId: invoice.companyId,
-              productId: ledger.productId,
-              type: 'ADJUSTMENT',
-              quantityBefore: currentQty,
-              quantityChange: changeQty,
-              quantityAfter: newQty,
-              notes: `Cancellation of Invoice ${invoice.invoiceNo}: ${dto.reason.trim()}`,
-              referenceId: invoice.id,
-              referenceType: 'INVOICE_CANCELLATION',
-            },
-          });
+          if (stock) {
+            const currentQty = Number(stock.quantity);
+            const newQty = currentQty + changeQty;
+
+            await tx.stock.update({
+              where: { id: stock.id },
+              data: { quantity: newQty, availableQuantity: newQty },
+            });
+
+            await tx.stockLedger.create({
+              data: {
+                companyId: invoice.companyId,
+                productId: ledger.productId,
+                type: 'ADJUSTMENT',
+                quantityBefore: currentQty,
+                quantityChange: changeQty,
+                quantityAfter: newQty,
+                notes: `Cancellation of Invoice ${invoice.invoiceNo}: ${dto.reason.trim()}${whId ? ` [Warehouse: ${whId}]` : ''}`,
+                referenceId: invoice.id,
+                referenceType: 'INVOICE_CANCELLATION',
+              },
+            });
+          }
         }
       }
 
@@ -1863,41 +2044,16 @@ export class InvoicesService {
           },
         });
 
-        // Stock deduction
-        for (const item of itemsToCreate) {
-          if (item.productId) {
-            const prod = await tx.product.findUnique({ where: { id: item.productId } });
-            if (prod && (prod.isService || !prod.isInventoryItem || !prod.isTrackStock)) continue;
-
-            let wh = await tx.warehouse.findFirst({ where: { companyId, isDefault: true } })
-              || await tx.warehouse.findFirst({ where: { companyId } })
-              || await tx.warehouse.create({ data: { companyId, name: 'Main Warehouse', isDefault: true } });
-
-            const stock = await tx.stock.findFirst({ where: { companyId, productId: item.productId, warehouseId: wh.id } });
-            const currentQty = stock ? Number(stock.quantity) : 0;
-            const newQty = currentQty - item.qty;
-
-            if (stock) {
-              await tx.stock.update({ where: { id: stock.id }, data: { quantity: newQty, availableQuantity: newQty } });
-            } else {
-              await tx.stock.create({ data: { companyId, productId: item.productId, warehouseId: wh.id, quantity: newQty, availableQuantity: newQty } });
-            }
-
-            await tx.stockLedger.create({
-              data: {
-                companyId,
-                productId: item.productId,
-                type: 'SALE',
-                quantityBefore: currentQty,
-                quantityChange: -item.qty,
-                quantityAfter: newQty,
-                notes: `Issued via ${docType} ${invoice.invoiceNo}`,
-                referenceId: invoice.id,
-                referenceType: 'INVOICE',
-              },
-            });
-          }
-        }
+        // Concurrency-safe atomic inventory stock deduction
+        await this.deductInventoryStock(
+          tx,
+          companyId,
+          updated,
+          itemsToCreate,
+          docType,
+          false,
+          dto.warehouseId,
+        );
 
         // Post balanced Journal Entry
         let arAccount = await tx.account.findFirst({ where: { companyId, name: { in: ['Accounts Receivable', 'Trade Receivables'] } } })
@@ -2013,40 +2169,19 @@ export class InvoicesService {
           });
         }
 
-        // Re-deduct physical inventory
-        for (const item of invoice.items) {
-          if (item.productId) {
-            const prod = await tx.product.findUnique({ where: { id: item.productId } });
-            if (prod && (prod.isService || !prod.isInventoryItem || !prod.isTrackStock)) continue;
-
-            const wh = await tx.warehouse.findFirst({ where: { companyId, isDefault: true } })
-              || await tx.warehouse.findFirst({ where: { companyId } });
-
-            if (wh) {
-              const stock = await tx.stock.findFirst({ where: { companyId, productId: item.productId, warehouseId: wh.id } });
-              const currentQty = stock ? Number(stock.quantity) : 0;
-              const newQty = currentQty - Number(item.qty);
-
-              if (stock) {
-                await tx.stock.update({ where: { id: stock.id }, data: { quantity: newQty, availableQuantity: newQty } });
-              }
-
-              await tx.stockLedger.create({
-                data: {
-                  companyId,
-                  productId: item.productId,
-                  type: 'SALE',
-                  quantityBefore: currentQty,
-                  quantityChange: -Number(item.qty),
-                  quantityAfter: newQty,
-                  notes: `Restoration of Invoice ${invoice.invoiceNo}`,
-                  referenceId: invoice.id,
-                  referenceType: 'INVOICE_RESTORE',
-                },
-              });
-            }
-          }
-        }
+        // Re-deduct physical inventory with stock validation
+        await this.deductInventoryStock(
+          tx,
+          companyId,
+          restored,
+          invoice.items.map((it: any) => ({
+            productId: it.productId,
+            qty: Number(it.qty),
+            description: it.description,
+          })),
+          invoice.invoiceType,
+          false,
+        );
 
         // Check if journal entry already exists for this invoice (prevent duplicate entries on retries)
         const existingJournal = await tx.journalEntry.findFirst({

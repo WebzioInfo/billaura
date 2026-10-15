@@ -46,6 +46,10 @@ export class InvoiceItemDto {
   @IsString()
   @IsOptional()
   taxPreference?: string;
+
+  @IsString()
+  @IsOptional()
+  warehouseId?: string;
 }
 
 export class CreateInvoiceDto {
@@ -160,6 +164,10 @@ export class CreateInvoiceDto {
   @IsString()
   @IsOptional()
   termsConditions?: string;
+
+  @IsString()
+  @IsOptional()
+  warehouseId?: string;
 
   @IsString()
   @IsOptional()
