@@ -18,15 +18,19 @@ export function WorkspaceLayout() {
   const [isNavigating, setIsNavigating] = React.useState(false);
   const isFetching = useIsFetching();
 
-  // Persistent sidebar collapse state
+  // Persistent sidebar collapse state (default for first-time user: expanded)
   const [isCollapsed, setIsCollapsed] = useState(() => {
-    return localStorage.getItem('billaura_sidebar_collapsed') === 'true';
+    return (
+      localStorage.getItem('sidebar-collapsed') === 'true' ||
+      localStorage.getItem('billaura_sidebar_collapsed') === 'true'
+    );
   });
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const toggleSidebarCollapse = () => {
     setIsCollapsed(prev => {
       const next = !prev;
+      localStorage.setItem('sidebar-collapsed', String(next));
       localStorage.setItem('billaura_sidebar_collapsed', String(next));
       return next;
     });
@@ -88,7 +92,11 @@ export function WorkspaceLayout() {
       // Match against sidebar navigation first
       let matchedSidebarLabel: string | undefined;
       for (const group of SIDEBAR_NAVIGATION) {
-        const item = group.items.find(i => i.path === baseRoute);
+        if (group.path === baseRoute) {
+          matchedSidebarLabel = group.label;
+          break;
+        }
+        const item = group.items?.find(i => i.path === baseRoute);
         if (item) {
           matchedSidebarLabel = item.label;
           break;
@@ -115,7 +123,6 @@ export function WorkspaceLayout() {
         if (isDatabaseId) {
           const parentSegment = segments.length > 1 ? segments[segments.length - 2] : '';
           if (parentSegment) {
-            // singularize parent segment (e.g., "employees" -> "Employee")
             let entityName = parentSegment.replace(/-/g, ' ');
             if (entityName.endsWith('s')) entityName = entityName.slice(0, -1);
             title = (entityName.charAt(0).toUpperCase() + entityName.slice(1)) + ' Details';
@@ -137,51 +144,52 @@ export function WorkspaceLayout() {
   }, [location.pathname, location.search]);
 
   return (
-    <div className="flex h-[100dvh] w-full bg-background overflow-hidden font-sans text-foreground">
-      {/* 1. Left Persistent & Responsive Modern Sidebar */}
-      <AppSidebar
-        isCollapsed={isCollapsed}
-        onToggleCollapse={toggleSidebarCollapse}
-        isMobileOpen={isMobileOpen}
-        onMobileClose={() => setIsMobileOpen(false)}
+    <div className="flex flex-col h-[100dvh] w-full bg-white overflow-hidden font-sans text-[#2B2F36]">
+      {/* 1. Global Full-Width Top Bar (Dark Navy, 48px) */}
+      <AppHeader
+        onMobileMenuToggle={() => setIsMobileOpen(true)}
       />
 
-      {/* 2. Main Executive Viewport */}
-      <div
-        className={cn(
-          "flex-1 flex flex-col h-full min-w-0 overflow-hidden transition-all duration-300 ease-in-out",
-          isCollapsed ? "lg:pl-[68px]" : "lg:pl-[260px]"
-        )}
-      >
-        <TopProgressBar isAnimating={isNavigating || isFetching > 0} />
+      <TopProgressBar isAnimating={isNavigating || isFetching > 0} />
 
-        {/* Global Executive Header */}
-        <AppHeader
-          onMobileMenuToggle={() => setIsMobileOpen(true)}
+      {/* 2. Workspace Viewport (Sidebar on Left + Content on Right) */}
+      <div className="flex-1 flex w-full min-h-0 overflow-hidden">
+        {/* Left Persistent & Responsive Modern Sidebar */}
+        <AppSidebar
+          isCollapsed={isCollapsed}
+          onToggleCollapse={toggleSidebarCollapse}
+          isMobileOpen={isMobileOpen}
+          onMobileClose={() => setIsMobileOpen(false)}
         />
 
-        {/* Workspace Open Tabs */}
-        {hasTabs && (
-          <div className="bg-background border-b border-border px-[var(--page-gutter)] flex items-center overflow-x-auto shrink-0 select-none">
-            <WorkspaceTabs />
-          </div>
-        )}
-
-        {/* Main Content Area - Primary vertical scroll container for document & form pages */}
-        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative bg-background flex flex-col">
-          <Suspense
-            fallback={
-              <div className="flex-1 min-h-[400px] flex items-center justify-center p-8">
-                <PageLoader
-                  title="Loading View..."
-                  description="Preparing workspace view..."
-                />
+        {/* Right Main Content Viewport */}
+        <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-white">
+          {/* Workspace Open Tabs (if enabled - hidden to match Zoho UX with global flag) */}
+          {(() => {
+            const SHOW_RECENT_TABS = false;
+            return SHOW_RECENT_TABS && hasTabs && (
+              <div className="bg-[#F8F9FB] border-b border-[#E5E7EB] px-3 flex items-center overflow-x-auto shrink-0 select-none h-8">
+                <WorkspaceTabs />
               </div>
-            }
-          >
-            <Outlet />
-          </Suspense>
-        </main>
+            );
+          })()}
+
+          {/* Main Content Area - Page itself never scrolls; inner table/form body scrolls */}
+          <main className="flex-1 min-h-0 overflow-hidden relative bg-white flex flex-col">
+            <Suspense
+              fallback={
+                <div className="flex-1 min-h-[400px] flex items-center justify-center p-8">
+                  <PageLoader
+                    title="Loading View..."
+                    description="Preparing workspace view..."
+                  />
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
+          </main>
+        </div>
       </div>
 
       {/* Global Command Palette Trigger */}

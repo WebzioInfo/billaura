@@ -15,6 +15,7 @@ import { erpInvalidate } from '@/core/query/erpConsistency';
 import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import { UnifiedReceiptForm } from './UnifiedReceiptForm';
+import { PaymentReceivedForm } from './PaymentReceivedForm';
 import { DocumentPreviewModal } from '@/shared/components/pdf/DocumentPreviewModal';
 
 interface Invoice {
@@ -381,7 +382,7 @@ export const ReceiptForm = () => {
   const { id } = useParams();
 
   if (!id) {
-    return <UnifiedReceiptForm />;
+    return <PaymentReceivedForm />;
   }
 
   const navigate = useNavigate();

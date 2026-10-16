@@ -1,296 +1,260 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Eye, Edit2, Trash2, MapPin, Building2, Phone } from 'lucide-react';
-import { ColumnDef } from '@tanstack/react-table';
-
-import { PageLayout } from '@/shared/components/layout/PageLayout';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Button, IconButton, KpiCard, CurrencyCell, DeleteDialog } from '@/shared/components/ui';
-import { DataTable } from '@/shared/components/ui/data-table/DataTable';
-import { usePagination } from '@/shared/hooks/usePagination';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
+import { dialog } from '@/core/services/DialogService';
+import {
+  ZohoPageHeader,
+  ZohoListTable,
+  ZohoColumn,
+  ZohoEmptyState,
+} from '@/shared/components/zoho';
+import { ExportService } from '@/core/services/ExportService';
 
-export const VendorsList = () => {
-  const navigate = useNavigate();
+export const VendorsList: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  // Filters
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [vendorToDelete, setVendorToDelete] = useState<any>(null);
+  const [activeView, setActiveView] = useState('ACTIVE');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
-  // Unified pagination
-  const {
-    page,
-    limit,
-    totalPages,
-    totalItems,
-    setPage,
-    setLimit,
-    resetPage,
-  } = usePagination({
-    tableKey: 'vendors',
-    defaultLimit: 25,
-    itemLabel: 'vendors',
-  });
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['vendors', search, statusFilter, typeFilter, page, limit],
+  const { data: vendorsData, isLoading: loading } = useQuery({
+    queryKey: ['vendors', searchTerm, activeView],
     queryFn: async () => {
       const res = await apiClient.get('/vendors', {
         params: {
-          search: search || undefined,
-          status: statusFilter || undefined,
-          customerType: typeFilter || undefined,
-          page,
-          limit,
-        }
+          search: searchTerm || undefined,
+          status: activeView === 'ALL' ? undefined : activeView,
+        },
       });
-      return res.data || {};
-    }
+      const items = res.data?.data?.items || res.data?.items || (Array.isArray(res.data?.data) ? res.data.data : res.data) || [];
+      return Array.isArray(items) ? items : [];
+    },
   });
+
+  const vendors = Array.isArray(vendorsData) ? vendorsData : [];
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiClient.delete(`/vendors/${id}`);
+    mutationFn: async (ids: string[]) => {
+      return Promise.all(ids.map((id) => apiClient.delete(`/vendors/${id}`)));
     },
-    onSuccess: async () => {
-      try {
-        await queryClient.invalidateQueries({ queryKey: ['vendors'] });
-      } catch {
-        notification.warning('Vendor deleted successfully, but could not refresh list. Please refresh the page.');
-        setVendorToDelete(null);
-        return;
-      }
-      notification.success('Vendor deleted successfully');
-      setVendorToDelete(null);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      notification.success('Vendor(s) deleted successfully');
+      setSelectedIds([]);
     },
-    onError: (error: any) => {
-      notification.error(error.response?.data?.message || 'Unable to delete vendor. Please try again.');
-    }
+    onError: (err: any) => {
+      notification.error(err.response?.data?.message || 'Failed to delete vendor');
+    },
   });
 
-  const vendors = data?.data?.items || data?.items || (Array.isArray(data?.data) ? data.data : []) || [];
-  const serverTotal = data?.data?.total || data?.data?.totalItems || data?.meta?.totalItems || vendors.length || 0;
-  const serverTotalPages = data?.data?.totalPages || data?.meta?.totalPages || Math.max(1, Math.ceil(serverTotal / limit));
-
-  const columns: ColumnDef<any>[] = useMemo(() => [
-    {
-      accessorKey: 'bpCode',
-      header: 'Vendor Code',
-      cell: ({ row }) => (
-        <span className="tabular-nums font-medium text-[#111827] dark:text-[#EDEDED]">
-          {row.original.bpCode || row.original.vendorCode || '—'}
-        </span>
-      )
-    },
-    {
-      accessorKey: 'name',
-      header: 'Vendor Name',
-      cell: ({ row }) => {
-        const v = row.original;
-        return (
-          <div className="py-0.5">
-            <button
-              type="button"
-              onClick={() => navigate(`/vendors/${v.id}`)}
-              className="font-medium text-[#111827] dark:text-[#EDEDED] hover:underline text-left cursor-pointer transition-colors block truncate max-w-xs"
-            >
-              {v.name}
-            </button>
-            {v.tradeName && <span className="text-[12px] text-[#6B7280] dark:text-[#9CA3AF] block">{v.tradeName}</span>}
-          </div>
-        );
-      }
-    },
-    {
-      accessorKey: 'contact',
-      header: 'Contact Info',
-      cell: ({ row }) => (
-        <div className="text-[13px] space-y-0.5">
-          {row.original.email && (
-            <span className="text-[#4B5563] dark:text-[#D1D5DB] flex items-center gap-1.5 truncate max-w-[180px]">
-              <Building2 className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
-              {row.original.email}
-            </span>
-          )}
-          {row.original.phone && (
-            <span className="text-[#6B7280] dark:text-[#9CA3AF] tabular-nums flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
-              {row.original.phone}
-            </span>
-          )}
-        </div>
-      )
-    },
-    {
-      accessorKey: 'gstin',
-      header: 'GSTIN',
-      cell: ({ row }) => (
-        <span className="tabular-nums text-[13px] uppercase text-[#111827] dark:text-[#EDEDED]">
-          {row.original.gstin || '—'}
-        </span>
-      )
-    },
-    {
-      accessorKey: 'state',
-      header: 'State',
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1 text-[13px] text-[#4B5563] dark:text-[#D1D5DB]">
-          {row.original.state ? (
-            <>
-              <MapPin className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
-              {row.original.state}
-            </>
-          ) : '—'}
-        </div>
-      )
-    },
-    {
-      accessorKey: 'payableBalance',
-      header: () => <div className="text-right">Outstanding</div>,
-      cell: ({ row }) => (
-        <CurrencyCell amount={Number(row.original.payableBalance || 0)} className="font-semibold text-foreground text-right" />
-      )
-    },
-    {
-      id: 'actions',
-      header: () => <div className="text-right">Actions</div>,
-      cell: ({ row }) => {
-        const v = row.original;
-        return (
-          <div className="flex items-center justify-end gap-1">
-            <IconButton
-              icon={Eye}
-              aria-label="View Vendor"
-              tooltip="View Profile"
-              size="dense"
-              variant="ghost"
-              onClick={() => navigate(`/vendors/${v.id}`)}
-            />
-            <IconButton
-              icon={Edit2}
-              aria-label="Edit Vendor"
-              tooltip="Edit Vendor"
-              size="dense"
-              variant="ghost"
-              onClick={() => navigate(`/vendors/${v.id}/edit`)}
-            />
-            <IconButton
-              icon={Trash2}
-              aria-label={deleteMutation.isPending && vendorToDelete?.id === v.id ? "Deleting Vendor..." : "Delete Vendor"}
-              tooltip={deleteMutation.isPending && vendorToDelete?.id === v.id ? "Deleting Vendor..." : "Delete Vendor"}
-              size="dense"
-              variant="danger-ghost"
-              isLoading={deleteMutation.isPending && vendorToDelete?.id === v.id}
-              disabled={deleteMutation.isPending}
-              onClick={() => setVendorToDelete(v)}
-            />
-          </div>
-        );
-      }
+  const handleDelete = async (ids: string[]) => {
+    const confirmed = await dialog.confirmDelete(
+      'Delete Vendor(s)?',
+      `Are you sure you want to delete ${ids.length} selected vendor(s)? This action cannot be undone.`
+    );
+    if (confirmed) {
+      deleteMutation.mutate(ids);
     }
-  ], [navigate]);
+  };
 
-  const toolbarExtras = (
-    <div className="flex items-center gap-2">
-      <select
-        value={statusFilter}
-        onChange={(e) => {
-          setStatusFilter(e.target.value);
-          resetPage();
-        }}
-        className="h-9 text-[13px] bg-background border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] px-2.5 text-foreground focus:outline-none cursor-pointer"
-        aria-label="Filter status"
-      >
-        <option value="">All Statuses</option>
-        <option value="ACTIVE">Active</option>
-        <option value="INACTIVE">Inactive</option>
-      </select>
-    </div>
+  // Client-side pagination
+  const paginatedData = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return vendors.slice(start, start + pageSize);
+  }, [vendors, page, pageSize]);
+
+  // Export CSV
+  const handleExport = () => {
+    if (vendors.length === 0) {
+      notification.warning('No vendors to export');
+      return;
+    }
+    const headers = [
+      'Name',
+      'Company Name',
+      'Email',
+      'Work Phone',
+      'Source of Supply',
+      'Payables',
+      'Unused Credits',
+    ];
+    const rows = vendors.map((v: any) => ({
+      Name: v.name || '',
+      'Company Name': v.companyName || v.tradeName || '',
+      Email: v.email || '',
+      'Work Phone': v.phone || v.mobile || '',
+      'Source of Supply': v.placeOfSupply || v.state || '',
+      Payables: v.balance || v.outstandingBalance || 0,
+      'Unused Credits': v.unusedCredits || 0,
+    }));
+    ExportService.exportCsv('Vendors_List.csv', rows, headers);
+  };
+
+  // Columns per Prompt 02: Name, Company Name, Email, Work Phone, Source of Supply, Payables (BCY), Unused Credits (BCY)
+  const columns: ZohoColumn<any>[] = useMemo(
+    () => [
+      {
+        key: 'name',
+        label: 'NAME',
+        isPrimary: true,
+        width: '220px',
+        render: (row) => (
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/vendors/${row.id}`);
+            }}
+            className="text-[#408DFB] hover:underline font-medium cursor-pointer truncate block"
+          >
+            {row.name || 'Unnamed Vendor'}
+          </span>
+        ),
+      },
+      {
+        key: 'companyName',
+        label: 'COMPANY NAME',
+        width: '180px',
+        render: (row) => (
+          <span className="text-[#2B2F36] truncate block">
+            {row.companyName || row.tradeName || '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'email',
+        label: 'EMAIL',
+        width: '200px',
+        render: (row) => (
+          <span className="text-[#6B7280] truncate block">
+            {row.email || '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'phone',
+        label: 'WORK PHONE',
+        width: '140px',
+        render: (row) => (
+          <span className="text-[#6B7280] tabular-nums truncate block">
+            {row.phone || row.mobile || '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'sourceOfSupply',
+        label: 'SOURCE OF SUPPLY',
+        width: '150px',
+        render: (row) => (
+          <span className="text-[#6B7280] truncate block">
+            {row.placeOfSupply || row.state || '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'payables',
+        label: 'PAYABLES (BCY)',
+        align: 'right',
+        isNumeric: true,
+        width: '150px',
+        render: (row) => {
+          const val = Number(row.balance || row.outstandingBalance || 0);
+          return (
+            <span className="font-medium text-[#2B2F36] tabular-nums">
+              ₹{val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'unusedCredits',
+        label: 'UNUSED CREDITS (BCY)',
+        align: 'right',
+        isNumeric: true,
+        width: '160px',
+        render: (row) => {
+          const val = Number(row.unusedCredits || 0);
+          return (
+            <span className="text-[#6B7280] tabular-nums">
+              ₹{val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          );
+        },
+      },
+    ],
+    [navigate]
   );
 
+  const VIEWS = [
+    { id: 'ACTIVE', label: 'Active Vendors' },
+    { id: 'ALL', label: 'All Vendors' },
+    { id: 'INACTIVE', label: 'Inactive Vendors' },
+  ];
+
   return (
-    <PageLayout
-      isLoading={isLoading && vendors.length === 0}
-      loadingTitle="Loading Vendors..."
-      loadingDescription="Fetching supplier directory and payables..."
-    >
-      <PageHeader
-        title="Vendors"
-        count={serverTotal}
-        primaryAction={
-          <Button
-            onClick={() => navigate('/vendors/new')}
-            variant="primary"
-            size="md"
-          >
-            <Plus className="w-4 h-4" /> New Vendor
-          </Button>
-        }
+    <div className="w-full h-full flex flex-col bg-white overflow-hidden select-none">
+      {/* 1. Zoho List Page Header */}
+      <ZohoPageHeader
+        title="Active Vendors"
+        views={VIEWS}
+        activeViewId={activeView}
+        onViewChange={(vId) => {
+          setActiveView(vId);
+          setPage(1);
+        }}
+        newAction={{
+          label: 'New',
+          onClick: () => navigate('/vendors/new'),
+        }}
+        onRefresh={() => queryClient.invalidateQueries({ queryKey: ['vendors'] })}
+        onExport={handleExport}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 shrink-0 mb-3">
-        <KpiCard
-          label="Total Vendors"
-          value={isLoading ? '—' : serverTotal.toLocaleString('en-IN')}
-          helperText="Active suppliers and payees"
-          isLoading={isLoading}
+      {/* 2. Zoho List Table Area */}
+      <div className="flex-1 p-4 overflow-hidden min-h-0 bg-white">
+        <ZohoListTable
+          columns={columns}
+          data={paginatedData}
+          keyField="id"
+          selectedIds={selectedIds}
+          onSelectChange={setSelectedIds}
+          onRowClick={(row) => navigate(`/vendors/${row.id}`)}
+          isLoading={loading}
+          searchPlaceholder="Search in Vendors (Name, Company, GSTIN, Phone)..."
+          onSearchChange={setSearchTerm}
+          bulkActions={[
+            {
+              label: 'Delete',
+              icon: Trash2,
+              variant: 'danger',
+              onClick: (ids) => handleDelete(ids),
+            },
+          ]}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalCount: vendors.length,
+            onPageChange: setPage,
+            onPageSizeChange: (newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            },
+          }}
+          emptyState={
+            <ZohoEmptyState
+              title="No Vendors Yet"
+              description="Keep track of your suppliers, purchase bills, and payables in one place."
+              createLabel="NEW VENDOR"
+              onCreate={() => navigate('/vendors/new')}
+            />
+          }
         />
       </div>
-
-      <DataTable
-        columns={columns}
-        data={vendors}
-        totalItems={serverTotal}
-        manualPagination={true}
-        pageCount={serverTotalPages}
-        pagination={{
-          pageIndex: page - 1,
-          pageSize: limit,
-        }}
-        onPaginationChange={(updater: any) => {
-          const next = typeof updater === 'function' ? updater({ pageIndex: page - 1, pageSize: limit }) : updater;
-          if (next.pageIndex !== undefined) setPage(next.pageIndex + 1);
-          if (next.pageSize !== undefined) setLimit(next.pageSize);
-        }}
-        isLoading={isLoading}
-        storageKey="vendors"
-        searchPlaceholder="Search vendors by name, code, GST..."
-        globalFilter={search}
-        onGlobalFilterChange={(val) => {
-          setSearch(val);
-          resetPage();
-        }}
-        toolbarExtras={toolbarExtras}
-        exportFilename="Vendors_List"
-        itemLabel="vendors"
-        emptyText="No vendors found"
-        emptyDescription="Create your first vendor to start issuing purchase orders and recording bills."
-        emptyActionLabel="Create Vendor"
-        onEmptyAction={() => navigate('/vendors/new')}
-      />
-
-      <DeleteDialog
-        isOpen={!!vendorToDelete}
-        onClose={() => {
-          if (!deleteMutation.isPending) {
-            setVendorToDelete(null);
-          }
-        }}
-        onConfirm={async () => {
-          if (vendorToDelete) {
-            await deleteMutation.mutateAsync(vendorToDelete.id);
-          }
-        }}
-        isLoading={deleteMutation.isPending}
-        entityName="Vendor"
-        entityId={vendorToDelete?.name}
-        warningText="WARNING: Deleting a vendor will remove them from the system. Ensure there are no active purchase orders or pending bills."
-      />
-    </PageLayout>
+    </div>
   );
 };

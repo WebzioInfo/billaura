@@ -6,6 +6,7 @@ import {
   ValidateNested,
   IsNumber,
   IsDateString,
+  IsBoolean,
   ArrayMinSize,
   ArrayMaxSize,
   Min,
@@ -50,6 +51,26 @@ export class InvoiceItemDto {
   @IsString()
   @IsOptional()
   warehouseId?: string;
+
+  @IsString()
+  @IsOptional()
+  accountId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  discount?: number;
+
+  @IsString()
+  @IsOptional()
+  discountType?: string;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
+
+  @IsString()
+  @IsOptional()
+  taxId?: string;
 }
 
 export class CreateInvoiceDto {
@@ -131,6 +152,14 @@ export class CreateInvoiceDto {
 
   @IsString()
   @IsOptional()
+  paymentTerms?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  allowNegativeStock?: boolean;
+
+  @IsString()
+  @IsOptional()
   invoiceType?: string;
 
   @IsString()
@@ -175,6 +204,10 @@ export class CreateInvoiceDto {
 
   @IsString()
   @IsOptional()
+  templateId?: string;
+
+  @IsString()
+  @IsOptional()
   taxTreatmentId?: string;
 
   @IsString()
@@ -209,6 +242,50 @@ export class CreateInvoiceDto {
   @IsOptional()
   @Min(0, { message: 'Amount paid cannot be negative' })
   amountPaid?: number;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
+
+  @IsString()
+  @IsOptional()
+  subject?: string;
+
+  @IsString()
+  @IsOptional()
+  salesperson?: string;
+
+  @IsString()
+  @IsOptional()
+  orderNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  referenceNo?: string;
+
+  @IsNumber()
+  @IsOptional()
+  adjustment?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTcsType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  tdsTcsAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTcsTaxId?: string;
+
+  @IsString()
+  @IsOptional()
+  customerNotes?: string;
+
+  @IsString()
+  @IsOptional()
+  originalInvoiceNo?: string;
 
   @IsArray()
   @ArrayMinSize(1, { message: 'At least one line item is required' })

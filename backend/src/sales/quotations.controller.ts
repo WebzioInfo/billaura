@@ -11,8 +11,12 @@ import {
   UseGuards,
   HttpStatus,
   HttpCode,
+  Req,
+  Res,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { QuotationsService } from "./quotations.service";
+import { PdfEngineService } from "./pdf-engine.service";
 import {
   CreateQuotationDto,
   UpdateQuotationDto,
@@ -25,7 +29,10 @@ import { TenantGuard } from "../common/guards/tenant.guard";
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller(["sales/quotations", "quotations"])
 export class QuotationsController {
-  constructor(private readonly quotationsService: QuotationsService) {}
+  constructor(
+    private readonly quotationsService: QuotationsService,
+    private readonly pdfEngineService: PdfEngineService,
+  ) {}
 
   @Get()
   async findAll(@Query() query: QuotationQueryDto) {
@@ -63,6 +70,26 @@ export class QuotationsController {
     @Body() dto: UpdateQuotationStatusDto
   ) {
     return this.quotationsService.updateStatus(id, dto.status);
+  }
+
+  @Get(":id/pdf")
+  async exportPdf(
+    @Param("id") id: string,
+    @Query("inline") inline: string,
+    @Req() req: any,
+    @Res() res: Response
+  ) {
+    const quotation = await this.quotationsService.findOne(id);
+    const pdfBuffer = await this.pdfEngineService.generateQuotationPdf(id, req.user.companyId);
+    const safeDocNo = (quotation?.quotationNo || `Quote_${id}`).replace(/[/\\:*?"<>|]/g, '_');
+    const dispositionType = inline === 'true' ? 'inline' : 'attachment';
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `${dispositionType}; filename="${safeDocNo}.pdf"`,
+      'Content-Length': String(pdfBuffer.length),
+    });
+    res.end(pdfBuffer);
   }
 
   @Delete(":id")

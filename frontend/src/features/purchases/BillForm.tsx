@@ -1,1346 +1,1311 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  ArrowLeft, Plus, Trash2, Copy, Save, AlertCircle, ShoppingCart, 
-  Building, Calendar, FileText, Landmark, FileCheck, HelpCircle
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import {
+  Receipt,
+  FileText,
+  X,
+  Search,
+  Plus,
+  Building2,
+  Calendar,
+  AlertCircle,
+  HelpCircle,
+  Clock,
+  Sparkles,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { PageContainer, LoadingState } from '@/shared/components/ui/LayoutComponents';
-import { Card } from '@/shared/components/ui/Card';
-import { Button, Input, Select, FormErrorDisplay, SearchableSelect, PageLoader } from '@/shared/components/ui';
 import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
-import { useAsyncForm } from '@/shared/hooks/useAsyncForm';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { BillDocumentUpload, UploadedBillDocument } from './components/BillDocumentUpload';
-import { BillOcrReviewViewer } from './components/BillOcrReviewViewer';
-import { BillOcrReviewModal, OcrReviewItem } from './components/BillOcrReviewModal';
-import { OcrVerificationBanner } from './components/OcrVerificationBanner';
-import { OcrFieldBadge } from './components/OcrFieldBadge';
+import {
+  ZohoTransactionForm,
+  ZohoItemTable,
+  ZohoTotalsBox,
+  ZohoFormFooter,
+  ZohoAttachmentUploader,
+  ZohoItemRow,
+  AttachmentFile,
+  ZohoModal,
+} from '@/shared/components/zoho';
+import { PageLoader } from '@/shared/components/ui';
+
+const billItemSchema = z.object({
+  productId: z.string().optional(),
+  accountId: z.string().optional(),
+  customerId: z.string().optional(),
+  description: z.string().optional(),
+  qty: z.coerce.number().min(0.0001, 'Qty must be > 0'),
+  rate: z.coerce.number().min(0, 'Rate must be >= 0'),
+  taxPercent: z.coerce.number().min(0).default(18),
+  discount: z.coerce.number().min(0).default(0),
+  unit: z.string().optional(),
+});
 
 const billSchema = z.object({
-  vendorId: z.string().min(1, 'Vendor is required'),
-  date: z.string().min(1, 'Billing Date is required'),
+  vendorId: z.string().min(1, 'Vendor Name is required'),
+  billNumber: z.string().min(1, 'Bill# is required'),
+  orderNumber: z.string().optional(),
+  date: z.string().min(1, 'Bill Date is required'),
   dueDate: z.string().optional(),
-  reference: z.string().optional(),
-  billingAddress: z.string().optional(),
-  shippingAddress: z.string().optional(),
-  placeOfSupply: z.string().optional(),
+  paymentTerms: z.string().default('Due on Receipt'),
+  isRcm: z.boolean().default(false),
+  subject: z.string().max(250, 'Enter a subject within 250 characters').optional(),
+  notes: z.string().optional(),
+  termsConditions: z.string().optional(),
+  discount: z.coerce.number().default(0),
+  discountType: z.enum(['%', 'amount']).default('%'),
+  adjustment: z.coerce.number().default(0),
+  tdsTcsType: z.enum(['NONE', 'TDS', 'TCS']).default('NONE'),
+  tdsTcsRate: z.coerce.number().default(0),
+  tdsTcsAmount: z.coerce.number().default(0),
+  tdsTcsTaxId: z.string().optional(),
+  items: z.array(billItemSchema).min(1, 'At least one line item is required'),
 });
+
 type BillFormValues = z.infer<typeof billSchema>;
 
-interface Vendor {
-  id: string;
-  name: string;
-  gstin?: string;
-  address?: string;
-  state?: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  hsnCode?: string;
-  unit: string;
-  purchasePrice: number;
-  taxRate?: number;
-  gstRate?: number;
-}
-
-interface Warehouse {
-  id: string;
-  name: string;
-  isDefault: boolean;
-}
-
-interface FormLineItem {
-  keyId: string; // React list rendering unique key
-  productId: string;
-  description: string;
-  originalExtractedDescription?: string; // Exact invoice description preserved
-  classification?: string;
-  matchStatus?: 'EXISTING' | 'NEW' | 'SKIPPED' | 'NEEDS_REVIEW';
-  createAsNewProduct?: boolean;
-  newProductData?: {
-    name: string;
-    description?: string;
-    itemType: 'FINISHED_GOOD' | 'RAW_MATERIAL' | 'SERVICE';
-    hsnCode?: string;
-    gstRate: number;
-    unit: string;
-    isInventoryItem: boolean;
-  };
-  hsnCode: string;
-  qty: number;
-  unit: string;
-  rate: number;
-  discount: number; // percentage
-  taxPercent: number; // GST percentage
-  warehouseId: string;
-}
-
-export const BillForm = () => {
+export const BillForm: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
   const editId = searchParams.get('edit');
-  const duplicateId = searchParams.get('duplicate');
   const isEditMode = !!editId;
-  const isDuplicateMode = !!duplicateId;
 
-  // Form State
-  const form = useAsyncForm<BillFormValues>(
-    {
-      resolver: zodResolver(billSchema as any) as any,
-      defaultValues: {
-        vendorId: '',
-        date: new Date().toISOString().split('T')[0],
-        dueDate: '',
-        reference: '',
-        billingAddress: '',
-        shippingAddress: '',
-        placeOfSupply: '',
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'DRAFT' | 'OPEN'>('OPEN');
+  const [attachedFiles, setAttachedFiles] = useState<AttachmentFile[]>([]);
+
+  // Modals state
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
+  const [vendorSearchQuery, setVendorSearchQuery] = useState('');
+
+  const [isCreateTermModalOpen, setIsCreateTermModalOpen] = useState(false);
+  const [newTermName, setNewTermName] = useState('');
+  const [newTermDays, setNewTermDays] = useState<number | ''>('');
+  const [isCreatingTerm, setIsCreatingTerm] = useState(false);
+
+  const [isBulkItemsModalOpen, setIsBulkItemsModalOpen] = useState(false);
+  const [bulkSearchQuery, setBulkSearchQuery] = useState('');
+  const [bulkSelectedMap, setBulkSelectedMap] = useState<Record<string, number>>({});
+
+  const form = useForm<BillFormValues>({
+    resolver: zodResolver(billSchema) as any,
+    defaultValues: {
+      vendorId: '',
+      billNumber: '',
+      orderNumber: '',
+      date: new Date().toISOString().split('T')[0],
+      dueDate: new Date().toISOString().split('T')[0],
+      paymentTerms: 'Due on Receipt',
+      isRcm: false,
+      subject: '',
+      notes: '',
+      termsConditions: '',
+      discount: 0,
+      discountType: '%',
+      adjustment: 0,
+      tdsTcsType: 'NONE',
+      tdsTcsRate: 0,
+      tdsTcsAmount: 0,
+      items: [
+        {
+          productId: '',
+          accountId: '',
+          customerId: '',
+          description: '',
+          qty: 1,
+          rate: 0,
+          taxPercent: 18,
+          discount: 0,
+          unit: 'Pcs',
+        },
+      ],
+    },
+  });
+
+  const { register, control, handleSubmit, watch, setValue, formState: { errors } } = form;
+  const { append } = useFieldArray({ control, name: 'items' });
+
+  // 1. Master Data Queries
+  const { data: vendorsData, isLoading: loadingVendors } = useQuery<any>({
+    queryKey: ['vendors'],
+    queryFn: () => apiClient.get('/vendors'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: productsData, isLoading: loadingProducts } = useQuery<any>({
+    queryKey: ['products'],
+    queryFn: () => apiClient.get('/products'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: accountsData } = useQuery<any>({
+    queryKey: ['accounts'],
+    queryFn: () => apiClient.get('/accounts').catch(() => ({ data: [] })),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: customersData } = useQuery<any>({
+    queryKey: ['customers'],
+    queryFn: () => apiClient.get('/customers').catch(() => ({ data: [] })),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: nextNoData } = useQuery<any>({
+    queryKey: ['bills', 'next-number'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get('/purchases/next-number');
+        return res?.data?.data || res?.data || res;
+      } catch (_) {
+        return { nextNumber: `BILL-${Date.now().toString().slice(-5)}` };
       }
     },
-    null,
-    () => ({})
-  );
+    staleTime: 0,
+  });
 
-  const { register, handleFormSubmit, formState: { errors }, watch, setValue } = form;
+  const { data: paymentTermsData = [] } = useQuery<Array<{ name: string; days: number }>>({
+    queryKey: ['purchases', 'payment-terms'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get('/purchases/payment-terms');
+        const data = res?.data?.data || res?.data || [];
+        return Array.isArray(data) ? data : [];
+      } catch (_) {
+        return [
+          { name: 'Due on Receipt', days: 0 },
+          { name: 'Net 15', days: 15 },
+          { name: 'Net 30', days: 30 },
+          { name: 'Net 45', days: 45 },
+          { name: 'Net 60', days: 60 },
+          { name: 'Due end of the month', days: 30 },
+          { name: 'Due end of next month', days: 60 },
+        ];
+      }
+    },
+  });
+
+  const { data: taxRatesData = [] } = useQuery<any[]>({
+    queryKey: ['tax-rates'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get('/accounting/tax-rates');
+        const data = res?.data?.data || res?.data || [];
+        return Array.isArray(data) ? data : [];
+      } catch (_) {
+        return [];
+      }
+    },
+  });
+
+  // Edit Data Query
+  const { data: existingBill, isLoading: loadingExisting } = useQuery<any>({
+    queryKey: ['bill-edit', editId],
+    queryFn: async () => {
+      if (!editId) return null;
+      const res = await apiClient.get(`/purchases/${editId}`);
+      return res?.data?.data || res?.data || res;
+    },
+    enabled: isEditMode,
+  });
+
+  // Source Purchase Order Query if converting
+  const poIdParam = searchParams.get('poId');
+  const { data: sourcePo } = useQuery<any>({
+    queryKey: ['purchase-order-source', poIdParam],
+    queryFn: async () => {
+      if (!poIdParam) return null;
+      const res = await apiClient.get(`/purchase-orders/${poIdParam}`);
+      return res?.data?.data || res?.data || null;
+    },
+    enabled: !!poIdParam && !isEditMode,
+  });
+
+  const vendors = useMemo(() => ensureArray(vendorsData), [vendorsData]);
+  const products = useMemo(() => ensureArray(productsData), [productsData]);
+  const accounts = useMemo(() => ensureArray(accountsData), [accountsData]);
+  const customers = useMemo(() => ensureArray(customersData), [customersData]);
 
   const vendorId = watch('vendorId');
-  const date = watch('date');
-  const dueDate = watch('dueDate');
-  const reference = watch('reference');
-  const billingAddress = watch('billingAddress');
-  const shippingAddress = watch('shippingAddress');
-  const placeOfSupply = watch('placeOfSupply');
+  const selectedVendor = useMemo(() => {
+    return vendors.find((v: any) => v.id === vendorId);
+  }, [vendorId, vendors]);
 
-  const [taxMode, setTaxMode] = useState<'CGST_SGST' | 'IGST'>('CGST_SGST');
-  const [isRcm, setIsRcm] = useState(false);
-  const [warehouseId, setWarehouseId] = useState('');
-  const [notes, setNotes] = useState('');
-
-  // OCR Document, Extraction, & Verification State
-  const [ocrDocument, setOcrDocument] = useState<UploadedBillDocument | null>(null);
-  const [ocrExtraction, setOcrExtraction] = useState<any | null>(null);
-  const [isOcrAssisted, setIsOcrAssisted] = useState(false);
-  const [isOcrVerified, setIsOcrVerified] = useState(false);
-  const [fieldTracking, setFieldTracking] = useState<Record<string, { status: 'extracted' | 'modified' | 'unmodified'; confidence?: number }>>({});
-
-  // Document Review Viewer Modal State
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [viewerDoc, setViewerDoc] = useState<{ url: string; fileName: string; mimeType: string }>({
-    url: '',
-    fileName: '',
-    mimeType: '',
+  // Load Purchase Orders for this Vendor
+  const { data: vendorPOs = [] } = useQuery<any[]>({
+    queryKey: ['purchase-orders', 'by-vendor', vendorId],
+    queryFn: async () => {
+      if (!vendorId) return [];
+      try {
+        const res = await apiClient.get('/purchase-orders', { params: { vendorId } });
+        const list = res?.data?.data || res?.data || [];
+        return Array.isArray(list) ? list : [];
+      } catch (_) {
+        return [];
+      }
+    },
+    enabled: !!vendorId,
   });
 
-  const markFieldModified = (fieldName: string) => {
-    setFieldTracking(prev => {
-      if (prev[fieldName]?.status === 'extracted') {
-        return { ...prev, [fieldName]: { status: 'modified' } };
+  // Next bill sequence assignment
+  useEffect(() => {
+    if (!isEditMode && nextNoData?.nextNumber && !watch('billNumber')) {
+      setValue('billNumber', nextNoData.nextNumber);
+    }
+  }, [nextNoData, isEditMode, setValue, watch]);
+
+  // Pre-populate if editing
+  useEffect(() => {
+    if (isEditMode && existingBill) {
+      if (existingBill.vendorId || existingBill.businessPartnerId) {
+        setValue('vendorId', existingBill.vendorId || existingBill.businessPartnerId);
       }
-      return prev;
-    });
+      if (existingBill.purchaseNo) setValue('billNumber', existingBill.purchaseNo);
+      if (existingBill.orderNumber || existingBill.reference) {
+        setValue('orderNumber', existingBill.orderNumber || existingBill.reference);
+      }
+      if (existingBill.date) setValue('date', new Date(existingBill.date).toISOString().split('T')[0]);
+      if (existingBill.dueDate) setValue('dueDate', new Date(existingBill.dueDate).toISOString().split('T')[0]);
+      if (existingBill.paymentTerms) setValue('paymentTerms', existingBill.paymentTerms);
+      if (existingBill.isRcm !== undefined) setValue('isRcm', Boolean(existingBill.isRcm));
+      if (existingBill.subject) setValue('subject', existingBill.subject);
+      if (existingBill.notes) setValue('notes', existingBill.notes);
+      if (existingBill.termsConditions) setValue('termsConditions', existingBill.termsConditions);
+      if (existingBill.adjustment !== undefined) setValue('adjustment', Number(existingBill.adjustment));
+      if (existingBill.tdsTcsType) setValue('tdsTcsType', existingBill.tdsTcsType);
+      if (existingBill.tdsTcsRate) setValue('tdsTcsRate', Number(existingBill.tdsTcsRate));
+      if (existingBill.tdsTcsAmount) setValue('tdsTcsAmount', Number(existingBill.tdsTcsAmount));
+
+      if (Array.isArray(existingBill.items) && existingBill.items.length > 0) {
+        setValue(
+          'items',
+          existingBill.items.map((it: any) => ({
+            productId: it.productId || '',
+            accountId: it.accountId || '',
+            customerId: it.customerId || '',
+            description: it.description || '',
+            qty: Number(it.qty || 1),
+            rate: Number(it.rate || 0),
+            taxPercent: Number(it.taxPercent || 18),
+            discount: Number(it.discount || 0),
+            unit: it.unit || 'Pcs',
+          }))
+        );
+      }
+    }
+  }, [isEditMode, existingBill, setValue]);
+
+  // Pre-populate if converting from Purchase Order
+  useEffect(() => {
+    if (sourcePo && !isEditMode) {
+      if (sourcePo.businessPartnerId) {
+        setValue('vendorId', sourcePo.businessPartnerId, { shouldValidate: true });
+      }
+      if (sourcePo.orderNo) {
+        setValue('orderNumber', sourcePo.orderNo);
+      }
+      if (sourcePo.paymentTerms) {
+        handlePaymentTermsChange(sourcePo.paymentTerms);
+      }
+      if (sourcePo.notes) {
+        setValue('notes', sourcePo.notes);
+      }
+      if (sourcePo.termsConditions) {
+        setValue('termsConditions', sourcePo.termsConditions);
+      }
+      if (sourcePo.isRcm !== undefined) {
+        setValue('isRcm', Boolean(sourcePo.isRcm));
+      }
+      if (Array.isArray(sourcePo.items) && sourcePo.items.length > 0) {
+        const poMapped = sourcePo.items.map((it: any) => ({
+          productId: it.productId || '',
+          accountId: it.accountId || '',
+          customerId: '',
+          description: it.description || it.product?.name || '',
+          qty: Number(it.qty || it.quantity || 1),
+          rate: Number(it.rate || it.unitPrice || 0),
+          taxPercent: Number(it.taxPercent || it.taxRate || 18),
+          discount: Number(it.discount || 0),
+          unit: it.unit || 'Pcs',
+        }));
+        setValue('items', poMapped, { shouldValidate: true, shouldDirty: true });
+      }
+      notification.success(`Loaded Purchase Order ${sourcePo.orderNo} into Bill`);
+    }
+  }, [sourcePo, isEditMode]);
+
+  // Handle vendor select
+  const handleVendorSelect = (selectedId: string) => {
+    setValue('vendorId', selectedId, { shouldValidate: true });
+    setValue('orderNumber', ''); // reset PO link on vendor change
+    const found = vendors.find((v: any) => v.id === selectedId);
+    if (found?.paymentTerms) {
+      handlePaymentTermsChange(found.paymentTerms);
+    }
   };
-  
-  const [items, setItems] = useState<FormLineItem[]>([
-    {
-      keyId: 'initial-row-1',
-      productId: '',
-      description: '',
-      hsnCode: 'N/A',
-      qty: 1,
-      unit: 'PCS',
-      rate: 0,
-      discount: 0,
-      taxPercent: 18,
-      warehouseId: ''
-    }
-  ]);
 
-  // Fetch Master Data
-  const { data: vendors = [], isLoading: loadingVendors, isError: errorVendors, refetch: refetchVendors } = useQuery<Vendor[]>({
-    queryKey: ['vendors'],
-    queryFn: async () => {
-      const res = await apiClient.get('/vendors');
-      return ensureArray<Vendor>(res);
-    }
-  });
+  // Payment terms and due date recalculation
+  const handlePaymentTermsChange = (term: string) => {
+    setValue('paymentTerms', term);
+    const d = watch('date') ? new Date(watch('date')) : new Date();
+    if (isNaN(d.getTime())) return;
+    const opt = paymentTermsData.find((o) => o.name === term);
+    const daysToAdd = opt ? opt.days : 0;
+    d.setDate(d.getDate() + daysToAdd);
+    setValue('dueDate', d.toISOString().split('T')[0]);
+  };
 
-  const { data: products = [], isLoading: loadingProducts, isError: errorProducts, refetch: refetchProducts } = useQuery<Product[]>({
-    queryKey: ['products'],
-    queryFn: async () => {
-      const res = await apiClient.get('/products');
-      return ensureArray<Product>(res);
-    }
-  });
+  // Recalculate due date when Bill Date changes
+  const handleDateChange = (newDateStr: string) => {
+    setValue('date', newDateStr);
+    const d = new Date(newDateStr);
+    if (isNaN(d.getTime())) return;
+    const curTerm = watch('paymentTerms');
+    const opt = paymentTermsData.find((o) => o.name === curTerm);
+    const daysToAdd = opt ? opt.days : 0;
+    d.setDate(d.getDate() + daysToAdd);
+    setValue('dueDate', d.toISOString().split('T')[0]);
+  };
 
-  const { data: warehouses = [], isLoading: loadingWarehouses, isError: errorWarehouses, refetch: refetchWarehouses } = useQuery<Warehouse[]>({
-    queryKey: ['warehouses'],
-    queryFn: async () => {
-      const res = await apiClient.get('/warehouses');
-      return ensureArray<Warehouse>(res);
-    }
-  });
+  // Link selected Purchase Order
+  const handlePurchaseOrderSelect = async (poNumber: string) => {
+    setValue('orderNumber', poNumber);
+    if (!poNumber) return;
 
-  const { data: meData } = useQuery<any>({
-    queryKey: ['auth', 'me'],
-    queryFn: () => apiClient.get('/auth/me'),
-  });
+    const po = vendorPOs.find((p: any) => (p.orderNo || p.purchaseNo) === poNumber);
+    if (po) {
+      if (po.paymentTerms) handlePaymentTermsChange(po.paymentTerms);
+      if (po.notes && !watch('notes')) setValue('notes', po.notes);
 
-  const companyProfile = meData?.data?.company || meData?.company || { name: 'Your Company', address: 'N/A', email: 'N/A', state: '' };
-
-  // Load existing bill for Edit or Duplicate
-  const loadBillId = editId || duplicateId;
-  const { data: existingBill, isLoading: loadingExisting } = useQuery({
-    queryKey: ['bill', loadBillId],
-    queryFn: async () => {
-      if (!loadBillId) return null;
-      const res = await apiClient.get(`/purchases/${loadBillId}`);
-      return res.data?.data || res.data || null;
-    },
-    enabled: !!loadBillId,
-  });
-
-  // Load from Purchase Order
-  const poId = searchParams.get('poId');
-  const { data: existingPo, isLoading: loadingPo } = useQuery({
-    queryKey: ['purchase-order', poId],
-    queryFn: async () => {
-      if (!poId) return null;
-      const res = await apiClient.get(`/purchase-orders/${poId}`);
-      return res.data || null;
-    },
-    enabled: !!poId,
-  });
-
-  const [shouldSkipStock, setShouldSkipStock] = useState(false);
-
-  // Populate existing bill data
-  useEffect(() => {
-    if (!existingBill) return;
-
-    setValue('vendorId', existingBill.vendorId);
-    setValue('reference', isDuplicateMode ? '' : (existingBill.reference || ''));
-    setValue('billingAddress', existingBill.billingAddress || '');
-    setValue('shippingAddress', existingBill.shippingAddress || '');
-    setValue('placeOfSupply', existingBill.placeOfSupply || '');
-    setTaxMode(existingBill.igstAmount > 0 ? 'IGST' : 'CGST_SGST');
-    setIsRcm(existingBill.isRcm || false);
-
-    // Populate custom metadata
-    if (existingBill.gstBreakup) {
-      setWarehouseId(existingBill.gstBreakup.warehouseId || '');
-      setNotes(existingBill.gstBreakup.notes || '');
-      if (!isDuplicateMode) {
-        setValue('dueDate', existingBill.gstBreakup.dueDate || '');
-      }
-    }
-
-    if (existingBill.date && !isDuplicateMode) {
-      setValue('date', existingBill.date.split('T')[0]);
-    }
-
-    // Populate line items
-    if (existingBill.items && Array.isArray(existingBill.items)) {
-      const mappedItems = existingBill.items.map((i: any, index: number) => {
-        let textDesc = i.description || '';
-        let discountPercent = 0;
-        try {
-          if (i.description.startsWith('{') && i.description.endsWith('}')) {
-            const parsed = JSON.parse(i.description);
-            textDesc = parsed.text || '';
-            discountPercent = parsed.discount || 0;
-          }
-        } catch (e) {}
-
-        return {
-          keyId: `loaded-row-${index}`,
-          productId: i.productId || '',
-          description: textDesc,
-          hsnCode: i.product?.hsnCode || 'N/A',
-          qty: Number(i.qty),
-          unit: i.product?.unit || 'PCS',
-          rate: Number(i.rate),
-          discount: discountPercent,
-          taxPercent: Number(i.taxPercent),
-          warehouseId: existingBill.gstBreakup?.warehouseId || ''
-        };
-      });
-      setItems(mappedItems.length > 0 ? mappedItems : items);
-    }
-
-    // Populate source invoice document attachment if present
-    if (existingBill.attachments && Array.isArray(existingBill.attachments) && existingBill.attachments.length > 0) {
-      const att = existingBill.attachments[0];
-      setOcrDocument(att);
-      if (att.ocrData) {
-        setOcrExtraction(att.ocrData);
-        setIsOcrAssisted(true);
-        setIsOcrVerified(true);
-      }
-    }
-  }, [existingBill, isDuplicateMode]);
-
-  // Populate from PO
-  useEffect(() => {
-    if (!existingPo) return;
-
-    setValue('vendorId', existingPo.businessPartnerId);
-    setValue('billingAddress', existingPo.billingAddress || '');
-    setValue('shippingAddress', existingPo.shippingAddress || '');
-    setValue('placeOfSupply', existingPo.placeOfSupply || '');
-    setTaxMode(existingPo.taxMode);
-
-    const poMeta = existingPo.gstBreakup || {};
-    setWarehouseId(poMeta.warehouseId || '');
-    setNotes(poMeta.notes || '');
-    
-    // Pass skipStockUpdate flag inside gstBreakup metadata so bill saves without incrementing stock again if received!
-    const shouldSkip = existingPo.status === 'PARTIAL' || existingPo.status === 'CONVERTED';
-    setShouldSkipStock(shouldSkip);
-
-    if (existingPo.items && Array.isArray(existingPo.items)) {
-      setItems(existingPo.items.map((i: any, index: number) => ({
-        keyId: `po-row-${index}`,
-        productId: i.productId || '',
-        description: i.description || '',
-        hsnCode: i.product?.hsnCode || 'N/A',
-        qty: Number(i.qty),
-        unit: i.product?.unit || 'PCS',
-        rate: Number(i.rate),
-        discount: 0,
-        taxPercent: Number(i.taxPercent || 0),
-        warehouseId: poMeta.warehouseId || '',
-      })));
-    }
-  }, [existingPo]);
-
-  // Set default warehouse when list loads
-  useEffect(() => {
-    if (warehouses.length > 0 && !warehouseId) {
-      const def = warehouses.find(w => w.isDefault);
-      setWarehouseId(def ? def.id : warehouses[0].id);
-    }
-  }, [warehouses]);
-
-  // Handle successful OCR extraction and form auto-fill
-  const handleOcrExtractionSuccess = (extractionData: any, doc: UploadedBillDocument) => {
-    setOcrDocument(doc);
-    if (!extractionData) return;
-
-    setOcrExtraction(extractionData);
-    setIsOcrAssisted(true);
-    setIsOcrVerified(false); // Explicit manual verification required!
-
-    const newTracking: Record<string, { status: 'extracted' | 'modified' | 'unmodified'; confidence?: number }> = {};
-
-    // 1. Auto-fill Reference / Invoice Number
-    if (extractionData.invoice?.invoiceNumber?.value) {
-      setValue('reference', extractionData.invoice.invoiceNumber.value, { shouldDirty: true });
-      newTracking.reference = { status: 'extracted', confidence: extractionData.invoice.invoiceNumber.confidence };
-    }
-
-    // 2. Auto-fill Billing Date
-    if (extractionData.invoice?.invoiceDate?.value) {
-      setValue('date', extractionData.invoice.invoiceDate.value, { shouldDirty: true });
-      newTracking.date = { status: 'extracted', confidence: extractionData.invoice.invoiceDate.confidence };
-    }
-
-    // 3. Auto-fill Due Date
-    if (extractionData.invoice?.dueDate?.value) {
-      setValue('dueDate', extractionData.invoice.dueDate.value, { shouldDirty: true });
-      newTracking.dueDate = { status: 'extracted', confidence: extractionData.invoice.dueDate.confidence };
-    }
-
-    // 4. Auto-fill Place of Supply
-    if (extractionData.vendor?.state?.value) {
-      setValue('placeOfSupply', extractionData.vendor.state.value, { shouldDirty: true });
-      newTracking.placeOfSupply = { status: 'extracted', confidence: extractionData.vendor.state.confidence };
-    }
-
-    // 5. Auto-set Tax Mode
-    if (extractionData.taxes?.igst?.value > 0) {
-      setTaxMode('IGST');
-    } else {
-      setTaxMode('CGST_SGST');
-    }
-
-    // 6. RCM
-    if (extractionData.taxes?.isRcm?.value) {
-      setIsRcm(true);
-    }
-
-    // 7. Auto-fill Vendor if matched
-    if (extractionData.matchedVendor?.id) {
-      setValue('vendorId', extractionData.matchedVendor.id, { shouldValidate: true, shouldDirty: true });
-      newTracking.vendor = { status: 'extracted', confidence: extractionData.matchedVendor.confidence };
-      const v = vendors.find(item => item.id === extractionData.matchedVendor.id);
-      if (v?.address) {
-        setValue('billingAddress', v.address, { shouldDirty: true });
-        setValue('shippingAddress', v.address, { shouldDirty: true });
-      }
-    } else {
-      newTracking.vendor = { status: 'extracted', confidence: extractionData.vendor?.name?.confidence || 0.4 };
-    }
-
-    // 8. Auto-fill Line items
-    if (extractionData.items && Array.isArray(extractionData.items) && extractionData.items.length > 0) {
-      const mappedItems: FormLineItem[] = extractionData.items.map((item: any, idx: number) => {
-        let pId = item.matchedProductId || '';
-        let hsn = item.hsnSac?.value || 'N/A';
-        let unit = item.unit?.value || 'PCS';
-        let rate = Number(item.rate?.value || 0);
-        let taxPercent = Number(item.gstRate?.value !== undefined ? item.gstRate.value : 18);
-
-        if (pId) {
-          const p = products.find(prod => prod.id === pId);
-          if (p) {
-            hsn = p.hsnCode || hsn;
-            unit = p.unit || unit;
-            if (rate === 0) rate = Number(p.purchasePrice || 0);
-            if (item.gstRate?.value === undefined) taxPercent = Number(p.gstRate || 18);
-          }
+      // Fetch full PO with line items
+      try {
+        const fullRes = await apiClient.get(`/purchase-orders/${po.id}`);
+        const fullPo = fullRes?.data?.data || fullRes?.data || po;
+        if (Array.isArray(fullPo.items) && fullPo.items.length > 0) {
+          const poMappedItems = fullPo.items.map((it: any) => ({
+            productId: it.productId || '',
+            accountId: it.accountId || '',
+            customerId: '',
+            description: it.description || it.product?.name || '',
+            qty: Number(it.qty || it.quantity || 1),
+            rate: Number(it.rate || it.unitPrice || 0),
+            taxPercent: Number(it.taxPercent || it.taxRate || 18),
+            discount: Number(it.discount || 0),
+            unit: it.unit || 'Pcs',
+          }));
+          setValue('items', poMappedItems, { shouldValidate: true, shouldDirty: true });
+          notification.success(`Loaded ${poMappedItems.length} item(s) from Purchase Order ${poNumber}`);
         }
-
-        newTracking[`item_${idx}`] = { status: 'extracted', confidence: item.name?.confidence || 0.8 };
-
-        return {
-          keyId: `ocr-item-${idx}-${Date.now()}`,
-          productId: pId,
-          description: item.name?.value || item.extractedDescription || '',
-          originalExtractedDescription: item.extractedDescription || item.name?.value || '',
-          classification: item.classification || 'PRODUCT',
-          matchStatus: item.matchStatus || (pId ? 'EXISTING' : 'NEW'),
-          createAsNewProduct: false,
-          newProductData: item.candidateProduct,
-          hsnCode: hsn,
-          qty: Number(item.quantity?.value || 1),
-          unit,
-          rate,
-          discount: Number(item.discount?.value || 0),
-          taxPercent,
-          warehouseId: warehouseId || '',
-        };
-      });
-      setItems(mappedItems);
-    }
-
-    setFieldTracking(newTracking);
-    // Automatically open the side-by-side OCR Review Modal for instant visual verification
-    setIsReviewModalOpen(true);
-  };
-
-  const handleApplyVerification = (verifiedItems: OcrReviewItem[]) => {
-    setIsOcrVerified(true);
-    const mapped: FormLineItem[] = verifiedItems.map((v, idx) => ({
-      keyId: `verified-item-${idx}-${Date.now()}`,
-      productId: v.matchedProductId || '',
-      description: v.name || v.extractedDescription,
-      originalExtractedDescription: v.extractedDescription,
-      classification: v.classification,
-      matchStatus: v.matchStatus,
-      createAsNewProduct: v.createAsNewProduct,
-      newProductData: v.newProductData,
-      hsnCode: v.hsnSac && v.hsnSac !== 'N/A' ? v.hsnSac : 'N/A',
-      qty: Number(v.qty || 1),
-      unit: v.unit || 'PCS',
-      rate: Number(v.rate || 0),
-      discount: Number(v.discount || 0),
-      taxPercent: Number(v.gstRate || 18),
-      warehouseId: warehouseId || '',
-    }));
-    setItems(mapped);
-    notification.success('Extracted bill verified and auto-filled into form.');
-  };
-
-  const handleDocumentRemoved = () => {
-    setOcrDocument(null);
-    setOcrExtraction(null);
-    setIsOcrAssisted(false);
-    setIsOcrVerified(false);
-    setFieldTracking({});
-    notification.info('Attached vendor bill removed. Form remains editable.');
-  };
-
-  // Set default place of supply & addresses when vendor is selected
-  const handleVendorChange = (id: string) => {
-    setValue('vendorId', id);
-    markFieldModified('vendor');
-    const v = vendors.find(vendor => vendor.id === id);
-    if (v) {
-      setValue('billingAddress', v.address || '');
-      setValue('shippingAddress', v.address || '');
-      setValue('placeOfSupply', v.state || '');
-
-      // Auto check tax mode
-      const compState = companyProfile?.state?.trim().toLowerCase() || '';
-      const supplyState = (v.state || '').trim().toLowerCase();
-      if (supplyState && compState && supplyState !== compState) {
-        setTaxMode('IGST');
-      } else {
-        setTaxMode('CGST_SGST');
+      } catch (_) {
+        notification.info(`Linked Purchase Order ${poNumber}`);
       }
     }
   };
 
-  // Line item change handlers
-  const handleLineChange = (index: number, field: keyof FormLineItem, value: any, itemObj?: any) => {
-    const updated = [...items];
-    updated[index] = { ...updated[index], [field]: value };
-    markFieldModified(`item_${index}`);
-
-    // Auto populate rate/details when product changes
-    if (field === 'productId') {
-      const p = itemObj || products.find(prod => prod.id === value);
-      if (p) {
-        updated[index].description = p.name;
-        updated[index].hsnCode = p.hsnCode || 'N/A';
-        updated[index].rate = Number(p.purchasePrice || p.rate || 0);
-        updated[index].unit = p.unit || 'PCS';
-        updated[index].taxPercent = Number(p.taxRate || p.gstRate || 18);
-      }
-    }
-
-    setItems(updated);
-  };
-
-  const addLine = () => {
-    setItems([
-      ...items,
-      {
-        keyId: `new-row-${Date.now()}`,
-        productId: '',
-        description: '',
-        hsnCode: 'N/A',
-        qty: 1,
-        unit: 'PCS',
-        rate: 0,
-        discount: 0,
-        taxPercent: 18,
-        warehouseId: warehouseId
-      }
-    ]);
-  };
-
-  const removeLine = (index: number) => {
-    if (items.length === 1) {
-      notification.warning('A purchase bill must contain at least one line item');
+  // Create New Payment Term Modal submission
+  const handleSavePaymentTerm = async () => {
+    if (!newTermName.trim()) {
+      notification.warning('Please enter a term name');
       return;
     }
-    setItems(items.filter((_, idx) => idx !== index));
+    const daysNum = Number(newTermDays);
+    if (isNaN(daysNum) || daysNum < 0) {
+      notification.warning('Please enter a valid number of days');
+      return;
+    }
+
+    setIsCreatingTerm(true);
+    try {
+      await apiClient.post('/purchases/payment-terms', {
+        termName: newTermName.trim(),
+        dueAfter: daysNum,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['purchases', 'payment-terms'] });
+      notification.success(`Payment Term "${newTermName.trim()}" created successfully`);
+      handlePaymentTermsChange(newTermName.trim());
+      setNewTermName('');
+      setNewTermDays('');
+      setIsCreateTermModalOpen(false);
+    } catch (err: any) {
+      notification.error(err.response?.data?.message || 'Failed to save payment term');
+    } finally {
+      setIsCreatingTerm(false);
+    }
   };
 
-  const duplicateLine = (index: number) => {
-    const original = items[index];
-    setItems([
-      ...items,
-      {
-        ...original,
-        keyId: `dup-row-${Date.now()}`
-      }
-    ]);
-  };
+  // Watch fields for calculations
+  const items = useWatch({ control, name: 'items' }) || [];
+  const adjustmentValue = watch('adjustment') || 0;
+  const discountVal = watch('discount') || 0;
+  const discountTypeVal = watch('discountType') || '%';
+  const tdsTcsTypeVal = watch('tdsTcsType') || 'NONE';
+  const tdsTcsRateVal = watch('tdsTcsRate') || 0;
 
-  // Math totals calculation
-  const totals = React.useMemo(() => {
+  // Real live monetary calculations
+  const totals = useMemo(() => {
     let subtotal = 0;
-    let discountTotal = 0;
+    let lineDiscountTotal = 0;
     let taxTotal = 0;
+    let totalQty = 0;
 
-    items.forEach(item => {
-      const rate = Number(item.rate || 0);
-      const qty = Number(item.qty || 0);
-      const lineGross = rate * qty;
-      const discAmt = (lineGross * Number(item.discount || 0)) / 100;
-      const lineNet = lineGross - discAmt;
-      const lineTax = (lineNet * Number(item.taxPercent || 0)) / 100;
+    (items || []).forEach((it: any) => {
+      const qty = Number(it.qty) || 0;
+      const rate = Number(it.rate) || 0;
+      const disc = Number(it.discount) || 0;
+      const taxRate = Number(it.taxPercent) || 0;
 
-      subtotal += lineNet;
-      discountTotal += discAmt;
+      const lineTotal = qty * rate;
+      const lineDisc = lineTotal * (disc / 100);
+      const taxable = Math.max(0, lineTotal - lineDisc);
+      const lineTax = (taxable * taxRate) / 100;
+
+      subtotal += taxable;
+      lineDiscountTotal += lineDisc;
       taxTotal += lineTax;
+      totalQty += qty;
     });
 
-    const rawGrandTotal = subtotal + taxTotal;
-    const roundedGrandTotal = Math.round(rawGrandTotal);
-    const roundOff = roundedGrandTotal - rawGrandTotal;
+    let txnDiscountAmount = 0;
+    if (discountVal > 0) {
+      if (discountTypeVal === '%') {
+        txnDiscountAmount = (subtotal * discountVal) / 100;
+      } else {
+        txnDiscountAmount = Math.min(subtotal, discountVal);
+      }
+    }
 
-    const cgst = taxMode === 'CGST_SGST' ? taxTotal / 2 : 0;
-    const sgst = taxMode === 'CGST_SGST' ? taxTotal / 2 : 0;
-    const igst = taxMode === 'IGST' ? taxTotal : 0;
+    const netTaxable = Math.max(0, subtotal - txnDiscountAmount);
+
+    let tdsTcsAmt = 0;
+    if (tdsTcsTypeVal !== 'NONE' && tdsTcsRateVal > 0) {
+      tdsTcsAmt = Number(((netTaxable * tdsTcsRateVal) / 100).toFixed(2));
+    }
+
+    let exactGrandTotal = netTaxable + taxTotal + Number(adjustmentValue || 0);
+    if (tdsTcsTypeVal === 'TDS') {
+      exactGrandTotal -= tdsTcsAmt;
+    } else if (tdsTcsTypeVal === 'TCS') {
+      exactGrandTotal += tdsTcsAmt;
+    }
+
+    exactGrandTotal = Math.max(0, exactGrandTotal);
+    const roundedGrandTotal = Math.round(exactGrandTotal);
+    const roundOff = Number((roundedGrandTotal - exactGrandTotal).toFixed(2));
 
     return {
       subtotal,
-      discountTotal,
+      lineDiscountTotal,
+      txnDiscountAmount,
       taxTotal,
-      cgst,
-      sgst,
-      igst,
+      tdsTcsAmount: tdsTcsAmt,
       roundOff,
-      grandTotal: roundedGrandTotal
+      grandTotal: roundedGrandTotal,
+      totalQty,
     };
-  }, [items, taxMode]);
+  }, [items, adjustmentValue, discountVal, discountTypeVal, tdsTcsTypeVal, tdsTcsRateVal]);
 
-  // Save Mutation
-  const saveMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      if (isEditMode) {
-        await apiClient.put(`/purchases/${editId}`, payload);
-      } else {
-        await apiClient.post('/purchases', payload);
+  // Synchronize items with ZohoItemTable
+  const zohoItems: ZohoItemRow[] = useMemo(() => {
+    return (items || []).map((it: any, idx: number) => {
+      const prod = products.find((p: any) => p.id === it.productId);
+      const qty = Number(it.qty) || 1;
+      const rate = Number(it.rate) || 0;
+      const disc = Number(it.discount) || 0;
+      const base = qty * rate;
+      const discAmt = (base * disc) / 100;
+
+      return {
+        id: String(idx),
+        productId: it.productId,
+        accountId: it.accountId,
+        customerId: it.customerId,
+        name: prod?.name || it.description || '',
+        description: it.description || '',
+        quantity: qty,
+        rate,
+        discount: disc,
+        discountType: '%',
+        taxRate: Number(it.taxPercent) || 0,
+        amount: Math.max(0, base - discAmt),
+      };
+    });
+  }, [items, products]);
+
+  const handleZohoItemsChange = (newRows: ZohoItemRow[]) => {
+    const mapped = newRows.map((row) => {
+      let discPercent = Number(row.discount) || 0;
+      if (row.discountType === 'amount') {
+        const lineTotal = (Number(row.quantity) || 1) * (Number(row.rate) || 0);
+        discPercent = lineTotal > 0 ? ((Number(row.discount) || 0) / lineTotal) * 100 : 0;
       }
-    },
-    onSuccess: async () => {
-      notification.success(isEditMode ? 'Vendor bill updated successfully' : 'Vendor bill created successfully');
-      await erpInvalidate.purchaseBill(queryClient, {
-        vendorId: vendorId || undefined,
-      });
-      navigate('/bills');
-    },
-    onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to save purchase bill');
-    }
-  });
-
-  const handleSave = (data: BillFormValues) => {
-    // Validations
-    if (!data.vendorId) {
-      notification.error('Please select a vendor');
-      return;
-    }
-    if (!date) {
-      notification.error('Please select a billing date');
-      return;
-    }
-    const invalidItemIdx = items.findIndex(i => !i.productId && !i.description && !i.originalExtractedDescription);
-    if (invalidItemIdx !== -1) {
-      notification.error(`Please select a product or enter description for line item ${invalidItemIdx + 1}`);
-      return;
-    }
-    const zeroQtyIdx = items.findIndex(i => Number(i.qty) <= 0);
-    if (zeroQtyIdx !== -1) {
-      notification.error(`Quantity must be greater than zero for line item ${zeroQtyIdx + 1}`);
-      return;
-    }
-
-    // Explicit Verification check for AI OCR bills
-    if (isOcrAssisted && !isOcrVerified) {
-      notification.error('Please verify the extracted bill fields by clicking "Verify & Continue" before saving.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    // Build Payload
-    const payload = {
-      vendorId: data.vendorId,
-      date: new Date(data.date).toISOString(),
-      reference: data.reference,
-      billingAddress: data.billingAddress,
-      shippingAddress: data.shippingAddress,
-      placeOfSupply: data.placeOfSupply,
-      taxMode,
-      isRcm,
-      attachmentId: ocrDocument?.id || undefined,
-      gstBreakup: {
-        dueDate: data.dueDate || undefined,
-        warehouseId: warehouseId || undefined,
-        notes: notes || undefined,
-        roundOff: totals.roundOff,
-        skipStockUpdate: shouldSkipStock || undefined
-      },
-      items: items.map(i => ({
-        productId: i.productId || undefined,
-        description: i.description || i.originalExtractedDescription || 'Bill Line Item',
-        qty: Number(i.qty),
-        rate: Number(i.rate),
-        taxPercent: Number(i.taxPercent),
-        discount: Number(i.discount),
-        createAsNewProduct: Boolean(i.createAsNewProduct),
-        newProductData: i.createAsNewProduct ? i.newProductData : undefined,
-      }))
-    };
-
-    saveMutation.mutate(payload);
+      return {
+        productId: row.productId || '',
+        accountId: row.accountId || '',
+        customerId: row.customerId || '',
+        description: row.description || row.name || '',
+        qty: Number(row.quantity) || 1,
+        rate: Number(row.rate) || 0,
+        taxPercent: Number(row.taxRate ?? 18),
+        discount: discPercent,
+        unit: 'Pcs',
+      };
+    });
+    setValue('items', mapped, { shouldValidate: true, shouldDirty: true });
   };
 
-  if (loadBillId && loadingExisting) {
+  const handleAddItem = () => {
+    append({
+      productId: '',
+      accountId: '',
+      customerId: '',
+      description: '',
+      qty: 1,
+      rate: 0,
+      taxPercent: 18,
+      discount: 0,
+      unit: 'Pcs',
+    });
+  };
+
+  // Add items in bulk logic
+  const handleBulkAddConfirm = () => {
+    const selectedIds = Object.keys(bulkSelectedMap).filter((id) => bulkSelectedMap[id] > 0);
+    if (selectedIds.length === 0) {
+      notification.warning('Please select at least one item');
+      return;
+    }
+
+    const currentItems = [...items];
+    const cleanItems = currentItems.length === 1 && !currentItems[0].productId && !currentItems[0].description
+      ? []
+      : currentItems;
+
+    selectedIds.forEach((prodId) => {
+      const prod = products.find((p: any) => p.id === prodId);
+      if (prod) {
+        cleanItems.push({
+          productId: prod.id,
+          accountId: '',
+          customerId: '',
+          description: prod.name || prod.description || '',
+          qty: bulkSelectedMap[prodId] || 1,
+          rate: Number(prod.purchasePrice || prod.costPrice || prod.price || 0),
+          taxPercent: Number(prod.taxRate || prod.gstRate || 18),
+          discount: 0,
+          unit: prod.unit || 'Pcs',
+        });
+      }
+    });
+
+    setValue('items', cleanItems, { shouldValidate: true, shouldDirty: true });
+    setBulkSelectedMap({});
+    setIsBulkItemsModalOpen(false);
+    notification.success(`Added ${selectedIds.length} item(s) to bill`);
+  };
+
+  const handleFileUpload = (files: FileList | null) => {
+    if (!files) return;
+    const newFiles: AttachmentFile[] = Array.from(files).map((f) => ({
+      name: f.name,
+      size: f.size,
+      type: f.type,
+    }));
+    setAttachedFiles((prev) => [...prev, ...newFiles].slice(0, 5));
+    notification.success(`${newFiles.length} file(s) attached`);
+  };
+
+  // Submit Handler
+  const onSubmit = async (data: BillFormValues) => {
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        vendorId: data.vendorId,
+        purchaseNo: data.billNumber.trim(),
+        orderNumber: data.orderNumber || undefined,
+        reference: data.orderNumber || undefined,
+        date: new Date(data.date).toISOString(),
+        dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
+        paymentTerms: data.paymentTerms,
+        isRcm: data.isRcm,
+        subject: data.subject || undefined,
+        notes: data.notes || undefined,
+        termsConditions: data.termsConditions || undefined,
+        status: submitStatus === 'DRAFT' ? 'DRAFT' : 'OPEN',
+        discount: data.discount,
+        discountType: data.discountType,
+        discountAmount: totals.txnDiscountAmount,
+        adjustment: data.adjustment,
+        tdsTcsType: data.tdsTcsType,
+        tdsTcsRate: data.tdsTcsRate,
+        tdsTcsAmount: totals.tdsTcsAmount,
+        tdsTcsTaxId: data.tdsTcsTaxId,
+        attachedFiles,
+        items: data.items.map((it) => ({
+          productId: it.productId || undefined,
+          accountId: it.accountId || undefined,
+          customerId: it.customerId || undefined,
+          description: it.description || '',
+          qty: Number(it.qty),
+          rate: Number(it.rate),
+          taxPercent: Number(it.taxPercent),
+          discount: Number(it.discount),
+          unit: it.unit || 'Pcs',
+        })),
+      };
+
+      if (isEditMode) {
+        await apiClient.put(`/purchases/${editId}`, payload);
+        notification.success('Bill updated successfully');
+      } else {
+        await apiClient.post('/purchases', payload);
+        notification.success(submitStatus === 'DRAFT' ? 'Bill draft saved' : 'Bill created and posted successfully');
+      }
+
+      await erpInvalidate.purchaseBill(queryClient, { vendorId: data.vendorId });
+      navigate('/bills');
+    } catch (err: any) {
+      notification.error(err.response?.data?.message || 'Failed to save bill');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loadingVendors || loadingProducts || (isEditMode && loadingExisting)) {
     return (
-      <PageContainer maxWidth="7xl">
-        <PageLoader title="Loading Bill..." description="Fetching bill details, vendor info, and line items..." />
-      </PageContainer>
+      <div className="h-full flex items-center justify-center bg-white">
+        <PageLoader title="Loading Bill Form..." description="Fetching vendors, items, and ledger accounts..." />
+      </div>
     );
   }
 
-  return (
-    <PageContainer maxWidth="7xl">
-      <div className="space-y-6 pb-12">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border/60 pb-5">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/bills')}
-              className="p-2 hover:bg-muted border border-border rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-                {isEditMode ? 'Edit Vendor Bill' : isDuplicateMode ? 'Duplicate Bill' : 'New Vendor Bill'}
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                {isEditMode ? `Updating transaction fields for ${existingBill?.purchaseNo}` : 'Record vendor purchases, ledger liabilities, and stock inputs.'}
-              </p>
-            </div>
+  // Header Band: Vendor Selection with blue search button & live vendor profile
+  const headerBand = (
+    <div className="space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <label className="text-xs font-semibold text-[#2B2F36] w-36 shrink-0 flex items-center gap-1">
+          Vendor Name <span className="text-[#E54B4B]">*</span>
+        </label>
+        <div className="flex items-center gap-1.5 flex-1 max-w-lg">
+          <select
+            value={vendorId}
+            onChange={(e) => handleVendorSelect(e.target.value)}
+            className="flex-1 h-8 px-2.5 text-xs border border-gray-300 rounded-[4px] bg-white text-[#2B2F36] focus:outline-none focus:border-[#408DFB] cursor-pointer"
+          >
+            <option value="">Select a Vendor</option>
+            {vendors.map((v: any) => {
+              const displayName = v.name || v.companyName || 'Unnamed Vendor';
+              const detail = [v.companyName !== v.name ? v.companyName : null, v.gstin || v.gstNumber].filter(Boolean).join(' - ');
+              return (
+                <option key={v.id} value={v.id}>
+                  {displayName} {detail ? `(${detail})` : ''}
+                </option>
+              );
+            })}
+          </select>
+
+          {/* Blue Search Button [🔍] opening Vendor Search Modal */}
+          <button
+            type="button"
+            onClick={() => setIsVendorModalOpen(true)}
+            className="w-8 h-8 flex items-center justify-center bg-[#408DFB] hover:bg-[#2563EB] text-white rounded-[4px] transition-colors shrink-0 cursor-pointer shadow-sm"
+            title="Search Vendor"
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+      {errors.vendorId && (
+        <p className="text-[#E54B4B] text-[11px] sm:ml-40">{errors.vendorId.message}</p>
+      )}
+
+      {/* Dynamic Vendor Profile Badge */}
+      {selectedVendor && (
+        <div className="sm:ml-40 bg-[#F8F9FB] border border-[#E5E7EB] rounded-[4px] p-3 max-w-lg space-y-1 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-[#2B2F36]">{selectedVendor.name || selectedVendor.companyName}</span>
+            {(selectedVendor.gstin || selectedVendor.gstNumber) && (
+              <span className="px-1.5 py-0.5 bg-[#EFF6FF] text-[#408DFB] text-[10px] font-mono font-medium rounded border border-[#BFDBFE]">
+                GSTIN: {selectedVendor.gstin || selectedVendor.gstNumber}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => navigate('/bills')}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              form="billForm"
-              disabled={saveMutation.isPending}
-              className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold shadow-lg shadow-primary/10 flex items-center gap-1.5 px-5 py-2.5"
-            >
-              <Save className="w-4 h-4" />
-              {saveMutation.isPending ? 'Saving...' : 'Save Bill'}
-            </Button>
-          </div>
+          {(selectedVendor.phone || selectedVendor.email) && (
+            <p className="text-[11px] text-[#6B7280]">
+              {[selectedVendor.phone, selectedVendor.email].filter(Boolean).join(' • ')}
+            </p>
+          )}
+          {(selectedVendor.billingAddress || selectedVendor.address) && (
+            <p className="text-[11px] text-[#4B5563] line-clamp-2">
+              {selectedVendor.billingAddress || selectedVendor.address}
+            </p>
+          )}
+          {selectedVendor.paymentTerms && (
+            <p className="text-[10px] text-[#2563EB] font-medium pt-0.5">
+              Default Payment Terms: {selectedVendor.paymentTerms}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Form Fields Grid
+  const fieldsGrid = (
+    <div className="space-y-4">
+      {/* Row 1: Bill# + Order Number */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-xs font-semibold text-[#2B2F36] mb-1.5">
+            Bill# <span className="text-[#E54B4B]">*</span>
+          </label>
+          <input
+            type="text"
+            {...register('billNumber')}
+            placeholder="e.g. C 1373/26-27 or BILL-00001"
+            className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs font-mono text-[#2B2F36] outline-none focus:border-[#408DFB]"
+          />
+          {errors.billNumber && <p className="text-[#E54B4B] text-[11px] mt-1">{errors.billNumber.message}</p>}
         </div>
 
-        {/* Prominent Vendor Bill Upload Section */}
-        <div className="space-y-4">
-          <BillDocumentUpload
-            currentDocument={ocrDocument}
-            onExtractionSuccess={handleOcrExtractionSuccess}
-            onDocumentRemoved={handleDocumentRemoved}
-            onOpenViewer={(url, fileName, mimeType) => {
-              setViewerDoc({ url, fileName, mimeType });
-              setIsViewerOpen(true);
-            }}
-            disabled={saveMutation.isPending}
-          />
-
-          {isOcrAssisted && (
-            <OcrVerificationBanner
-              isVerified={isOcrVerified}
-              onVerify={() => setIsOcrVerified(!isOcrVerified)}
-              onOpenReview={() => setIsReviewModalOpen(true)}
-              onOpenViewer={() => {
-                if (ocrDocument?.secureUrl) {
-                  setViewerDoc({
-                    url: ocrDocument.secureUrl,
-                    fileName: ocrDocument.originalFileName,
-                    mimeType: ocrDocument.mimeType,
-                  });
-                  setIsViewerOpen(true);
-                }
-              }}
-              ocrTotal={ocrExtraction?.totals?.grandTotal?.value}
-              calculatedTotal={totals.grandTotal}
-              warnings={ocrExtraction?.warnings}
-              duplicateInfo={ocrExtraction?.duplicateCheck}
-              matchedVendorName={ocrExtraction?.matchedVendor?.name}
+        <div>
+          <label className="block text-xs font-semibold text-[#2B2F36] mb-1.5">
+            Order Number
+          </label>
+          {vendorPOs.length > 0 ? (
+            <select
+              value={watch('orderNumber') || ''}
+              onChange={(e) => handlePurchaseOrderSelect(e.target.value)}
+              className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] cursor-pointer"
+            >
+              <option value="">Select or type Order Number</option>
+              {vendorPOs.map((p: any) => (
+                <option key={p.id} value={p.orderNo || p.purchaseNo}>
+                  {p.orderNo || p.purchaseNo} ({new Date(p.date).toLocaleDateString('en-GB')} - ₹{Number(p.grandTotal || 0).toFixed(2)})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              {...register('orderNumber')}
+              placeholder="PO-00001"
+              className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB]"
             />
           )}
         </div>
-
-        <form id="billForm" onSubmit={handleFormSubmit(handleSave as any)} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Info Blocks (Left 2 cols) */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Vendor & Bill Info */}
-            <Card className="p-6 space-y-4">
-              <h3 className="font-extrabold text-base text-foreground flex items-center gap-1.5 border-b border-border pb-3">
-                <ShoppingCart className="w-5 h-5 text-primary" /> Vendor & Billing Details
-              </h3>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between pb-0.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Vendor / Supplier <span className="text-red-500">*</span>
-                    </label>
-                    <OcrFieldBadge
-                      status={fieldTracking.vendor?.status}
-                      confidence={fieldTracking.vendor?.confidence}
-                    />
-                  </div>
-                  <SearchableSelect
-                    required
-                    value={vendorId || ''}
-                    onChange={(val) => {
-                      setValue('vendorId', val, { shouldValidate: true, shouldDirty: true });
-                      handleVendorChange(val);
-                    }}
-                    options={vendors}
-                    mapOption={(v) => ({
-                      value: v.id,
-                      label: v.name,
-                      subLabel: [v.gstin, v.state].filter(Boolean).join(' • '),
-                      searchKeywords: [v.gstin, v.state].filter(Boolean),
-                    })}
-                    placeholder="Select Vendor"
-                    searchPlaceholder="Search vendors by name, GSTIN..."
-                    clearable
-                    isLoading={loadingVendors}
-                    isError={errorVendors}
-                    onRetry={() => refetchVendors()}
-                    quickCreateEntity="vendor"
-                    onQuickCreated={(newVendor) => {
-                      handleVendorChange(newVendor.id);
-                      refetchVendors();
-                    }}
-                  />
-                  <FormErrorDisplay error={errors.vendorId} />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between pb-0.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Place of Supply / State
-                    </label>
-                    <OcrFieldBadge
-                      status={fieldTracking.placeOfSupply?.status}
-                      confidence={fieldTracking.placeOfSupply?.confidence}
-                    />
-                  </div>
-                  <Input
-                    {...register('placeOfSupply', {
-                      onChange: () => markFieldModified('placeOfSupply'),
-                    })}
-                    placeholder="Auto-filled state code"
-                  />
-                  <FormErrorDisplay error={errors.placeOfSupply} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between pb-0.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Billing Date <span className="text-red-500">*</span>
-                    </label>
-                    <OcrFieldBadge
-                      status={fieldTracking.date?.status}
-                      confidence={fieldTracking.date?.confidence}
-                    />
-                  </div>
-                  <Input
-                    type="date"
-                    required
-                    {...register('date', {
-                      onChange: () => markFieldModified('date'),
-                    })}
-                  />
-                  <FormErrorDisplay error={errors.date} />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between pb-0.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Due Date
-                    </label>
-                    <OcrFieldBadge
-                      status={fieldTracking.dueDate?.status}
-                      confidence={fieldTracking.dueDate?.confidence}
-                    />
-                  </div>
-                  <Input
-                    type="date"
-                    {...register('dueDate', {
-                      onChange: () => markFieldModified('dueDate'),
-                    })}
-                  />
-                  <FormErrorDisplay error={errors.dueDate} />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between pb-0.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Vendor Reference / Invoice No
-                    </label>
-                    <OcrFieldBadge
-                      status={fieldTracking.reference?.status}
-                      confidence={fieldTracking.reference?.confidence}
-                    />
-                  </div>
-                  <Input
-                    {...register('reference', {
-                      onChange: () => markFieldModified('reference'),
-                    })}
-                    placeholder="e.g. INV/2026/001"
-                  />
-                  <FormErrorDisplay error={errors.reference} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Billing Address</label>
-                  <textarea
-                    rows={2}
-                    {...register('billingAddress')}
-                    placeholder="Vendor invoice billing address"
-                    className="w-full px-3.5 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all resize-none"
-                  />
-                  <FormErrorDisplay error={errors.billingAddress} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Shipping Address</label>
-                  <textarea
-                    rows={2}
-                    {...register('shippingAddress')}
-                    placeholder="Material delivery destination address"
-                    className="w-full px-3.5 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all resize-none"
-                  />
-                  <FormErrorDisplay error={errors.shippingAddress} />
-                </div>
-              </div>
-            </Card>
-
-            {/* Items Grid Layout */}
-            <Card className="p-6 space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="font-extrabold text-base text-foreground flex items-center gap-1.5">
-                  <Building className="w-5 h-5 text-primary" /> Purchase Items Grid
-                </h3>
-                <Button 
-                  onClick={addLine}
-                  type="button" 
-                  variant="outline" 
-                  className="text-xs font-bold flex items-center gap-1 hover:bg-primary/5 hover:text-primary hover:border-primary/40"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Row
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                {items.map((item, index) => {
-                  const lineGross = Number(item.rate || 0) * Number(item.qty || 0);
-                  const lineDiscount = (lineGross * Number(item.discount || 0)) / 100;
-                  const lineNet = lineGross - lineDiscount;
-                  const lineTax = (lineNet * Number(item.taxPercent || 0)) / 100;
-                  const lineTotal = lineNet + lineTax;
-
-                  return (
-                    <div key={item.keyId} className="p-4 border border-border/80 rounded-xl bg-muted/10 space-y-3 relative group">
-                      {/* Row Header */}
-                      <div className="flex items-center justify-between border-b border-border/30 pb-2 flex-wrap gap-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Item line {index + 1}</span>
-                          <OcrFieldBadge
-                            status={fieldTracking[`item_${index}`]?.status}
-                            confidence={fieldTracking[`item_${index}`]?.confidence}
-                          />
-
-                          {/* Matching & Catalog Status Badges */}
-                          {item.productId ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
-                              ✓ Catalog Item
-                            </span>
-                          ) : item.createAsNewProduct ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full border border-blue-300 dark:border-blue-800">
-                              + Will Create New Product
-                            </span>
-                          ) : item.originalExtractedDescription ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-800">
-                              ⚠ Not in catalog (Bill charge only)
-                            </span>
-                          ) : null}
-
-                          {/* Raw invoice description badge */}
-                          {item.originalExtractedDescription && (
-                            <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-2 py-0.5 rounded truncate max-w-xs" title={`Original invoice description: "${item.originalExtractedDescription}"`}>
-                              Invoice: &ldquo;{item.originalExtractedDescription}&rdquo;
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Decision Toggle for non-catalog items */}
-                        {!item.productId && (item.originalExtractedDescription || item.description) && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-muted-foreground font-medium">Create product?</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const nextVal = !item.createAsNewProduct;
-                                setItems(prev => {
-                                  const copy = [...prev];
-                                  copy[index] = {
-                                    ...copy[index],
-                                    createAsNewProduct: nextVal,
-                                    matchStatus: nextVal ? 'NEW' : 'SKIPPED',
-                                    newProductData: nextVal && !copy[index].newProductData ? {
-                                      name: copy[index].description || copy[index].originalExtractedDescription || 'New Product',
-                                      description: copy[index].originalExtractedDescription || copy[index].description,
-                                      itemType: copy[index].classification === 'SERVICE' ? 'SERVICE' : 'FINISHED_GOOD',
-                                      hsnCode: copy[index].hsnCode !== 'N/A' ? copy[index].hsnCode : '',
-                                      gstRate: copy[index].taxPercent || 18,
-                                      unit: copy[index].unit || 'NOS',
-                                      isInventoryItem: copy[index].classification !== 'SERVICE',
-                                    } : copy[index].newProductData,
-                                  };
-                                  return copy;
-                                });
-                              }}
-                              className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-colors ${
-                                item.createAsNewProduct
-                                  ? 'bg-primary text-primary-foreground shadow-xs'
-                                  : 'bg-muted text-muted-foreground hover:text-foreground'
-                              }`}
-                            >
-                              {item.createAsNewProduct ? 'Create as New: ON' : 'Create as New: OFF'}
-                            </button>
-                          </div>
-                        )}
-
-                        <div className="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={() => duplicateLine(index)}
-                            className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground rounded cursor-pointer"
-                            title="Duplicate Line"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeLine(index)}
-                            className="p-1 hover:bg-muted text-muted-foreground hover:text-red-500 rounded cursor-pointer"
-                            title="Delete Line"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Row Grid inputs */}
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                        <div className="md:col-span-4 space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase">Product</label>
-                          <SearchableSelect
-                            value={item.productId || ''}
-                            onChange={(val) => handleLineChange(index, 'productId', val)}
-                            options={products}
-                            mapOption={(p) => ({
-                              value: p.id,
-                              label: p.name,
-                              subLabel: [p.sku ? `SKU: ${p.sku}` : null, p.hsnCode ? `HSN: ${p.hsnCode}` : null].filter(Boolean).join(' • '),
-                              searchKeywords: [p.sku, p.hsnCode, p.barcode].filter(Boolean),
-                            })}
-                            placeholder="Select Product"
-                            searchPlaceholder="Search product by name, SKU, HSN..."
-                            triggerClassName="w-full text-xs"
-                            clearable
-                            isLoading={loadingProducts}
-                            isError={errorProducts}
-                            onRetry={() => refetchProducts()}
-                            quickCreateEntity="product"
-                            onQuickCreated={(newProd) => {
-                              handleLineChange(index, 'productId', newProd.id, newProd);
-                              refetchProducts();
-                            }}
-                          />
-                        </div>
-
-                        <div className="md:col-span-3 space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase">Description</label>
-                          <input
-                            type="text"
-                            placeholder="Specifications / Notes"
-                            value={item.description}
-                            onChange={e => handleLineChange(index, 'description', e.target.value)}
-                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                        </div>
-
-                        <div className="md:col-span-1.5 space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase">HSN Code</label>
-                          <input
-                            type="text"
-                            readOnly
-                            value={item.hsnCode}
-                            className="w-full px-2 py-1.5 bg-muted text-muted-foreground border border-border rounded-lg text-xs font-mono"
-                          />
-                        </div>
-
-                        <div className="md:col-span-1.5 space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase">Quantity</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.qty}
-                            onChange={e => handleLineChange(index, 'qty', Number(e.target.value))}
-                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                        </div>
-
-                        <div className="md:col-span-2 space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase">Rate (INR)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={item.rate}
-                            onChange={e => handleLineChange(index, 'rate', Number(e.target.value))}
-                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Row Grid tax discount calculations */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-12 gap-3 items-center pt-2">
-                        <div className="md:col-span-3 space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase">Discount (%)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={item.discount}
-                            onChange={e => handleLineChange(index, 'discount', Number(e.target.value))}
-                            className="w-full px-2 py-1 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                        </div>
-
-                        <div className="md:col-span-3 space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase">GST Tax (%)</label>
-                          <select
-                            value={item.taxPercent}
-                            onChange={e => handleLineChange(index, 'taxPercent', Number(e.target.value))}
-                            className="w-full px-2 py-1 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                          >
-                            <option value="0">0% (Nil Rated)</option>
-                            <option value="5">5% GST</option>
-                            <option value="12">12% GST</option>
-                            <option value="18">18% GST</option>
-                            <option value="28">28% GST</option>
-                          </select>
-                        </div>
-
-                        <div className="md:col-span-3 text-right">
-                          <div className="text-[10px] font-bold text-muted-foreground uppercase">Tax Amount</div>
-                          <div className="text-xs font-mono font-medium text-foreground">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(lineTax)}</div>
-                        </div>
-
-                        <div className="md:col-span-3 text-right">
-                          <div className="text-[10px] font-bold text-muted-foreground uppercase">Line Total</div>
-                          <div className="text-xs font-mono font-bold text-primary">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(lineTotal)}</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          </div>
-
-          {/* Sticky Right Side Block (Totals and Settings) */}
-          <div className="space-y-6">
-            {/* Header Configuration */}
-            <Card className="p-6 space-y-4">
-              <h3 className="font-extrabold text-base text-foreground flex items-center gap-1.5 border-b border-border pb-3">
-                <Landmark className="w-5 h-5 text-primary" /> Settings & Place
-              </h3>
-
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Destination Warehouse</label>
-                  <SearchableSelect
-                    value={warehouseId || ''}
-                    onChange={(val) => setWarehouseId(val)}
-                    options={warehouses}
-                    mapOption={(w) => ({
-                      value: w.id,
-                      label: w.name,
-                      subLabel: w.code || w.location || undefined,
-                    })}
-                    placeholder="Select Warehouse"
-                    searchPlaceholder="Search warehouses..."
-                    clearable={false}
-                    quickCreateEntity="warehouse"
-                    onQuickCreated={(newWh) => {
-                      setWarehouseId(newWh.id);
-                      refetchWarehouses();
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">GST Route Mode</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setTaxMode('CGST_SGST')}
-                      className={`px-3 py-2 border rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        taxMode === 'CGST_SGST' 
-                          ? 'border-primary bg-primary/5 text-primary ring-1 ring-primary' 
-                          : 'border-border text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      Intrastate (CGST/SGST)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTaxMode('IGST')}
-                      className={`px-3 py-2 border rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        taxMode === 'IGST' 
-                          ? 'border-primary bg-primary/5 text-primary ring-1 ring-primary' 
-                          : 'border-border text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      Interstate (IGST)
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between py-1 px-0.5 border border-border/40 rounded-lg p-2.5 bg-muted/10">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-foreground">Reverse Charge (RCM)</span>
-                    <span className="text-[10px] text-muted-foreground">GST is paid by receiver</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={isRcm}
-                    onChange={e => setIsRcm(e.target.checked)}
-                    className="w-4 h-4 text-primary focus:ring-primary rounded"
-                  />
-                </div>
-              </div>
-            </Card>
-
-            {/* Calculations & Summary */}
-            <Card className="p-6 space-y-4">
-              <h3 className="font-extrabold text-base text-foreground flex items-center gap-1.5 border-b border-border pb-3">
-                <FileCheck className="w-5 h-5 text-primary" /> Financial Summary
-              </h3>
-
-              <div className="space-y-3">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Subtotal before tax:</span>
-                  <span className="font-semibold text-foreground font-mono">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totals.subtotal)}</span>
-                </div>
-
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Total Item Discounts:</span>
-                  <span className="font-semibold text-red-500 font-mono">-{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totals.discountTotal)}</span>
-                </div>
-
-                {taxMode === 'CGST_SGST' ? (
-                  <>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Input CGST:</span>
-                      <span className="font-semibold text-foreground font-mono">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totals.cgst)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Input SGST:</span>
-                      <span className="font-semibold text-foreground font-mono">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totals.sgst)}</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Input IGST:</span>
-                    <span className="font-semibold text-foreground font-mono">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totals.igst)}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Round Off:</span>
-                  <span className="font-semibold text-foreground font-mono">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totals.roundOff)}</span>
-                </div>
-
-                <div className="flex justify-between text-sm font-bold text-foreground border-t border-border pt-3">
-                  <span>Grand Total (INR):</span>
-                  <span className="text-primary text-base font-black font-mono">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totals.grandTotal)}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-border/40 space-y-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Internal Billing Notes</label>
-                  <textarea
-                    rows={3}
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Enter additional terms or ledger descriptions..."
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 space-y-2">
-                <Button
-                  type="submit"
-                  form="billForm"
-                  disabled={saveMutation.isPending}
-                  className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-bold shadow-lg shadow-primary/10 flex items-center justify-center gap-1.5 py-3 transition-transform active:scale-[0.98]"
-                >
-                  <Save className="w-4 h-4" />
-                  {saveMutation.isPending ? 'Posting Transaction...' : 'Save & Post Ledger'}
-                </Button>
-                <div className="text-[10px] text-muted-foreground text-center flex items-center justify-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Generates stock entries & GL journal bookings.
-                </div>
-              </div>
-            </Card>
-          </div>
-        </form>
       </div>
 
-      {/* Interactive Bill OCR Review Viewer Modal (Source Document Inspection) */}
-      <BillOcrReviewViewer
-        isOpen={isViewerOpen}
-        onClose={() => setIsViewerOpen(false)}
-        documentUrl={viewerDoc.url}
-        fileName={viewerDoc.fileName}
-        mimeType={viewerDoc.mimeType}
+      {/* Row 2: Bill Date + Due Date & Payment Terms */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-xs font-semibold text-[#2B2F36] mb-1.5">
+            Bill Date <span className="text-[#E54B4B]">*</span>
+          </label>
+          <input
+            type="date"
+            value={watch('date')}
+            onChange={(e) => handleDateChange(e.target.value)}
+            className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB]"
+          />
+          {errors.date && <p className="text-[#E54B4B] text-[11px] mt-1">{errors.date.message}</p>}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-[#2B2F36]">Due Date & Terms</label>
+            <span className="text-[11px] text-[#6B7280]">Due: {watch('dueDate') || '-'}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="date"
+              {...register('dueDate')}
+              className="h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB]"
+            />
+            <div className="flex items-center gap-1">
+              <select
+                value={watch('paymentTerms')}
+                onChange={(e) => {
+                  if (e.target.value === '__NEW_TERM__') {
+                    setIsCreateTermModalOpen(true);
+                  } else {
+                    handlePaymentTermsChange(e.target.value);
+                  }
+                }}
+                className="flex-1 h-8 px-2 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] cursor-pointer"
+              >
+                {paymentTermsData.map((t) => (
+                  <option key={t.name} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
+                <option value="__NEW_TERM__" className="text-[#408DFB] font-semibold">
+                  + Configure Terms
+                </option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setIsCreateTermModalOpen(true)}
+                className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-[#CBD5E1] rounded-[4px] text-[#4B5563] cursor-pointer shrink-0"
+                title="Create New Payment Term"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Checkbox: Reverse Charge */}
+      <div className="pt-1">
+        <label className="inline-flex items-center gap-2 cursor-pointer text-xs text-[#2B2F36]">
+          <input
+            type="checkbox"
+            {...register('isRcm')}
+            className="rounded border-[#CBD5E1] text-[#408DFB] focus:ring-0 cursor-pointer"
+          />
+          <span>This transaction is applicable for reverse charge</span>
+        </label>
+      </div>
+
+      {/* Subject */}
+      <div>
+        <label className="block text-xs font-semibold text-[#2B2F36] mb-1.5">
+          Subject
+        </label>
+        <textarea
+          rows={2}
+          {...register('subject')}
+          placeholder="Enter a subject within 250 characters"
+          maxLength={250}
+          className="w-full p-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB]"
+        />
+      </div>
+    </div>
+  );
+
+  // Item Table
+  const itemTable = (
+    <ZohoItemTable
+      items={zohoItems}
+      onChange={handleZohoItemsChange}
+      onAddItem={handleAddItem}
+      onAddLandedCost={() => notification.info('Add Landed Cost allocations')}
+      onAddBulk={() => {
+        setBulkSearchQuery('');
+        setBulkSelectedMap({});
+        setIsBulkItemsModalOpen(true);
+      }}
+      products={products}
+      priceField="purchase"
+      showAccountColumn={true}
+      showCustomerColumn={true}
+      accountOptions={accounts.map((a: any) => ({ label: a.name || a.title, id: a.id }))}
+      customerOptions={customers.map((c: any) => ({ label: c.name, id: c.id }))}
+      taxOptions={[
+        { label: 'Non-Taxable (0%)', rate: 0, id: 'tax-0' },
+        { label: 'GST (5%)', rate: 5, id: 'tax-5' },
+        { label: 'GST (12%)', rate: 12, id: 'tax-12' },
+        { label: 'GST (18%)', rate: 18, id: 'tax-18' },
+        { label: 'GST (28%)', rate: 28, id: 'tax-28' },
+      ]}
+    />
+  );
+
+  // Totals Box with live TDS / TCS radio options and tax dropdown
+  const totalsBox = (
+    <ZohoTotalsBox
+      subtotal={totals.subtotal}
+      discount={discountVal}
+      discountType={discountTypeVal}
+      onDiscountChange={(val, type) => {
+        setValue('discount', val);
+        setValue('discountType', type);
+      }}
+      taxLines={[{ label: 'Taxes (GST)', amount: totals.taxTotal }]}
+      tdsTcsType={tdsTcsTypeVal}
+      tdsTcsRate={tdsTcsRateVal}
+      tdsTcsAmount={totals.tdsTcsAmount}
+      selectedTaxId={watch('tdsTcsTaxId')}
+      onTdsTcsChange={(type, val, rate, taxId) => {
+        setValue('tdsTcsType', type);
+        setValue('tdsTcsRate', rate || 0);
+        setValue('tdsTcsAmount', val || 0);
+        setValue('tdsTcsTaxId', taxId || '');
+      }}
+      adjustment={adjustmentValue}
+      onAdjustmentChange={(v) => setValue('adjustment', v)}
+      roundOff={totals.roundOff}
+      total={totals.grandTotal}
+    />
+  );
+
+  // Notes & Attachments
+  const notesAndTerms = (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-semibold text-[#2B2F36] mb-1">
+          Notes
+        </label>
+        <textarea
+          rows={3}
+          {...register('notes')}
+          placeholder="It will not be shown in PDF"
+          className="w-full bg-white border border-[#CBD5E1] rounded-[4px] p-2.5 text-xs text-[#2B2F36] outline-none focus:border-[#408DFB]"
+        />
+        <p className="text-[11px] text-[#6B7280] mt-0.5">It will not be shown in PDF</p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-[#2B2F36] mb-1">
+          Attach File(s) to Bill
+        </label>
+        <ZohoAttachmentUploader
+          files={attachedFiles}
+          onUpload={handleFileUpload}
+          onRemove={(idx) => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
+          maxFiles={5}
+          maxSizeMB={10}
+        />
+      </div>
+    </div>
+  );
+
+  // Footer Actions
+  const footer = (
+    <ZohoFormFooter
+      primaryActions={[
+        {
+          label: isEditMode ? 'Update Bill' : 'Save as Open',
+          onClick: () => {
+            setSubmitStatus('OPEN');
+            handleSubmit(onSubmit)();
+          },
+          loading: isSubmitting && submitStatus === 'OPEN',
+          disabled: isSubmitting,
+        },
+      ]}
+      secondaryActions={[
+        {
+          label: 'Save as Draft',
+          onClick: () => {
+            setSubmitStatus('DRAFT');
+            handleSubmit(onSubmit)();
+          },
+          disabled: isSubmitting,
+        },
+        {
+          label: 'Cancel',
+          onClick: () => navigate('/bills'),
+        },
+      ]}
+      templateName="Standard Template"
+      onChangeTemplate={() => notification.info('Standard Template configured')}
+      totalSummary={{
+        totalAmount: totals.grandTotal,
+        totalQuantity: totals.totalQty,
+      }}
+    />
+  );
+
+  // Filtered vendors for modal
+  const filteredVendors = useMemo(() => {
+    if (!vendorSearchQuery.trim()) return vendors;
+    const q = vendorSearchQuery.toLowerCase();
+    return vendors.filter((v: any) => {
+      const name = (v.name || v.companyName || '').toLowerCase();
+      const email = (v.email || '').toLowerCase();
+      const phone = (v.phone || '').toLowerCase();
+      const gstin = (v.gstin || v.gstNumber || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || phone.includes(q) || gstin.includes(q);
+    });
+  }, [vendors, vendorSearchQuery]);
+
+  // Filtered products for bulk modal
+  const filteredProducts = useMemo(() => {
+    if (!bulkSearchQuery.trim()) return products;
+    const q = bulkSearchQuery.toLowerCase();
+    return products.filter((p: any) => {
+      const name = (p.name || '').toLowerCase();
+      const sku = (p.sku || '').toLowerCase();
+      return name.includes(q) || sku.includes(q);
+    });
+  }, [products, bulkSearchQuery]);
+
+  return (
+    <>
+      <ZohoTransactionForm
+        title={isEditMode ? 'Edit Bill' : 'New Bill'}
+        icon={Receipt}
+        onClose={() => navigate('/bills')}
+        headerBand={headerBand}
+        fieldsGrid={fieldsGrid}
+        itemTable={itemTable}
+        totalsBox={totalsBox}
+        notesAndTerms={notesAndTerms}
+        footer={footer}
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit(onSubmit)();
+        }}
       />
 
-      {/* Dedicated Side-by-Side OCR Verification Review Modal */}
-      {ocrDocument && (
-        <BillOcrReviewModal
-          isOpen={isReviewModalOpen}
-          onClose={() => setIsReviewModalOpen(false)}
-          documentUrl={ocrDocument.secureUrl}
-          documentName={ocrDocument.originalFileName}
-          documentMime={ocrDocument.mimeType}
-          vendorName={ocrExtraction?.vendor?.name?.value || ''}
-          vendorGstin={ocrExtraction?.vendor?.gstin?.value}
-          matchedVendorName={ocrExtraction?.matchedVendor?.name}
-          invoiceNumber={reference || ocrExtraction?.invoice?.invoiceNumber?.value || ''}
-          invoiceDate={date || ocrExtraction?.invoice?.invoiceDate?.value || ''}
-          dueDate={dueDate || ocrExtraction?.invoice?.dueDate?.value}
-          subtotal={Number(ocrExtraction?.totals?.subtotal?.value || totals.subtotal)}
-          taxTotal={Number(ocrExtraction?.taxes?.totalTax?.value || totals.taxTotal)}
-          grandTotal={Number(ocrExtraction?.totals?.grandTotal?.value || totals.grandTotal)}
-          items={items.map((it, idx) => ({
-            id: it.keyId || `item-${idx}`,
-            name: it.description || it.originalExtractedDescription || `Item ${idx + 1}`,
-            extractedDescription: it.originalExtractedDescription || it.description || '',
-            classification: it.classification || 'PRODUCT',
-            matchedProductId: it.productId,
-            matchedProductName: products.find(p => p.id === it.productId)?.name,
-            matchStatus: it.matchStatus || (it.productId ? 'EXISTING' : (it.createAsNewProduct ? 'NEW' : (it.originalExtractedDescription ? 'SKIPPED' : 'NEEDS_REVIEW'))),
-            hsnSac: it.hsnCode,
-            qty: it.qty,
-            unit: it.unit,
-            rate: it.rate,
-            discount: it.discount,
-            gstRate: it.taxPercent,
-            taxAmount: (it.rate * it.qty * it.taxPercent) / 100,
-            lineTotal: (it.rate * it.qty) * (1 + it.taxPercent / 100),
-            createAsNewProduct: Boolean(it.createAsNewProduct),
-            newProductData: it.newProductData,
-          }))}
-          onApplyVerification={handleApplyVerification}
-        />
-      )}
-    </PageContainer>
+      {/* VENDOR SEARCH MODAL */}
+      <ZohoModal
+        isOpen={isVendorModalOpen}
+        onClose={() => setIsVendorModalOpen(false)}
+        title="Select Vendor"
+        maxWidth="max-w-xl"
+      >
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+            <input
+              type="text"
+              value={vendorSearchQuery}
+              onChange={(e) => setVendorSearchQuery(e.target.value)}
+              placeholder="Search vendor by name, email, phone, or GSTIN..."
+              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-[4px] text-xs focus:outline-none focus:border-[#408DFB]"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-[4px]">
+            {filteredVendors.length === 0 ? (
+              <div className="p-6 text-center text-xs text-gray-500">
+                No vendors found matching "{vendorSearchQuery}".
+              </div>
+            ) : (
+              filteredVendors.map((v: any) => {
+                const displayName = v.name || v.companyName || 'Unnamed Vendor';
+                const isSelected = v.id === vendorId;
+                return (
+                  <div
+                    key={v.id}
+                    onClick={() => {
+                      handleVendorSelect(v.id);
+                      setIsVendorModalOpen(false);
+                      setVendorSearchQuery('');
+                    }}
+                    className={`p-3 text-xs hover:bg-[#F3F4F6] cursor-pointer flex items-center justify-between transition-colors ${
+                      isSelected ? 'bg-[#EFF6FF]' : ''
+                    }`}
+                  >
+                    <div>
+                      <p className="font-semibold text-[#2B2F36]">{displayName}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        {[v.phone, v.email, v.gstin || v.gstNumber].filter(Boolean).join(' • ')}
+                      </p>
+                    </div>
+                    {isSelected && (
+                      <span className="text-[#408DFB] text-xs font-semibold">Selected</span>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="flex justify-between items-center pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsVendorModalOpen(false);
+                navigate('/vendors/new');
+              }}
+              className="text-xs text-[#408DFB] hover:underline flex items-center gap-1 font-medium cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              + Create New Vendor
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsVendorModalOpen(false)}
+              className="px-4 py-1.5 border border-gray-300 rounded-[4px] text-xs text-gray-700 hover:bg-gray-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </ZohoModal>
+
+      {/* CREATE PAYMENT TERM MODAL (Screenshot 4) */}
+      <ZohoModal
+        isOpen={isCreateTermModalOpen}
+        onClose={() => {
+          setIsCreateTermModalOpen(false);
+          setNewTermName('');
+          setNewTermDays('');
+        }}
+        title="New Payment Term"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 pt-2">
+          <div>
+            <label className="block text-xs font-semibold text-[#2B2F36] mb-1.5">
+              Term Name <span className="text-[#E54B4B]">*</span>
+            </label>
+            <input
+              type="text"
+              value={newTermName}
+              onChange={(e) => setNewTermName(e.target.value)}
+              placeholder="e.g. Net 20 or Custom Terms"
+              className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB]"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#2B2F36] mb-1.5">
+              Due After <span className="text-[#E54B4B]">*</span>
+            </label>
+            <div className="flex items-center">
+              <input
+                type="number"
+                min="0"
+                value={newTermDays}
+                onChange={(e) => setNewTermDays(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="0"
+                className="w-full h-8 px-2.5 bg-white border border-r-0 border-[#CBD5E1] rounded-l-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB]"
+              />
+              <span className="h-8 px-3 bg-gray-50 border border-[#CBD5E1] rounded-r-[4px] text-xs text-gray-600 flex items-center font-medium">
+                Days
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-4 border-t border-[#E5E7EB]">
+            <button
+              type="button"
+              onClick={handleSavePaymentTerm}
+              disabled={isCreatingTerm}
+              className="px-4 py-1.5 bg-[#408DFB] hover:bg-[#2563EB] text-white rounded-[4px] text-xs font-medium cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              {isCreatingTerm ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsCreateTermModalOpen(false);
+                setNewTermName('');
+                setNewTermDays('');
+              }}
+              className="px-4 py-1.5 bg-white border border-gray-300 rounded-[4px] text-xs text-gray-700 hover:bg-gray-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </ZohoModal>
+
+      {/* BULK ITEMS MODAL */}
+      <ZohoModal
+        isOpen={isBulkItemsModalOpen}
+        onClose={() => setIsBulkItemsModalOpen(false)}
+        title="Add Items in Bulk"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+            <input
+              type="text"
+              value={bulkSearchQuery}
+              onChange={(e) => setBulkSearchQuery(e.target.value)}
+              placeholder="Search items by name or SKU..."
+              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-[4px] text-xs focus:outline-none focus:border-[#408DFB]"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-[4px]">
+            {filteredProducts.length === 0 ? (
+              <div className="p-6 text-center text-xs text-gray-500">
+                No items found matching "{bulkSearchQuery}".
+              </div>
+            ) : (
+              filteredProducts.map((p: any) => {
+                const qtySelected = bulkSelectedMap[p.id] || 0;
+                return (
+                  <div
+                    key={p.id}
+                    className="p-3 text-xs hover:bg-[#F9FAFB] flex items-center justify-between transition-colors"
+                  >
+                    <div className="flex-1 mr-4">
+                      <p className="font-semibold text-[#2B2F36]">{p.name}</p>
+                      <p className="text-[11px] text-gray-500">
+                        SKU: {p.sku || 'N/A'} • Rate: ₹{Number(p.purchasePrice || p.costPrice || p.price || 0).toFixed(2)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        value={qtySelected === 0 ? '' : qtySelected}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setBulkSelectedMap((prev) => ({
+                            ...prev,
+                            [p.id]: val,
+                          }));
+                        }}
+                        placeholder="Qty"
+                        className="w-16 h-8 px-2 border border-gray-300 rounded-[4px] text-xs text-center"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkSelectedMap((prev) => ({
+                            ...prev,
+                            [p.id]: (prev[p.id] || 0) + 1,
+                          }));
+                        }}
+                        className={`px-2.5 py-1.5 rounded-[4px] text-xs font-medium cursor-pointer ${
+                          qtySelected > 0
+                            ? 'bg-[#EFF6FF] text-[#408DFB] border border-[#BFDBFE]'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {qtySelected > 0 ? `Selected (${qtySelected})` : '+ Add'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="flex justify-between items-center pt-2">
+            <span className="text-xs text-gray-500">
+              {Object.keys(bulkSelectedMap).filter((id) => bulkSelectedMap[id] > 0).length} item(s) selected
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkItemsModalOpen(false)}
+                className="px-4 py-1.5 border border-gray-300 rounded-[4px] text-xs text-gray-700 hover:bg-gray-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkAddConfirm}
+                className="px-4 py-1.5 bg-[#408DFB] hover:bg-[#2563EB] text-white rounded-[4px] text-xs font-medium cursor-pointer shadow-sm"
+              >
+                Add Selected Items
+              </button>
+            </div>
+          </div>
+        </div>
+      </ZohoModal>
+    </>
   );
 };
+
+export default BillForm;

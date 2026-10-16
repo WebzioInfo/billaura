@@ -248,17 +248,17 @@ export const PurchaseOrderDetails = () => {
       ],
       items: (po.items || []).map((item: any, i: number) => ({
         no: i + 1,
-        item: item.item?.name || '',
-        hsn: item.item?.hsnCode || '',
-        qty: item.quantity,
-        rate: Number(item.rate).toFixed(2),
-        tax: item.taxRate,
-        total: (Number(item.quantity) * Number(item.rate)).toFixed(2)
+        item: item.product?.name || item.description || '',
+        hsn: item.product?.hsnCode || '',
+        qty: Number(item.qty || item.quantity || 0),
+        rate: Number(item.rate || 0).toFixed(2),
+        tax: Number(item.taxPercent || item.taxRate || 0),
+        total: Number(item.total || (Number(item.qty || 0) * Number(item.rate || 0))).toFixed(2)
       })),
       summary: [
-        { label: 'Taxable Amount:', value: Number(po.taxableAmount).toFixed(2) },
-        { label: 'Tax Amount:', value: Number(po.taxAmount).toFixed(2) },
-        { label: 'Total Amount:', value: Number(po.totalAmount).toFixed(2), isTotal: true }
+        { label: 'Taxable Amount:', value: Number(po.subTotal || po.taxableAmount || 0).toFixed(2) },
+        { label: 'Tax Amount:', value: Number(po.taxTotal || po.taxAmount || 0).toFixed(2) },
+        { label: 'Total Amount:', value: Number(po.grandTotal || po.totalAmount || 0).toFixed(2), isTotal: true }
       ]
     });
   };

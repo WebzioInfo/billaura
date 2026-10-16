@@ -1,7 +1,7 @@
 import { PdfDocumentData, PdfTaxBreakupItem, PdfLineItem } from './pdf-document.types';
 
 export function numberToWordsIndian(num: number): string {
-  if (isNaN(num) || num === 0) return 'Zero Rupees Only';
+  if (isNaN(num) || num === 0) return 'Indian Rupee Zero Only';
 
   const ones = [
     '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
@@ -12,7 +12,8 @@ export function numberToWordsIndian(num: number): string {
 
   const convertTwoDigits = (n: number): string => {
     if (n < 20) return ones[n];
-    return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+    const unit = n % 10;
+    return tens[Math.floor(n / 10)] + (unit !== 0 ? '-' + ones[unit] : '');
   };
 
   const convertThreeDigits = (n: number): string => {
@@ -39,18 +40,19 @@ export function numberToWordsIndian(num: number): string {
   const thousand = Math.floor(rem / 1000);
   rem = rem % 1000;
 
-  if (crore > 0) result += convertTwoDigits(crore) + ' Crore ';
-  if (lakh > 0) result += convertTwoDigits(lakh) + ' Lakh ';
-  if (thousand > 0) result += convertTwoDigits(thousand) + ' Thousand ';
+  if (crore > 0) result += convertThreeDigits(crore) + ' Crore ';
+  if (lakh > 0) result += convertThreeDigits(lakh) + ' Lakh ';
+  if (thousand > 0) result += convertThreeDigits(thousand) + ' Thousand ';
   if (rem > 0) result += convertThreeDigits(rem) + ' ';
 
-  result = result.trim() + ' Rupees';
+  const intWords = result.trim() || 'Zero';
+  let finalStr = `Indian Rupee ${intWords}`;
 
   if (decimalPart > 0) {
-    result += ' and ' + convertTwoDigits(decimalPart) + ' Paise';
+    finalStr += ' and ' + convertTwoDigits(decimalPart) + ' Paise';
   }
 
-  return result + ' Only';
+  return finalStr + ' Only';
 }
 
 function formatDateIndian(dateStr?: string | Date | null): string {
@@ -64,10 +66,21 @@ function formatDateIndian(dateStr?: string | Date | null): string {
 }
 
 export class PdfDataBuilder {
-  static fromInvoiceModel(invoice: any, company: any): PdfDocumentData {
+  static fromInvoiceModel(invoice: any, company: any, template?: any): PdfDocumentData {
     const docType = invoice.invoiceType || 'TAX_INVOICE';
     const gstBreakup: any = invoice.gstBreakup || {};
-    const logoSrc = company?.settings?.logoBase64 || company?.logo || null;
+    
+    // Resolve logo based on template settings
+    let logoSrc = company?.settings?.logoBase64 || company?.logo || null;
+    if (template?.logoSettings) {
+      if (template.logoSettings.showLogo === false) {
+        logoSrc = null;
+      } else if (!template.logoSettings.useOrgLogo && template.logoUrl) {
+        logoSrc = template.logoUrl;
+      }
+    } else if (template?.logoUrl) {
+      logoSrc = template.logoUrl;
+    }
 
     const grandTotal = Number(invoice.grandTotal || 0);
     const amountPaid = Number(invoice.amountPaid || 0);
@@ -192,7 +205,7 @@ export class PdfDataBuilder {
         phone: invoice.businessPartner?.phone || '',
       },
       document: {
-        title: docType === 'BILL_OF_SUPPLY' ? 'BILL OF SUPPLY' : 'TAX INVOICE',
+        title: template?.config?.documentTitle || (docType === 'BILL_OF_SUPPLY' ? 'BILL OF SUPPLY' : 'TAX INVOICE'),
         documentNo: invoice.invoiceNo || '-',
         date: formatDateIndian(invoice.date),
         dueDate: invoice.dueDate ? formatDateIndian(invoice.dueDate) : undefined,
@@ -221,6 +234,7 @@ export class PdfDataBuilder {
         currency: '₹',
       },
       taxBreakup: taxBreakup.length > 0 && taxTotal > 0 ? taxBreakup : undefined,
+      template,
     };
   }
 
@@ -301,6 +315,131 @@ export class PdfDataBuilder {
         amountInWords: numberToWordsIndian(receiptAmount),
         currency: '₹',
       },
+    };
+  }
+
+  static fromQuotationModel(quotation: any, company: any, template?: any): PdfDocumentData {
+    const gstBreakup: any = quotation.gstBreakup || {};
+
+    let logoSrc = company?.settings?.logoBase64 || company?.logo || null;
+    if (template?.logoSettings) {
+      if (template.logoSettings.showLogo === false) {
+        logoSrc = null;
+      } else if (!template.logoSettings.useOrgLogo && template.logoUrl) {
+        logoSrc = template.logoUrl;
+      }
+    } else if (template?.logoUrl) {
+      logoSrc = template.logoUrl;
+    }
+
+    const grandTotal = Number(quotation.grandTotal || 0);
+    const subTotal = Number(quotation.subTotal || 0);
+    const cgstAmount = Number(quotation.cgstAmount || 0);
+    const sgstAmount = Number(quotation.sgstAmount || 0);
+    const igstAmount = Number(quotation.igstAmount || 0);
+    const cessAmount = Number(quotation.cessAmount || 0);
+    const sumGst = cgstAmount + sgstAmount + igstAmount + cessAmount;
+    const taxTotal = Math.max(Number(quotation.taxTotal || quotation.totalTaxAmount || 0), sumGst);
+
+    const bankAcct = (company?.bankAccounts && company.bankAccounts[0]) || null;
+    const bankInfo = bankAcct
+      ? {
+          bankName: bankAcct.bankName || undefined,
+          accountName: bankAcct.accountName || company?.companyName || undefined,
+          accountNumber: bankAcct.accountNumber || undefined,
+          ifsc: bankAcct.ifsc || undefined,
+          upiId: bankAcct.upiId || undefined,
+          branch: bankAcct.branch || undefined,
+        }
+      : undefined;
+
+    const companyAddressParts = [
+      company?.address,
+      company?.state,
+      company?.country,
+      company?.pinCode,
+    ].filter(Boolean);
+
+    const items: PdfLineItem[] = (quotation.items || []).map((item: any, idx: number) => {
+      const qty = Number(item.qty || 0);
+      const rate = Number(item.rate || 0);
+      const taxAmount = Number(item.taxAmount || 0);
+      const itemTotal = Number(item.total || qty * rate);
+      const taxPercent = Number(item.taxPercent || 0);
+      const hsn = item.hsn || item.product?.hsnCode || item.product?.eInvoiceHsn || undefined;
+      const unit = item.unit || item.product?.unit || 'NOS';
+
+      return {
+        index: idx + 1,
+        description: item.description || item.product?.name || 'Item',
+        hsn,
+        qty,
+        unit,
+        rate,
+        taxPercent,
+        taxAmount,
+        cgstAmount: Number(item.cgstAmount || 0),
+        sgstAmount: Number(item.sgstAmount || 0),
+        igstAmount: Number(item.igstAmount || 0),
+        cessAmount: Number(item.cessAmount || 0),
+        total: itemTotal,
+      };
+    });
+
+    const bp = quotation.businessPartner || {};
+
+    return {
+      company: {
+        name: company?.companyName || company?.legalName || 'Company Name',
+        legalName: company?.legalName || undefined,
+        address: companyAddressParts.join(', ') || company?.address || '',
+        state: company?.state || undefined,
+        gstin: company?.gstin || '',
+        pan: company?.pan || '',
+        email: company?.email || '',
+        phone: company?.phone || '',
+        logoUrl: logoSrc || undefined,
+        bankDetails: company?.settings?.invoiceSettings?.bankDetails || company?.bankDetails || undefined,
+        bankInfo,
+        terms: gstBreakup.termsConditions || template?.terms || company?.terms || undefined,
+      },
+      customer: {
+        name: bp.name || bp.legalName || 'Customer',
+        legalName: bp.legalName || undefined,
+        address: quotation.billingAddress || bp.address || '',
+        shippingAddress: quotation.shippingAddress || bp.shippingAddress || quotation.billingAddress || bp.address || undefined,
+        gstin: bp.gstin || bp.gstNumber || '',
+        pan: bp.pan || undefined,
+        state: quotation.customerStateCode || bp.state || undefined,
+        email: bp.email || '',
+        phone: bp.phone || '',
+      },
+      document: {
+        title: template?.config?.documentTitle || 'Quote',
+        documentNo: quotation.quotationNo || '-',
+        date: formatDateIndian(quotation.date),
+        dueDate: quotation.expiryDate ? formatDateIndian(quotation.expiryDate) : undefined,
+        status: quotation.status || 'DRAFT',
+        docType: 'QUOTE',
+        placeOfSupply: quotation.placeOfSupply || undefined,
+        expiryDate: quotation.expiryDate ? formatDateIndian(quotation.expiryDate) : undefined,
+        salesperson: quotation.salesperson || gstBreakup.salesperson || undefined,
+        notes: gstBreakup.notes || template?.notes || undefined,
+        terms: gstBreakup.termsConditions || template?.terms || undefined,
+      },
+      items,
+      totals: {
+        subTotal,
+        taxTotal,
+        cgstAmount: cgstAmount > 0 ? cgstAmount : undefined,
+        sgstAmount: sgstAmount > 0 ? sgstAmount : undefined,
+        igstAmount: igstAmount > 0 ? igstAmount : undefined,
+        cessAmount: cessAmount > 0 ? cessAmount : undefined,
+        grandTotal,
+        amountInWords: numberToWordsIndian(grandTotal),
+        currency: '₹',
+      },
+      template,
     };
   }
 }

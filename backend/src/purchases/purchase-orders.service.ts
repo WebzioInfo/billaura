@@ -85,7 +85,22 @@ export class PurchaseOrdersService {
       const nextNum = config.currentNumber + 1;
       return { nextNumber: `${config.prefix || 'PO-'}${String(nextNum).padStart(config.padding || 5, '0')}` };
     }
-    return { nextNumber: 'PO-00001' };
+
+    const allPos = await this.prisma.purchaseOrder.findMany({
+      where: { companyId, orderNo: { startsWith: 'PO-' } },
+      select: { orderNo: true },
+    });
+    let maxNum = 0;
+    for (const p of allPos) {
+      const match = p.orderNo.match(/PO-(\d+)$/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (!isNaN(n) && n > maxNum) {
+          maxNum = n;
+        }
+      }
+    }
+    return { nextNumber: `PO-${String(maxNum + 1).padStart(5, '0')}` };
   }
 
   async findOne(id: string) {
@@ -100,18 +115,20 @@ export class PurchaseOrdersService {
     const metadata = (order.gstBreakup as any) || {};
     const itemsMeta = metadata.itemsMeta || [];
 
-    // Augment items with unit and discount if preserved in metadata
+    // Augment items with unit, account, and discount if preserved in metadata
     const augmentedItems = order.items.map((item, idx) => {
       const metaItem = itemsMeta[idx] || itemsMeta.find((m: any) => m.productId === item.productId && m.description === item.description);
       return {
         ...item,
         unit: item.product?.unit || metaItem?.unit || 'Pcs',
         discount: metaItem?.discount || 0,
+        accountId: metaItem?.accountId || '',
       };
     });
 
     return {
       ...order,
+      ...metadata,
       items: augmentedItems,
     };
   }
@@ -125,12 +142,20 @@ export class PurchaseOrdersService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      let orderNo = dto.orderNo;
+      let orderNo = dto.orderNo?.trim();
       if (orderNo) {
         const existing = await tx.purchaseOrder.findFirst({
           where: { companyId, orderNo },
         });
-        if (existing) throw new ConflictException(`Purchase Order number "${orderNo}" is already in use`);
+        if (existing) {
+          const next = await this.getNextNumber();
+          if (next.nextNumber && next.nextNumber !== orderNo) {
+            const check = await tx.purchaseOrder.findFirst({ where: { companyId, orderNo: next.nextNumber } });
+            orderNo = check ? `PO-${Date.now().toString().slice(-5)}` : next.nextNumber;
+          } else {
+            throw new ConflictException(`Purchase Order number "${orderNo}" is already in use`);
+          }
+        }
       } else {
         orderNo = await this.sequenceService.generateNextSequence(companyId, 'PURCHASE_ORDER', tx);
       }
@@ -152,7 +177,7 @@ export class PurchaseOrdersService {
 
         return {
           productId: item.productId || null,
-          description: item.description,
+          description: item.description?.trim() || 'Line Item',
           qty,
           rate,
           taxPercent,
@@ -160,6 +185,7 @@ export class PurchaseOrdersService {
           total,
           discount,
           unit: item.unit || 'Pcs',
+          accountId: (item as any).accountId || null,
           taxable,
           gross,
           discAmt,
@@ -170,7 +196,17 @@ export class PurchaseOrdersService {
       const totalDiscount = processedItems.reduce((sum, item) => sum + item.discAmt, 0);
       const taxableTotal = subTotal - totalDiscount;
       const taxTotal = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
-      const grandTotal = Math.round(taxableTotal + taxTotal);
+      
+      let grandTotal = taxableTotal + taxTotal + Number(dto.adjustment || 0);
+      if (dto.discountAmount) {
+        grandTotal -= Number(dto.discountAmount);
+      }
+      if (dto.tdsTcsType === 'TDS') {
+        grandTotal -= Number(dto.tdsTcsAmount || 0);
+      } else if (dto.tdsTcsType === 'TCS') {
+        grandTotal += Number(dto.tdsTcsAmount || 0);
+      }
+      grandTotal = Math.max(0, Math.round(grandTotal));
 
       const metadata = {
         expectedDeliveryDate: dto.expectedDeliveryDate,
@@ -178,6 +214,23 @@ export class PurchaseOrdersService {
         buyer: dto.buyer,
         notes: dto.notes,
         referenceNo: dto.referenceNo,
+        deliveryAddressType: dto.deliveryAddressType || 'ORGANIZATION',
+        deliveryCustomerId: dto.deliveryCustomerId,
+        deliveryCustomerName: dto.deliveryCustomerName,
+        deliveryCustomerAddress: dto.deliveryCustomerAddress,
+        paymentTerms: dto.paymentTerms,
+        shipmentPreference: dto.shipmentPreference,
+        isRcm: Boolean(dto.isRcm),
+        termsConditions: dto.termsConditions,
+        discount: Number(dto.discount || 0),
+        discountType: dto.discountType || '%',
+        discountAmount: Number(dto.discountAmount || 0),
+        adjustment: Number(dto.adjustment || 0),
+        tdsTcsType: dto.tdsTcsType || 'NONE',
+        tdsTcsRate: Number(dto.tdsTcsRate || 0),
+        tdsTcsAmount: Number(dto.tdsTcsAmount || 0),
+        tdsTcsTaxId: dto.tdsTcsTaxId,
+        attachedFiles: dto.attachedFiles || [],
         createdByName: user?.name || user?.email || 'System Admin',
         receivedQty: {},
         itemsMeta: processedItems.map(p => ({
@@ -185,6 +238,7 @@ export class PurchaseOrdersService {
           description: p.description,
           discount: p.discount,
           unit: p.unit,
+          accountId: p.accountId,
         })),
       };
 
@@ -202,7 +256,7 @@ export class PurchaseOrdersService {
           taxTotal,
           totalTaxAmount: taxTotal,
           grandTotal,
-          status: dto.status || 'DRAFT',
+          status: (dto.status as string) === 'ISSUED' ? 'SENT' : (dto.status || 'DRAFT'),
           gstBreakup: metadata as any,
           items: {
             create: processedItems.map(item => ({
@@ -223,7 +277,11 @@ export class PurchaseOrdersService {
         await this.logAudit(companyId, userId, 'CREATE', 'PurchaseOrder', null, po);
       }
 
-      return po;
+      const poMeta = (po.gstBreakup as any) || {};
+      return {
+        ...po,
+        ...poMeta,
+      };
     });
   }
 
@@ -250,18 +308,41 @@ export class PurchaseOrdersService {
     }
 
     const updateData: any = {};
-    if (dto.status) updateData.status = dto.status;
+    if (dto.status) {
+      updateData.status = (dto.status as any) === 'ISSUED' ? 'SENT' : dto.status;
+    }
+    if (dto.businessPartnerId) updateData.businessPartnerId = dto.businessPartnerId;
+    if (dto.orderNo) updateData.orderNo = dto.orderNo;
+    if (dto.taxMode) updateData.taxMode = dto.taxMode;
+    if (dto.placeOfSupply !== undefined) updateData.placeOfSupply = dto.placeOfSupply;
     if (dto.date) updateData.date = new Date(dto.date);
-    if (dto.billingAddress) updateData.billingAddress = dto.billingAddress;
-    if (dto.shippingAddress) updateData.shippingAddress = dto.shippingAddress;
+    if (dto.billingAddress !== undefined) updateData.billingAddress = dto.billingAddress;
+    if (dto.shippingAddress !== undefined) updateData.shippingAddress = dto.shippingAddress;
 
     const newMeta = {
       ...existingMeta,
-      ...(dto.expectedDeliveryDate && { expectedDeliveryDate: dto.expectedDeliveryDate }),
-      ...(dto.warehouseId && { warehouseId: dto.warehouseId }),
-      ...(dto.buyer && { buyer: dto.buyer }),
-      ...(dto.notes && { notes: dto.notes }),
-      ...(dto.referenceNo && { referenceNo: dto.referenceNo }),
+      ...(dto.expectedDeliveryDate !== undefined && { expectedDeliveryDate: dto.expectedDeliveryDate }),
+      ...(dto.warehouseId !== undefined && { warehouseId: dto.warehouseId }),
+      ...(dto.buyer !== undefined && { buyer: dto.buyer }),
+      ...(dto.notes !== undefined && { notes: dto.notes }),
+      ...(dto.referenceNo !== undefined && { referenceNo: dto.referenceNo }),
+      ...(dto.deliveryAddressType !== undefined && { deliveryAddressType: dto.deliveryAddressType }),
+      ...(dto.deliveryCustomerId !== undefined && { deliveryCustomerId: dto.deliveryCustomerId }),
+      ...(dto.deliveryCustomerName !== undefined && { deliveryCustomerName: dto.deliveryCustomerName }),
+      ...(dto.deliveryCustomerAddress !== undefined && { deliveryCustomerAddress: dto.deliveryCustomerAddress }),
+      ...(dto.paymentTerms !== undefined && { paymentTerms: dto.paymentTerms }),
+      ...(dto.shipmentPreference !== undefined && { shipmentPreference: dto.shipmentPreference }),
+      ...(dto.isRcm !== undefined && { isRcm: Boolean(dto.isRcm) }),
+      ...(dto.termsConditions !== undefined && { termsConditions: dto.termsConditions }),
+      ...(dto.discount !== undefined && { discount: Number(dto.discount) }),
+      ...(dto.discountType !== undefined && { discountType: dto.discountType }),
+      ...(dto.discountAmount !== undefined && { discountAmount: Number(dto.discountAmount) }),
+      ...(dto.adjustment !== undefined && { adjustment: Number(dto.adjustment) }),
+      ...(dto.tdsTcsType !== undefined && { tdsTcsType: dto.tdsTcsType }),
+      ...(dto.tdsTcsRate !== undefined && { tdsTcsRate: Number(dto.tdsTcsRate) }),
+      ...(dto.tdsTcsAmount !== undefined && { tdsTcsAmount: Number(dto.tdsTcsAmount) }),
+      ...(dto.tdsTcsTaxId !== undefined && { tdsTcsTaxId: dto.tdsTcsTaxId }),
+      ...(dto.attachedFiles !== undefined && { attachedFiles: dto.attachedFiles }),
     };
 
     if (dto.items) {
@@ -297,7 +378,7 @@ export class PurchaseOrdersService {
 
         return {
           productId: item.productId || null,
-          description: item.description,
+          description: item.description?.trim() || 'Line Item',
           qty,
           rate,
           taxPercent,
@@ -305,6 +386,7 @@ export class PurchaseOrdersService {
           total,
           discount,
           unit: item.unit || 'Pcs',
+          accountId: (item as any).accountId || null,
           taxable,
           gross,
           discAmt,
@@ -315,7 +397,15 @@ export class PurchaseOrdersService {
       const totalDiscount = processedItems.reduce((sum, item) => sum + item.discAmt, 0);
       const taxableTotal = subTotal - totalDiscount;
       const taxTotal = processedItems.reduce((sum, item) => sum + item.taxAmount, 0);
-      const grandTotal = Math.round(taxableTotal + taxTotal);
+
+      let grandTotal = taxableTotal + taxTotal + Number(dto.adjustment ?? newMeta.adjustment ?? 0);
+      const discAmt = dto.discountAmount ?? newMeta.discountAmount ?? 0;
+      if (discAmt) grandTotal -= Number(discAmt);
+      const ttType = dto.tdsTcsType ?? newMeta.tdsTcsType ?? 'NONE';
+      const ttAmt = dto.tdsTcsAmount ?? newMeta.tdsTcsAmount ?? 0;
+      if (ttType === 'TDS') grandTotal -= Number(ttAmt);
+      else if (ttType === 'TCS') grandTotal += Number(ttAmt);
+      grandTotal = Math.max(0, Math.round(grandTotal));
 
       updateData.subTotal = subTotal;
       updateData.taxTotal = taxTotal;
@@ -327,6 +417,7 @@ export class PurchaseOrdersService {
         description: p.description,
         discount: p.discount,
         unit: p.unit,
+        accountId: p.accountId,
       }));
 
       // Delete existing and recreate
@@ -359,7 +450,7 @@ export class PurchaseOrdersService {
       await this.logAudit(companyId, userId, 'UPDATE', 'PurchaseOrder', oldPo, updated);
     }
 
-    return updated;
+    return this.findOne(id);
   }
 
   async remove(id: string, userId?: string) {

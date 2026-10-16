@@ -15,6 +15,22 @@ export class CreateProductDto {
 
   @IsString()
   @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  purchaseDescription?: string;
+
+  @IsNumber()
+  @IsOptional()
+  openingStock?: number;
+
+  @IsNumber()
+  @IsOptional()
+  openingStockRate?: number;
+
+  @IsString()
+  @IsOptional()
   categoryId?: string;
 
   @IsString()

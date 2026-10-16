@@ -1,329 +1,776 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { 
-  ArrowLeft, Edit2, Phone, Mail, Building, MapPin, DollarSign, 
-  ShoppingCart, CreditCard, Activity, ArrowUpRight, CheckCircle2, AlertCircle, FileText
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Edit,
+  Trash2,
+  Plus,
+  ChevronDown,
+  ChevronRight,
+  MoreVertical,
+  Paperclip,
+  Printer,
+  Download,
+  Mail,
+  Phone,
+  Building2,
+  Clock,
+  ShoppingCart,
+  CreditCard,
+  FileText,
 } from 'lucide-react';
-import { PageContainer, LoadingState, EmptyState, Breadcrumb } from '@/shared/components/ui/LayoutComponents';
-import { PageLoader } from '@/shared/components/ui';
-import { Card } from '@/shared/components/ui/Card';
-import { Button } from '@/shared/components/ui/Button';
-import { DataTable } from '@/shared/components/ui/data-table/DataTable';
 import apiClient from '@/core/api';
-import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
-import { getVendorDisplayName } from '@/shared/utils/entityNames';
+import notification from '@/core/services/NotificationService';
+import { dialog } from '@/core/services/DialogService';
+import { erpInvalidate } from '@/core/query/erpConsistency';
+import { ExportService } from '@/core/services/ExportService';
+import { DocumentEngine } from '@/core/reporting/DocumentEngine';
+import { cn } from '@/lib/utils';
+import { ZohoSplitDetail, ZohoStatusText } from '@/shared/components/zoho';
 
-const formatCurrency = (val: number) => {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
-};
-
-const formatDate = (date: string) => {
-  if (!date) return '';
-  return date.split('T')[0];
-};
-
-export const VendorProfile = () => {
+export const VendorProfile: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'purchases' | 'payments' | 'ledger'>('purchases');
+  const queryClient = useQueryClient();
 
-  // Vendor Data
-  const { data: vendor, isLoading: loadingVendor } = useQuery({
+  const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'statement' | 'comments'>('overview');
+
+  // Collapsible section toggles
+  const [addressOpen, setAddressOpen] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [contactsOpen, setContactsOpen] = useState(true);
+
+  // Dropdown states
+  const [newTxnOpen, setNewTxnOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+
+  // 1. Fetch Vendors List for left compact list
+  const { data: vendorsData } = useQuery({
+    queryKey: ['vendors'],
+    queryFn: async () => {
+      const res = await apiClient.get('/vendors');
+      const items = res.data?.data?.items || res.data?.items || (Array.isArray(res.data?.data) ? res.data.data : res.data) || [];
+      return Array.isArray(items) ? items : [];
+    },
+  });
+  const allVendors = Array.isArray(vendorsData) ? vendorsData : [];
+
+  // 2. Fetch Selected Vendor Detail
+  const { data: vendor, isLoading } = useQuery({
     queryKey: ['vendor', id],
     queryFn: async () => {
       const res = await apiClient.get(`/vendors/${id}`);
       return res.data?.data || res.data || null;
-    }
+    },
+    enabled: Boolean(id),
   });
 
-  const displayName = getVendorDisplayName(vendor);
-  useDynamicTitle(vendor ? displayName : null);
-
-  // Recent Purchases
-  const { data: purchasesData, isLoading: loadingPurchases } = useQuery({
+  // 3. Fetch Vendor Bills / Purchases
+  const { data: purchasesData } = useQuery({
     queryKey: ['vendor-purchases', id],
     queryFn: async () => {
       const res = await apiClient.get('/purchases', { params: { vendorId: id, limit: 50 } });
       return res.data?.data?.items || res.data?.data || [];
-    }
+    },
+    enabled: Boolean(id),
   });
+  const purchases = Array.isArray(purchasesData) ? purchasesData : [];
 
-  // Recent Payments
-  const { data: paymentsData, isLoading: loadingPayments } = useQuery({
+  // 4. Fetch Vendor Payments
+  const { data: paymentsData } = useQuery({
     queryKey: ['vendor-payments', id],
     queryFn: async () => {
       const res = await apiClient.get('/purchases/payments', { params: { vendorId: id, limit: 50 } });
       return res.data?.data?.items || res.data?.data || [];
-    }
+    },
+    enabled: Boolean(id),
   });
-
-  const purchases = Array.isArray(purchasesData) ? purchasesData : [];
   const payments = Array.isArray(paymentsData) ? paymentsData : [];
 
-  const purchaseColumns = useMemo(() => [
-    {
-      accessorKey: 'billNo',
-      header: 'Bill No',
-      cell: ({ row }: any) => <span className="font-medium text-foreground">{row.original.billNo}</span>
-    },
-    {
-      accessorKey: 'date',
-      header: 'Date',
-      cell: ({ row }: any) => <span className="text-muted-foreground">{formatDate(row.original.date)}</span>
-    },
-    {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ row }: any) => {
-        const s = row.original.status;
-        if (s === 'PAID') return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Paid</span>;
-        if (s === 'PARTIAL') return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Partial</span>;
-        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">Unpaid</span>;
+  // 5. Fetch Vendor Ledger
+  const { data: ledger } = useQuery({
+    queryKey: ['vendor', id, 'ledger'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get(`/vendors/${id}/ledger`);
+        return res.data?.data || res.data || null;
+      } catch {
+        return null;
       }
     },
-    {
-      accessorKey: 'grandTotal',
-      header: () => <div className="text-right">Amount</div>,
-      cell: ({ row }: any) => <div className="text-right font-medium">{formatCurrency(row.original.grandTotal)}</div>
-    }
-  ], []);
+    enabled: Boolean(id),
+  });
 
-  const paymentColumns = useMemo(() => [
-    {
-      accessorKey: 'paymentNo',
-      header: 'Payment No',
-      cell: ({ row }: any) => <span className="font-medium text-foreground">{row.original.paymentNo || row.original.voucherNo}</span>
+  // Delete Mutation
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return apiClient.delete(`/vendors/${id}`);
     },
-    {
-      accessorKey: 'date',
-      header: 'Date',
-      cell: ({ row }: any) => <span className="text-muted-foreground">{formatDate(row.original.date)}</span>
+    onSuccess: async () => {
+      await erpInvalidate.vendor(queryClient, { vendorId: id });
+      notification.success('Vendor deleted successfully');
+      navigate('/vendors');
     },
-    {
-      accessorKey: 'method',
-      header: 'Method',
-      cell: ({ row }: any) => <span className="text-muted-foreground">{row.original.method?.replace('_', ' ')}</span>
+    onError: (err: any) => {
+      notification.error(err.response?.data?.message || 'Failed to delete vendor');
     },
-    {
-      accessorKey: 'amount',
-      header: () => <div className="text-right">Amount</div>,
-      cell: ({ row }: any) => <div className="text-right font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(row.original.amount)}</div>
-    }
-  ], []);
+  });
 
-  if (loadingVendor) {
+  const handleDelete = async () => {
+    const confirmed = await dialog.confirmDelete(
+      'Delete Vendor?',
+      `Are you sure you want to delete "${vendor?.name}"? This action cannot be undone.`
+    );
+    if (confirmed) {
+      deleteMutation.mutate();
+    }
+  };
+
+  const handleExportStatement = () => {
+    if (!ledger?.transactions || ledger.transactions.length === 0) {
+      notification.error('No statement transactions to export');
+      return;
+    }
+    const headers = ['Date', 'Type', 'Reference', 'Debit', 'Credit', 'Balance'];
+    const rows = ledger.transactions.map((t: any) => ({
+      Date: t.date?.split('T')[0] || '',
+      Type: t.type || '',
+      Reference: t.reference || '',
+      Debit: t.balanceImpact > 0 ? t.balanceImpact : 0,
+      Credit: t.balanceImpact < 0 ? Math.abs(t.balanceImpact) : 0,
+      Balance: t.runningBalance || 0,
+    }));
+    ExportService.exportCsv(`${vendor?.name || 'Vendor'}_Statement.csv`, rows, headers);
+  };
+
+  const handlePrintStatement = async () => {
+    if (!ledger?.transactions || ledger.transactions.length === 0) {
+      notification.error('No statement transactions to print');
+      return;
+    }
+    await DocumentEngine.generateTablePDF({
+      title: `Statement of Accounts: ${vendor?.name}`,
+      columns: [
+        { header: 'Date', dataKey: 'date', width: 25 },
+        { header: 'Type', dataKey: 'type', width: 25 },
+        { header: 'Reference', dataKey: 'reference', width: 40 },
+        { header: 'Debit (₹)', dataKey: 'debit', align: 'right' },
+        { header: 'Credit (₹)', dataKey: 'credit', align: 'right' },
+      ],
+      data: ledger.transactions.map((t: any) => ({
+        date: t.date?.split('T')[0] || '',
+        type: t.type || '',
+        reference: t.reference || '',
+        debit: t.balanceImpact > 0 ? `₹${t.balanceImpact.toFixed(2)}` : '',
+        credit: t.balanceImpact < 0 ? `₹${Math.abs(t.balanceImpact).toFixed(2)}` : '',
+      })),
+    });
+  };
+
+  // Map compact list items for SplitDetail
+  const splitItems = useMemo(() => {
+    return allVendors.map((v: any) => ({
+      id: v.id,
+      name: v.name || 'Unnamed Vendor',
+      amount: v.balance || v.outstandingBalance || 0,
+      number: v.bpCode || v.vendorCode || 'VEND',
+      date: v.createdAt ? v.createdAt.split('T')[0] : '',
+      status: v.status || 'ACTIVE',
+    }));
+  }, [allVendors]);
+
+  if (isLoading && !vendor) {
     return (
-      <PageContainer maxWidth="6xl">
-        <PageLoader title="Loading Vendor Profile..." description="Fetching supplier details and payment history..." />
-      </PageContainer>
+      <div className="w-full h-full flex items-center justify-center p-12 text-xs text-[#6B7280]">
+        Loading Vendor Profile...
+      </div>
     );
   }
 
   if (!vendor) {
     return (
-      <PageContainer maxWidth="6xl">
-        <EmptyState title="Vendor Not Found" description="The vendor you are looking for does not exist." actionLabel="Back to Vendors" onActionClick={() => navigate('/vendors')} />
-      </PageContainer>
+      <div className="w-full h-full flex flex-col items-center justify-center p-12 text-xs text-[#6B7280] space-y-3">
+        <p>Vendor not found.</p>
+        <button
+          type="button"
+          onClick={() => navigate('/vendors')}
+          className="px-4 py-1.5 bg-[#408DFB] text-white rounded-[4px] cursor-pointer"
+        >
+          Back to Vendors
+        </button>
+      </div>
     );
   }
 
+  const payable = Number(vendor.payableBalance || vendor.balance || vendor.outstandingBalance || 0);
+  const unusedCredits = Number(vendor.unusedCredits || 0);
+  const initials = (vendor.name || 'V')
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
-    <PageContainer maxWidth="6xl">
-      <div className="mb-4">
-        <Breadcrumb items={[
-          { label: 'Vendors', href: '/vendors' },
-          { label: displayName }
-        ]} />
-      </div>
-      {/* Header Profile Section */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
-        <div className="flex items-start gap-4">
-          <button 
-            onClick={() => navigate('/vendors')}
-            className="mt-1 p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground hover:text-foreground border border-border/40 bg-surface"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-foreground tracking-tight">{displayName}</h1>
-              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary uppercase tracking-wider">
-                {vendor.bpCode || vendor.vendorCode}
-              </span>
-            </div>
-            {vendor.tradeName && <p className="text-muted-foreground mt-1 font-medium">{vendor.tradeName}</p>}
-            
-            <div className="flex flex-wrap gap-4 mt-4 text-sm">
-              {vendor.email && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Mail className="w-4 h-4 text-primary" /> {vendor.email}
-                </div>
-              )}
-              {vendor.phone && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Phone className="w-4 h-4 text-primary" /> {vendor.phone}
-                </div>
-              )}
-              {vendor.gstin && (
-                <div className="flex items-center gap-1.5 text-muted-foreground font-mono">
-                  <Building className="w-4 h-4 text-primary" /> GSTIN: {vendor.gstin}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
+    <ZohoSplitDetail
+      moduleTitle="All Vendors"
+      items={splitItems}
+      selectedId={id || ''}
+      onSelect={(selectedId) => navigate(`/vendors/${selectedId}`)}
+      onNew={() => navigate('/vendors/new')}
+      onClose={() => navigate('/vendors')}
+      detailTitle={vendor.name}
+      detailActions={
         <div className="flex items-center gap-2">
-          <Button onClick={() => navigate(`/bills/new?vendorId=${vendor.id}`)} variant="outline" className="font-semibold bg-background">
-            <ShoppingCart className="w-4 h-4 mr-2" /> New Bill
-          </Button>
-          <Button onClick={() => navigate(`/vendors/${vendor.id}/edit`)} variant="primary" className="font-semibold shadow-sm">
-            <Edit2 className="w-4 h-4 mr-2" /> Edit Profile
-          </Button>
+          {/* Edit Button */}
+          <button
+            type="button"
+            onClick={() => navigate(`/vendors/${id}/edit`)}
+            className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] rounded-[4px] text-xs font-medium text-[#2B2F36] cursor-pointer"
+          >
+            <Edit className="w-3.5 h-3.5 text-[#6B7280]" />
+            <span>Edit</span>
+          </button>
+
+          {/* Blue "New Transaction ▾" Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setNewTxnOpen(!newTxnOpen)}
+              className="inline-flex items-center gap-1 px-3 py-1 bg-[#408DFB] hover:bg-[#3078E0] text-white rounded-[4px] text-xs font-medium cursor-pointer"
+            >
+              <span>New Transaction</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
+            {newTxnOpen && (
+              <div className="absolute left-0 mt-1 w-44 bg-white text-[#2B2F36] rounded-[4px] shadow-xl border border-[#E5E7EB] py-1 z-50 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTxnOpen(false);
+                    navigate(`/bills/new?vendorId=${id}`);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#F0F5FF] hover:text-[#408DFB] cursor-pointer"
+                >
+                  Bill
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTxnOpen(false);
+                    navigate(`/purchase-orders/new?vendorId=${id}`);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#F0F5FF] hover:text-[#408DFB] cursor-pointer"
+                >
+                  Purchase Order
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTxnOpen(false);
+                    navigate(`/expenses?vendorId=${id}`);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#F0F5FF] hover:text-[#408DFB] cursor-pointer"
+                >
+                  Expense
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTxnOpen(false);
+                    navigate(`/debit-notes/new?vendorId=${id}`);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#F0F5FF] hover:text-[#408DFB] cursor-pointer"
+                >
+                  Vendor Credit
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* "More ▾" Options */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+              className="p-1 bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] rounded-[4px] text-[#6B7280] hover:text-[#2B2F36] cursor-pointer"
+              title="More"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {moreMenuOpen && (
+              <div className="absolute right-0 mt-1 w-36 bg-white text-[#2B2F36] rounded-[4px] shadow-xl border border-[#E5E7EB] py-1 z-50 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    navigate(`/vendors/new?cloneFrom=${id}`);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#F8F9FB] cursor-pointer"
+                >
+                  Clone
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    handleDelete();
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#FEF2F2] text-[#E54B4B] cursor-pointer font-medium"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="p-6 bg-gradient-to-br from-surface to-surface/50 border-border/60 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <DollarSign className="w-24 h-24" />
-          </div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">Outstanding Payable</h3>
-            <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg"><AlertCircle className="w-4 h-4" /></div>
-          </div>
-          <div className="text-3xl font-bold text-foreground">{formatCurrency(Number(vendor.payableBalance || 0))}</div>
-          <p className="text-xs text-muted-foreground mt-2">Amount you owe to this vendor</p>
-        </Card>
-
-        <Card className="p-6 bg-gradient-to-br from-surface to-surface/50 border-border/60 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <CreditCard className="w-24 h-24" />
-          </div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">Total Bills (YTD)</h3>
-            <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg"><ShoppingCart className="w-4 h-4" /></div>
-          </div>
-          <div className="text-3xl font-bold text-foreground">{purchases.length}</div>
-          <p className="text-xs text-muted-foreground mt-2">Recorded in the current year</p>
-        </Card>
-
-        <Card className="p-6 bg-gradient-to-br from-surface to-surface/50 border-border/60 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <CheckCircle2 className="w-24 h-24" />
-          </div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">Credit Limit</h3>
-            <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg"><Activity className="w-4 h-4" /></div>
-          </div>
-          <div className="text-3xl font-bold text-foreground">{formatCurrency(Number(vendor.creditLimit || 0))}</div>
-          <p className="text-xs text-muted-foreground mt-2">Maximum allowable credit</p>
-        </Card>
-      </div>
-
-      {/* Main Content Tabs */}
-      <Card className="flex flex-col shadow-sm border-border/60 overflow-hidden">
-        <div className="flex items-center gap-6 border-b border-border/40 px-6 pt-4 bg-surface/50">
+      }
+    >
+      <div className="flex flex-col h-full bg-white select-none">
+        {/* Detail Tabs Bar: Overview | Transactions | Statement | Comments */}
+        <div className="h-10 px-6 border-b border-[#E5E7EB] bg-white flex items-center gap-6 text-xs shrink-0">
           <button
-            className={`pb-4 font-semibold text-sm transition-colors relative ${activeTab === 'purchases' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setActiveTab('purchases')}
+            type="button"
+            onClick={() => setActiveTab('overview')}
+            className={cn(
+              'h-full border-b-2 font-medium cursor-pointer transition-colors flex items-center',
+              activeTab === 'overview'
+                ? 'border-[#408DFB] text-[#408DFB] font-semibold'
+                : 'border-transparent text-[#6B7280] hover:text-[#2B2F36]'
+            )}
           >
-            Recent Purchases
-            {activeTab === 'purchases' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full" />}
+            Overview
           </button>
+
           <button
-            className={`pb-4 font-semibold text-sm transition-colors relative ${activeTab === 'payments' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setActiveTab('payments')}
+            type="button"
+            onClick={() => setActiveTab('transactions')}
+            className={cn(
+              'h-full border-b-2 font-medium cursor-pointer transition-colors flex items-center',
+              activeTab === 'transactions'
+                ? 'border-[#408DFB] text-[#408DFB] font-semibold'
+                : 'border-transparent text-[#6B7280] hover:text-[#2B2F36]'
+            )}
           >
-            Payments Made
-            {activeTab === 'payments' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full" />}
+            Transactions
           </button>
+
           <button
-            className={`pb-4 font-semibold text-sm transition-colors relative ${activeTab === 'ledger' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setActiveTab('ledger')}
+            type="button"
+            onClick={() => setActiveTab('statement')}
+            className={cn(
+              'h-full border-b-2 font-medium cursor-pointer transition-colors flex items-center',
+              activeTab === 'statement'
+                ? 'border-[#408DFB] text-[#408DFB] font-semibold'
+                : 'border-transparent text-[#6B7280] hover:text-[#2B2F36]'
+            )}
           >
-            Vendor Information
-            {activeTab === 'ledger' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full" />}
+            Statement
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('comments')}
+            className={cn(
+              'h-full border-b-2 font-medium cursor-pointer transition-colors flex items-center',
+              activeTab === 'comments'
+                ? 'border-[#408DFB] text-[#408DFB] font-semibold'
+                : 'border-transparent text-[#6B7280] hover:text-[#2B2F36]'
+            )}
+          >
+            Comments
           </button>
         </div>
 
-        <div className="p-0 min-h-[400px]">
-          {activeTab === 'purchases' && (
-            <div className="p-6">
-              {loadingPurchases ? <LoadingState variant="table" /> : (
-                <DataTable
-                  columns={purchaseColumns}
-                  data={purchases}
-                  emptyText="No recent purchases found."
-                  exportFilename={`${vendor.name}_Purchases`}
-                />
-              )}
-            </div>
-          )}
-
-          {activeTab === 'payments' && (
-            <div className="p-6">
-              {loadingPayments ? <LoadingState variant="table" /> : (
-                <DataTable
-                  columns={paymentColumns}
-                  data={payments}
-                  emptyText="No recent payments found."
-                  exportFilename={`${vendor.name}_Payments`}
-                />
-              )}
-            </div>
-          )}
-
-          {activeTab === 'ledger' && (
-            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-12">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-bold tracking-wider text-muted-foreground uppercase mb-4 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-primary" /> Billing Address
-                  </h3>
-                  <div className="bg-background rounded-xl p-4 border border-border/50">
-                    <p className="text-foreground text-sm whitespace-pre-wrap">{vendor.address || 'No address provided.'}</p>
-                    {vendor.state && <p className="text-foreground text-sm mt-2">{vendor.state} {vendor.pinCode}</p>}
-                  </div>
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === 'overview' && (
+          <div className="flex-1 flex overflow-hidden">
+            {/* Left Column (Light Grey Background #F8F9FB, ~320px) */}
+            <div className="w-80 md:w-96 bg-[#F8F9FB] border-r border-[#E5E7EB] p-5 overflow-y-auto space-y-5 text-xs text-[#2B2F36] shrink-0">
+              {/* Contact Card */}
+              <div className="flex items-start gap-3 pb-4 border-b border-[#E5E7EB]">
+                <div className="w-11 h-11 rounded-[4px] bg-[#408DFB] text-white flex items-center justify-center font-bold text-base shrink-0">
+                  {initials}
                 </div>
-                
-                <div>
-                  <h3 className="text-sm font-bold tracking-wider text-muted-foreground uppercase mb-4 flex items-center gap-2">
-                    <Building className="w-4 h-4 text-primary" /> Tax Details
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-sm text-[#2B2F36] truncate">
+                    {vendor.name}
                   </h3>
-                  <div className="bg-background rounded-xl p-4 border border-border/50 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">GSTIN</p>
-                      <p className="font-mono text-sm">{vendor.gstin || 'N/A'}</p>
+                  {vendor.companyName && (
+                    <p className="text-[11px] text-[#6B7280] truncate">{vendor.companyName}</p>
+                  )}
+                  {vendor.email && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#6B7280] mt-1 truncate">
+                      <Mail className="w-3 h-3 shrink-0 text-[#9CA3AF]" />
+                      <span className="truncate">{vendor.email}</span>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">PAN</p>
-                      <p className="font-mono text-sm">{vendor.panNumber || 'N/A'}</p>
+                  )}
+                  {vendor.phone && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#6B7280] mt-0.5 tabular-nums">
+                      <Phone className="w-3 h-3 shrink-0 text-[#9CA3AF]" />
+                      <span>{vendor.phone}</span>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Tax Type</p>
-                      <p className="font-medium text-sm">{vendor.customerType || 'Unregistered'}</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-sm font-bold tracking-wider text-muted-foreground uppercase mb-4 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-primary" /> Internal Notes
-                </h3>
-                <div className="bg-background rounded-xl p-4 border border-border/50 min-h-[120px]">
-                  <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-                    {vendor.notes || 'No internal notes recorded for this vendor.'}
-                  </p>
+              {/* Collapsible Section: ADDRESS */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setAddressOpen(!addressOpen)}
+                  className="w-full flex items-center justify-between text-[11px] font-bold text-[#6B7280] uppercase tracking-wider cursor-pointer"
+                >
+                  <span>Address</span>
+                  <ChevronDown
+                    className={cn(
+                      'w-3.5 h-3.5 text-[#6B7280] transition-transform duration-150',
+                      !addressOpen && '-rotate-90'
+                    )}
+                  />
+                </button>
+
+                {addressOpen && (
+                  <div className="space-y-3 pt-1 text-xs">
+                    <div>
+                      <div className="font-medium text-[#2B2F36] mb-0.5">Billing Address</div>
+                      <p className="text-[#6B7280] leading-relaxed">
+                        {vendor.address || 'No billing address provided.'}
+                        {vendor.state && `, ${vendor.state}`}
+                        {vendor.pinCode && ` - ${vendor.pinCode}`}
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="font-medium text-[#2B2F36] mb-0.5">Shipping Address</div>
+                      <p className="text-[#6B7280] leading-relaxed">
+                        {vendor.address || 'Same as billing address.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Collapsible Section: OTHER DETAILS */}
+              <div className="space-y-2 pt-2 border-t border-[#E5E7EB]">
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(!detailsOpen)}
+                  className="w-full flex items-center justify-between text-[11px] font-bold text-[#6B7280] uppercase tracking-wider cursor-pointer"
+                >
+                  <span>Other Details</span>
+                  <ChevronDown
+                    className={cn(
+                      'w-3.5 h-3.5 text-[#6B7280] transition-transform duration-150',
+                      !detailsOpen && '-rotate-90'
+                    )}
+                  />
+                </button>
+
+                {detailsOpen && (
+                  <div className="space-y-2 pt-1 text-xs divide-y divide-[#E5E7EB]">
+                    <div className="flex justify-between py-1">
+                      <span className="text-[#6B7280]">Vendor Type</span>
+                      <span className="font-medium text-[#2B2F36]">
+                        {vendor.customerType || vendor.vendorType || 'Business'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1">
+                      <span className="text-[#6B7280]">Currency</span>
+                      <span className="font-medium text-[#2B2F36]">INR - Indian Rupee</span>
+                    </div>
+
+                    <div className="flex justify-between py-1">
+                      <span className="text-[#6B7280]">GST Treatment</span>
+                      <span className="font-medium text-[#2B2F36]">
+                        {vendor.gstRegistrationStatus || 'Registered'}
+                      </span>
+                    </div>
+
+                    {vendor.gstin && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-[#6B7280]">GSTIN</span>
+                        <span className="font-mono font-medium text-[#2B2F36]">{vendor.gstin}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between py-1">
+                      <span className="text-[#6B7280]">Source of Supply</span>
+                      <span className="font-medium text-[#2B2F36]">
+                        {vendor.placeOfSupply || vendor.state || 'Maharashtra'}
+                      </span>
+                    </div>
+
+                    {vendor.panNumber && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-[#6B7280]">PAN</span>
+                        <span className="font-mono font-medium text-[#2B2F36]">{vendor.panNumber}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* RECORD INFO */}
+              <div className="pt-2 border-t border-[#E5E7EB] text-[11px] text-[#6B7280] space-y-1">
+                <div>Vendor Code: <span className="font-mono text-[#2B2F36]">{vendor.bpCode || vendor.vendorCode || '—'}</span></div>
+                <div>Created: <span>{vendor.createdAt?.split('T')[0] || 'Recently'}</span></div>
+              </div>
+            </div>
+
+            {/* Right Column: Payables Table, Expenses Chart, Activity Timeline */}
+            <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-white">
+              {/* Payment due period */}
+              <div className="text-xs text-[#6B7280]">
+                Payment due period: <span className="font-semibold text-[#2B2F36]">Due on Receipt</span>
+              </div>
+
+              {/* Payables Table */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-[#2B2F36] uppercase tracking-wider">
+                    Payables
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/vendors/${id}/edit`)}
+                    className="text-xs text-[#408DFB] hover:underline cursor-pointer"
+                  >
+                    Enter Opening Balance
+                  </button>
+                </div>
+
+                <div className="border border-[#E5E7EB] rounded-[4px] overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-[#F8F9FB] border-b border-[#E5E7EB] text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider text-left">
+                        <th className="px-4 py-2">Currency</th>
+                        <th className="px-4 py-2 text-right">Outstanding Payables</th>
+                        <th className="px-4 py-2 text-right">Unused Credits</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="hover:bg-[#F9FAFB]">
+                        <td className="px-4 py-3 font-medium text-[#2B2F36]">
+                          INR - Indian Rupee
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-[#2B2F36] tabular-nums">
+                          ₹{payable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-right text-[#6B7280] tabular-nums">
+                          ₹{unusedCredits.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Expenses Summary */}
+              <div className="border border-[#E5E7EB] rounded-[4px] p-4 bg-[#F8F9FB] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-[#2B2F36]">
+                    Total Purchases & Expenses
+                  </span>
+                  <span className="text-[11px] text-[#6B7280]">Accrual</span>
+                </div>
+                <div className="text-xl font-bold text-[#2B2F36] tabular-nums">
+                  ₹{payable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              {/* Recent Bills & Purchases */}
+              <div className="space-y-3 pt-2">
+                <h4 className="text-xs font-semibold text-[#2B2F36] uppercase tracking-wider">
+                  Recent Bills
+                </h4>
+
+                <div className="border border-[#E5E7EB] rounded-[4px] overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-[#F8F9FB] border-b border-[#E5E7EB] text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider text-left">
+                        <th className="px-4 py-2">Bill#</th>
+                        <th className="px-4 py-2">Date</th>
+                        <th className="px-4 py-2 text-right">Amount</th>
+                        <th className="px-4 py-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E5E7EB]">
+                      {purchases.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-6 text-center text-xs text-[#6B7280]">
+                            No bills found for this vendor.
+                          </td>
+                        </tr>
+                      ) : (
+                        purchases.slice(0, 5).map((p: any) => (
+                          <tr key={p.id} className="hover:bg-[#F9FAFB]">
+                            <td className="px-4 py-2 font-medium text-[#408DFB]">
+                              {p.billNo || p.billNumber || 'BILL'}
+                            </td>
+                            <td className="px-4 py-2 text-[#6B7280]">
+                              {p.date?.split('T')[0] || ''}
+                            </td>
+                            <td className="px-4 py-2 text-right font-medium text-[#2B2F36] tabular-nums">
+                              ₹{Number(p.grandTotal || p.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <ZohoStatusText status={p.status || 'OPEN'} />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
-          )}
-        </div>
-      </Card>
-    </PageContainer>
+          </div>
+        )}
+
+        {/* TAB 2: TRANSACTIONS */}
+        {activeTab === 'transactions' && (
+          <div className="flex-1 p-6 overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
+              <span className="font-bold text-xs text-[#2B2F36]">Bills ({purchases.length})</span>
+              <button
+                type="button"
+                onClick={() => navigate(`/bills/new?vendorId=${id}`)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-[#408DFB] hover:underline cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Bill</span>
+              </button>
+            </div>
+
+            <div className="border border-[#E5E7EB] rounded-[4px] overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-[#F8F9FB] border-b border-[#E5E7EB] text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider text-left">
+                    <th className="px-4 py-2">Bill#</th>
+                    <th className="px-4 py-2">Date</th>
+                    <th className="px-4 py-2 text-right">Amount</th>
+                    <th className="px-4 py-2 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E7EB]">
+                  {purchases.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-xs text-[#6B7280]">
+                        No bills recorded for this vendor.
+                      </td>
+                    </tr>
+                  ) : (
+                    purchases.map((b: any) => (
+                      <tr key={b.id} className="hover:bg-[#F9FAFB]">
+                        <td className="px-4 py-2.5 font-medium text-[#408DFB]">
+                          {b.billNo || b.billNumber || 'BILL'}
+                        </td>
+                        <td className="px-4 py-2.5 text-[#6B7280]">
+                          {b.date?.split('T')[0] || ''}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-medium text-[#2B2F36] tabular-nums">
+                          ₹{Number(b.grandTotal || b.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <ZohoStatusText status={b.status || 'OPEN'} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: STATEMENT */}
+        {activeTab === 'statement' && (
+          <div className="flex-1 p-6 overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E5E7EB]">
+              <h3 className="text-xs font-semibold text-[#2B2F36] uppercase tracking-wider">
+                Vendor Statement
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrintStatement}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] rounded-[4px] text-xs font-medium text-[#2B2F36] cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-[#6B7280]" />
+                  <span>Print</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportStatement}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] rounded-[4px] text-xs font-medium text-[#2B2F36] cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#6B7280]" />
+                  <span>Export CSV</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="border border-[#E5E7EB] rounded-[4px] overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-[#F8F9FB] border-b border-[#E5E7EB] text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider text-left">
+                    <th className="px-4 py-2">Date</th>
+                    <th className="px-4 py-2">Type</th>
+                    <th className="px-4 py-2">Reference</th>
+                    <th className="px-4 py-2 text-right">Debit</th>
+                    <th className="px-4 py-2 text-right">Credit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E7EB]">
+                  {!ledger?.transactions || ledger.transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-xs text-[#6B7280]">
+                        No statement entries available for this vendor.
+                      </td>
+                    </tr>
+                  ) : (
+                    ledger.transactions.map((tx: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-[#F9FAFB]">
+                        <td className="px-4 py-2 text-[#6B7280]">
+                          {tx.date?.split('T')[0] || ''}
+                        </td>
+                        <td className="px-4 py-2 font-medium text-[#2B2F36]">
+                          {tx.type || 'Entry'}
+                        </td>
+                        <td className="px-4 py-2 text-[#6B7280]">
+                          {tx.reference || '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right text-[#2B2F36] tabular-nums">
+                          {tx.balanceImpact > 0 ? `₹${tx.balanceImpact.toFixed(2)}` : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right text-[#2B2F36] tabular-nums">
+                          {tx.balanceImpact < 0 ? `₹${Math.abs(tx.balanceImpact).toFixed(2)}` : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: COMMENTS */}
+        {activeTab === 'comments' && (
+          <div className="flex-1 p-6 overflow-y-auto space-y-4">
+            <h3 className="text-xs font-semibold text-[#2B2F36] uppercase tracking-wider pb-2 border-b border-[#E5E7EB]">
+              Notes & Comments
+            </h3>
+            <div className="bg-[#F8F9FB] border border-[#E5E7EB] rounded-[4px] p-4 text-xs text-[#2B2F36] leading-relaxed">
+              {vendor.notes ? vendor.notes : 'No vendor notes or remarks recorded.'}
+            </div>
+          </div>
+        )}
+      </div>
+    </ZohoSplitDetail>
   );
 };

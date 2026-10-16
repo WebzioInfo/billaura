@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
@@ -50,6 +51,15 @@ export class PurchaseOrdersController {
     return this.purchaseOrdersService.create(dto, req.user?.userId);
   }
 
+  @Put(":id")
+  async updatePut(
+    @Param("id") id: string,
+    @Body() dto: UpdatePurchaseOrderDto,
+    @Req() req: any
+  ) {
+    return this.purchaseOrdersService.update(id, dto, req.user?.userId);
+  }
+
   @Patch(":id")
   async update(
     @Param("id") id: string,
@@ -65,7 +75,9 @@ export class PurchaseOrdersController {
     @Body() body: { status: any },
     @Req() req: any
   ) {
-    return this.purchaseOrdersService.update(id, { status: body.status }, req.user?.userId);
+    const rawStatus = body.status;
+    const status = rawStatus === 'ISSUED' ? 'SENT' : rawStatus;
+    return this.purchaseOrdersService.update(id, { status } as any, req.user?.userId);
   }
 
   @Delete(":id")

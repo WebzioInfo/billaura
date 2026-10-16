@@ -15,6 +15,8 @@ import { CompanyContext } from "../common/context/company-context";
 import { toPaginatedResult } from "../common/pagination";
 import { VendorsService } from "./vendors.service";
 
+import { CreateVendorDto, UpdateVendorDto } from "./dto/vendor.dto";
+
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller("vendors")
 export class VendorsController {
@@ -44,7 +46,7 @@ export class VendorsController {
   }
 
   @Post()
-  async create(@Body() data: any) {
+  async create(@Body() data: CreateVendorDto) {
     const companyId = CompanyContext.getCompanyId() as string;
     const item = await this.vendorsService.create(companyId, data);
     return {
@@ -55,7 +57,7 @@ export class VendorsController {
   }
 
   @Patch(":id")
-  async update(@Param("id") id: string, @Body() data: any) {
+  async update(@Param("id") id: string, @Body() data: UpdateVendorDto) {
     const companyId = CompanyContext.getCompanyId() as string;
     const item = await this.vendorsService.update(id, companyId, data);
     return {

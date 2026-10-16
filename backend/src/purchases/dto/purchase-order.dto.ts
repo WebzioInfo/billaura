@@ -7,7 +7,7 @@ import {
   IsArray,
   ValidateNested,
 } from "class-validator";
-import { Type } from "class-transformer";
+import { Type, Transform } from "class-transformer";
 import { TaxMode, DocumentStatus } from "@prisma/client";
 
 export class PurchaseOrderItemDto {
@@ -16,8 +16,8 @@ export class PurchaseOrderItemDto {
   productId?: string;
 
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  @IsOptional()
+  description?: string;
 
   @IsNumber()
   qty: number;
@@ -35,6 +35,9 @@ export class PurchaseOrderItemDto {
   @IsString()
   @IsOptional()
   unit?: string;
+  @IsString()
+  @IsOptional()
+  accountId?: string;
 }
 
 export class CreatePurchaseOrderDto {
@@ -86,9 +89,96 @@ export class CreatePurchaseOrderDto {
   @IsOptional()
   shippingAddress?: string;
 
+  @IsString()
+  @IsOptional()
+  deliveryAddressType?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryCustomerId?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryCustomerName?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryCustomerAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentTerms?: string;
+
+  @IsString()
+  @IsOptional()
+  shipmentPreference?: string;
+
+  @IsOptional()
+  isRcm?: boolean;
+
+  @IsString()
+  @IsOptional()
+  termsConditions?: string;
+
+  @IsNumber()
+  @IsOptional()
+  discount?: number;
+
+  @IsString()
+  @IsOptional()
+  discountType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  discountAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  adjustment?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTcsType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  tdsTcsRate?: number;
+
+  @IsNumber()
+  @IsOptional()
+  tdsTcsAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTcsTaxId?: string;
+
+  @IsArray()
+  @IsOptional()
+  attachedFiles?: any[];
+
+  @Transform(({ value }) => (value === 'ISSUED' ? DocumentStatus.SENT : value))
   @IsEnum(DocumentStatus)
   @IsOptional()
   status?: DocumentStatus;
+
+  @IsNumber()
+  @IsOptional()
+  totalAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  subTotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxTotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  grandTotal?: number;
+
+  @IsOptional()
+  isSaveAndNew?: boolean;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -97,9 +187,45 @@ export class CreatePurchaseOrderDto {
 }
 
 export class UpdatePurchaseOrderDto {
+  @IsString()
+  @IsOptional()
+  businessPartnerId?: string;
+
+  @IsString()
+  @IsOptional()
+  orderNo?: string;
+
+  @IsEnum(TaxMode)
+  @IsOptional()
+  taxMode?: TaxMode;
+
+  @IsString()
+  @IsOptional()
+  placeOfSupply?: string;
+
+  @Transform(({ value }) => (value === 'ISSUED' ? DocumentStatus.SENT : value))
   @IsEnum(DocumentStatus)
   @IsOptional()
   status?: DocumentStatus;
+
+  @IsNumber()
+  @IsOptional()
+  totalAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  subTotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxTotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  grandTotal?: number;
+
+  @IsOptional()
+  isSaveAndNew?: boolean;
 
   @IsString()
   @IsOptional()
@@ -132,6 +258,73 @@ export class UpdatePurchaseOrderDto {
   @IsString()
   @IsOptional()
   shippingAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryAddressType?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryCustomerId?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryCustomerName?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryCustomerAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentTerms?: string;
+
+  @IsString()
+  @IsOptional()
+  shipmentPreference?: string;
+
+  @IsOptional()
+  isRcm?: boolean;
+
+  @IsString()
+  @IsOptional()
+  termsConditions?: string;
+
+  @IsNumber()
+  @IsOptional()
+  discount?: number;
+
+  @IsString()
+  @IsOptional()
+  discountType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  discountAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  adjustment?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTcsType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  tdsTcsRate?: number;
+
+  @IsNumber()
+  @IsOptional()
+  tdsTcsAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTcsTaxId?: string;
+
+  @IsArray()
+  @IsOptional()
+  attachedFiles?: any[];
 
   @IsArray()
   @ValidateNested({ each: true })

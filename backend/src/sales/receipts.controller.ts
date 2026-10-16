@@ -41,7 +41,7 @@ export class ReceiptsController {
     return this.receiptsService.getSummary();
   }
 
-  @Get("next-sequence")
+  @Get(["next-sequence", "next-number"])
   async getNextSequence(@Query("type") type: string) {
     const nextNo = await this.receiptsService.getNextNumber(type);
     return {

@@ -1,50 +1,44 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Search, Filter, Download, ArrowUpRight, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Download, ArrowUpRight } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
-import { TableLoader } from '@/shared/components/ui/LoadingSystem';
-import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
-import { Button } from '@/shared/components/ui/Button';
-import { Input } from '@/shared/components/ui/Input';
-import { Badge } from '@/shared/components/ui/Badge';
-import { StatusBadge, DateCell, IconButton } from '@/shared/components/ui';
 import { ConfirmDialog } from '@/shared/components/ui/action-system/ConfirmDialog';
 import { BrandFormModal } from './BrandFormModal';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { useDebounce } from '@/shared/hooks/useDebounce';
+import { ExportService } from '@/core/services/ExportService';
+import { cn } from '@/lib/utils';
 
-export const BrandsList = () => {
+export const BrandsList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearch = useDebounce(searchTerm, 500);
+  const debouncedSearch = useDebounce(searchTerm, 400);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
-  
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<any>(null);
-  
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [brandToDelete, setBrandToDelete] = useState<any>(null);
 
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['brands', debouncedSearch, statusFilter],
     queryFn: async () => {
       const params: any = { limit: 100 };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter !== 'ALL') params.status = statusFilter;
-      
+
       const res = await apiClient.get('/inventory/brands', { params });
       return res.data?.data || res.data || { items: [] };
-    }
+    },
   });
 
   const brands = Array.isArray(data) ? data : data?.items || [];
-  
+
   // Calculate stats
   const totalBrands = brands.length;
-  const activeBrands = brands.filter((b: any) => b.status === 'ACTIVE').length;
+  const activeBrands = brands.filter((b: any) => b.status === 'ACTIVE' || !b.status).length;
   const inactiveBrands = totalBrands - activeBrands;
 
   const deleteMutation = useMutation({
@@ -64,7 +58,7 @@ export const BrandsList = () => {
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Unable to deactivate brand. Please try again.');
-    }
+    },
   });
 
   const handleCreate = () => {
@@ -88,171 +82,260 @@ export const BrandsList = () => {
     }
   };
 
+  const handleExport = () => {
+    if (brands.length === 0) {
+      notification.warning('No brands to export');
+      return;
+    }
+    const headers = ['Brand Name', 'Code', 'Description', 'Website', 'Products', 'Status', 'Created Date'];
+    const rows = brands.map((b: any) => ({
+      'Brand Name': b.brandName || b.name || '',
+      Code: b.brandCode || b.code || '',
+      Description: b.description || '',
+      Website: b.website || '',
+      Products: b._count?.products || 0,
+      Status: b.status || 'ACTIVE',
+      'Created Date': b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '',
+    }));
+    ExportService.exportCsv('Brands_List.csv', rows, headers);
+  };
+
   return (
-    <PageContainer maxWidth="7xl">
-      <PageHeader
-        title="Brands Management"
-        description="Manage product brands, manufacturers, and their details"
-        primaryAction={
-          <Button onClick={handleCreate} variant="primary" className="flex items-center gap-2">
-            <Plus className="w-4 h-4" /> New Brand
-          </Button>
-        }
-        secondaryAction={
-          <Button variant="outline" className="flex items-center gap-2">
-            <Download className="w-4 h-4" /> Export
-          </Button>
-        }
-      />
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-white text-[#2B2F36] overflow-y-auto">
+      {/* 1. Page Header (Zoho Books Style) */}
+      <div className="px-6 py-4 border-b border-[#E5E7EB] bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-[20px] font-semibold text-[#2B2F36] leading-tight">
+              Brands Management
+            </h1>
+            <span className="px-2 py-0.5 rounded-[4px] bg-[#F3F4F6] text-[#6B7280] text-xs font-medium">
+              {totalBrands}
+            </span>
+          </div>
+          <p className="text-xs text-[#6B7280] mt-0.5">
+            Manage product brands, manufacturers, and manufacturer details
+          </p>
+        </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-        <div className="bg-surface border border-border rounded-xl p-5 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-1">Total Brands</p>
-            <h3 className="text-2xl font-bold text-foreground">{isLoading ? '-' : totalBrands}</h3>
-          </div>
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-            <Search className="w-6 h-6" />
-          </div>
-        </div>
-        <div className="bg-surface border border-border rounded-xl p-5 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-1">Active Brands</p>
-            <h3 className="text-2xl font-bold text-green-600">{isLoading ? '-' : activeBrands}</h3>
-          </div>
-          <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center text-green-600">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-        </div>
-        <div className="bg-surface border border-border rounded-xl p-5 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-1">Inactive Brands</p>
-            <h3 className="text-2xl font-bold text-slate-500">{isLoading ? '-' : inactiveBrands}</h3>
-          </div>
-          <div className="w-12 h-12 rounded-full bg-slate-500/10 flex items-center justify-center text-slate-500">
-            <XCircle className="w-6 h-6" />
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="h-8 px-3 bg-white border border-[#D1D5DB] hover:bg-[#F9FAFB] text-[#2B2F36] rounded-[4px] text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Export Records"
+          >
+            <Download className="w-3.5 h-3.5 text-[#6B7280]" />
+            <span>Export</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCreate}
+            className="h-8 px-3.5 bg-[#408DFB] hover:bg-[#3078E0] text-white rounded-[4px] text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Brand</span>
+          </button>
         </div>
       </div>
 
-      {/* Filters Toolbar */}
-      <div className="mt-8 flex flex-col sm:flex-row gap-4 items-center justify-between bg-surface p-4 rounded-xl border border-border shadow-sm">
-        <div className="relative w-full sm:w-96">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input 
-            placeholder="Search by Brand Name, Code or Description..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 bg-background"
-          />
+      {/* 2. Compact Zoho Summary Strip */}
+      <div className="px-6 py-2.5 bg-[#F9FAFB] border-b border-[#E5E7EB] flex flex-wrap items-center gap-6 text-xs text-[#6B7280] shrink-0">
+        <div className="flex items-center gap-1.5">
+          <span>Total Brands:</span>
+          <strong className="text-[#2B2F36] font-semibold">{totalBrands}</strong>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="flex items-center bg-background border border-border rounded-lg p-1">
-            <button 
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${statusFilter === 'ALL' ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              All
-            </button>
-            <button 
-              onClick={() => setStatusFilter('ACTIVE')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${statusFilter === 'ACTIVE' ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              Active
-            </button>
-            <button 
-              onClick={() => setStatusFilter('INACTIVE')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${statusFilter === 'INACTIVE' ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              Inactive
-            </button>
-          </div>
-          <Button variant="outline" className="flex items-center gap-2">
-            <Filter className="w-4 h-4" /> Filters
-          </Button>
+        <span className="text-[#D1D5DB]">•</span>
+        <div className="flex items-center gap-1.5">
+          <span>Active:</span>
+          <strong className="text-[#2B2F36] font-semibold">{activeBrands}</strong>
+        </div>
+        <span className="text-[#D1D5DB]">•</span>
+        <div className="flex items-center gap-1.5">
+          <span>Inactive:</span>
+          <strong className="text-[#2B2F36] font-semibold">{inactiveBrands}</strong>
         </div>
       </div>
 
-      {isLoading ? (
-        <TableLoader cols={6} rows={5} className="mt-6 border border-border/80 bg-surface rounded-2xl" />
-      ) : brands.length === 0 ? (
-        <div className="mt-6 bg-surface rounded-xl border border-border shadow-sm overflow-hidden">
-          <EmptyState
-            title="No Brands Found"
-            description={searchTerm ? `No brands match your search '${searchTerm}'` : "Start organizing your products by adding your first brand."}
-            actionLabel={searchTerm ? "Clear Search" : "Add Brand"}
-            onActionClick={searchTerm ? () => setSearchTerm('') : handleCreate}
-          />
+      {/* 3. Main Content: Toolbar + Full-Width Table */}
+      <div className="p-6 space-y-4 flex-1 flex flex-col min-h-0">
+        {/* Search & Filter Toolbar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-3.5 h-3.5 text-[#9CA3AF] absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search by brand name, code or description..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-8 pl-8 pr-3 bg-white border border-[#D1D5DB] rounded-[4px] text-[13px] text-[#2B2F36] outline-none focus:border-[#408DFB]"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[#6B7280]">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="h-8 px-2.5 bg-white border border-[#D1D5DB] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] cursor-pointer"
+              >
+                <option value="ALL">All Status</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+
+            <div className="text-xs text-[#6B7280]">
+              Showing <strong className="text-[#2B2F36] font-medium">{brands.length}</strong> brands
+            </div>
+          </div>
         </div>
-      ) : (
-        <Table className="mt-6">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-6 pr-4 w-[250px]">Brand Info</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead align="right">Products</TableHead>
-              <TableHead align="center">Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead align="right" className="pr-6 pl-4">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {brands.map((brand: any) => (
-              <TableRow key={brand.id}>
-                <TableCell className="pl-6 pr-4">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-foreground">{brand.brandName}</span>
-                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                      {brand.description || (brand.website ? <a href={brand.website} target="_blank" rel="noreferrer" className="hover:underline flex items-center gap-1">{brand.website} <ArrowUpRight className="w-3 h-3" /></a> : '—')}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {brand.brandCode || '—'}
-                  </span>
-                </TableCell>
-                <TableCell align="right" className="tabular-nums font-medium text-foreground">
-                  {brand._count?.products || 0}
-                </TableCell>
-                <TableCell align="center">
-                  <StatusBadge status={brand.status || 'ACTIVE'} />
-                </TableCell>
-                <DateCell date={brand.createdAt} />
-                <TableCell align="right" className="pr-6 pl-4">
-                  <div className="flex items-center justify-end gap-1">
-                    <IconButton
-                      icon={Edit}
-                      aria-label="Edit Brand"
-                      tooltip="Edit Brand"
-                      size="dense"
-                      disabled={deleteMutation.isPending && brandToDelete?.id === brand.id}
-                      onClick={() => handleEdit(brand)}
-                    />
-                    <IconButton
-                      icon={Trash2}
-                      aria-label={deleteMutation.isPending && brandToDelete?.id === brand.id ? "Deactivating Brand..." : "Deactivate Brand"}
-                      tooltip={deleteMutation.isPending && brandToDelete?.id === brand.id ? "Deactivating Brand..." : "Deactivate Brand"}
-                      size="dense"
-                      variant="danger-ghost"
-                      isLoading={deleteMutation.isPending && brandToDelete?.id === brand.id}
-                      disabled={deleteMutation.isPending}
-                      onClick={() => handleDeleteRequest(brand)}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+
+        {/* Clean Full-Width Table */}
+        <div className="border border-[#E5E7EB] rounded-[4px] overflow-hidden bg-white">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-[13px]">
+              <thead>
+                <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB] text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider h-9">
+                  <th className="px-4 py-2 font-semibold w-[280px]">Brand Information</th>
+                  <th className="px-4 py-2 font-semibold">Code</th>
+                  <th className="px-4 py-2 font-semibold text-right">Products</th>
+                  <th className="px-4 py-2 font-semibold text-center">Status</th>
+                  <th className="px-4 py-2 font-semibold">Created Date</th>
+                  <th className="px-4 py-2 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E7EB]">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-xs text-[#6B7280]">
+                      <div className="inline-block w-5 h-5 border-2 border-[#408DFB] border-t-transparent rounded-full animate-spin mb-2" />
+                      <p>Loading brands...</p>
+                    </td>
+                  </tr>
+                ) : brands.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-xs text-[#6B7280]">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-[#2B2F36]">No brands found</p>
+                        <p className="text-xs text-[#6B7280]">
+                          {searchTerm || statusFilter !== 'ALL'
+                            ? `No brands match your filter criteria.`
+                            : 'Start organizing your products by adding your first brand.'}
+                        </p>
+                        {searchTerm || statusFilter !== 'ALL' ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSearchTerm('');
+                              setStatusFilter('ALL');
+                            }}
+                            className="mt-2 text-xs text-[#408DFB] hover:underline cursor-pointer"
+                          >
+                            Clear Filters
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleCreate}
+                            className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-[#408DFB] text-white rounded-[4px] text-xs font-medium cursor-pointer shadow-sm"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Brand</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  brands.map((brand: any) => {
+                    const isActive = brand.status === 'ACTIVE' || !brand.status;
+                    const brandTitle = brand.brandName || brand.name || 'Unnamed Brand';
+                    const brandCode = brand.brandCode || brand.code || '—';
+                    const brandDesc = brand.description;
+                    const brandWeb = brand.website;
+
+                    return (
+                      <tr key={brand.id} className="hover:bg-[#F5F7FA] transition-colors min-h-[41px]">
+                        <td className="px-4 py-2.5 font-medium text-[#2B2F36]">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-[#2B2F36]">{brandTitle}</span>
+                            {brandDesc && (
+                              <span className="text-[11px] text-[#6B7280] truncate max-w-[240px]">
+                                {brandDesc}
+                              </span>
+                            )}
+                            {brandWeb && !brandDesc && (
+                              <a
+                                href={brandWeb.startsWith('http') ? brandWeb : `https://${brandWeb}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] text-[#408DFB] hover:underline inline-flex items-center gap-0.5 truncate max-w-[240px]"
+                              >
+                                <span>{brandWeb}</span>
+                                <ArrowUpRight className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-[#6B7280]">
+                          {brandCode}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-[#2B2F36] font-medium">
+                          {brand._count?.products || 0}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          {isActive ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-[3px] text-[11px] font-medium bg-[#ECFDF5] text-[#059669]">
+                              ACTIVE
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-[3px] text-[11px] font-medium bg-[#F3F4F6] text-[#6B7280]">
+                              INACTIVE
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-[#6B7280] text-xs">
+                          {brand.createdAt ? new Date(brand.createdAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(brand)}
+                              className="p-1.5 text-[#6B7280] hover:text-[#408DFB] hover:bg-[#EBF3FF] rounded-[4px] transition-colors cursor-pointer"
+                              title="Edit Brand"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRequest(brand)}
+                              disabled={deleteMutation.isPending && brandToDelete?.id === brand.id}
+                              className="p-1.5 text-[#6B7280] hover:text-[#E54B4B] hover:bg-[#FEF2F2] rounded-[4px] transition-colors cursor-pointer"
+                              title="Deactivate Brand"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
       {/* Forms & Dialogs */}
-      <BrandFormModal 
-        isOpen={isFormOpen} 
-        onClose={() => setIsFormOpen(false)} 
-        brand={selectedBrand} 
+      <BrandFormModal
+        isOpen={isFormOpen}
+        onClose={() => setIsFormOpen(false)}
+        brand={selectedBrand}
       />
 
       <ConfirmDialog
@@ -265,12 +348,14 @@ export const BrandsList = () => {
         }}
         onConfirm={confirmDelete}
         title="Deactivate Brand"
-        message={`Are you sure you want to deactivate the brand "${brandToDelete?.brandName}"? It will no longer be available for new products.`}
+        message={`Are you sure you want to deactivate the brand "${brandToDelete?.brandName || brandToDelete?.name}"? It will no longer be available for new products.`}
         confirmText="Deactivate"
         loadingText="Deactivating..."
         variant="danger"
         isLoading={deleteMutation.isPending}
       />
-    </PageContainer>
+    </div>
   );
 };
+
+export default BrandsList;

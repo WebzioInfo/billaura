@@ -1,80 +1,57 @@
-export const numberToWords = (num: number): string => {
-  if (num === 0) return 'Zero';
+export function numberToWordsIndian(num: number): string {
+  if (isNaN(num) || num === 0) return 'Indian Rupee Zero Only';
 
-  const a = [
-    '',
-    'One ',
-    'Two ',
-    'Three ',
-    'Four ',
-    'Five ',
-    'Six ',
-    'Seven ',
-    'Eight ',
-    'Nine ',
-    'Ten ',
-    'Eleven ',
-    'Twelve ',
-    'Thirteen ',
-    'Fourteen ',
-    'Fifteen ',
-    'Sixteen ',
-    'Seventeen ',
-    'Eighteen ',
-    'Nineteen ',
+  const ones = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+    'Seventeen', 'Eighteen', 'Nineteen'
   ];
-  const b = [
-    '',
-    '',
-    'Twenty',
-    'Thirty',
-    'Forty',
-    'Fifty',
-    'Sixty',
-    'Seventy',
-    'Eighty',
-    'Ninety',
-  ];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
-  const convert = (n: number): string => {
-    if (n < 20) return a[n];
-    if (n < 100)
-      return b[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + a[n % 10] : ' ');
-    if (n < 1000)
-      return (
-        a[Math.floor(n / 100)] +
-        'Hundred ' +
-        (n % 100 !== 0 ? 'and ' + convert(n % 100) : '')
-      );
-    if (n < 100000)
-      return (
-        convert(Math.floor(n / 1000)) +
-        'Thousand ' +
-        (n % 1000 !== 0 ? convert(n % 1000) : '')
-      );
-    if (n < 10000000)
-      return (
-        convert(Math.floor(n / 100000)) +
-        'Lakh ' +
-        (n % 100000 !== 0 ? convert(n % 100000) : '')
-      );
-    return (
-      convert(Math.floor(n / 10000000)) +
-      'Crore ' +
-      (n % 10000000 !== 0 ? convert(n % 10000000) : '')
-    );
+  const convertTwoDigits = (n: number): string => {
+    if (n < 20) return ones[n];
+    const unit = n % 10;
+    return tens[Math.floor(n / 10)] + (unit !== 0 ? '-' + ones[unit] : '');
   };
 
-  const integerPart = Math.floor(num);
-  const decimalPart = Math.round((num - integerPart) * 100);
+  const convertThreeDigits = (n: number): string => {
+    let str = '';
+    if (Math.floor(n / 100) > 0) {
+      str += ones[Math.floor(n / 100)] + ' Hundred ';
+    }
+    const rem = n % 100;
+    if (rem > 0) {
+      str += convertTwoDigits(rem);
+    }
+    return str.trim();
+  };
 
-  let result = convert(integerPart);
+  const integerPart = Math.floor(Math.abs(num));
+  const decimalPart = Math.round((Math.abs(num) - integerPart) * 100);
+
+  let result = '';
+
+  const crore = Math.floor(integerPart / 10000000);
+  let rem = integerPart % 10000000;
+  const lakh = Math.floor(rem / 100000);
+  rem = rem % 100000;
+  const thousand = Math.floor(rem / 1000);
+  rem = rem % 1000;
+
+  if (crore > 0) result += convertThreeDigits(crore) + ' Crore ';
+  if (lakh > 0) result += convertThreeDigits(lakh) + ' Lakh ';
+  if (thousand > 0) result += convertThreeDigits(thousand) + ' Thousand ';
+  if (rem > 0) result += convertThreeDigits(rem) + ' ';
+
+  const intWords = result.trim() || 'Zero';
+  let finalStr = `Indian Rupee ${intWords}`;
 
   if (decimalPart > 0) {
-    result = `Indian Rupee ${result.trim()} and ${convert(decimalPart).trim()} Paise Only`;
-  } else {
-    result = `Indian Rupee ${result.trim()} Only`;
+    finalStr += ' and ' + convertTwoDigits(decimalPart) + ' Paise';
   }
 
-  return result;
-};
+  return finalStr + ' Only';
+}
+
+export const numberToWords = numberToWordsIndian;
+

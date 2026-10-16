@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { UnitsService, CreateUnitDto, CreateUnitConversionDto } from './units.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
@@ -16,6 +16,21 @@ export class UnitsController {
   @Post()
   async create(@Body() body: CreateUnitDto) {
     return this.unitsService.create(body);
+  }
+
+  @Patch(':id')
+  async update(@Param('id') id: string, @Body() body: Partial<CreateUnitDto>) {
+    return this.unitsService.update(id, body);
+  }
+
+  @Delete('conversions/:id')
+  async removeConversion(@Param('id') id: string) {
+    return this.unitsService.removeConversion(id);
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.unitsService.remove(id);
   }
 
   @Get('conversions')
@@ -45,3 +60,4 @@ export class UnitsController {
     };
   }
 }
+

@@ -42,7 +42,11 @@ export class QuotationsService {
         where,
         skip,
         take,
-        include: { businessPartner: true, items: { include: { product: true } } },
+        include: {
+          businessPartner: true,
+          items: { include: { product: true } },
+          template: true,
+        },
         orderBy: { date: 'desc' },
       }),
       this.prisma.quotation.count({ where }),
@@ -123,14 +127,50 @@ export class QuotationsService {
 
     const quotation = await this.prisma.quotation.findFirst({
       where: { id, companyId, deletedAt: null },
-      include: { businessPartner: true, items: { include: { product: true } } },
+      include: {
+        businessPartner: true,
+        items: { include: { product: true } },
+        template: true,
+        company: {
+          include: {
+            settings: true,
+            bankAccounts: {
+              where: { deletedAt: null },
+              orderBy: { isDefault: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
     });
 
     if (!quotation) {
       throw new NotFoundException(`Quotation with ID ${id} not found`);
     }
 
-    return quotation;
+    if (!quotation.template) {
+      const defaultTemplate = await this.prisma.documentTemplate.findFirst({
+        where: {
+          companyId,
+          OR: [{ docType: 'quote' }, { type: 'quote' }],
+          isDefault: true,
+        },
+      });
+      (quotation as any).template = defaultTemplate;
+    }
+
+    const breakup = (quotation.gstBreakup as any) || {};
+    return {
+      ...quotation,
+      notes: breakup.notes || '',
+      termsConditions: breakup.termsConditions || '',
+      salesperson: breakup.salesperson || null,
+      salespersonId: breakup.salespersonId || null,
+      referenceNo: breakup.referenceNo || null,
+      subject: breakup.subject || null,
+      adjustment: breakup.adjustment || 0,
+      expiryDate: breakup.expiryDate || null,
+    };
   }
 
   async create(dto: CreateQuotationDto) {
@@ -191,7 +231,8 @@ export class QuotationsService {
 
         const rate = Number(item.rate);
         const qty = Number(item.qty);
-        const lineTotal = rate * qty;
+        const discount = Number(item.discount || 0);
+        const lineTotal = Math.max(0, rate * qty - (item.discountType === 'fixed' ? discount : (rate * qty * discount) / 100));
         
         const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product.gstRate || 18);
         
@@ -223,13 +264,14 @@ export class QuotationsService {
         });
       }
 
-      const grandTotal = subTotal + taxTotal;
+      const grandTotal = Math.max(0, subTotal + taxTotal + Number(dto.adjustment || 0));
       const quotationStatus = dto.status === 'DRAFT' ? 'DRAFT' : 'SENT';
 
       return tx.quotation.create({
         data: {
           companyId,
           businessPartnerId: customerId,
+          templateId: dto.templateId || undefined,
           quotationNo,
           date: new Date(dto.date),
           status: quotationStatus as any,
@@ -248,6 +290,12 @@ export class QuotationsService {
             notes: dto.notes || '',
             termsConditions: dto.termsConditions || '',
             invoiceCategoryId: dto.invoiceCategoryId || null,
+            salesperson: dto.salesperson || null,
+            salespersonId: dto.salespersonId || null,
+            referenceNo: dto.referenceNo || null,
+            subject: dto.subject || null,
+            adjustment: dto.adjustment || 0,
+            expiryDate: dto.expiryDate || dto.dueDate || null,
           },
           items: {
             create: itemsToCreate,
@@ -342,6 +390,7 @@ export class QuotationsService {
           where: { id },
           data: {
             businessPartnerId: customerId,
+            ...(dto.templateId !== undefined && { templateId: dto.templateId }),
             ...(dto.date && { date: new Date(dto.date) }),
             ...(dto.status && { status: dto.status as any }),
             ...(dto.placeOfSupply && { placeOfSupply: dto.placeOfSupply }),
@@ -372,6 +421,7 @@ export class QuotationsService {
           ...(dto.status && { status: dto.status as any }),
           ...(dto.date && { date: new Date(dto.date) }),
           ...(dto.placeOfSupply && { placeOfSupply: dto.placeOfSupply }),
+          ...(dto.templateId !== undefined && { templateId: dto.templateId }),
           ...(dto.customerId && { businessPartnerId: dto.customerId }),
           ...(dto.businessPartnerId && { businessPartnerId: dto.businessPartnerId }),
         },

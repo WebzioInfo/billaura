@@ -11,8 +11,20 @@ import { PaymentMethod, PaidFromType, ApprovalStatus, TaxPreference } from "@pri
 
 export class CreateExpenseDto {
   @IsString()
-  @IsNotEmpty()
-  categoryId: string;
+  @IsOptional()
+  categoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  accountId?: string;
+
+  @IsString()
+  @IsOptional()
+  expenseAccountId?: string;
+
+  @IsString()
+  @IsOptional()
+  paidThroughAccountId?: string;
 
   @IsString()
   @IsOptional()
@@ -54,6 +66,22 @@ export class CreateExpenseDto {
   @IsOptional()
   taxAmount?: number;
 
+  @IsNumber()
+  @IsOptional()
+  totalAmount?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isSaveAndNew?: boolean;
+
+  @IsString()
+  @IsOptional()
+  vendorGstin?: string;
+
+  @IsString()
+  @IsOptional()
+  currency?: string;
+
   @IsEnum(PaymentMethod)
   @IsOptional()
   paymentMethod?: PaymentMethod;
@@ -61,6 +89,10 @@ export class CreateExpenseDto {
   @IsString()
   @IsOptional()
   billNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  invoiceNumber?: string;
 
   @IsString()
   @IsOptional()
@@ -73,6 +105,75 @@ export class CreateExpenseDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  expenseType?: string; // GOODS or SERVICES
+
+  @IsString()
+  @IsOptional()
+  sacCode?: string;
+
+  @IsString()
+  @IsOptional()
+  hsnCode?: string;
+
+  @IsString()
+  @IsOptional()
+  hsnSac?: string;
+
+  @IsString()
+  @IsOptional()
+  gstTreatment?: string;
+
+  @IsString()
+  @IsOptional()
+  sourceOfSupply?: string;
+
+  @IsString()
+  @IsOptional()
+  destinationOfSupply?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  reverseCharge?: boolean;
+
+  @IsString()
+  @IsOptional()
+  amountIs?: string; // TAX_INCLUSIVE or TAX_EXCLUSIVE
+
+  @IsString()
+  @IsOptional()
+  customerId?: string;
+
+  @IsString()
+  @IsOptional()
+  customerName?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isBillable?: boolean;
+
+  @IsOptional()
+  reportingTags?: any[];
+
+  @IsOptional()
+  attachments?: any[];
+
+  @IsOptional()
+  receiptUrls?: any[];
+
+  @IsBoolean()
+  @IsOptional()
+  autoApprove?: boolean;
+
+  @IsEnum(ApprovalStatus)
+  @IsOptional()
+  approvalStatus?: ApprovalStatus;
+
+  @IsString()
+  @IsOptional()
+  status?: any;
 
   @IsBoolean()
   @IsOptional()
@@ -116,6 +217,10 @@ export class CreateExpenseDto {
 
   @IsString()
   @IsOptional()
+  taxId?: string;
+
+  @IsString()
+  @IsOptional()
   departmentId?: string;
 }
 
@@ -136,7 +241,19 @@ export class UpdateExpenseDto {
 
   @IsString()
   @IsOptional()
+  accountId?: string;
+
+  @IsString()
+  @IsOptional()
+  expenseAccountId?: string;
+
+  @IsString()
+  @IsOptional()
   bankAccountId?: string;
+
+  @IsString()
+  @IsOptional()
+  paidThroughAccountId?: string;
 
   @IsDateString()
   @IsOptional()
@@ -150,6 +267,18 @@ export class UpdateExpenseDto {
   @IsOptional()
   taxAmount?: number;
 
+  @IsNumber()
+  @IsOptional()
+  totalAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  vendorGstin?: string;
+
+  @IsString()
+  @IsOptional()
+  currency?: string;
+
   @IsEnum(PaymentMethod)
   @IsOptional()
   paymentMethod?: PaymentMethod;
@@ -160,11 +289,73 @@ export class UpdateExpenseDto {
 
   @IsString()
   @IsOptional()
+  invoiceNumber?: string;
+
+  @IsString()
+  @IsOptional()
   description?: string;
 
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  expenseType?: string; // GOODS or SERVICES
+
+  @IsString()
+  @IsOptional()
+  sacCode?: string;
+
+  @IsString()
+  @IsOptional()
+  hsnCode?: string;
+
+  @IsString()
+  @IsOptional()
+  hsnSac?: string;
+
+  @IsString()
+  @IsOptional()
+  gstTreatment?: string;
+
+  @IsString()
+  @IsOptional()
+  sourceOfSupply?: string;
+
+  @IsString()
+  @IsOptional()
+  destinationOfSupply?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  reverseCharge?: boolean;
+
+  @IsString()
+  @IsOptional()
+  amountIs?: string; // TAX_INCLUSIVE or TAX_EXCLUSIVE
+
+  @IsString()
+  @IsOptional()
+  customerId?: string;
+
+  @IsString()
+  @IsOptional()
+  customerName?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isBillable?: boolean;
+
+  @IsOptional()
+  reportingTags?: any[];
+
+  @IsOptional()
+  receiptUrls?: any[];
+
+  @IsString()
+  @IsOptional()
+  taxId?: string;
 
   @IsBoolean()
   @IsOptional()

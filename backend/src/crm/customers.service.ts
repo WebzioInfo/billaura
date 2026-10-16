@@ -66,7 +66,12 @@ export class CustomersService {
     }
 
     const invoices = await this.prisma.invoice.findMany({
-      where: { businessPartnerId: id, companyId, status: { not: "CANCELLED" } },
+      where: {
+        businessPartnerId: id,
+        companyId,
+        status: { notIn: ["CANCELLED", "DRAFT"] },
+        deletedAt: null,
+      },
       orderBy: { date: 'desc' },
     });
 
@@ -80,10 +85,20 @@ export class CustomersService {
       orderBy: { date: 'desc' },
     });
 
-    const totalInvoiced = invoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0);
+    let openingBal = 0;
+    if (customer.openingBalanceType === 'DEBIT') {
+      openingBal = Number(customer.openingBalanceAmount || 0);
+    } else if (customer.openingBalanceType === 'CREDIT') {
+      openingBal = -Number(customer.openingBalanceAmount || 0);
+    }
+
+    const totalInvoiced = invoices.reduce((sum, inv) => {
+      const isCredit = inv.invoiceType === 'CREDIT_NOTE';
+      return isCredit ? sum - Number(inv.grandTotal) : sum + Number(inv.grandTotal);
+    }, 0);
     const totalReceipts = receipts.reduce((sum, rec) => sum + Number(rec.amount), 0);
     const totalPayments = payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
-    const calculatedBalance = Number((totalInvoiced - (totalReceipts + totalPayments)).toFixed(2));
+    const calculatedBalance = Number((openingBal + totalInvoiced - (totalReceipts + totalPayments)).toFixed(2));
 
     if (Math.abs(Number(customer.receivableBalance) - calculatedBalance) > 0.01) {
       await this.prisma.businessPartner.update({
@@ -94,21 +109,32 @@ export class CustomersService {
     }
 
     const transactions = [
-      ...invoices.map(inv => ({
-        id: inv.id,
-        date: inv.date,
-        type: 'INVOICE',
-        reference: inv.invoiceNo,
-        amount: Number(inv.grandTotal),
-        balanceImpact: Number(inv.grandTotal)
-      })),
+      ...(openingBal !== 0 ? [{
+        id: `opening-${customer.id}`,
+        date: customer.createdAt,
+        type: 'OPENING_BALANCE',
+        reference: 'Opening Balance',
+        amount: Math.abs(openingBal),
+        balanceImpact: openingBal,
+      }] : []),
+      ...invoices.map(inv => {
+        const isCredit = inv.invoiceType === 'CREDIT_NOTE';
+        return {
+          id: inv.id,
+          date: inv.date,
+          type: inv.invoiceType || 'INVOICE',
+          reference: inv.invoiceNo,
+          amount: Number(inv.grandTotal),
+          balanceImpact: isCredit ? -Number(inv.grandTotal) : Number(inv.grandTotal),
+        };
+      }),
       ...receipts.map(rec => ({
         id: rec.id,
         date: rec.date,
         type: 'RECEIPT',
         reference: rec.receiptNo,
         amount: Number(rec.amount),
-        balanceImpact: -Number(rec.amount)
+        balanceImpact: -Number(rec.amount),
       })),
       ...payments.map(pay => ({
         id: pay.id,
@@ -116,8 +142,8 @@ export class CustomersService {
         type: 'PAYMENT',
         reference: pay.paymentNo,
         amount: Number(pay.amount),
-        balanceImpact: -Number(pay.amount)
-      }))
+        balanceImpact: -Number(pay.amount),
+      })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return {
@@ -130,10 +156,18 @@ export class CustomersService {
 
   async getAnalytics(id: string, companyId: string) {
     const invoices = await this.prisma.invoice.findMany({
-      where: { businessPartnerId: id, companyId, status: { not: "CANCELLED" } }
+      where: {
+        businessPartnerId: id,
+        companyId,
+        status: { notIn: ["CANCELLED", "DRAFT"] },
+        deletedAt: null,
+      },
     });
 
-    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0);
+    const totalRevenue = invoices.reduce((sum, inv) => {
+      const isCredit = inv.invoiceType === 'CREDIT_NOTE';
+      return isCredit ? sum - Number(inv.grandTotal) : sum + Number(inv.grandTotal);
+    }, 0);
     const invoiceCount = invoices.length;
     const averageInvoiceValue = invoiceCount > 0 ? totalRevenue / invoiceCount : 0;
 

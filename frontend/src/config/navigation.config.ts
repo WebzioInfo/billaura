@@ -53,7 +53,6 @@ export const ERP_NAVIGATION: NavModule[] = [
       { id: 'categories', label: 'Categories', path: ROUTES.INVENTORY.CATEGORIES, icon: 'Tag' },
       { id: 'brands', label: 'Brands', path: ROUTES.INVENTORY.BRANDS, icon: 'Tag' },
       { id: 'units', label: 'Units', path: ROUTES.INVENTORY.UNITS, icon: 'Binary' },
-      { id: 'warehouses', label: 'Warehouses', path: ROUTES.INVENTORY.WAREHOUSES, icon: 'Building2' },
       { id: 'inventory-adjustments', label: 'Stock Adjustment', path: ROUTES.INVENTORY.ADJUSTMENTS, icon: 'Wrench' },
       { id: 'stock-transfer', label: 'Stock Transfer', path: ROUTES.INVENTORY.STOCK_TRANSFER, icon: 'Truck' },
       { id: 'report-inventory', label: 'Inventory Reports', path: ROUTES.INVENTORY.REPORTS, icon: 'BarChart3' },

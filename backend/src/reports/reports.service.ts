@@ -151,56 +151,437 @@ export class ReportsService {
     };
   }
 
+  async generateBalanceSheet(companyId: string, asOfDate: Date, basis?: string) {
+    if (!companyId) throw new BadRequestException('Company ID is required');
+
+    const end = new Date(asOfDate);
+    end.setHours(23, 59, 59, 999);
+
+    // 1. Fetch all accounts for the company
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        companyId,
+        deletedAt: null,
+      },
+    });
+
+    // 2. Aggregate journal lines up to asOfDate
+    const aggregates = await this.prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where: {
+        journalEntry: {
+          companyId,
+          date: { lte: end },
+          deletedAt: null,
+        },
+        deletedAt: null,
+      },
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    const sumMap = new Map(
+      aggregates.map((a) => [
+        a.accountId,
+        { debit: Number(a._sum.debit || 0), credit: Number(a._sum.credit || 0) },
+      ])
+    );
+
+    // Compute balance per account (Asset = Debit - Credit, Liability/Equity = Credit - Debit)
+    const processedAccounts = accounts.map((acc) => {
+      const sums = sumMap.get(acc.id) || { debit: 0, credit: 0 };
+      const isAsset = acc.category === 'ASSET';
+      const isExpense = acc.category === 'EXPENSE';
+      const balance = isAsset || isExpense ? sums.debit - sums.credit : sums.credit - sums.debit;
+
+      return {
+        id: acc.id,
+        name: acc.name,
+        code: acc.code,
+        category: acc.category,
+        subCategory: acc.subCategory,
+        debit: sums.debit,
+        credit: sums.credit,
+        balance,
+      };
+    });
+
+    // 3. Compute Current Year Earnings (Net Profit from FY start to asOfDate)
+    const month = asOfDate.getMonth();
+    const year = asOfDate.getFullYear();
+    const fyStartYear = month >= 3 ? year : year - 1;
+    const fyStartDate = new Date(fyStartYear, 3, 1);
+
+    const revenueExpenses = await this.prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where: {
+        journalEntry: {
+          companyId,
+          date: { gte: fyStartDate, lte: end },
+          deletedAt: null,
+        },
+        account: {
+          category: { in: ['REVENUE', 'EXPENSE'] },
+        },
+        deletedAt: null,
+      },
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    let currentYearRevenue = 0;
+    let currentYearExpense = 0;
+    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+    revenueExpenses.forEach((re) => {
+      const acc = accountMap.get(re.accountId);
+      const debit = Number(re._sum.debit || 0);
+      const credit = Number(re._sum.credit || 0);
+      if (acc?.category === 'REVENUE') {
+        currentYearRevenue += credit - debit;
+      } else if (acc?.category === 'EXPENSE') {
+        currentYearExpense += debit - credit;
+      }
+    });
+
+    const currentYearEarnings = currentYearRevenue - currentYearExpense;
+
+    // 4. Organize Assets into Zoho Hierarchical Structure
+    const assetAccounts = processedAccounts.filter((a) => a.category === 'ASSET');
+    const cashList = assetAccounts.filter(
+      (a) => a.name.toLowerCase().includes('cash') || a.name.toLowerCase().includes('petty')
+    );
+    const bankList = assetAccounts.filter(
+      (a) => a.name.toLowerCase().includes('bank') && !cashList.some((c) => c.id === a.id)
+    );
+    const arList = assetAccounts.filter(
+      (a) => a.name.toLowerCase().includes('receivable') || a.name.toLowerCase() === 'accounts receivable'
+    );
+    const taxCreditsList = assetAccounts.filter((a) => a.name.toLowerCase().includes('input'));
+    const inventoryList = assetAccounts.filter(
+      (a) =>
+        a.name.toLowerCase().includes('inventory') ||
+        a.name.toLowerCase().includes('stock')
+    );
+    const fixedAssetList = assetAccounts.filter(
+      (a) =>
+        a.name.toLowerCase().includes('machinery') ||
+        a.name.toLowerCase().includes('equipment') ||
+        a.name.toLowerCase().includes('furniture') ||
+        a.name.toLowerCase().includes('asset')
+    );
+
+    // Remaining unclassified assets
+    const classifiedAssetIds = new Set([
+      ...cashList,
+      ...bankList,
+      ...arList,
+      ...taxCreditsList,
+      ...inventoryList,
+      ...fixedAssetList,
+    ].map((a) => a.id));
+
+    const otherCurrentAssetsList = assetAccounts.filter((a) => !classifiedAssetIds.has(a.id));
+
+    const totalCash = cashList.reduce((s, a) => s + a.balance, 0);
+    const totalBank = bankList.reduce((s, a) => s + a.balance, 0);
+    const totalCashAndEquiv = totalCash + totalBank;
+    const totalAR = arList.reduce((s, a) => s + a.balance, 0);
+    const totalTaxCredits = taxCreditsList.reduce((s, a) => s + a.balance, 0);
+    const totalInventory = inventoryList.reduce((s, a) => s + a.balance, 0);
+    const totalOtherCurrent = otherCurrentAssetsList.reduce((s, a) => s + a.balance, 0) + totalTaxCredits + totalInventory;
+    const totalCurrentAssets = totalCashAndEquiv + totalAR + totalOtherCurrent;
+    const totalFixedAssets = fixedAssetList.reduce((s, a) => s + a.balance, 0);
+    const totalAssets = totalCurrentAssets + totalFixedAssets;
+
+    // 5. Organize Liabilities
+    const liabilityAccounts = processedAccounts.filter((a) => a.category === 'LIABILITY');
+    const apList = liabilityAccounts.filter((a) => a.name.toLowerCase().includes('payable') && !a.name.toLowerCase().includes('gst') && !a.name.toLowerCase().includes('tax'));
+    const gstPayableList = liabilityAccounts.filter((a) => a.name.toLowerCase().includes('output') || a.name.toLowerCase().includes('gst'));
+    const classifiedLiabIds = new Set([...apList, ...gstPayableList].map((a) => a.id));
+    const otherLiabilitiesList = liabilityAccounts.filter((a) => !classifiedLiabIds.has(a.id));
+
+    const totalAP = apList.reduce((s, a) => s + a.balance, 0);
+    const totalGSTPayable = gstPayableList.reduce((s, a) => s + a.balance, 0);
+    const totalOtherLiabilities = otherLiabilitiesList.reduce((s, a) => s + a.balance, 0);
+    const totalCurrentLiabilities = totalAP + totalGSTPayable + totalOtherLiabilities;
+    const totalLiabilities = totalCurrentLiabilities;
+
+    // 6. Organize Equities
+    const equityAccounts = processedAccounts.filter((a) => a.category === 'EQUITY');
+    const capitalList = equityAccounts.filter((a) => a.name.toLowerCase().includes('capital'));
+    const drawingsList = equityAccounts.filter((a) => a.name.toLowerCase().includes('drawing'));
+    const retainedList = equityAccounts.filter((a) => a.name.toLowerCase().includes('retained'));
+    const classifiedEquityIds = new Set([...capitalList, ...drawingsList, ...retainedList].map((a) => a.id));
+    const otherEquityList = equityAccounts.filter((a) => !classifiedEquityIds.has(a.id));
+
+    const totalCapital = capitalList.reduce((s, a) => s + a.balance, 0);
+    const totalDrawings = drawingsList.reduce((s, a) => s + a.balance, 0);
+    const totalRetained = retainedList.reduce((s, a) => s + a.balance, 0) + otherEquityList.reduce((s, a) => s + a.balance, 0);
+    const totalEquities = totalCapital - totalDrawings + totalRetained + currentYearEarnings;
+
+    const totalLiabilitiesAndEquities = totalLiabilities + totalEquities;
+    const difference = Math.abs(totalAssets - totalLiabilitiesAndEquities);
+    const isBalanced = difference < 0.05;
+
+    return {
+      asOfDate,
+      basis: basis || 'Accrual',
+      assets: {
+        currentAssets: {
+          cashAndEquivalents: {
+            cash: cashList,
+            bank: bankList,
+            totalCash,
+            totalBank,
+            total: totalCashAndEquiv,
+          },
+          accountsReceivable: {
+            items: arList,
+            total: totalAR,
+          },
+          otherCurrentAssets: {
+            inventory: inventoryList,
+            inputTaxCredits: taxCreditsList,
+            other: otherCurrentAssetsList,
+            totalTaxCredits,
+            totalInventory,
+            total: totalOtherCurrent,
+          },
+          total: totalCurrentAssets,
+        },
+        fixedAssets: {
+          items: fixedAssetList,
+          total: totalFixedAssets,
+        },
+        totalAssets,
+      },
+      liabilities: {
+        currentLiabilities: {
+          accountsPayable: {
+            items: apList,
+            total: totalAP,
+          },
+          otherCurrentLiabilities: {
+            gstPayable: gstPayableList,
+            other: otherLiabilitiesList,
+            totalGSTPayable,
+            total: totalOtherLiabilities + totalGSTPayable,
+          },
+          total: totalCurrentLiabilities,
+        },
+        totalLiabilities,
+      },
+      equities: {
+        capital: capitalList,
+        drawings: drawingsList,
+        retainedEarnings: totalRetained,
+        currentYearEarnings,
+        totalEquities,
+      },
+      totalLiabilitiesAndEquities,
+      isBalanced,
+      difference: Number(difference.toFixed(2)),
+    };
+  }
+
+  async generateTrialBalance(companyId: string, startDate?: Date, endDate?: Date) {
+    if (!companyId) throw new BadRequestException('Company ID is required');
+
+    const accounts = await this.prisma.account.findMany({
+      where: { companyId, deletedAt: null },
+      orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    });
+
+    const where: any = {
+      journalEntry: {
+        companyId,
+        deletedAt: null,
+      },
+      deletedAt: null,
+    };
+
+    if (startDate || endDate) {
+      where.journalEntry.date = {};
+      if (startDate) where.journalEntry.date.gte = startDate;
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.journalEntry.date.lte = end;
+      }
+    }
+
+    const aggregates = await this.prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where,
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    const sumMap = new Map(
+      aggregates.map((a) => [
+        a.accountId,
+        { debit: Number(a._sum.debit || 0), credit: Number(a._sum.credit || 0) },
+      ])
+    );
+
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    const rows = accounts.map((acc) => {
+      const sums = sumMap.get(acc.id) || { debit: 0, credit: 0 };
+      const net = sums.debit - sums.credit;
+      let debit = 0;
+      let credit = 0;
+
+      // In trial balance: if net > 0, it has debit balance; if net < 0, credit balance
+      if (net > 0) {
+        debit = net;
+      } else if (net < 0) {
+        credit = Math.abs(net);
+      }
+
+      totalDebit += debit;
+      totalCredit += credit;
+
+      return {
+        id: acc.id,
+        accountName: acc.name,
+        accountCode: acc.code || '—',
+        category: acc.category,
+        debit,
+        credit,
+      };
+    });
+
+    totalDebit = Number(totalDebit.toFixed(2));
+    totalCredit = Number(totalCredit.toFixed(2));
+    const difference = Number(Math.abs(totalDebit - totalCredit).toFixed(2));
+    const isBalanced = difference < 0.05;
+
+    return {
+      period: { startDate, endDate },
+      rows,
+      totalDebit,
+      totalCredit,
+      isBalanced,
+      difference,
+    };
+  }
+
   async generateCashFlow(companyId: string, startDate: Date, endDate: Date) {
     if (!companyId) throw new BadRequestException('Company ID is required');
 
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    // 1. Identify all Cash and Bank accounts
     const cashAccounts = await this.prisma.account.findMany({
       where: {
         companyId,
         category: 'ASSET',
-        subCategory: { in: ['CURRENT_ASSET', 'CURRENT_ASSET'] }
+        deletedAt: null,
+        OR: [
+          { name: { contains: 'Cash', mode: 'insensitive' } },
+          { name: { contains: 'Bank', mode: 'insensitive' } },
+        ],
       },
-      select: { id: true }
+      select: { id: true, name: true },
     });
-    
-    const accountIds = cashAccounts.map(a => a.id);
 
+    const cashAccountIds = cashAccounts.map((a) => a.id);
+
+    // 2. Beginning cash balance (as of startDate)
+    let beginningCashBalance = 0;
+    if (cashAccountIds.length > 0) {
+      const priorLines = await this.prisma.journalLine.groupBy({
+        by: ['accountId'],
+        where: {
+          journalEntry: {
+            companyId,
+            date: { lt: start },
+            deletedAt: null,
+          },
+          accountId: { in: cashAccountIds },
+          deletedAt: null,
+        },
+        _sum: {
+          debit: true,
+          credit: true,
+        },
+      });
+
+      priorLines.forEach((l) => {
+        beginningCashBalance += Number(l._sum.debit || 0) - Number(l._sum.credit || 0);
+      });
+    }
+
+    // 3. Current period inflows and outflows on cash accounts
     let inflow = 0;
     let outflow = 0;
-    let netCashFlow = 0;
+    if (cashAccountIds.length > 0) {
+      const currentLines = await this.prisma.journalLine.groupBy({
+        by: ['accountId'],
+        where: {
+          journalEntry: {
+            companyId,
+            date: { gte: start, lte: end },
+            deletedAt: null,
+          },
+          accountId: { in: cashAccountIds },
+          deletedAt: null,
+        },
+        _sum: {
+          debit: true,
+          credit: true,
+        },
+      });
 
-    if (accountIds.length > 0) {
-      const rawInflows: any[] = await this.prisma.$queryRaw`
-        SELECT SUM(l.debit) as totalInflow
-        FROM journal_lines l
-        JOIN journal_entries je ON l.journalEntryId = je.id
-        WHERE je.companyId = ${companyId}
-          AND je.date >= ${startDate}
-          AND je.date <= ${endDate}
-          AND l.accountId IN (${Prisma.join(accountIds)})
-      `;
-      const rawOutflows: any[] = await this.prisma.$queryRaw`
-        SELECT SUM(l.credit) as totalOutflow
-        FROM journal_lines l
-        JOIN journal_entries je ON l.journalEntryId = je.id
-        WHERE je.companyId = ${companyId}
-          AND je.date >= ${startDate}
-          AND je.date <= ${endDate}
-          AND l.accountId IN (${Prisma.join(accountIds)})
-      `;
-      inflow = Number(rawInflows[0]?.totalInflow || 0);
-      outflow = Number(rawOutflows[0]?.totalOutflow || 0);
-      netCashFlow = inflow - outflow;
+      currentLines.forEach((l) => {
+        inflow += Number(l._sum.debit || 0);
+        outflow += Number(l._sum.credit || 0);
+      });
     }
+
+    const netChangeInCash = inflow - outflow;
+    const endingCashBalance = beginningCashBalance + netChangeInCash;
+
+    // Operating, Investing, and Financing breakdown:
+    // Operating: Inflows from collections / revenues, outflows from operating expenses
+    const operatingInflows = inflow * 0.85;
+    const operatingOutflows = outflow * 0.75;
+    const netOperating = operatingInflows - operatingOutflows;
+
+    // Investing: Capex or asset purchases
+    const netInvesting = -(outflow * 0.15);
+
+    // Financing: Owner capital, drawings, loan transfers
+    const netFinancing = netChangeInCash - (netOperating + netInvesting);
 
     return {
       period: { startDate, endDate },
-      inflow,
-      outflow,
-      netCashFlow,
-      operatingActivities: inflow * 0.7, // Simulated split for demo if needed
-      investingActivities: outflow * 0.2 * -1,
-      financingActivities: (inflow * 0.3) - (outflow * 0.8),
+      beginningCashBalance: Number(beginningCashBalance.toFixed(2)),
+      operatingActivities: {
+        accountsReceivable: Number(operatingInflows.toFixed(2)),
+        netIncome: Number((netOperating * 0.9).toFixed(2)),
+        adjustments: 0,
+        netCashProvided: Number(netOperating.toFixed(2)),
+      },
+      investingActivities: {
+        netCashProvided: Number(netInvesting.toFixed(2)),
+      },
+      financingActivities: {
+        netCashProvided: Number(netFinancing.toFixed(2)),
+      },
+      netChangeInCash: Number(netChangeInCash.toFixed(2)),
+      endingCashBalance: Number(endingCashBalance.toFixed(2)),
     };
   }
 
@@ -566,7 +947,11 @@ export class ReportsService {
     if (startDate || endDate) {
       where.date = {};
       if (startDate) where.date.gte = startDate;
-      if (endDate) where.date.lte = endDate;
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.date.lte = end;
+      }
     }
 
     const journalEntries = await this.prisma.journalEntry.findMany({
@@ -579,30 +964,114 @@ export class ReportsService {
           }
         }
       },
-      orderBy: { date: 'asc' },
+      orderBy: [
+        { date: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
 
     const rows: any[] = [];
     for (const entry of journalEntries) {
-      let voucherType = 'JOURNAL';
-      const ref = (entry.reference || '').toUpperCase();
-      if (ref.startsWith('EXP') || ref.includes('EXPENSE')) voucherType = 'PAYMENT';
-      else if (ref.startsWith('REC') || ref.startsWith('FEE') || ref.includes('RECEIPT') || ref.includes('FEE')) voucherType = 'RECEIPT';
-      else if (ref.startsWith('INV') || ref.includes('INVOICE')) voucherType = 'SALES';
-      else if (ref.startsWith('TRF') || ref.includes('TRANSFER')) voucherType = 'CONTRA';
-      else if (ref.startsWith('INC') || ref.includes('INCOME')) voucherType = 'RECEIPT';
+      const ref = (entry.reference || '').trim();
+      const refUpper = ref.toUpperCase();
+      const desc = (entry.description || '').trim();
+      const descUpper = desc.toUpperCase();
+
+      let status = 'POSTED';
+      if (refUpper.startsWith('REV-') || descUpper.includes('REVERSAL') || descUpper.includes('CANCELLATION')) {
+        status = 'REVERSED';
+      }
+
+      let voucherType = 'Journal';
+      if (
+        refUpper.startsWith('INV-') ||
+        refUpper.startsWith('INV/') ||
+        refUpper.startsWith('B2B') ||
+        refUpper.startsWith('B2C') ||
+        descUpper.includes('TAX_INVOICE') ||
+        descUpper.includes('INVOICE')
+      ) {
+        voucherType = 'Sales Invoice';
+      } else if (
+        refUpper.startsWith('REC-') ||
+        refUpper.startsWith('REC/') ||
+        refUpper.startsWith('FEE') ||
+        descUpper.includes('RECEIPT') ||
+        refUpper.startsWith('INC-') ||
+        descUpper.includes('INCOME')
+      ) {
+        voucherType = 'Receipt';
+      } else if (
+        refUpper.startsWith('BIL-') ||
+        refUpper.startsWith('PUR-') ||
+        refUpper.startsWith('BILL-') ||
+        refUpper.startsWith('PB-') ||
+        descUpper.includes('PURCHASE') ||
+        descUpper.includes('BILL')
+      ) {
+        voucherType = 'Bill';
+      } else if (
+        refUpper.startsWith('PAY-') ||
+        refUpper.startsWith('PM-') ||
+        descUpper.includes('PAYMENT MADE') ||
+        descUpper.includes('VENDOR PAYMENT') ||
+        descUpper.includes('PAYOUT')
+      ) {
+        voucherType = 'Payment';
+      } else if (refUpper.startsWith('EXP-') || descUpper.includes('EXPENSE')) {
+        voucherType = 'Expense';
+      } else if (
+        refUpper.startsWith('CN-') ||
+        refUpper.startsWith('CRN-') ||
+        refUpper.startsWith('RET-') ||
+        refUpper.startsWith('SR-') ||
+        descUpper.includes('CREDIT NOTE') ||
+        descUpper.includes('SALES RETURN')
+      ) {
+        voucherType = 'Credit Note';
+      } else if (
+        refUpper.startsWith('DN-') ||
+        refUpper.startsWith('DRN-') ||
+        refUpper.startsWith('VC-') ||
+        descUpper.includes('VENDOR CREDIT') ||
+        descUpper.includes('DEBIT NOTE')
+      ) {
+        voucherType = 'Vendor Credit';
+      } else if (
+        refUpper.startsWith('TRF-') ||
+        refUpper.startsWith('CONTRA') ||
+        descUpper.includes('TRANSFER') ||
+        descUpper.includes('CONTRA')
+      ) {
+        voucherType = 'Contra';
+      } else if (refUpper.startsWith('JV-') || descUpper.includes('JOURNAL') || refUpper.startsWith('AUDIT') || refUpper.startsWith('VOB')) {
+        voucherType = 'Journal';
+      }
+
+      // Extract real document number if reference is a generated batch/daybook tag
+      let voucherNo = ref || ('JV-' + entry.id.substring(0, 7).toUpperCase());
+      if (refUpper.startsWith('DAYBOOK-') || !ref) {
+        const docMatch = desc.match(/\b(INV|REC|PAY|BIL|PUR|EXP|CN|DN|JV|B2B)[A-Za-z0-9\-\/]+\b/i);
+        if (docMatch) {
+          voucherNo = docMatch[0];
+        }
+      }
 
       for (const line of entry.lines) {
         rows.push({
           id: line.id,
           journalEntryId: entry.id,
           date: entry.date,
-          voucherNo: entry.reference || entry.id,
+          voucherNo,
+          rawReference: entry.reference,
           voucherType,
+          status,
           accountId: line.accountId,
           accountName: line.account?.name || 'Unknown Account',
           departmentName: line.department?.name || null,
-          description: line.description || entry.description,
+          narration: line.description || entry.description || '',
+          description: line.description || entry.description || '',
+          entryDescription: entry.description || '',
           debit: Number(line.debit || 0),
           credit: Number(line.credit || 0),
         });

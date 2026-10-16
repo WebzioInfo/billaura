@@ -23,6 +23,8 @@ const DEFAULT_TYPE_PREFIXES: Record<string, string> = {
   FEE_RECEIPT: 'FEE',
   PAYMENT_RECEIPT: 'REC',
   OTHER_RECEIPT: 'OREC',
+  PAYMENT: 'PAY',
+  PURCHASE: 'BILL',
 };
 
 @Injectable()
@@ -232,6 +234,22 @@ export class SequenceService {
 
     const numStr = num.toString().padStart(padding, '0');
     return `${formattedPrefix}${numStr}${formattedSuffix}`;
+  }
+
+  async previewNextSequence(companyId: string, documentType: string): Promise<string> {
+    const seq = await this.prisma.documentSequence.findUnique({
+      where: {
+        companyId_documentType: {
+          companyId,
+          documentType,
+        },
+      },
+    });
+
+    const currentNum = (seq?.currentNumber || 0) + 1;
+    const prefix = seq?.prefix || `${documentType}-`;
+    const padding = seq?.padding || 5;
+    return `${prefix}${currentNum.toString().padStart(padding, '0')}`;
   }
 
   private replaceDatePlaceholders(str: string, date: Date): string {

@@ -1,16 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Edit, Trash2, Search, Download, RefreshCw, BarChart2, CheckCircle2, XCircle, Package } from 'lucide-react';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, IconButton } from '@/shared/components/ui';
-import { PageContainer, EmptyState } from '@/shared/components/ui/LayoutComponents';
+import { Plus, Edit, Trash2, Search, Download, RefreshCw } from 'lucide-react';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { dialog } from '@/core/services/DialogService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/shared/components/ui';
-import { Input } from '@/shared/components/ui/Input';
+import { ExportService } from '@/core/services/ExportService';
+import { cn } from '@/lib/utils';
 
-export const CategoriesList = () => {
+export const CategoriesList: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -21,7 +18,7 @@ export const CategoriesList = () => {
       const res = await apiClient.get('/inventory/categories');
       const items = res.data?.data?.items || res.data || [];
       return Array.isArray(items) ? items : [];
-    }
+    },
   });
 
   const deleteMutation = useMutation({
@@ -39,7 +36,7 @@ export const CategoriesList = () => {
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Unable to delete category. Please try again.');
-    }
+    },
   });
 
   const handleDelete = async (id: string, name: string) => {
@@ -85,12 +82,28 @@ export const CategoriesList = () => {
     }
   };
 
-  // Export removed as it is not implemented
+  // Export CSV
+  const handleExport = () => {
+    if (filteredData.length === 0) {
+      notification.warning('No categories to export');
+      return;
+    }
+    const headers = ['Category Name', 'Code', 'Products', 'Status'];
+    const rows = filteredData.map((c: any) => ({
+      'Category Name': c.name || '',
+      Code: c.code || '',
+      Products: c._count?.products || 0,
+      Status: c.status || 'ACTIVE',
+    }));
+    ExportService.exportCsv('Categories_List.csv', rows, headers);
+  };
 
   const filteredData = useMemo(() => {
     return data.filter((c: any) => {
-      const matchesSearch = c.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            c.code?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch =
+        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.description?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -98,163 +111,240 @@ export const CategoriesList = () => {
 
   // KPIs
   const totalCategories = data.length;
-  const activeCategories = data.filter((c: any) => c.status === 'ACTIVE').length;
-  const inactiveCategories = data.filter((c: any) => c.status === 'INACTIVE').length;
-  const totalProductsLinked = data.reduce((acc: number, c: any) => acc + (c._count?.products || 0), 0);
+  const activeCategories = data.filter((c: any) => c.status === 'ACTIVE' || !c.status).length;
+  const inactiveCategories = totalCategories - activeCategories;
+  const totalProductsLinked = data.reduce(
+    (acc: number, c: any) => acc + (c._count?.products || 0),
+    0
+  );
 
   return (
-    <PageContainer maxWidth="7xl">
-      <PageHeader
-        title="Product Categories"
-        description="Organize your inventory with categories"
-        primaryAction={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2">
-              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} /> Refresh
-            </Button>
-            <Button variant="outline" size="sm" className="gap-2 opacity-50 cursor-not-allowed" title="Available in a future release." disabled>
-              <Download className="w-4 h-4" /> Export
-            </Button>
-            <Button onClick={handleCreate} variant="primary" size="sm" className="gap-2">
-              <Plus className="w-4 h-4" /> New Category
-            </Button>
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-white text-[#2B2F36] overflow-y-auto">
+      {/* 1. Page Header (Zoho Books Style) */}
+      <div className="px-6 py-4 border-b border-[#E5E7EB] bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-[20px] font-semibold text-[#2B2F36] leading-tight">
+              Product Categories
+            </h1>
+            <span className="px-2 py-0.5 rounded-[4px] bg-[#F3F4F6] text-[#6B7280] text-xs font-medium">
+              {totalCategories}
+            </span>
           </div>
-        }
-      />
-
-      {/* KPIs Section */}
-      {!isLoading && data.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-          <div className="bg-surface border border-border rounded-xl p-4 flex items-center gap-4 shadow-sm">
-            <div className="p-3 bg-blue-500/10 rounded-lg text-blue-500">
-              <BarChart2 className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Categories</p>
-              <h3 className="text-2xl font-bold mt-1">{totalCategories}</h3>
-            </div>
-          </div>
-          <div className="bg-surface border border-border rounded-xl p-4 flex items-center gap-4 shadow-sm">
-            <div className="p-3 bg-green-500/10 rounded-lg text-green-500">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active</p>
-              <h3 className="text-2xl font-bold mt-1">{activeCategories}</h3>
-            </div>
-          </div>
-          <div className="bg-surface border border-border rounded-xl p-4 flex items-center gap-4 shadow-sm">
-            <div className="p-3 bg-red-500/10 rounded-lg text-red-500">
-              <XCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Inactive</p>
-              <h3 className="text-2xl font-bold mt-1">{inactiveCategories}</h3>
-            </div>
-          </div>
-          <div className="bg-surface border border-border rounded-xl p-4 flex items-center gap-4 shadow-sm">
-            <div className="p-3 bg-purple-500/10 rounded-lg text-purple-500">
-              <Package className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Products Linked</p>
-              <h3 className="text-2xl font-bold mt-1">{totalProductsLinked}</h3>
-            </div>
-          </div>
+          <p className="text-xs text-[#6B7280] mt-0.5">
+            Organize and classify products across sales, purchases, and reporting
+          </p>
         </div>
-      )}
 
-      {/* Command Bar */}
-      <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 bg-surface p-3 rounded-xl border border-border shadow-sm">
-        <div className="flex-1 w-full relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input 
-            placeholder="Search categories by name or code..." 
-            className="pl-9 w-full sm:max-w-md"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <select 
-            className="px-3 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 w-full sm:w-auto"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="h-8 px-3 bg-white border border-[#D1D5DB] hover:bg-[#F9FAFB] text-[#2B2F36] rounded-[4px] text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Refresh List"
           >
-            <option value="ALL">All Status</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
+            <RefreshCw className={cn('w-3.5 h-3.5 text-[#6B7280]', isFetching && 'animate-spin')} />
+            <span>Refresh</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExport}
+            className="h-8 px-3 bg-white border border-[#D1D5DB] hover:bg-[#F9FAFB] text-[#2B2F36] rounded-[4px] text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Export Records"
+          >
+            <Download className="w-3.5 h-3.5 text-[#6B7280]" />
+            <span>Export</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCreate}
+            className="h-8 px-3.5 bg-[#408DFB] hover:bg-[#3078E0] text-white rounded-[4px] text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Category</span>
+          </button>
         </div>
       </div>
 
-      {isLoading ? (
-        <TableLoader cols={5} rows={5} className="mt-4 border border-border/80 bg-surface rounded-2xl" />
-      ) : filteredData.length === 0 ? (
-        <div className="mt-4 bg-surface rounded-xl border border-border shadow-sm overflow-hidden">
-          <EmptyState
-            title="No Categories Found"
-            description={searchTerm || statusFilter !== 'ALL' ? 'Try adjusting your search or filters.' : 'Start organizing your inventory by adding your first category.'}
-            actionLabel={searchTerm || statusFilter !== 'ALL' ? 'Clear Filters' : 'Add Category'}
-            onActionClick={searchTerm || statusFilter !== 'ALL' ? () => { setSearchTerm(''); setStatusFilter('ALL'); } : handleCreate}
-          />
+      {/* 2. Compact Zoho Summary Strip */}
+      <div className="px-6 py-2.5 bg-[#F9FAFB] border-b border-[#E5E7EB] flex flex-wrap items-center gap-6 text-xs text-[#6B7280] shrink-0">
+        <div className="flex items-center gap-1.5">
+          <span>Total Categories:</span>
+          <strong className="text-[#2B2F36] font-semibold">{totalCategories}</strong>
         </div>
-      ) : (
-        <Table className="mt-4">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-6 pr-4">Category Name</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead align="right">Products</TableHead>
-              <TableHead align="center">Status</TableHead>
-              <TableHead align="right" className="pr-6 pl-4">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredData.map((c: any) => (
-              <TableRow key={c.id}>
-                <TableCell className="pl-6 pr-4 font-medium text-foreground">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-foreground">{c.name}</span>
-                    {c.description && <span className="text-xs text-muted-foreground">{c.description}</span>}
-                  </div>
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {c.code || '—'}
-                </TableCell>
-                <TableCell align="right" className="tabular-nums font-medium text-foreground">
-                  {c._count?.products || 0}
-                </TableCell>
-                <TableCell align="center">
-                  <StatusBadge status={c.status || 'ACTIVE'} />
-                </TableCell>
-                <TableCell align="right" className="pr-6 pl-4">
-                  <div className="flex items-center justify-end gap-1">
-                    <IconButton
-                      icon={Edit}
-                      aria-label="Edit Category"
-                      tooltip="Edit Category"
-                      size="dense"
-                      disabled={deleteMutation.isPending && deleteMutation.variables === c.id}
-                      onClick={() => handleEdit(c)}
-                    />
-                    <IconButton
-                      icon={Trash2}
-                      aria-label={deleteMutation.isPending && deleteMutation.variables === c.id ? "Deleting Category..." : "Delete Category"}
-                      tooltip={deleteMutation.isPending && deleteMutation.variables === c.id ? "Deleting Category..." : "Delete Category"}
-                      size="dense"
-                      variant="danger-ghost"
-                      isLoading={deleteMutation.isPending && deleteMutation.variables === c.id}
-                      disabled={deleteMutation.isPending}
-                      onClick={() => handleDelete(c.id, c.name)}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-    </PageContainer>
+        <span className="text-[#D1D5DB]">•</span>
+        <div className="flex items-center gap-1.5">
+          <span>Active:</span>
+          <strong className="text-[#2B2F36] font-semibold">{activeCategories}</strong>
+        </div>
+        <span className="text-[#D1D5DB]">•</span>
+        <div className="flex items-center gap-1.5">
+          <span>Inactive:</span>
+          <strong className="text-[#2B2F36] font-semibold">{inactiveCategories}</strong>
+        </div>
+        <span className="text-[#D1D5DB]">•</span>
+        <div className="flex items-center gap-1.5">
+          <span>Products Linked:</span>
+          <strong className="text-[#2B2F36] font-semibold">{totalProductsLinked}</strong>
+        </div>
+      </div>
+
+      {/* 3. Main Content: Toolbar + Full-Width Table */}
+      <div className="p-6 space-y-4 flex-1 flex flex-col min-h-0">
+        {/* Search & Filter Toolbar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-3.5 h-3.5 text-[#9CA3AF] absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search categories by name or code..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-8 pl-8 pr-3 bg-white border border-[#D1D5DB] rounded-[4px] text-[13px] text-[#2B2F36] outline-none focus:border-[#408DFB]"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[#6B7280]">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-8 px-2.5 bg-white border border-[#D1D5DB] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] cursor-pointer"
+              >
+                <option value="ALL">All Status</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+
+            <div className="text-xs text-[#6B7280]">
+              Showing <strong className="text-[#2B2F36] font-medium">{filteredData.length}</strong> of{' '}
+              {totalCategories}
+            </div>
+          </div>
+        </div>
+
+        {/* Clean Full-Width Table */}
+        <div className="border border-[#E5E7EB] rounded-[4px] overflow-hidden bg-white">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-[13px]">
+              <thead>
+                <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB] text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider h-9">
+                  <th className="px-4 py-2 font-semibold">Category Name</th>
+                  <th className="px-4 py-2 font-semibold">Code</th>
+                  <th className="px-4 py-2 font-semibold text-right">Products</th>
+                  <th className="px-4 py-2 font-semibold text-center">Status</th>
+                  <th className="px-4 py-2 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E7EB]">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-xs text-[#6B7280]">
+                      <div className="inline-block w-5 h-5 border-2 border-[#408DFB] border-t-transparent rounded-full animate-spin mb-2" />
+                      <p>Loading categories...</p>
+                    </td>
+                  </tr>
+                ) : filteredData.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-xs text-[#6B7280]">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-[#2B2F36]">No categories found</p>
+                        <p className="text-xs text-[#6B7280]">
+                          {searchTerm || statusFilter !== 'ALL'
+                            ? 'Try clearing your search query or filters.'
+                            : 'Start organizing your inventory by adding your first category.'}
+                        </p>
+                        {searchTerm || statusFilter !== 'ALL' ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSearchTerm('');
+                              setStatusFilter('ALL');
+                            }}
+                            className="mt-2 text-xs text-[#408DFB] hover:underline cursor-pointer"
+                          >
+                            Clear Filters
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleCreate}
+                            className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-[#408DFB] text-white rounded-[4px] text-xs font-medium cursor-pointer shadow-sm"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Category</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredData.map((c: any) => {
+                    const isActive = c.status === 'ACTIVE' || !c.status;
+                    return (
+                      <tr key={c.id} className="hover:bg-[#F5F7FA] transition-colors min-h-[41px]">
+                        <td className="px-4 py-2.5 font-medium text-[#2B2F36]">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-[#2B2F36]">{c.name}</span>
+                            {c.description && (
+                              <span className="text-[11px] text-[#6B7280]">{c.description}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-[#6B7280]">
+                          {c.code || '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-[#2B2F36] font-medium">
+                          {c._count?.products || 0}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          {isActive ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-[3px] text-[11px] font-medium bg-[#ECFDF5] text-[#059669]">
+                              ACTIVE
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-[3px] text-[11px] font-medium bg-[#F3F4F6] text-[#6B7280]">
+                              INACTIVE
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(c)}
+                              className="p-1.5 text-[#6B7280] hover:text-[#408DFB] hover:bg-[#EBF3FF] rounded-[4px] transition-colors cursor-pointer"
+                              title="Edit Category"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(c.id, c.name)}
+                              disabled={deleteMutation.isPending && deleteMutation.variables === c.id}
+                              className="p-1.5 text-[#6B7280] hover:text-[#E54B4B] hover:bg-[#FEF2F2] rounded-[4px] transition-colors cursor-pointer"
+                              title="Delete Category"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
+
+export default CategoriesList;

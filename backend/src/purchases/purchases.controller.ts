@@ -27,6 +27,21 @@ export class PurchasesController {
     return this.purchasesService.findAll(query);
   }
 
+  @Get("next-number")
+  async getNextNumber() {
+    return this.purchasesService.getNextNumber();
+  }
+
+  @Get("payment-terms")
+  async getPaymentTerms() {
+    return this.purchasesService.getPaymentTerms();
+  }
+
+  @Post("payment-terms")
+  async createPaymentTerm(@Body() dto: { termName: string; dueAfter: number }) {
+    return this.purchasesService.createPaymentTerm(dto);
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     return this.purchasesService.findOne(id);

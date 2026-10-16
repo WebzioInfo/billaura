@@ -145,8 +145,21 @@ export class UnitsService {
       throw new ConflictException('Company context is required');
     }
 
+    const multiplier = Number(dto.multiplier);
+    if (!multiplier || multiplier <= 0 || isNaN(multiplier)) {
+      throw new ConflictException('Conversion multiplier must be a positive number greater than 0');
+    }
+
+    if (dto.fromUnitId && dto.toUnitId && dto.fromUnitId.toUpperCase() === dto.toUnitId.toUpperCase()) {
+      throw new ConflictException('From Unit and To Unit cannot be the same');
+    }
+
     const fromUnit = await this.resolveUnitRecord(dto.fromUnitId, companyId);
     const toUnit = await this.resolveUnitRecord(dto.toUnitId, companyId);
+
+    if (fromUnit.id === toUnit.id) {
+      throw new ConflictException('From Unit and To Unit cannot be the same');
+    }
 
     const description =
       dto.description || `1 ${fromUnit.name} = ${dto.multiplier} ${toUnit.name}`;
@@ -170,6 +183,99 @@ export class UnitsService {
         multiplier: Number(dto.multiplier),
         description,
       },
+    });
+  }
+
+  async removeConversion(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const conversion = await this.prisma.unitConversion.findFirst({
+      where: { id, companyId },
+    });
+    if (!conversion) {
+      throw new ConflictException('Unit conversion rule not found');
+    }
+
+    return this.prisma.unitConversion.delete({
+      where: { id },
+    });
+  }
+
+  async update(id: string, dto: Partial<CreateUnitDto>) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const unit = await this.prisma.unit.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!unit) {
+      throw new ConflictException('Unit not found');
+    }
+
+    if (unit.isSystem) {
+      throw new ConflictException('Standard system units are protected and cannot be modified');
+    }
+
+    const code = dto.code ? dto.code.toUpperCase().replace(/\s+/g, '_') : unit.code;
+    if (code !== unit.code) {
+      const existing = await this.prisma.unit.findFirst({
+        where: { companyId, code, id: { not: id } },
+      });
+      if (existing) {
+        throw new ConflictException(`Unit with code '${code}' already exists`);
+      }
+    }
+
+    return this.prisma.unit.update({
+      where: { id },
+      data: {
+        name: dto.name || unit.name,
+        code,
+        abbreviation: dto.abbreviation || dto.symbol || code,
+        symbol: dto.symbol || dto.abbreviation || code,
+        category: dto.category || unit.category,
+        decimals: dto.decimals !== undefined ? Number(dto.decimals) : unit.decimals,
+        keywords: dto.keywords || `${dto.name || unit.name} ${code}`,
+      },
+    });
+  }
+
+  async remove(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new ConflictException('Company context is required');
+
+    const unit = await this.prisma.unit.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!unit) {
+      throw new ConflictException('Unit not found');
+    }
+
+    if (unit.isSystem) {
+      throw new ConflictException('Standard system units are protected and cannot be deleted');
+    }
+
+    const productCount = await this.prisma.product.count({
+      where: { companyId, unit: unit.code, deletedAt: null },
+    });
+    if (productCount > 0) {
+      throw new ConflictException(
+        `Cannot delete unit "${unit.name}" (${unit.code}) because it is used by ${productCount} active product(s).`
+      );
+    }
+
+    await this.prisma.unitConversion.deleteMany({
+      where: {
+        companyId,
+        OR: [{ fromUnitId: unit.id }, { toUnitId: unit.id }],
+      },
+    });
+
+    return this.prisma.unit.delete({
+      where: { id },
     });
   }
 

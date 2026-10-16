@@ -4,136 +4,100 @@
 
 :root {
   color-scheme: light;
-  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --page-gutter: 20px;
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --page-gutter: 16px;
 
-  /* Responsive page gutter */
-  @media (max-width: 1279px) {
-    --page-gutter: 16px;
-  }
-  @media (max-width: 767px) {
-    --page-gutter: 12px;
-  }
+  /* Zoho Books Core Color Tokens */
+  --topbar-bg: #1E2540;
+  --primary: #408DFB;
+  --primary-hover: #3078E0;
+  --primary-foreground: #ffffff;
+  --link-blue: #408DFB;
 
-  /* Standard text tokens */
-  --text-primary: #111827;
+  --text-primary: #2B2F36;
   --text-secondary: #4B5563;
   --text-tertiary: #6B7280;
+  --text-muted: #6B7280;
+  --foreground: #2B2F36;
+  --muted-foreground: #6B7280;
 
-  --background: #f8fafc;
+  --background: #ffffff;
   --surface: #ffffff;
   --card: #ffffff;
-  --card-foreground: #0f172a;
-  --foreground: #0f172a;
-  --muted-foreground: #475569;
-  --border: #e2e8f0;
+  --card-foreground: #2B2F36;
+  --border: #E5E7EB;
+  --form-header-band: #F8F9FB;
 
-  /* Brand / Primary colors */
-  --primary: #0f172a;
-  --primary-foreground: #ffffff;
-  --primary-muted: #64748b;
+  /* Required / Error / Accent */
+  --label-required: #E54B4B;
+  --danger: #E54B4B;
+  --danger-bg: #FEF2F2;
 
-  /* Accent colors (Indigo highlight) */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-muted: #eef2ff;
-  --accent-foreground: #ffffff;
+  /* Zoho Status Tokens (Plain uppercase text colors) */
+  --status-draft: #6B7280;
+  --status-sent: #2F80ED;
+  --status-paid: #1FAD6B;
+  --status-closed: #1FAD6B;
+  --status-invoiced: #1FAD6B;
+  --status-adjusted: #1FAD6B;
+  --status-overdue: #F76831;
+  --status-accepted: #F76831;
+  --status-open: #2F80ED;
 
-  /* Secondary surface */
-  --secondary: #f1f5f9;
-  --secondary-foreground: #1e293b;
+  /* Legacy compatibility status variables */
+  --status-paid-bg: #e6f9f0;
+  --status-paid-text: #1FAD6B;
+  --status-paid-dot: #1FAD6B;
 
-  /* Status Tokens */
-  --success: #059669;
-  --success-bg: #ecfdf5;
-  --warning: #d97706;
-  --warning-bg: #fffbeb;
-  --danger: #dc2626;
-  --danger-bg: #fef2f2;
-  --info: #2563eb;
-  --info-bg: #eff6ff;
+  --status-overdue-bg: #fff1eb;
+  --status-overdue-text: #F76831;
+  --status-overdue-dot: #F76831;
 
-  /* Invoice & Document Status Tokens (Light: Table V01 Soft Pills) */
-  --status-paid-bg: #dcfce7;
-  --status-paid-text: #166534;
-  --status-paid-dot: #22c55e;
+  --status-partial-bg: #fffbeb;
+  --status-partial-text: #D97706;
+  --status-partial-dot: #D97706;
 
-  --status-overdue-bg: #fee2e2;
-  --status-overdue-text: #991b1b;
-  --status-overdue-dot: #ef4444;
-
-  --status-partial-bg: #fef3c7;
-  --status-partial-text: #92400e;
-  --status-partial-dot: #f59e0b;
-
-  --status-issued-bg: #dbeafe;
-  --status-issued-text: #1e40af;
-  --status-issued-dot: #3b82f6;
+  --status-issued-bg: #ebf3fe;
+  --status-issued-text: #2F80ED;
+  --status-issued-dot: #2F80ED;
 
   --status-draft-bg: #f3f4f6;
-  --status-draft-text: #4b5563;
-  --status-draft-dot: #9ca3af;
+  --status-draft-text: #6B7280;
+  --status-draft-dot: #6B7280;
 
-  --status-cancelled-bg: #f3f4f6;
-  --status-cancelled-text: #6b7280;
-  --status-cancelled-dot: #9ca3af;
-
-  --status-violet-bg: #f3e8ff;
-  --status-violet-text: #6b21a8;
-  --status-violet-dot: #a855f7;
-
-  /* Document Type Tokens (Light: 1px outline soft pills) */
-  --doctype-tax-bg: transparent;
-  --doctype-tax-text: #374151;
-  --doctype-tax-border: #d1d5db;
-
-  --doctype-supply-bg: #f5f3ff;
-  --doctype-supply-text: #6d28d9;
-  --doctype-supply-border: #ddd6fe;
-
-  --doctype-credit-bg: #fffbeb;
-  --doctype-credit-text: #b45309;
-  --doctype-credit-border: #fde68a;
-
-  --doctype-proforma-bg: #f0fdfa;
-  --doctype-proforma-text: #0f766e;
-  --doctype-proforma-border: #99f6e4;
-
-  /* Table V01 Reference Style Tokens (Light) */
-  --table-header-bg: #34303f;
-  --table-header-text: #ffffff;
-  --table-zebra-even: #f5f5f5;
+  /* Table Tokens (Zoho Light Flat Style) */
+  --table-header-bg: #F8F9FB;
+  --table-header-text: #6B7280;
+  --table-zebra-even: #ffffff;
   --table-zebra-odd: #ffffff;
-  --table-row-hover: #efeff1;
-  --table-row-selected: #ececf1;
-  --table-container-border: #e8e8ec;
-  --table-text-muted: #555555;
-  --table-text-ink: #1f2937;
-  --table-text-bold: #111827;
+  --table-row-hover: #F9FAFB;
+  --table-row-selected: #F0F5FF;
+  --table-container-border: #E5E7EB;
+  --table-text-muted: #6B7280;
+  --table-text-ink: #2B2F36;
+  --table-text-bold: #2B2F36;
 
-  /* Elevation Shadows (Soft shadow for container) */
+  /* Minimal elevation (Zoho Books flat architecture, 0 or subtle 1px border) */
   --shadow-xs: none;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
 
-  /* Density Spacing Tokens */
+  /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
   --spacing-lg: 16px;
-  --spacing-xl: 24px;
+  --spacing-xl: 20px;
 
-  /* Sidebar Tokens (Light) */
+  /* Sidebar Tokens */
   --sidebar-bg: #ffffff;
-  --sidebar-border: #e5e7eb;
-  --sidebar-group-text: #374151;
-  --sidebar-item-text: #4b5563;
-  --sidebar-item-hover: #f3f4f6;
-  --sidebar-active-bg: #34303f;
+  --sidebar-border: #E5E7EB;
+  --sidebar-group-text: #2B2F36;
+  --sidebar-item-text: #4B5563;
+  --sidebar-item-hover: #F8F9FB;
+  --sidebar-active-bg: #408DFB;
   --sidebar-active-text: #ffffff;
-  --sidebar-guide: #e5e7eb;
-  --sidebar-guide-active: #34303f;
 }
 
 :root.dark,
@@ -286,17 +250,17 @@
   --color-sidebar-guide: var(--sidebar-guide);
   --color-sidebar-guide-active: var(--sidebar-guide-active);
 
-  /* Border Radii Architecture */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
+  /* Border Radii Architecture (Zoho Books 4px max) */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-2xl: 4px;
 }
 
 /* Global Typography & SaaS Density */
 html {
-  font-size: 16px;
+  font-size: 13px;
   scroll-behavior: smooth;
 }
 
@@ -310,8 +274,8 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 1.4;
   background-color: var(--background);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -322,6 +286,7 @@ body {
 /* Ensure all form controls and buttons strictly inherit font */
 input, select, textarea, button {
   font-family: inherit;
+  font-size: 13px;
 }
 
 /* Headings font styling strictly Inter */
@@ -329,50 +294,79 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   font-family: var(--font-sans);
 }
 
+/* Zoho Books Field & Status Helpers */
+.zoho-required::after {
+  content: " *";
+  color: #E54B4B;
+  font-weight: bold;
+}
+
+.zoho-tooltip-label {
+  border-bottom: 1px dashed #6B7280;
+  cursor: help;
+}
+
+.zoho-status {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.zoho-status-draft { color: #6B7280; }
+.zoho-status-sent { color: #2F80ED; }
+.zoho-status-paid { color: #1FAD6B; }
+.zoho-status-closed { color: #1FAD6B; }
+.zoho-status-invoiced { color: #1FAD6B; }
+.zoho-status-adjusted { color: #1FAD6B; }
+.zoho-status-overdue { color: #F76831; }
+.zoho-status-accepted { color: #F76831; }
+.zoho-status-open { color: #2F80ED; }
+
 /* Standard App-Wide Typography Scale */
 .text-title-display {
-  font-size: 22px;
-  line-height: 28px;
+  font-size: 20px;
+  line-height: 26px;
   font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 .text-title-page {
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.text-title-section {
-  font-size: 16px;
+  font-size: 18px;
   line-height: 24px;
   font-weight: 600;
 }
 
-.text-body-default {
+.text-title-section {
   font-size: 14px;
   line-height: 20px;
+  font-weight: 600;
+}
+
+.text-body-default {
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 400;
 }
 
 .text-table-cell {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 400;
 }
 
 .text-table-header {
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 500;
-  text-transform: none;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6B7280;
 }
 
 .text-label-form {
   font-size: 13px;
   line-height: 18px;
   font-weight: 500;
+  color: #2B2F36;
 }
 
 .text-caption {

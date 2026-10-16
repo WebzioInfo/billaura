@@ -1,33 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useForm, FieldErrors } from 'react-hook-form';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import notification from '@/core/services/NotificationService';
-import { Search, Plus, Trash2, Edit2, Download, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  Printer,
+  ChevronDown,
+  UploadCloud,
+  FileText,
+  Search,
+  Check,
+  Building2,
+  Tag,
+  CreditCard,
+  User,
+  Inbox,
+  Paperclip,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { ensureArray } from '@/core/api';
 import { erpInvalidate } from '@/core/query/erpConsistency';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/Table';
-import { DeleteDialog, AsyncSelect, StatusBadge, CurrencyCell, DateCell, TableLoader, Button, IconButton, SearchableSelect } from '@/shared/components/ui';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { PageLayout } from '@/shared/components/layout/PageLayout';
-import { Pagination } from '@/shared/components/ui/Pagination';
-import { usePagination } from '@/shared/hooks/usePagination';
+import {
+  ZohoListTable,
+  ZohoColumn,
+  ZohoSplitDetail,
+  ZohoSplitListItem,
+  ZohoPDFPreview,
+  ZohoEmptyState,
+} from '@/shared/components/zoho';
+import { DeleteDialog } from '@/shared/components/ui';
+import { cn } from '@/lib/utils';
 import { useTaxEngine } from '@/features/taxes/hooks/useTaxEngine';
 
 const expenseSchema = z.object({
-  categoryId: z.string().min(1, 'Please select an expense category'),
-  departmentId: z.string().optional(),
-  bankAccountId: z.string().min(1, 'Please select a source account ledger'),
-  date: z.string().min(1, 'Please select a posting date'),
-  amount: z.number().min(0.01, 'Base amount must be greater than zero'),
-  taxAmount: z.number().min(0),
-  paymentMethod: z.string().optional(),
-  billNumber: z.string().optional(),
+  categoryId: z.string().min(1, 'Please select an expense account'),
+  bankAccountId: z.string().min(1, 'Please select a paid through account'),
+  date: z.string().min(1, 'Please select an expense date'),
+  amount: z.number().min(0.01, 'Amount must be greater than zero'),
+  taxAmount: z.number().min(0).optional(),
+  vendorId: z.string().optional(),
   reference: z.string().optional(),
-  description: z.string().optional(),
+  billNumber: z.string().optional(),
   notes: z.string().optional(),
+  description: z.string().optional(),
+  paymentMethod: z.string().optional(),
+  departmentId: z.string().optional(),
   taxApplicable: z.boolean().optional(),
   gstRate: z.number().optional(),
   taxPreference: z.string().optional(),
@@ -38,6 +59,9 @@ const expenseSchema = z.object({
   sgstAmount: z.number().optional(),
   igstAmount: z.number().optional(),
   cessAmount: z.number().optional(),
+  // Extended fields for billable
+  customerName: z.string().optional(),
+  isBillable: z.boolean().optional(),
 });
 
 type ExpenseFormValues = z.infer<typeof expenseSchema>;
@@ -55,47 +79,76 @@ const categorySchema = z.object({
 
 type CategoryFormValues = z.infer<typeof categorySchema>;
 
-export const ExpensesDashboard = () => {
+type ExpenseView = 'all' | 'non_billable' | 'billable' | 'invoiced' | 'categories';
+
+export const ExpensesDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') === 'categories' ? 'categories' : 'claims';
-  const setActiveTab = (tab: string) => setSearchParams({ tab });
+  const [activeMainTab, setActiveMainTab] = useState<'expenses' | 'inbox'>('expenses');
+  const [currentView, setCurrentView] = useState<ExpenseView>(
+    searchParams.get('tab') === 'categories' ? 'categories' : 'all'
+  );
+  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+  const viewMenuRef = useRef<HTMLDivElement>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<any | null>(null);
+  const [showPdfView, setShowPdfView] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+
+  // Modals
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<any>(null);
 
-  // Category Modal States
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<any>(null);
 
+  // Receipts Inbox Mock state
+  const [receiptFiles, setReceiptFiles] = useState<
+    Array<{ id: string; name: string; size: string; date: string; status: string }>
+  >([
+    { id: '1', name: 'Cab_Receipt_14Apr.pdf', size: '1.2 MB', date: '14/04/2026', status: 'READY' },
+    { id: '2', name: 'Stationery_Invoice_07Apr.pdf', size: '850 KB', date: '07/04/2026', status: 'READY' },
+  ]);
+
+  // Click outside listener for view menu
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) {
+        setIsViewMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Forms
-  const form = useForm<ExpenseFormValues>({
-    resolver: zodResolver(expenseSchema),
+  const expenseForm = useForm<ExpenseFormValues>({
+    resolver: zodResolver(expenseSchema) as any,
     defaultValues: {
       categoryId: '',
       bankAccountId: '',
       date: new Date().toISOString().split('T')[0],
       amount: 0,
       taxAmount: 0,
-      paymentMethod: 'BANK_TRANSFER',
+      paymentMethod: 'CASH',
+      reference: '',
       billNumber: '',
-      description: '',
       notes: '',
+      description: '',
+      vendorId: '',
+      departmentId: '',
       taxApplicable: false,
       gstRate: 0,
       taxPreference: 'TAXABLE',
       taxMode: 'EXCLUDING_TAX',
       taxType: 'CGST_SGST',
-      taxableAmount: 0,
-      cgstAmount: 0,
-      sgstAmount: 0,
-      igstAmount: 0,
-      cessAmount: 0,
-      departmentId: '',
-    }
+      customerName: '',
+      isBillable: false,
+    },
   });
 
   const categoryForm = useForm<CategoryFormValues>({
@@ -109,12 +162,8 @@ export const ExpensesDashboard = () => {
       defaultTaxPreference: 'TAXABLE',
       defaultTaxMode: 'EXCLUDING_TAX',
       defaultInputTaxAccountId: '',
-    }
+    },
   });
-
-  const watchedPaymentMethod = form.watch('paymentMethod');
-  const watchedBankAccountId = form.watch('bankAccountId');
-  const prevPaymentMethodRef = React.useRef(watchedPaymentMethod);
 
   // Queries
   const { data: expensesData, isLoading: loadingExpenses } = useQuery({
@@ -123,7 +172,6 @@ export const ExpensesDashboard = () => {
       const res = await apiClient.get('/expenses');
       return ensureArray(res);
     },
-    enabled: activeTab === 'claims'
   });
   const expenses = Array.isArray(expensesData) ? expensesData : [];
 
@@ -132,7 +180,7 @@ export const ExpensesDashboard = () => {
     queryFn: async () => {
       const res = await apiClient.get('/expenses/categories');
       return ensureArray(res);
-    }
+    },
   });
   const categories = Array.isArray(categoriesData) ? categoriesData : [];
 
@@ -141,171 +189,103 @@ export const ExpensesDashboard = () => {
     queryFn: async () => {
       const res = await apiClient.get('/bank-accounts');
       return ensureArray(res);
-    }
+    },
   });
   const bankAccounts = Array.isArray(bankAccountsData) ? bankAccountsData : [];
 
-  // Automatically select the default or first valid source account for the payment method
-  useEffect(() => {
-    if (!isModalOpen) return;
-    const isCash = watchedPaymentMethod === 'CASH';
-    const available = bankAccounts.filter((b: any) => isCash ? b.accountType === 'CASH' : b.accountType !== 'CASH');
-    
-    // Check if currently selected account is valid for the current payment method
-    const isCurrentValid = Boolean(watchedBankAccountId && available.some((b: any) => b.id === watchedBankAccountId));
-
-    if (!isCurrentValid && available.length > 0) {
-      const defaultAccount = available.find((b: any) => b.isDefault) || available[0];
-      if (defaultAccount) {
-        form.setValue('bankAccountId', defaultAccount.id, { shouldValidate: true });
-      }
-    }
-    prevPaymentMethodRef.current = watchedPaymentMethod;
-  }, [watchedPaymentMethod, bankAccounts, isModalOpen, watchedBankAccountId, form]);
-
-  const { data: departmentsData } = useQuery({
-    queryKey: ['departments-list'],
+  const { data: vendorsData } = useQuery({
+    queryKey: ['vendors-purchases'],
     queryFn: async () => {
-      const res = await apiClient.get('/hr-masters/departments');
-      return ensureArray(res);
-    }
+      const res = await apiClient.get('/parties', { params: { type: 'VENDOR' } });
+      return res.data?.data || res.data || [];
+    },
   });
-  const departments = Array.isArray(departmentsData) ? departmentsData : [];
+  const vendors = Array.isArray(vendorsData) ? vendorsData : [];
 
   const { data: accountsData } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => {
       const res = await apiClient.get('/accounts');
       return res.data?.data || res.data || [];
-    }
+    },
   });
   const accounts = Array.isArray(accountsData) ? accountsData : [];
-  const expenseAccounts = accounts.filter((a: any) => a.category === 'EXPENSE');
 
-  const taxApplicable = form.watch('taxApplicable');
-  const amount = form.watch('amount');
-  const gstRate = form.watch('gstRate');
-  const taxPreference = form.watch('taxPreference');
-  const taxMode = form.watch('taxMode') as 'EXCLUDING_TAX' | 'INCLUDING_TAX';
-  const categoryId = form.watch('categoryId');
-
-  const taxRate = gstRate || 0;
+  // Tax computation hook inside form
+  const watchedAmount = expenseForm.watch('amount');
+  const watchedGstRate = expenseForm.watch('gstRate');
+  const watchedTaxMode = expenseForm.watch('taxMode') as 'EXCLUDING_TAX' | 'INCLUDING_TAX';
+  const watchedTaxApplicable = expenseForm.watch('taxApplicable');
 
   const taxEngineResult = useTaxEngine(
-    amount,
-    taxRate,
-    taxMode || 'EXCLUDING_TAX',
+    watchedAmount || 0,
+    watchedGstRate || 0,
+    watchedTaxMode || 'EXCLUDING_TAX',
     undefined,
     undefined,
     0
   );
 
   useEffect(() => {
-    if (taxApplicable) {
-      form.setValue('taxableAmount', taxEngineResult.taxableAmount);
-      form.setValue('cgstAmount', taxEngineResult.cgstAmount);
-      form.setValue('sgstAmount', taxEngineResult.sgstAmount);
-      form.setValue('igstAmount', taxEngineResult.igstAmount);
-      form.setValue('cessAmount', taxEngineResult.cessAmount);
-      form.setValue('taxAmount', taxEngineResult.taxAmount);
-      form.setValue('taxType', taxEngineResult.taxType);
+    if (watchedTaxApplicable) {
+      expenseForm.setValue('taxAmount', taxEngineResult.taxAmount);
+      expenseForm.setValue('taxableAmount', taxEngineResult.taxableAmount);
+      expenseForm.setValue('cgstAmount', taxEngineResult.cgstAmount);
+      expenseForm.setValue('sgstAmount', taxEngineResult.sgstAmount);
+      expenseForm.setValue('igstAmount', taxEngineResult.igstAmount);
+    } else {
+      expenseForm.setValue('taxAmount', 0);
     }
-  }, [taxEngineResult, taxApplicable, form]);
+  }, [taxEngineResult, watchedTaxApplicable, expenseForm]);
 
-  useEffect(() => {
-    if (categoryId) {
-      const cat = categories.find(c => c.id === categoryId);
-      if (cat && cat.defaultTaxApplicable !== undefined) {
-        form.setValue('taxApplicable', cat.defaultTaxApplicable);
-        if (cat.defaultGstRate !== undefined) form.setValue('gstRate', cat.defaultGstRate);
-        if (cat.defaultTaxPreference) form.setValue('taxPreference', cat.defaultTaxPreference);
-        if (cat.defaultTaxMode) form.setValue('taxMode', cat.defaultTaxMode);
-      }
-    }
-  }, [categoryId, categories, form]);
-
-  // Claim Mutations
+  // Mutations
   const saveExpense = useMutation({
     mutationFn: async (values: ExpenseFormValues) => {
-      const payload = {
+      const payload: any = {
         ...values,
         amount: Number(values.amount),
         taxAmount: Number(values.taxAmount || 0),
-        departmentId: values.departmentId?.trim() ? values.departmentId.trim() : undefined,
-        bankAccountId: values.bankAccountId?.trim() ? values.bankAccountId.trim() : undefined,
-        categoryId: values.categoryId?.trim() ? values.categoryId.trim() : undefined,
-        description: values.description?.trim() ? values.description.trim() : undefined,
-        paymentMethod: values.paymentMethod || 'BANK_TRANSFER',
+        categoryId: values.categoryId || undefined,
+        bankAccountId: values.bankAccountId || undefined,
+        vendorId: values.vendorId || undefined,
+        reference: values.reference || values.billNumber || undefined,
+        billNumber: values.billNumber || values.reference || undefined,
+        description: values.description || values.notes || undefined,
+        notes: values.notes || undefined,
+        paymentMethod: values.paymentMethod || 'CASH',
         taxApplicable: Boolean(values.taxApplicable),
         gstRate: Number(values.gstRate || 0),
-        taxPreference: values.taxPreference || 'TAXABLE',
-        taxMode: values.taxMode || 'EXCLUDING_TAX',
-        taxType: values.taxType || 'CGST_SGST',
-        taxableAmount: values.taxableAmount !== undefined ? Number(values.taxableAmount) : undefined,
-        cgstAmount: values.cgstAmount !== undefined ? Number(values.cgstAmount) : undefined,
-        sgstAmount: values.sgstAmount !== undefined ? Number(values.sgstAmount) : undefined,
-        igstAmount: values.igstAmount !== undefined ? Number(values.igstAmount) : undefined,
-        cessAmount: values.cessAmount !== undefined ? Number(values.cessAmount) : undefined,
       };
-      if (editingId) {
-        return apiClient.put(`/expenses/${editingId}`, payload);
+      if (editingExpenseId) {
+        return apiClient.put(`/expenses/${editingExpenseId}`, payload);
       }
       return apiClient.post('/expenses', payload);
     },
     onSuccess: async () => {
-      notification.success(editingId ? 'Expense updated successfully' : 'Expense created successfully');
+      notification.success(editingExpenseId ? 'Expense updated successfully' : 'Expense created successfully');
       await erpInvalidate.expenseReceipt(queryClient);
       await queryClient.invalidateQueries({ queryKey: ['expenses'] });
-      setIsModalOpen(false);
-      setEditingId(null);
-      form.reset();
+      setIsExpenseModalOpen(false);
+      setEditingExpenseId(null);
+      expenseForm.reset();
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.message || err.message || 'Failed to save expense';
-      const formattedMsg = Array.isArray(msg) ? msg.join(', ') : msg;
-      notification.error(formattedMsg);
-    }
+      notification.error(err.response?.data?.message || err.message || 'Failed to save expense');
+    },
   });
-
-  const onValidSubmit = (data: ExpenseFormValues) => {
-    saveExpense.mutate(data);
-  };
-
-  const onInvalidSubmit = (errors: FieldErrors<ExpenseFormValues>) => {
-    const errorMessages = Object.entries(errors)
-      .map(([field, err]) => err?.message || `${field} is required`)
-      .filter(Boolean);
-    const firstErrorMessage =
-      errors.categoryId?.message ||
-      errors.amount?.message ||
-      errors.bankAccountId?.message ||
-      errors.date?.message ||
-      errors.departmentId?.message ||
-      errorMessages[0] ||
-      'Please check all required fields';
-    notification.error(String(firstErrorMessage), { title: 'Incomplete Expense Form' });
-  };
 
   const deleteExpense = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/expenses/${id}`),
     onSuccess: async () => {
-      notification.success('Expense claim cancelled & reversed successfully');
+      notification.success('Expense deleted successfully');
       await erpInvalidate.expenseReceipt(queryClient);
+      await queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      setSelectedExpense(null);
+      setExpenseToDelete(null);
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to cancel expense');
-    }
-  });
-
-  const approveExpense = useMutation({
-    mutationFn: async (id: string) => apiClient.put(`/expenses/${id}/approval`, { approvalStatus: 'APPROVED' }),
-    onSuccess: async () => {
-      notification.success('Expense claim approved & posted successfully');
-      await erpInvalidate.expenseReceipt(queryClient);
+      notification.error(err.response?.data?.message || 'Failed to delete expense');
     },
-    onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to approve expense');
-    }
   });
 
   // Category Mutations
@@ -316,10 +296,7 @@ export const ExpensesDashboard = () => {
         description: values.description || undefined,
         accountId: values.accountId || undefined,
         defaultTaxApplicable: values.defaultTaxApplicable,
-        defaultGstRate: values.defaultGstRate !== undefined ? values.defaultGstRate : undefined,
-        defaultTaxPreference: values.defaultTaxPreference || undefined,
-        defaultTaxMode: values.defaultTaxMode || undefined,
-        defaultInputTaxAccountId: values.defaultInputTaxAccountId || undefined,
+        defaultGstRate: values.defaultGstRate !== undefined ? Number(values.defaultGstRate) : undefined,
       };
       if (editingCategoryId) {
         return apiClient.put(`/expenses/categories/${editingCategoryId}`, payload);
@@ -335,7 +312,7 @@ export const ExpensesDashboard = () => {
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to save category');
-    }
+    },
   });
 
   const deleteCategory = useMutation({
@@ -343,662 +320,810 @@ export const ExpensesDashboard = () => {
     onSuccess: () => {
       notification.success('Category removed successfully');
       queryClient.invalidateQueries({ queryKey: ['expense-categories'] });
+      setCategoryToDelete(null);
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to delete category');
+    },
+  });
+
+  const handleOpenNewExpense = () => {
+    navigate('/expenses/new');
+  };
+
+  const handleEditExpense = (exp: any) => {
+    navigate(`/expenses/${exp.id}/edit`);
+  };
+
+  const formatCurrency = (val: number | string | null | undefined) => {
+    const num = Number(val || 0);
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+    }).format(num);
+  };
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB'); // dd/mm/yyyy
+    } catch {
+      return dateStr;
     }
-  });
-
-  const handleEditCategory = (cat: any) => {
-    setEditingCategoryId(cat.id);
-    categoryForm.reset({
-      name: cat.name,
-      description: cat.description || '',
-      accountId: cat.accountId || '',
-      defaultTaxApplicable: cat.defaultTaxApplicable || false,
-      defaultGstRate: cat.defaultGstRate != null ? Number(cat.defaultGstRate) : 0,
-      defaultTaxPreference: cat.defaultTaxPreference || 'TAXABLE',
-      defaultTaxMode: cat.defaultTaxMode || 'EXCLUDING_TAX',
-      defaultInputTaxAccountId: cat.defaultInputTaxAccountId || '',
-    });
-    setIsCategoryModalOpen(true);
   };
 
-  const handleEdit = (exp: any) => {
-    if (exp.approvalStatus === 'APPROVED') {
-      notification.error('Cannot edit an approved expense claim');
-      return;
-    }
-    setEditingId(exp.id);
-    form.reset({
-      categoryId: exp.categoryId || '',
-      bankAccountId: exp.bankAccountId || '',
-      date: exp.date ? new Date(exp.date).toISOString().split('T')[0] : '',
-      amount: Number(exp.amount),
-      taxAmount: Number(exp.taxAmount),
-      paymentMethod: exp.paymentMethod || 'BANK_TRANSFER',
-      billNumber: exp.billNumber || '',
-      description: exp.description || '',
-      notes: exp.notes || '',
-      taxApplicable: exp.taxApplicable || false,
-      gstRate: exp.gstRate != null ? Number(exp.gstRate) : 0,
-      taxPreference: exp.taxPreference || 'TAXABLE',
-      taxMode: exp.taxMode || 'EXCLUDING_TAX',
-      taxType: exp.taxType || 'CGST_SGST',
-      taxableAmount: Number(exp.taxableAmount || 0),
-      cgstAmount: Number(exp.cgstAmount || 0),
-      sgstAmount: Number(exp.sgstAmount || 0),
-      igstAmount: Number(exp.igstAmount || 0),
-      cessAmount: Number(exp.cessAmount || 0),
-      departmentId: exp.departmentId || '',
-    });
-    prevPaymentMethodRef.current = exp.paymentMethod || 'BANK_TRANSFER';
-    setIsModalOpen(true);
-  };
+  // Filter expenses based on search and current view
+  const filteredExpenses = expenses.filter((e: any) => {
+    const matchesSearch =
+      (e.expenseNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (e.category?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (e.vendor?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (e.reference || e.billNumber || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-  const filteredExpenses = expenses.filter((e: any) => 
-    e.expenseNo?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    e.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.category?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    if (!matchesSearch) return false;
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
-  };
-
-  // TODO: Endpoint /expenses should support server-side pagination (?page=&limit=)
-  const {
-    page: claimsPage,
-    limit: claimsLimit,
-    paginatedData: paginatedExpenses,
-    totalPages: claimsTotalPages,
-    totalItems: claimsTotalItems,
-    setPage: setClaimsPage,
-    setLimit: setClaimsLimit,
-  } = usePagination({
-    data: filteredExpenses,
-    tableKey: 'expenses_claims',
-    defaultLimit: 25,
+    if (currentView === 'non_billable') return !e.isBillable;
+    if (currentView === 'billable') return Boolean(e.isBillable && !e.isInvoiced);
+    if (currentView === 'invoiced') return Boolean(e.isInvoiced);
+    return true;
   });
 
-  // TODO: Endpoint /expenses/categories should support server-side pagination (?page=&limit=)
-  const {
-    page: catPage,
-    limit: catLimit,
-    paginatedData: paginatedCategories,
-    totalPages: catTotalPages,
-    totalItems: catTotalItems,
-    setPage: setCatPage,
-    setLimit: setCatLimit,
-  } = usePagination({
-    data: categories,
-    tableKey: 'expenses_categories',
-    defaultLimit: 25,
-  });
+  const viewOptions: { id: ExpenseView; label: string }[] = [
+    { id: 'all', label: 'All Expenses' },
+    { id: 'non_billable', label: 'Non-Billable' },
+    { id: 'billable', label: 'Billable' },
+    { id: 'invoiced', label: 'Invoiced' },
+    { id: 'categories', label: 'Expense Categories' },
+  ];
+
+  const currentViewLabel = viewOptions.find((v) => v.id === currentView)?.label || 'All Expenses';
+
+  // Table Columns matching Screenshot 2
+  const expenseColumns: ZohoColumn<any>[] = [
+    {
+      key: 'date',
+      label: 'DATE',
+      width: '110px',
+      render: (exp) => (
+        <span className="text-[13px] text-[#1E2540]">{formatDate(exp.date)}</span>
+      ),
+    },
+    {
+      key: 'category',
+      label: 'EXPENSE ACCOUNT',
+      render: (exp) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedExpense(exp);
+          }}
+          className="text-[13px] font-medium text-[#408DFB] hover:underline text-left cursor-pointer"
+        >
+          {exp.category?.name || 'General Expense'}
+        </button>
+      ),
+    },
+    {
+      key: 'reference',
+      label: 'REFERENCE#',
+      render: (exp) => (
+        <span className="text-[13px] text-[#6B7280]">
+          {exp.reference || exp.billNumber || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'vendor',
+      label: 'VENDOR NAME',
+      render: (exp) => (
+        <span className="text-[13px] text-[#1E2540]">
+          {exp.vendor?.name || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'paidThrough',
+      label: 'PAID THROUGH',
+      render: (exp) => {
+        const name =
+          exp.bankAccount?.name ||
+          (exp.paymentMethod === 'CASH' ? 'Petty Cash' : 'Bank Account');
+        return <span className="text-[13px] text-[#1E2540]">{name}</span>;
+      },
+    },
+    {
+      key: 'customerName',
+      label: 'CUSTOMER NAME',
+      render: (exp) => (
+        <span className="text-[13px] text-[#6B7280]">
+          {exp.customerName || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'STATUS',
+      render: (exp) => {
+        const label = exp.isInvoiced
+          ? 'INVOICED'
+          : exp.isBillable
+          ? 'BILLABLE'
+          : 'NON-BILLABLE';
+        return (
+          <span className="text-[11px] font-semibold tracking-wider text-[#6B7280]">
+            {label}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'amount',
+      label: 'AMOUNT',
+      align: 'right',
+      render: (exp) => (
+        <span className="text-[13px] font-medium text-[#1E2540] tabular-nums">
+          {formatCurrency(exp.totalAmount || exp.amount)}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <>
-      <PageLayout>
-        <PageHeader
-          title={activeTab === 'claims' ? "Expense Claims" : "Expense Categories"}
-          count={activeTab === 'claims' ? filteredExpenses.length : categories.length}
-          primaryAction={
-            activeTab === 'claims' ? (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setEditingId(null);
-                  form.reset({
-                    categoryId: '',
-                    bankAccountId: '',
-                    date: new Date().toISOString().split('T')[0],
-                    amount: 0,
-                    taxAmount: 0,
-                    paymentMethod: 'BANK_TRANSFER',
-                    billNumber: '',
-                    description: '',
-                    notes: '',
-                    departmentId: '',
-                    taxApplicable: false,
-                    gstRate: 0,
-                    taxPreference: 'TAXABLE',
-                    taxMode: 'EXCLUDING_TAX',
-                    taxType: 'CGST_SGST',
-                    taxableAmount: 0,
-                    cgstAmount: 0,
-                    sgstAmount: 0,
-                    igstAmount: 0,
-                    cessAmount: 0,
-                  });
-                  prevPaymentMethodRef.current = 'BANK_TRANSFER';
-                  setIsModalOpen(true);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-1.5" /> File Expense Claim
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setEditingCategoryId(null);
-                  categoryForm.reset({ name: '', description: '', accountId: '' });
-                  setIsCategoryModalOpen(true);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-1.5" /> Add Custom Category
-              </Button>
-            )
-          }
-        />
+    <div className="h-full flex flex-col bg-white overflow-hidden text-[13px] font-sans">
+      {/* Top Tabs Band matching Screenshot 2 */}
+      <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-white px-6 pt-3 shrink-0">
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => setActiveMainTab('inbox')}
+            className={cn(
+              'pb-3 text-[14px] transition-colors border-b-2 cursor-pointer flex items-center gap-1.5',
+              activeMainTab === 'inbox'
+                ? 'border-[#408DFB] text-[#1E2540] font-semibold'
+                : 'border-transparent text-[#6B7280] hover:text-[#1E2540] font-medium'
+            )}
+          >
+            Receipts Inbox
+          </button>
 
-        <div className="flex items-center justify-between gap-4 border-b border-border pb-2 shrink-0">
-          <div className="flex border-b border-transparent gap-2 select-none">
+          <div className="relative" ref={viewMenuRef}>
             <button
-              onClick={() => setActiveTab('claims')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                activeTab === 'claims' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-              }`}
+              onClick={() => {
+                setActiveMainTab('expenses');
+                setIsViewMenuOpen((prev) => !prev);
+              }}
+              className={cn(
+                'pb-3 text-[14px] transition-colors border-b-2 cursor-pointer flex items-center gap-1.5',
+                activeMainTab === 'expenses'
+                  ? 'border-[#408DFB] text-[#1E2540] font-semibold'
+                  : 'border-transparent text-[#6B7280] hover:text-[#1E2540] font-medium'
+              )}
             >
-              Claims Register
+              <span>{currentViewLabel}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-[#6B7280]" />
             </button>
-            <button
-              onClick={() => setActiveTab('categories')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                activeTab === 'categories' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Category Ledger Mappings
-            </button>
+
+            {isViewMenuOpen && (
+              <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-md shadow-lg border border-[#E5E7EB] py-1 z-50 animate-in fade-in-50 zoom-in-95">
+                {viewOptions.map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => {
+                      setCurrentView(v.id);
+                      setIsViewMenuOpen(false);
+                      setActiveMainTab('expenses');
+                    }}
+                    className={cn(
+                      'w-full text-left px-3.5 py-2 text-[13px] flex items-center justify-between hover:bg-[#F3F4F6] transition-colors',
+                      currentView === v.id
+                        ? 'text-[#408DFB] font-semibold bg-[#F0F7FF]'
+                        : 'text-[#1E2540]'
+                    )}
+                  >
+                    {v.label}
+                    {currentView === v.id && <Check className="w-3.5 h-3.5 text-[#408DFB]" />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-
-          {activeTab === 'claims' && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border/80 w-full max-w-sm focus-within:border-accent transition-colors">
-              <Search className="w-4 h-4 text-muted-foreground" />
-              <input 
-                type="text" 
-                placeholder="Search claims..." 
-                className="bg-transparent border-none outline-none w-full text-xs text-foreground placeholder:text-muted-foreground/60"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          )}
         </div>
 
-        {activeTab === 'claims' ? (
-          <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-card border border-border rounded-xl shadow-xs overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-[#34303F] hover:bg-[#34303F] text-white border-none">
-                    <TableHead className="pl-6 pr-4 text-white font-medium">Claim No</TableHead>
-                    <TableHead className="text-white font-medium">Date</TableHead>
-                    <TableHead className="text-white font-medium">Category</TableHead>
-                    <TableHead className="text-white font-medium">Description</TableHead>
-                    <TableHead className="text-white font-medium">Payment Source</TableHead>
-                    <TableHead align="right" className="text-white font-medium">Total Amount</TableHead>
-                    <TableHead align="center" className="text-white font-medium">Approval</TableHead>
-                    <TableHead align="right" className="pr-6 pl-4 text-white font-medium">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loadingExpenses ? (
-                    <TableRow><TableCell colSpan={8} className="p-0"><TableLoader rows={claimsLimit} /></TableCell></TableRow>
-                  ) : filteredExpenses.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-12 text-sm text-muted-foreground">No expense claims found.</TableCell></TableRow>
-                  ) : (
-                    paginatedExpenses.map((exp: any) => (
-                      <TableRow key={exp.id} className="hover:bg-muted/30 transition-colors">
-                        <TableCell className="pl-6 pr-4 tabular-nums font-medium text-foreground">{exp.expenseNo}</TableCell>
-                        <DateCell date={exp.date} />
-                        <TableCell className="font-medium text-foreground">{exp.category?.name || 'Uncategorized'}</TableCell>
-                        <TableCell className="text-muted-foreground truncate max-w-[200px]">{exp.description || '—'}</TableCell>
-                        <TableCell className="text-muted-foreground">{exp.bankAccount?.name || 'Cash'}</TableCell>
-                        <CurrencyCell amount={Number(exp.totalAmount)} className="tabular-nums font-semibold text-foreground" />
-                        <TableCell align="center">
-                          <StatusBadge status={exp.approvalStatus} />
-                        </TableCell>
-                        <TableCell align="right" className="pr-6 pl-4">
-                          <div className="flex items-center justify-end gap-1">
-                            {exp.approvalStatus === 'PENDING' && (
-                              <Button 
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => approveExpense.mutate(exp.id)}
-                                className="h-7 text-xs font-medium text-emerald-600 border-emerald-300 hover:bg-emerald-50"
-                              >
-                                Approve
-                              </Button>
-                            )}
-                            <IconButton
-                              icon={Download}
-                              aria-label="Download PDF Receipt"
-                              tooltip="Download PDF Receipt"
-                              size="dense"
-                              onClick={async () => {
-                                try {
-                                  notification.loading('Generating receipt...', { id: 'pdf-gen' });
-                                  const res = await apiClient.get(`/documents/expenses/${exp.id}/export`, { responseType: 'blob' });
-                                  const url = URL.createObjectURL(res.data);
-                                  const link = document.createElement('a');
-                                  link.href = url;
-                                  link.download = `Receipt_${exp.expenseNo}.pdf`;
-                                  link.click();
-                                  notification.success('Receipt downloaded', { id: 'pdf-gen' });
-                                } catch (e) {
-                                  notification.error('Failed to download receipt', { id: 'pdf-gen' });
-                                }
-                              }}
-                            />
-                            {exp.approvalStatus !== 'APPROVED' && (
-                              <IconButton 
-                                icon={Edit2}
-                                aria-label="Edit Claim"
-                                tooltip="Edit Claim"
-                                size="dense"
-                                onClick={() => handleEdit(exp)} 
-                              />
-                            )}
-                            <IconButton 
-                              icon={Trash2}
-                              aria-label="Delete Claim"
-                              tooltip="Delete Claim"
-                              size="dense"
-                              variant="danger-ghost"
-                              onClick={() => setExpenseToDelete(exp)} 
-                            />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+        {/* Right Action buttons */}
+        <div className="flex items-center gap-2 pb-2">
+          {currentView === 'categories' ? (
+            <button
+              onClick={() => {
+                setEditingCategoryId(null);
+                categoryForm.reset({ name: '', description: '', accountId: '' });
+                setIsCategoryModalOpen(true);
+              }}
+              className="h-8 px-3.5 bg-[#408DFB] hover:bg-[#2563EB] text-white rounded text-[13px] font-medium flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New Category
+            </button>
+          ) : (
+            <button
+              onClick={handleOpenNewExpense}
+              className="h-8 px-3.5 bg-[#408DFB] hover:bg-[#2563EB] text-white rounded text-[13px] font-medium flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New
+            </button>
+          )}
+
+          <div className="relative">
+            <div className="flex items-center gap-2 px-3 py-1 bg-[#F9FAFB] border border-[#E5E7EB] rounded text-xs text-[#1E2540] focus-within:border-[#408DFB]">
+              <Search className="w-3.5 h-3.5 text-[#9CA3AF]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="bg-transparent border-none outline-hidden w-28 text-[12px] placeholder:text-[#9CA3AF]"
+              />
             </div>
-            <Pagination
-              currentPage={claimsPage}
-              totalPages={claimsTotalPages}
-              totalItems={claimsTotalItems}
-              pageSize={claimsLimit}
-              onPageChange={setClaimsPage}
-              onPageSizeChange={setClaimsLimit}
-              itemLabel="expense claims"
-            />
           </div>
-        ) : (
-          <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-card border border-border rounded-xl shadow-xs overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-[#34303F] hover:bg-[#34303F] text-white border-none">
-                    <TableHead className="pl-6 pr-4 text-white font-medium">Category Name</TableHead>
-                    <TableHead className="text-white font-medium">Description</TableHead>
-                    <TableHead className="text-white font-medium">GL Account Ledger mapping</TableHead>
-                    <TableHead align="right" className="pr-6 pl-4 text-white font-medium">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loadingCategories ? (
-                    <TableRow><TableCell colSpan={4} className="p-0"><TableLoader rows={catLimit} /></TableCell></TableRow>
-                  ) : categories.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-12 text-sm text-muted-foreground">No categories configured.</TableCell></TableRow>
-                  ) : (
-                    paginatedCategories.map((cat: any) => (
-                      <TableRow key={cat.id} className="hover:bg-muted/30 transition-colors">
-                        <TableCell className="pl-6 pr-4 font-medium text-foreground">{cat.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{cat.description || '—'}</TableCell>
-                        <TableCell className="tabular-nums text-xs">
-                          {cat.account ? (
-                            <span className="text-foreground font-medium bg-muted/60 px-2 py-0.5 rounded border border-border">{cat.account.name}</span>
-                          ) : (
-                            <span className="text-muted-foreground italic bg-muted/30 px-2 py-0.5 rounded border border-border/50">Name Matching ({cat.name})</span>
-                          )}
-                        </TableCell>
-                        <TableCell align="right" className="pr-6 pl-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <IconButton 
-                              icon={Edit2}
-                              aria-label="Edit Category"
-                              tooltip="Edit Category"
-                              size="dense"
-                              onClick={() => handleEditCategory(cat)} 
-                            />
-                            {cat.type !== 'SYSTEM' && (
-                              <IconButton 
-                                icon={Trash2}
-                                aria-label="Delete Category"
-                                tooltip="Delete Category"
-                                size="dense"
-                                variant="danger-ghost"
-                                onClick={() => setCategoryToDelete(cat)} 
-                              />
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 min-h-0 flex relative overflow-hidden bg-white">
+        {/* RECEIPTS INBOX TAB */}
+        {activeMainTab === 'inbox' && (
+          <div className="flex-1 p-6 overflow-y-auto">
+            <div className="max-w-4xl mx-auto space-y-6">
+              <div className="border-2 border-dashed border-[#D1D5DB] rounded-lg p-8 bg-[#F9FAFB] text-center hover:border-[#408DFB] transition-colors cursor-pointer">
+                <UploadCloud className="w-10 h-10 text-[#408DFB] mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-[#1E2540]">
+                  Drag and Drop Receipts here
+                </h3>
+                <p className="text-xs text-[#6B7280] mt-1">
+                  Upload PDF, PNG, JPG receipts up to 10MB each. Automatic OCR extracts total & date.
+                </p>
+                <button
+                  onClick={handleOpenNewExpense}
+                  className="mt-4 px-4 py-1.5 bg-[#408DFB] text-white text-xs font-medium rounded hover:bg-[#2563EB] transition-colors cursor-pointer"
+                >
+                  Upload Files
+                </button>
+              </div>
+
+              <div className="bg-white border border-[#E5E7EB] rounded">
+                <div className="px-4 py-3 border-b border-[#E5E7EB] flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-[#1E2540] uppercase tracking-wider">
+                    Receipts Ready for Processing ({receiptFiles.length})
+                  </h4>
+                </div>
+                <div className="divide-y divide-[#E5E7EB]">
+                  {receiptFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="px-4 py-3 flex items-center justify-between hover:bg-[#F9FAFB] transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-[#408DFB]" />
+                        <div>
+                          <p className="text-xs font-medium text-[#1E2540]">{file.name}</p>
+                          <p className="text-[11px] text-[#6B7280]">
+                            {file.size} • Uploaded on {file.date}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            handleOpenNewExpense();
+                            expenseForm.setValue('notes', `Auto-scanned from ${file.name}`);
+                          }}
+                          className="px-3 py-1 bg-white border border-[#408DFB] text-[#408DFB] hover:bg-[#F0F7FF] text-xs font-medium rounded transition-colors cursor-pointer"
+                        >
+                          Convert to Expense
+                        </button>
+                        <button
+                          onClick={() =>
+                            setReceiptFiles((prev) => prev.filter((f) => f.id !== file.id))
+                          }
+                          className="p-1 text-[#9CA3AF] hover:text-[#DC2626] transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <Pagination
-              currentPage={catPage}
-              totalPages={catTotalPages}
-              totalItems={catTotalItems}
-              pageSize={catLimit}
-              onPageChange={setCatPage}
-              onPageSizeChange={setCatLimit}
-              itemLabel="categories"
-            />
           </div>
         )}
 
-        {/* Claim Form Modal */}
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-            <div className="bg-surface rounded-2xl border border-border/80 shadow-premium w-full max-w-lg z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-              <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
-                <h2 className="font-bold text-sm text-foreground">{editingId ? 'Edit Expense Claim' : 'File Expense Claim'}</h2>
-                <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
+        {/* EXPENSE CATEGORIES VIEW */}
+        {activeMainTab === 'expenses' && currentView === 'categories' && (
+          <div className="flex-1 p-6 overflow-y-auto">
+            <div className="max-w-5xl mx-auto space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1E2540]">
+                    Expense Categories & General Ledger Mappings
+                  </h3>
+                  <p className="text-xs text-[#6B7280]">
+                    Define accounts and default tax preferences for automated bookkeeping.
+                  </p>
+                </div>
               </div>
-              <form onSubmit={form.handleSubmit(onValidSubmit, onInvalidSubmit)} className="p-6 space-y-4">
-                {Object.keys(form.formState.errors).length > 0 && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-2 text-red-500 text-xs">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>Please complete the highlighted required fields to save this expense claim.</span>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <SearchableSelect
-                      label="Expense Category"
-                      required
-                      value={form.watch('categoryId') || ''}
-                      onChange={(val) => form.setValue('categoryId', val, { shouldValidate: true })}
-                      options={categories}
-                      mapOption={(c: any) => ({
-                        value: c.id,
-                        label: c.name,
-                        subLabel: c.description || undefined,
-                      })}
-                      placeholder="Select Category"
-                      searchPlaceholder="Search categories..."
-                      clearable
-                      quickCreateEntity="expenseCategory"
-                      error={form.formState.errors.categoryId?.message}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <SearchableSelect
-                      label="Department"
-                      value={form.watch('departmentId') || ''}
-                      onChange={(val) => form.setValue('departmentId', val, { shouldValidate: true })}
-                      options={departments}
-                      mapOption={(d: any) => ({
-                        value: d.id,
-                        label: d.name,
-                        subLabel: d.code || undefined,
-                      })}
-                      placeholder="Select Department"
-                      searchPlaceholder="Search departments..."
-                      clearable
-                      error={form.formState.errors.departmentId?.message}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Posting Date *</label>
-                    <input
-                      type="date"
-                      {...form.register('date')}
-                      className={`w-full p-2 bg-background border rounded-lg text-xs outline-none focus:border-accent ${
-                        form.formState.errors.date ? 'border-red-500' : 'border-border/80'
-                      }`}
-                    />
-                    {form.formState.errors.date && (
-                      <p className="text-[10px] text-red-500 mt-1">{form.formState.errors.date.message}</p>
+
+              <div className="border border-[#E5E7EB] rounded overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F8F9FB] border-b border-[#E5E7EB] text-[#6B7280] uppercase tracking-wider font-semibold">
+                    <tr>
+                      <th className="py-2.5 px-4">Category Name</th>
+                      <th className="py-2.5 px-4">General Ledger Account</th>
+                      <th className="py-2.5 px-4">Default Tax Rate</th>
+                      <th className="py-2.5 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E5E7EB]">
+                    {categories.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-[#9CA3AF]">
+                          No expense categories configured. Click &quot;New Category&quot; to add one.
+                        </td>
+                      </tr>
+                    ) : (
+                      categories.map((cat: any) => {
+                        const glAccount = accounts.find((a: any) => a.id === cat.accountId);
+                        return (
+                          <tr key={cat.id} className="hover:bg-[#F9FAFB] transition-colors">
+                            <td className="py-3 px-4 font-medium text-[#1E2540]">{cat.name}</td>
+                            <td className="py-3 px-4 text-[#6B7280]">
+                              {glAccount ? `${glAccount.name} (${glAccount.code || 'GL'})` : 'Default Expense GL'}
+                            </td>
+                            <td className="py-3 px-4 text-[#6B7280]">
+                              {cat.defaultTaxApplicable ? `${cat.defaultGstRate || 0}% GST` : 'Non-taxable'}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingCategoryId(cat.id);
+                                    categoryForm.reset({
+                                      name: cat.name,
+                                      description: cat.description || '',
+                                      accountId: cat.accountId || '',
+                                      defaultTaxApplicable: cat.defaultTaxApplicable || false,
+                                      defaultGstRate: cat.defaultGstRate || 0,
+                                    });
+                                    setIsCategoryModalOpen(true);
+                                  }}
+                                  className="text-[#408DFB] hover:underline cursor-pointer"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => setCategoryToDelete(cat)}
+                                  className="text-[#DC2626] hover:underline cursor-pointer ml-2"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Payment Method</label>
-                    <select {...form.register('paymentMethod')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                      <option value="BANK_TRANSFER">Bank Transfer</option>
-                      <option value="CASH">Cash</option>
-                      <option value="CREDIT_CARD">Credit Card</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Base Amount *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      {...form.register('amount', { valueAsNumber: true })}
-                      className={`w-full p-2 bg-background border rounded-lg text-xs outline-none focus:border-accent ${
-                        form.formState.errors.amount ? 'border-red-500' : 'border-border/80'
-                      }`}
-                    />
-                    {form.formState.errors.amount && (
-                      <p className="text-[10px] text-red-500 mt-1">{form.formState.errors.amount.message}</p>
-                    )}
-                  </div>
-                  <div className="col-span-2 mt-4 pt-4 border-t border-border/40">
-                    <h3 className="text-xs font-bold mb-3 flex items-center justify-between">
-                      Tax Information
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <span className="text-[10px] text-muted-foreground uppercase">Tax Applicable</span>
-                        <input type="checkbox" {...form.register('taxApplicable')} className="rounded border-border text-accent focus:ring-accent" />
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ALL EXPENSES TABLE & SPLIT DETAIL */}
+        {activeMainTab === 'expenses' && currentView !== 'categories' && (
+          <>
+            {selectedExpense ? (
+              <ZohoSplitDetail
+                moduleTitle="All Expenses"
+                items={filteredExpenses.map((exp: any) => ({
+                  id: exp.id,
+                  name: exp.category?.name || 'General Expense',
+                  amount: `₹${Number(exp.totalAmount || exp.amount || 0).toLocaleString('en-IN')}`,
+                  number: exp.expenseNo || `EXP-${exp.id.slice(-5)}`,
+                  date: formatDate(exp.date),
+                  status: exp.isBillable ? 'BILLABLE' : 'NON-BILLABLE',
+                }))}
+                selectedId={selectedExpense.id}
+                onSelect={(id) => {
+                  const exp = expenses.find((e: any) => e.id === id);
+                  if (exp) setSelectedExpense(exp);
+                }}
+                onNew={handleOpenNewExpense}
+                onClose={() => setSelectedExpense(null)}
+                detailTitle="Expense Details"
+                detailActions={
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-xs text-[#6B7280]">
+                      <input
+                        type="checkbox"
+                        id="show-pdf-toggle"
+                        checked={showPdfView}
+                        onChange={(e) => setShowPdfView(e.target.checked)}
+                        className="rounded border-[#D1D5DB] text-[#408DFB] focus:ring-0 cursor-pointer"
+                      />
+                      <label htmlFor="show-pdf-toggle" className="cursor-pointer select-none">
+                        Show PDF View
                       </label>
-                    </h3>
-                    
-                    {taxApplicable && (
-                      <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
-                        <div>
-                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">GST Rate *</label>
-                          <select {...form.register('gstRate', { valueAsNumber: true })} disabled={form.watch('taxPreference') === 'EXEMPT' || form.watch('taxPreference') === 'NIL_RATED' || form.watch('taxPreference') === 'NON_GST'} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                            <option value="0">0%</option>
-                            <option value="3">3%</option>
-                            <option value="5">5%</option>
-                            <option value="12">12%</option>
-                            <option value="18">18%</option>
-                            <option value="28">28%</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Tax Preference *</label>
-                          <select {...form.register('taxPreference')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                            <option value="TAXABLE">Taxable</option>
-                            <option value="EXEMPT">Exempt</option>
-                            <option value="NIL_RATED">Nil Rated</option>
-                            <option value="NON_GST">Non GST</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Tax Mode *</label>
-                          <select {...form.register('taxMode')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                            <option value="EXCLUDING_TAX">Amount Excluding Tax (Base + Tax = Total)</option>
-                            <option value="INCLUDING_TAX">Amount Including Tax (Reverse Calculated)</option>
-                          </select>
-                        </div>
+                    </div>
 
-                        <div className="col-span-2 grid grid-cols-4 gap-3 pt-3 border-t border-border/40">
-                          <div>
-                            <label className="block text-[10px] text-muted-foreground uppercase mb-1">Taxable</label>
-                            <div className="text-sm font-bold font-mono text-foreground">₹{form.watch('taxableAmount')?.toFixed(2)}</div>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] text-muted-foreground uppercase mb-1">{form.watch('taxType') === 'IGST' ? 'IGST' : 'CGST'}</label>
-                            <div className="text-sm font-bold font-mono text-muted-foreground">₹{form.watch('taxType') === 'IGST' ? form.watch('igstAmount')?.toFixed(2) : form.watch('cgstAmount')?.toFixed(2)}</div>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] text-muted-foreground uppercase mb-1">{form.watch('taxType') === 'IGST' ? '-' : 'SGST'}</label>
-                            <div className="text-sm font-bold font-mono text-muted-foreground">₹{form.watch('taxType') === 'IGST' ? '0.00' : form.watch('sgstAmount')?.toFixed(2)}</div>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-accent uppercase mb-1">Total Paid</label>
-                            <div className="text-sm font-black font-mono text-accent">₹{form.watch('taxMode') === 'INCLUDING_TAX' ? Number(form.watch('amount') || 0).toFixed(2) : (Number(form.watch('taxableAmount') || 0) + Number(form.watch('taxAmount') || 0)).toFixed(2)}</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="col-span-2">
-                    <AsyncSelect
-                      label="Source Account Ledger *"
-                      apiPath="/bank-accounts"
-                      queryKeyPrefix="bank_accounts_lookup"
-                      placeholder="Select Ledger"
-                      value={form.watch('bankAccountId') || ''}
-                      onChange={(val) => {
-                        form.setValue('bankAccountId', val, { shouldValidate: true });
+                    <button
+                      type="button"
+                      onClick={() => handleEditExpense(selectedExpense)}
+                      className="text-xs font-medium text-[#1E2540] hover:text-[#408DFB] cursor-pointer"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          notification.loading('Downloading receipt...', { id: 'exp-dl' });
+                          const res = await apiClient.get(
+                            `/documents/expenses/${selectedExpense.id}/export`,
+                            { responseType: 'blob' }
+                          );
+                          const url = URL.createObjectURL(res.data);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = `Expense_${selectedExpense.expenseNo}.pdf`;
+                          link.click();
+                          notification.success('Downloaded successfully', { id: 'exp-dl' });
+                        } catch {
+                          notification.error('Failed to export PDF receipt', { id: 'exp-dl' });
+                        }
                       }}
-                      additionalParams={{ type: form.watch('paymentMethod') === 'CASH' ? 'CASH' : 'BANK' }}
-                      error={form.formState.errors.bankAccountId?.message}
-                      quickCreateEntity="bankAccount"
-                      mapOption={(b: any) => {
-                        const balance = Number(b.currentBalance || b.balance || 0);
-                        const balanceStr = balance > 0
-                          ? `₹${Math.abs(balance).toLocaleString('en-IN')} Dr`
-                          : balance < 0
-                            ? `₹${Math.abs(balance).toLocaleString('en-IN')} Cr`
-                            : '₹0';
-                        const mask = b.accountNumber ? ` | ****${b.accountNumber.slice(-4)}` : '';
-                        return {
-                          label: b.name || b.bankName,
-                          value: b.id,
-                          description: `${balanceStr}${mask}`,
-                        };
-                      }}
-                    />
+                      className="text-xs font-medium text-[#1E2540] hover:text-[#408DFB] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" /> PDF/Print
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setExpenseToDelete(selectedExpense)}
+                      className="text-xs font-medium text-[#DC2626] hover:underline cursor-pointer"
+                    >
+                      Delete
+                    </button>
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Description / Narration</label>
-                    <input type="text" {...form.register('description')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-border/40">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-border hover:bg-muted/50 rounded-xl text-xs font-bold cursor-pointer">Cancel</button>
-                  <button
-                    type="submit"
-                    disabled={saveExpense.isPending}
-                    className="px-4 py-2 bg-accent text-white hover:bg-opacity-90 rounded-xl text-xs font-bold shadow-md shadow-accent/15 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                }
+              >
+                {showPdfView ? (
+                  <ZohoPDFPreview
+                    status={selectedExpense.isBillable ? 'BILLABLE' : 'NON-BILLABLE'}
+                    title="EXPENSE RECEIPT"
                   >
-                    {saveExpense.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>{saveExpense.isPending ? 'Saving Expense...' : (editingId ? 'Update Expense' : 'Save Expense')}</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Category Form Modal */}
-        {isCategoryModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsCategoryModalOpen(false)} />
-            <div className="bg-surface rounded-2xl border border-border/80 shadow-premium w-full max-w-lg z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-              <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
-                <h2 className="font-bold text-sm text-foreground">{editingCategoryId ? 'Edit Category mapping' : 'Add Custom Category'}</h2>
-                <button onClick={() => setIsCategoryModalOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">✕</button>
-              </div>
-              <form onSubmit={categoryForm.handleSubmit((d) => saveCategory.mutate(d))} className="p-6 space-y-4">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Category Name *</label>
-                    <input type="text" {...categoryForm.register('name')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Description</label>
-                    <input type="text" {...categoryForm.register('description')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">General Ledger Mapping Account *</label>
-                    <SearchableSelect
-                      value={categoryForm.watch('accountId') || ''}
-                      onChange={(val) => categoryForm.setValue('accountId', val, { shouldValidate: true })}
-                      options={expenseAccounts}
-                      mapOption={(a: any) => ({
-                        value: a.id,
-                        label: a.name,
-                        subLabel: a.accountCode || a.type || undefined,
-                        searchKeywords: [a.accountCode].filter(Boolean),
-                      })}
-                      placeholder="Select Target Account"
-                      searchPlaceholder="Search accounts by name, code..."
-                      clearable
-                    />
-                    {categoryForm.formState.errors.accountId && <span className="text-red-500 text-[10px] mt-1">{categoryForm.formState.errors.accountId.message}</span>}
-                    <span className="text-[9px] text-muted-foreground/80 mt-1 block">Specify the general ledger target account to post approved expense debits to.</span>
-                  </div>
-                  
-                  <div className="mt-4 pt-4 border-t border-border/40 space-y-4">
-                    <h3 className="text-xs font-bold flex items-center gap-2">
-                      <input type="checkbox" {...categoryForm.register('defaultTaxApplicable')} id="cat-tax-app" className="rounded border-border text-accent focus:ring-accent" />
-                      <label htmlFor="cat-tax-app" className="cursor-pointer">Default Tax Applicable</label>
-                    </h3>
-
-                    {categoryForm.watch('defaultTaxApplicable') && (
-                      <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
+                    <div className="p-6 space-y-4 max-w-xl mx-auto bg-white border border-[#CBD5E1] rounded-[4px] text-xs">
+                      <div className="flex justify-between items-start border-b border-[#E5E7EB] pb-3">
                         <div>
-                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Default GST Rate</label>
-                          <select {...categoryForm.register('defaultGstRate', { valueAsNumber: true })} disabled={categoryForm.watch('defaultTaxPreference') === 'EXEMPT' || categoryForm.watch('defaultTaxPreference') === 'NIL_RATED' || categoryForm.watch('defaultTaxPreference') === 'NON_GST'} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                            <option value="0">0%</option>
-                            <option value="3">3%</option>
-                            <option value="5">5%</option>
-                            <option value="12">12%</option>
-                            <option value="18">18%</option>
-                            <option value="28">28%</option>
-                          </select>
+                          <h3 className="font-bold text-sm text-[#2B2F36]">EXPENSE RECEIPT</h3>
+                          <p className="font-mono text-xs text-[#6B7280]">
+                            {selectedExpense.expenseNo || 'EXP-0001'}
+                          </p>
                         </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Default Tax Preference</label>
-                          <select {...categoryForm.register('defaultTaxPreference')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                            <option value="TAXABLE">Taxable</option>
-                            <option value="EXEMPT">Exempt</option>
-                            <option value="NIL_RATED">Nil Rated</option>
-                            <option value="NON_GST">Non GST</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Default Tax Mode</label>
-                          <select {...categoryForm.register('defaultTaxMode')} className="w-full p-2 bg-background border border-border/80 rounded-lg text-xs outline-none focus:border-accent">
-                            <option value="EXCLUDING_TAX">Amount Excluding Tax</option>
-                            <option value="INCLUDING_TAX">Amount Including Tax</option>
-                          </select>
+                        <div className="text-right">
+                          <span className="text-[#6B7280] block text-[11px]">Date</span>
+                          <span className="font-semibold">{formatDate(selectedExpense.date)}</span>
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-border/40">
-                  <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="px-4 py-2 border border-border hover:bg-muted/50 rounded-xl text-xs font-bold cursor-pointer">Cancel</button>
-                  <button type="submit" disabled={saveCategory.isPending} className="px-4 py-2 bg-accent text-white hover:bg-opacity-90 rounded-xl text-xs font-bold shadow-md shadow-accent/15 cursor-pointer">
-                    {saveCategory.isPending ? 'Saving Category...' : 'Save Category'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+                      <div className="py-2 flex justify-between">
+                        <div>
+                          <span className="text-[#6B7280] block text-[11px]">Expense Account</span>
+                          <span className="font-semibold text-[#2B2F36]">
+                            {selectedExpense.category?.name || 'General Expense'}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[#6B7280] block text-[11px]">Total Amount</span>
+                          <span className="text-base font-bold text-[#DC2626]">
+                            {formatCurrency(selectedExpense.totalAmount || selectedExpense.amount)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </ZohoPDFPreview>
+                ) : (
+                    <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(100vh-140px)]">
+                      {/* Top Highlight Box matching Prompt 05 specification */}
+                      <div className="flex items-start justify-between border-b border-[#E5E7EB] pb-5">
+                        <div>
+                          <div className="text-2xl font-bold text-[#DC2626] tracking-tight">
+                            {formatCurrency(selectedExpense.totalAmount || selectedExpense.amount)}{' '}
+                            <span className="text-sm font-normal text-[#6B7280]">
+                              on {formatDate(selectedExpense.date)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="px-2 py-0.5 text-[11px] font-semibold bg-[#F3F4F6] text-[#4B5563] rounded">
+                              {selectedExpense.isBillable ? 'BILLABLE' : 'NON-BILLABLE'}
+                            </span>
+                            <span className="px-2.5 py-0.5 text-xs font-medium bg-[#EEF2F6] text-[#1E2540] rounded">
+                              {selectedExpense.category?.name || 'General Expense'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Drop Zone Box */}
+                        <div className="w-56 p-3 border border-dashed border-[#D1D5DB] rounded bg-[#F9FAFB] text-center">
+                          <Paperclip className="w-4 h-4 text-[#408DFB] mx-auto mb-1" />
+                          <p className="text-[11px] font-medium text-[#1E2540]">
+                            Drag or Drop Receipts
+                          </p>
+                          <p className="text-[10px] text-[#6B7280]">max 10MB • Upload File</p>
+                        </div>
+                      </div>
+
+                      {/* Detail Fields Grid */}
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <span className="text-[#6B7280] block mb-0.5">Paid Through</span>
+                          <span className="font-medium text-[#1E2540]">
+                            {selectedExpense.bankAccount?.name ||
+                              (selectedExpense.paymentMethod === 'CASH'
+                                ? 'Petty Cash'
+                                : 'Bank Account')}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[#6B7280] block mb-0.5">GST Treatment</span>
+                          <span className="font-medium text-[#1E2540]">
+                            {selectedExpense.taxApplicable
+                              ? `Taxable (${selectedExpense.gstRate || 0}%)`
+                              : 'Out of Scope'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[#6B7280] block mb-0.5">Vendor</span>
+                          <span className="font-medium text-[#1E2540]">
+                            {selectedExpense.vendor?.name || '—'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[#6B7280] block mb-0.5">Reference# / Invoice#</span>
+                          <span className="font-medium text-[#1E2540]">
+                            {selectedExpense.reference || selectedExpense.billNumber || '—'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[#6B7280] block mb-0.5">Customer Name</span>
+                          <span className="font-medium text-[#1E2540]">
+                            {selectedExpense.customerName || '—'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[#6B7280] block mb-0.5">Notes</span>
+                          <span className="text-[#1E2540]">
+                            {selectedExpense.notes || selectedExpense.description || '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Journal Table matching Prompt 05 specification */}
+                      <div className="mt-8 pt-4 border-t border-[#E5E7EB]">
+                        <h4 className="text-xs font-semibold text-[#1E2540] mb-2 uppercase tracking-wider">
+                          Accounting Journal
+                        </h4>
+                        <div className="border border-[#E5E7EB] rounded overflow-hidden">
+                          <table className="w-full text-xs">
+                            <thead className="bg-[#F8F9FB] border-b border-[#E5E7EB] text-[#6B7280]">
+                              <tr>
+                                <th className="py-2 px-3 text-left font-medium">Account</th>
+                                <th className="py-2 px-3 text-right font-medium">Debit</th>
+                                <th className="py-2 px-3 text-right font-medium">Credit</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#E5E7EB]">
+                              <tr>
+                                <td className="py-2 px-3 text-[#1E2540]">
+                                  {selectedExpense.category?.name || 'Expense Account'}
+                                </td>
+                                <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                  {formatCurrency(selectedExpense.amount)}
+                                </td>
+                                <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
+                              </tr>
+                              {Boolean(selectedExpense.taxAmount && selectedExpense.taxAmount > 0) && (
+                                <tr>
+                                  <td className="py-2 px-3 text-[#1E2540]">Input GST Tax Ledger</td>
+                                  <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                    {formatCurrency(selectedExpense.taxAmount)}
+                                  </td>
+                                  <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
+                                </tr>
+                              )}
+                              <tr>
+                                <td className="py-2 px-3 text-[#1E2540]">
+                                  {selectedExpense.bankAccount?.name || 'Petty Cash Ledger'}
+                                </td>
+                                <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
+                                <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                  {formatCurrency(
+                                    selectedExpense.totalAmount || selectedExpense.amount
+                                  )}
+                                </td>
+                              </tr>
+                            </tbody>
+                            <tfoot className="bg-[#F9FAFB] font-semibold border-t border-[#E5E7EB]">
+                              <tr>
+                                <td className="py-2 px-3 text-[#1E2540]">Total</td>
+                                <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                  {formatCurrency(
+                                    selectedExpense.totalAmount || selectedExpense.amount
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                  {formatCurrency(
+                                    selectedExpense.totalAmount || selectedExpense.amount
+                                  )}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </ZohoSplitDetail>
+            ) : (
+              <div className="w-full h-full flex flex-col">
+                <ZohoListTable
+                  data={filteredExpenses}
+                  columns={expenseColumns}
+                  keyField="id"
+                  isLoading={loadingExpenses}
+                  onRowClick={(exp) => setSelectedExpense(exp)}
+                  emptyState={
+                    <ZohoEmptyState
+                      title="Record and manage your business expenses."
+                      description="Keep track of money leaving your business by recording non-billable and billable expenses."
+                      createLabel="Create Expense"
+                      onCreate={handleOpenNewExpense}
+                    />
+                  }
+                />
+              </div>
+            )}
+          </>
         )}
-      </PageLayout>
+      </div>
 
-      <DeleteDialog 
-        isOpen={!!expenseToDelete} 
-        onClose={() => setExpenseToDelete(null)} 
-        onConfirm={async () => { deleteExpense.mutate(expenseToDelete.id); setExpenseToDelete(null); }} 
-        entityName="Expense Claim" 
-        entityId={expenseToDelete?.expenseNo} 
-        warningText="Cancelling this approved expense claim will trigger reversal journal entry lines and restore cash/bank balances in accounting." 
+      {/* Legacy modal removed in favor of full-page ExpenseForm at /expenses/new */}
+
+      {/* NEW / EDIT CATEGORY MODAL */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white rounded-lg shadow-xl border border-[#E5E7EB] overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between bg-[#F8F9FB]">
+              <h3 className="text-sm font-semibold text-[#1E2540]">
+                {editingCategoryId ? 'Edit Category' : 'New Expense Category'}
+              </h3>
+              <button
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="text-[#9CA3AF] hover:text-[#1E2540] cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={categoryForm.handleSubmit((d) => saveCategory.mutate(d))}
+              className="p-5 space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-medium text-[#1E2540] mb-1">
+                  Category Name <span className="text-[#DC2626]">*</span>
+                </label>
+                <input
+                  type="text"
+                  {...categoryForm.register('name')}
+                  placeholder="e.g. Office Supplies, Travel"
+                  className="w-full h-8 px-2.5 border border-[#D1D5DB] rounded text-xs text-[#1E2540] outline-hidden focus:border-[#408DFB]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#1E2540] mb-1">
+                  General Ledger Account <span className="text-[#DC2626]">*</span>
+                </label>
+                <select
+                  {...categoryForm.register('accountId')}
+                  className="w-full h-8 px-2.5 border border-[#D1D5DB] rounded text-xs text-[#1E2540] outline-hidden bg-white"
+                >
+                  <option value="">Select expense GL account</option>
+                  {accounts
+                    .filter((a: any) => a.category === 'EXPENSE' || !a.category)
+                    .map((a: any) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.code || 'GL'})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="cat-tax"
+                  {...categoryForm.register('defaultTaxApplicable')}
+                  className="rounded border-[#D1D5DB] text-[#408DFB]"
+                />
+                <label htmlFor="cat-tax" className="text-xs text-[#1E2540]">
+                  Applicable for GST
+                </label>
+              </div>
+
+              {categoryForm.watch('defaultTaxApplicable') && (
+                <div>
+                  <label className="block text-xs font-medium text-[#1E2540] mb-1">
+                    Default GST Rate (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    {...categoryForm.register('defaultGstRate', { valueAsNumber: true })}
+                    placeholder="18"
+                    className="w-full h-8 px-2.5 border border-[#D1D5DB] rounded text-xs text-[#1E2540] outline-hidden"
+                  />
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-[#E5E7EB] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="px-3 py-1.5 text-xs text-[#6B7280] hover:text-[#1E2540] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saveCategory.isPending}
+                  className="h-8 px-4 bg-[#408DFB] hover:bg-[#2563EB] text-white rounded text-xs font-medium transition-colors cursor-pointer"
+                >
+                  {saveCategory.isPending ? 'Saving...' : 'Save Category'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteDialog
+        isOpen={Boolean(expenseToDelete)}
+        entityName={`Expense ${expenseToDelete?.expenseNo || ''}`}
+        warningText={`Are you sure you want to delete this expense record (${expenseToDelete?.expenseNo || 'this item'})? This action cannot be undone.`}
+        onConfirm={() => expenseToDelete && deleteExpense.mutate(expenseToDelete.id)}
+        onClose={() => setExpenseToDelete(null)}
       />
 
-      <DeleteDialog 
-        isOpen={!!categoryToDelete} 
-        onClose={() => setCategoryToDelete(null)} 
-        onConfirm={async () => { deleteCategory.mutate(categoryToDelete.id); setCategoryToDelete(null); }} 
-        entityName="Expense Category" 
-        entityId={categoryToDelete?.name} 
-        warningText="Deleting this category removes it from selectors in future expense claims." 
+      {/* Delete Category Dialog */}
+      <DeleteDialog
+        isOpen={Boolean(categoryToDelete)}
+        entityName={`Category ${categoryToDelete?.name || ''}`}
+        warningText={`Are you sure you want to remove the "${categoryToDelete?.name}" category?`}
+        onConfirm={() => categoryToDelete && deleteCategory.mutate(categoryToDelete.id)}
+        onClose={() => setCategoryToDelete(null)}
       />
-    </>
+    </div>
   );
 };
+
+export default ExpensesDashboard;

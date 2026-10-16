@@ -41,9 +41,9 @@ export const PageLayout = React.forwardRef<HTMLDivElement, PageLayoutProps>(
       <div
         ref={ref}
         className={cn(
-          'w-full flex-1 min-h-full flex flex-col bg-background text-foreground',
+          'w-full flex-1 min-h-0 flex flex-col bg-white text-[#2B2F36]',
           !scrollable && 'h-full overflow-hidden',
-          !noGutter && 'px-[var(--page-gutter)] pt-[var(--page-gutter)] pb-6',
+          !noGutter && 'p-4',
           className
         )}
         {...props}

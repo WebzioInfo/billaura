@@ -178,6 +178,8 @@ export class ProductsService {
       const product = await tx.product.create({
         data: {
           name: dto.name,
+          description: dto.description || null,
+          purchaseDescription: dto.purchaseDescription || null,
           categoryId: dto.categoryId || null,
           brandId: dto.brandId || null,
           unit: dto.unit || 'NOS',
@@ -220,21 +222,55 @@ export class ProductsService {
         },
       });
 
-      // Find default warehouse to initialize stock mapping
-      const defaultWh = await tx.warehouse.findFirst({
-        where: { companyId, isDefault: true },
-      });
+      // Handle Inventory Tracking & Opening Stock initialization
+      const isTrackStock = dto.isTrackStock !== false && dto.isInventoryItem !== false && dto.isService !== true;
 
-      if (defaultWh) {
-        await tx.stock.create({
-          data: {
-            companyId,
-            productId: product.id,
-            warehouseId: defaultWh.id,
-            quantity: 0,
-            availableQuantity: 0,
-          },
+      if (isTrackStock) {
+        // Find or ensure default warehouse
+        let defaultWh = await tx.warehouse.findFirst({
+          where: { companyId, isDefault: true },
         });
+
+        if (!defaultWh) {
+          defaultWh = await tx.warehouse.findFirst({
+            where: { companyId },
+          });
+        }
+
+        const openingQty = Number(dto.openingStock) || 0;
+        const openingRate = Number(dto.openingStockRate) || Number(dto.purchasePrice) || 0;
+
+        if (defaultWh) {
+          await tx.stock.create({
+            data: {
+              companyId,
+              productId: product.id,
+              warehouseId: defaultWh.id,
+              quantity: openingQty,
+              availableQuantity: openingQty,
+              averageCost: openingRate,
+            },
+          });
+
+          // If positive opening stock, create auditable StockLedger entry
+          if (openingQty > 0) {
+            await tx.stockLedger.create({
+              data: {
+                companyId,
+                productId: product.id,
+                type: 'OPENING_STOCK',
+                quantityBefore: 0,
+                quantityChange: openingQty,
+                quantityAfter: openingQty,
+                averageCost: openingRate,
+                referenceType: 'OPENING_STOCK',
+                referenceId: product.id,
+                notes: 'Initial opening stock balance',
+                date: new Date(),
+              },
+            });
+          }
+        }
       }
 
       const fullProduct = await tx.product.findUnique({
@@ -332,8 +368,19 @@ export class ProductsService {
       );
     }
 
+    if (dto.isTrackStock !== undefined && dto.isTrackStock !== product.isTrackStock) {
+      const hasTransactions = await this.prisma.stockLedger.findFirst({
+        where: { companyId, productId: id },
+      });
+      if (hasTransactions) {
+        throw new BadRequestException("You cannot change inventory tracking once transactions exist for this item");
+      }
+    }
+
     const dataToUpdate: Prisma.ProductUncheckedUpdateInput = {
       ...(dto.name !== undefined && { name: dto.name }),
+      ...(dto.description !== undefined && { description: dto.description || null }),
+      ...(dto.purchaseDescription !== undefined && { purchaseDescription: dto.purchaseDescription || null }),
       ...(dto.alias !== undefined && { alias: dto.alias || null }),
       ...(dto.unit !== undefined && { unit: dto.unit }),
       ...(dto.barcode !== undefined && { barcode: dto.barcode || null }),
@@ -384,7 +431,18 @@ export class ProductsService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const product = await this.findOne(id);
+    const [invoiceCount, purchaseCount] = await Promise.all([
+      this.prisma.invoiceItem.count({ where: { productId: id } }),
+      this.prisma.purchaseItem.count({ where: { productId: id } }),
+    ]);
+
+    if (invoiceCount > 0 || purchaseCount > 0) {
+      throw new ConflictException(
+        `Cannot delete product "${product.name}" because it is referenced in historical sales invoices (${invoiceCount}) or purchase bills (${purchaseCount}).`
+      );
+    }
+
     return this.prisma.product.update({
       where: { id },
       data: { deletedAt: new Date() },

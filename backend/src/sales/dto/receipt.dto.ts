@@ -7,6 +7,7 @@ import {
   IsArray,
   ValidateNested,
   Min,
+  IsBoolean,
 } from "class-validator";
 import { Type } from "class-transformer";
 import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
@@ -123,6 +124,46 @@ export class CreateReceiptDto {
   @ValidateNested({ each: true })
   @Type(() => SplitPaymentDto)
   splitPayments?: SplitPaymentDto[];
+
+  @IsBoolean()
+  @IsOptional()
+  isAdvance?: boolean;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @IsString()
+  @IsOptional()
+  receiptNo?: string;
+
+  @IsNumber()
+  @IsOptional()
+  tdsAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTaxId?: string;
+
+  @IsString()
+  @IsOptional()
+  placeOfSupply?: string;
+
+  @IsString()
+  @IsOptional()
+  descriptionOfSupply?: string;
+
+  @IsNumber()
+  @IsOptional()
+  taxRate?: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxAmount?: number;
+
+  @IsArray()
+  @IsOptional()
+  attachments?: any[];
 }
 
 export class UpdateReceiptDto {

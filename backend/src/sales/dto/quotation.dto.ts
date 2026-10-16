@@ -45,7 +45,15 @@ export class QuotationItemDto {
 
   @IsString()
   @IsOptional()
+  discountType?: string;
+
+  @IsString()
+  @IsOptional()
   unit?: string;
+
+  @IsString()
+  @IsOptional()
+  taxName?: string;
 
   @IsNumber()
   @IsOptional()
@@ -124,6 +132,34 @@ export class CreateQuotationDto {
   @IsString()
   @IsOptional()
   termsConditions?: string;
+
+  @IsString()
+  @IsOptional()
+  templateId?: string;
+
+  @IsString()
+  @IsOptional()
+  salesperson?: string;
+
+  @IsString()
+  @IsOptional()
+  salespersonId?: string;
+
+  @IsString()
+  @IsOptional()
+  referenceNo?: string;
+
+  @IsString()
+  @IsOptional()
+  subject?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsNumber()
+  @IsOptional()
+  adjustment?: number;
 
   @IsArray()
   @ArrayMinSize(1, { message: 'At least one line item is required' })

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Save,
@@ -19,13 +19,18 @@ import {
   X,
   Loader2,
   Check,
+  Settings,
+  Paperclip,
+  Calendar,
+  HelpCircle,
+  Repeat,
+  GripVertical,
+  Upload,
 } from 'lucide-react';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
 import { apiClient as api, ensureArray } from '@/core/api/apiClient';
-import { PageLayout } from '@/shared/components/layout/PageLayout';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Button } from '@/shared/components/ui/Button';
+import { useSessionStore } from '@/features/auth/stores/sessionStore';
 
 // Indian Currency Formatter
 const formatINR = (val: number, forceDecimals = false) => {
@@ -52,9 +57,10 @@ export interface VoucherLine {
   id: string;
   accountId: string;
   account?: AccountOption | null;
-  debit: number;
-  credit: number;
-  memo: string;
+  description: string;
+  contactId?: string;
+  debit: number | string;
+  credit: number | string;
 }
 
 // Category Configuration & Golden Rules
@@ -100,52 +106,51 @@ const CATEGORY_META: Record<
     label: 'Expense',
     groupLabel: 'EXPENSES',
     normalBalance: 'Dr',
-    drExplanation: 'Debit increases expense (records expenditure, reduces profit)',
-    crExplanation: 'Credit decreases expense (reversal, rebate, or credit note)',
+    drExplanation: 'Debit increases expense (cost incurred)',
+    crExplanation: 'Credit decreases expense (cost reversed or refunded)',
   },
 };
 
-// Educational Voucher Templates
+// Educational Templates for Indian Accounting & Zoho parity
 const EDUCATIONAL_TEMPLATES = [
   {
-    id: 'expense-cash',
-    title: '1. Expense Paid via Cash / Bank',
-    description: 'Debit the Expense account (e.g. Office Rent) and Credit Cash or Bank.',
-    narration: 'Being office expenditure paid through cash / bank account',
+    id: 'capital_infusion',
+    title: '1. Capital Infusion by Owner / Director',
+    description: 'Debit Bank/Cash (Asset increases) and Credit Owner Capital (Equity increases).',
+    narration: 'Being capital introduced by proprietor / partner into business account',
     exampleLines: [
-      { category: 'EXPENSE', nameQuery: 'Rent', isDebit: true, amount: 10000 },
-      { category: 'ASSET', nameQuery: 'Cash', isDebit: false, amount: 10000 },
+      { category: 'ASSET', nameQuery: 'Bank', isDebit: true, amount: 200000 },
+      { category: 'EQUITY', nameQuery: 'Capital', isDebit: false, amount: 200000 },
     ],
   },
   {
-    id: 'asset-bank',
-    title: '2. Asset Purchased via Bank',
-    description: 'Debit Fixed Asset (e.g. Machinery / Equipment) and Credit Bank Account.',
-    narration: 'Being computer equipment / machinery purchased for business use via bank transfer',
+    id: 'salary_accrual',
+    title: '2. Month-End Salary Accrual Entry',
+    description: 'Debit Salaries Expense (P&L expense increases) and Credit Salaries Payable (Liability increases).',
+    narration: 'Being monthly payroll accrued for staff salaries payable next month',
     exampleLines: [
-      { category: 'ASSET', nameQuery: 'Machinery', isDebit: true, amount: 50000 },
-      { category: 'ASSET', nameQuery: 'Bank Accounts', isDebit: false, amount: 50000 },
+      { category: 'EXPENSE', nameQuery: 'Salary', isDebit: true, amount: 85000 },
+      { category: 'LIABILITY', nameQuery: 'Payable', isDebit: false, amount: 85000 },
     ],
   },
   {
-    id: 'capital-intro',
-    title: '3. Capital Introduced by Owner',
-    description: 'Debit Cash / Bank (Asset increases) and Credit Owners Capital (Equity increases).',
-    narration: 'Being additional capital introduced into the business by proprietor / partner',
+    id: 'prepaid_rent',
+    title: '3. Prepaid Rent Amortization',
+    description: 'Debit Rent Expense (Expense recognized) and Credit Prepaid Rent (Asset amortization).',
+    narration: 'Being adjustment of current month portion of prepaid advance rent',
     exampleLines: [
-      { category: 'ASSET', nameQuery: 'Bank Accounts', isDebit: true, amount: 100000 },
-      { category: 'EQUITY', nameQuery: 'Owners Capital', isDebit: false, amount: 100000 },
+      { category: 'EXPENSE', nameQuery: 'Rent', isDebit: true, amount: 25000 },
+      { category: 'ASSET', nameQuery: 'Prepaid', isDebit: false, amount: 25000 },
     ],
   },
   {
-    id: 'compound-expense',
-    title: '4. Compound Multiple Expenses',
-    description: 'Debit multiple expense lines (e.g. Rent & Utilities) against a single Credit to Cash/Bank.',
-    narration: 'Being monthly rent and utility dues settled via single consolidated payment',
+    id: 'bad_debt',
+    title: '4. Bad Debt Write-off Entry',
+    description: 'Debit Bad Debts Expense (Expense recognized) and Credit Accounts Receivable (Customer asset reduced).',
+    narration: 'Being uncollectible receivable balance written off as bad debts',
     exampleLines: [
-      { category: 'EXPENSE', nameQuery: 'Rent', isDebit: true, amount: 20000 },
-      { category: 'EXPENSE', nameQuery: 'Utilities', isDebit: true, amount: 5000 },
-      { category: 'ASSET', nameQuery: 'Cash', isDebit: false, amount: 25000 },
+      { category: 'EXPENSE', nameQuery: 'Bad Debts', isDebit: true, amount: 12000 },
+      { category: 'ASSET', nameQuery: 'Receivable', isDebit: false, amount: 12000 },
     ],
   },
   {
@@ -160,9 +165,7 @@ const EDUCATIONAL_TEMPLATES = [
   },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FLOATING PORTAL ACCOUNT SELECTOR (Escapes container clipping completely)
-// ─────────────────────────────────────────────────────────────────────────────
+// FLOATING PORTAL ACCOUNT SELECTOR
 interface FloatingAccountSelectorProps {
   isOpen: boolean;
   onClose: () => void;
@@ -192,14 +195,13 @@ const FloatingAccountSelector: React.FC<FloatingAccountSelectorProps> = ({
   const [dropdownCoords, setDropdownCoords] = useState<{ top: number; left: number; width: number; isUp: boolean }>({
     top: 0,
     left: 0,
-    width: 440,
+    width: 380,
     isUp: false,
   });
   const [activeIndex, setActiveIndex] = useState(-1);
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Position calculation
   useEffect(() => {
     if (!isOpen || !triggerRef.current) return;
 
@@ -208,8 +210,8 @@ const FloatingAccountSelector: React.FC<FloatingAccountSelectorProps> = ({
       const rect = triggerRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
       const viewportWidth = window.innerWidth;
-      const popoverHeight = 380;
-      const width = Math.max(rect.width, 460);
+      const popoverHeight = 340;
+      const width = Math.max(rect.width, 360);
 
       const spaceBelow = viewportHeight - rect.bottom;
       const spaceAbove = rect.top;
@@ -235,7 +237,6 @@ const FloatingAccountSelector: React.FC<FloatingAccountSelectorProps> = ({
     };
   }, [isOpen, triggerRef]);
 
-  // Focus input and reset state on open
   useEffect(() => {
     if (isOpen) {
       setSearch('');
@@ -244,87 +245,62 @@ const FloatingAccountSelector: React.FC<FloatingAccountSelectorProps> = ({
     }
   }, [isOpen]);
 
-  // Close on outside click or Escape
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
+    const handleOutsideClick = (e: MouseEvent) => {
       if (
         menuRef.current &&
-        !menuRef.current.contains(target) &&
+        !menuRef.current.contains(e.target as Node) &&
         triggerRef.current &&
-        !triggerRef.current.contains(target)
+        !triggerRef.current.contains(e.target as Node)
       ) {
         onClose();
       }
     };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [isOpen, onClose, triggerRef]);
 
-  // Filter accounts
   const filteredAccounts = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return accounts;
-    return accounts.filter((acc) => {
-      return (
-        acc.name.toLowerCase().includes(q) ||
-        (acc.code && acc.code.toLowerCase().includes(q)) ||
-        (acc.parent?.name && acc.parent.name.toLowerCase().includes(q)) ||
-        acc.category.toLowerCase().includes(q)
-      );
-    });
+    return accounts.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        (a.code && a.code.toLowerCase().includes(q)) ||
+        CATEGORY_META[a.category]?.label.toLowerCase().includes(q)
+    );
   }, [accounts, search]);
 
-  // Group filtered accounts
-  const groupedAccounts = useMemo(() => {
-    const groups: { [key: string]: AccountOption[] } = {
+  const grouped = useMemo(() => {
+    const map: Record<string, AccountOption[]> = {
       ASSET: [],
       LIABILITY: [],
       EQUITY: [],
       REVENUE: [],
       EXPENSE: [],
     };
-
     filteredAccounts.forEach((acc) => {
-      if (groups[acc.category]) {
-        groups[acc.category].push(acc);
+      if (map[acc.category]) {
+        map[acc.category].push(acc);
       }
     });
-
-    return groups;
+    return map;
   }, [filteredAccounts]);
 
-  // Flat list for keyboard navigation
   const flatVisibleAccounts = useMemo(() => {
     const list: AccountOption[] = [];
-    ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'].forEach((cat) => {
-      if (groupedAccounts[cat]) {
-        list.push(...groupedAccounts[cat]);
-      }
+    Object.keys(grouped).forEach((cat) => {
+      list.push(...grouped[cat]);
     });
     return list;
-  }, [groupedAccounts]);
+  }, [grouped]);
 
-  // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (flatVisibleAccounts.length === 0) return;
-
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      onClose();
+    } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActiveIndex((prev) => (prev < flatVisibleAccounts.length - 1 ? prev + 1 : 0));
     } else if (e.key === 'ArrowUp') {
@@ -342,167 +318,98 @@ const FloatingAccountSelector: React.FC<FloatingAccountSelectorProps> = ({
 
   if (!isOpen) return null;
 
-  const totalResultsCount = flatVisibleAccounts.length;
-
   return createPortal(
     <div
       ref={menuRef}
+      role="dialog"
+      aria-label="Account selector"
       style={{
         position: 'fixed',
-        top: `${dropdownCoords.top}px`,
-        left: `${dropdownCoords.left}px`,
-        width: `${dropdownCoords.width}px`,
-        maxHeight: '380px',
-        zIndex: 99999,
+        top: dropdownCoords.top,
+        left: dropdownCoords.left,
+        width: dropdownCoords.width,
+        zIndex: 9999,
       }}
-      className="bg-white dark:bg-[#1E1C26] border border-[#D1D5DB] dark:border-[#374151] rounded-xl shadow-2xl flex flex-col overflow-hidden text-xs font-sans text-foreground animate-in fade-in duration-100"
+      className="bg-white rounded-[4px] border border-[#CBD5E1] shadow-xl flex flex-col max-h-[340px] text-[13px] animate-in fade-in-50 duration-100"
     >
-      {/* Search Header */}
-      <div className="p-2.5 border-b border-border/80 bg-muted/20 relative shrink-0">
-        <Search className="w-4 h-4 text-muted-foreground absolute left-5 top-1/2 -translate-y-1/2" />
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Search account, code or group... (e.g. Cash, 1001, Rent)"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="w-full bg-background border border-border/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-accent"
-        />
+      <div className="p-2 border-b border-[#E5E7EB] bg-[#F8F9FB]">
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setActiveIndex(0);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="Search accounts by name or code..."
+            className="w-full pl-8 pr-3 py-1 text-xs bg-white border border-[#D1D5DB] rounded focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
+          />
+        </div>
       </div>
 
-      {/* Grouped Account List */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-3">
-        {isError && accounts.length === 0 ? (
-          <div className="py-8 text-center space-y-2">
-            <p className="text-xs text-rose-500 font-medium">
-              Unable to load accounts. Please retry.
-            </p>
-            {onRetry && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-muted hover:bg-muted/80 rounded-lg border border-border cursor-pointer transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Retry
-              </button>
-            )}
+      <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+        {isLoading ? (
+          <div className="p-6 text-center text-gray-500">
+            <Loader2 className="w-5 h-5 animate-spin mx-auto text-[#408DFB] mb-1" />
+            <span className="text-xs">Loading chart of accounts...</span>
           </div>
-        ) : isLoading && accounts.length === 0 ? (
-          <div className="py-8 flex flex-col items-center justify-center text-muted-foreground gap-2">
-            <Loader2 className="w-5 h-5 animate-spin text-accent" />
-            <span className="text-xs">Loading accounts...</span>
-          </div>
-        ) : accounts.length === 0 ? (
-          <div className="py-8 text-center space-y-2">
-            <p className="text-xs text-muted-foreground">
-              No ledgers have been configured for this company.
-            </p>
-            <button
-              type="button"
-              onClick={() => onQuickCreate('')}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-accent hover:underline cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Create First Ledger
-            </button>
-          </div>
-        ) : totalResultsCount === 0 ? (
-          <div className="py-8 text-center space-y-2">
-            <p className="text-xs text-muted-foreground">
-              No matching accounts found for "{search}"
-            </p>
+        ) : flatVisibleAccounts.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-xs text-gray-500 mb-2">No matching account found for "{search}"</p>
             <button
               type="button"
               onClick={() => onQuickCreate(search)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-accent hover:underline cursor-pointer"
+              className="text-xs text-[#408DFB] hover:underline font-semibold cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
-              Create "{search}"
+              + Create "{search}" as a new account
             </button>
           </div>
         ) : (
-          ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'].map((catKey) => {
-            const catAccounts = groupedAccounts[catKey];
-            if (!catAccounts || catAccounts.length === 0) return null;
+          Object.keys(grouped).map((catKey) => {
+            const list = grouped[catKey];
+            if (list.length === 0) return null;
             const meta = CATEGORY_META[catKey];
-
             return (
-              <div key={catKey} className="space-y-1">
-                <div className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 flex items-center justify-between border-b border-border/40 pb-1">
-                  <span>{meta.groupLabel}</span>
-                  <span className="font-mono text-[9px] opacity-70">
-                    {catAccounts.length}
-                  </span>
+              <div key={catKey} className="py-1">
+                <div className="px-3 py-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider bg-gray-50/70">
+                  {meta.groupLabel}
                 </div>
-
-                <div className="space-y-0.5">
-                  {catAccounts.map((acc) => {
-                    const isSelected = acc.id === selectedAccountId;
-                    const isKeyboardActive =
-                      flatVisibleAccounts.indexOf(acc) === activeIndex;
-
-                    return (
-                      <div
-                        key={acc.id}
-                        onClick={() => onSelect(acc)}
-                        className={`px-3 py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-between ${
-                          isSelected
-                            ? 'bg-accent/15 text-accent font-bold'
-                            : isKeyboardActive
-                            ? 'bg-muted text-foreground'
-                            : 'hover:bg-muted/60 text-foreground'
-                        }`}
-                      >
-                        <div className="flex-1 min-w-0 pr-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-xs truncate">
-                              {acc.name}
-                            </span>
-                            {acc.code && (
-                              <span className="text-[10px] font-mono px-1.5 py-0.2 bg-muted text-muted-foreground rounded font-medium">
-                                {acc.code}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                            {acc.parent?.name || meta.label} · {meta.label}
-                          </div>
-                        </div>
-
-                        <div className="text-right shrink-0 flex items-center gap-2">
-                          {acc.balance !== undefined && (
-                            <span className="font-mono text-[11px] font-medium text-muted-foreground">
-                              {formatINR(Math.abs(acc.balance))}
-                            </span>
-                          )}
-                          {isSelected && (
-                            <Check className="w-3.5 h-3.5 text-accent" />
-                          )}
-                        </div>
+                {list.map((acc) => {
+                  const isSelected = selectedAccountId === acc.id;
+                  return (
+                    <div
+                      key={acc.id}
+                      onClick={() => onSelect(acc)}
+                      className={`px-3 py-1.5 cursor-pointer flex items-center justify-between text-xs hover:bg-[#F0F5FF] ${
+                        isSelected ? 'bg-blue-50 text-[#408DFB] font-medium' : 'text-[#2B2F36]'
+                      }`}
+                    >
+                      <div className="truncate pr-2">
+                        <span>{acc.name}</span>
+                        {acc.code && <span className="text-gray-400 text-[11px] ml-1.5">({acc.code})</span>}
                       </div>
-                    );
-                  })}
-                </div>
+                      <span className="text-[11px] text-gray-400 shrink-0">{meta.label}</span>
+                    </div>
+                  );
+                })}
               </div>
             );
           })
         )}
       </div>
 
-      {/* Footer Strip */}
-      <div className="p-2 border-t border-border/80 bg-muted/20 flex items-center justify-between text-[11px] shrink-0">
+      <div className="p-2 border-t border-[#E5E7EB] bg-gray-50 flex items-center justify-between text-xs text-gray-500">
         <button
           type="button"
           onClick={() => onQuickCreate(search)}
-          className="inline-flex items-center gap-1 font-bold text-accent hover:underline cursor-pointer"
+          className="text-[#408DFB] hover:underline font-medium flex items-center gap-1 cursor-pointer"
         >
-          <Plus className="w-3 h-3" /> Create New Ledger
+          <Plus className="w-3.5 h-3.5" /> + New Account
         </button>
-        <span className="text-muted-foreground">
-          Press <kbd className="px-1 py-0.2 bg-background border border-border rounded text-[9px]">Esc</kbd> to close
-        </span>
+        <span className="text-[11px] text-gray-400">Esc to close</span>
       </div>
     </div>,
     document.body
@@ -510,23 +417,37 @@ const FloatingAccountSelector: React.FC<FloatingAccountSelectorProps> = ({
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN JOURNAL VOUCHER COMPONENT
+// MAIN JOURNAL FORM COMPONENT (Zoho Books Parity & Multi-Column Grid)
 // ─────────────────────────────────────────────────────────────────────────────
 export const JournalVoucherForm: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
-  // Header Details
-  const [voucherDate, setVoucherDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
-  const [referenceNo, setReferenceNo] = useState<string>('');
-  const [mainNarration, setMainNarration] = useState<string>('');
+  // Mode: Normal Journal vs Recurring Journal
+  const [isRecurring, setIsRecurring] = useState<boolean>(searchParams.get('recurring') === 'true');
 
-  // Voucher Grid Lines
+  // Recurring specific fields
+  const [profileName, setProfileName] = useState<string>('');
+  const [repeatEvery, setRepeatEvery] = useState<string>('Week');
+  const [startsOn, setStartsOn] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [endsOn, setEndsOn] = useState<string>('');
+  const [neverExpires, setNeverExpires] = useState<boolean>(true);
+
+  // Journal Header Details (Multi-Column Layout)
+  const [voucherDate, setVoucherDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [reverseDate, setReverseDate] = useState<string>('');
+  const [publishReverseOnlyOnDate, setPublishReverseOnlyOnDate] = useState<boolean>(false);
+  const [journalNumber, setJournalNumber] = useState<string>('1');
+  const [referenceNo, setReferenceNo] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [reportingMethod, setReportingMethod] = useState<'both' | 'accrual' | 'cash'>('both');
+  const [currency, setCurrency] = useState<string>('INR');
+
+  // Journal Grid Lines (Exactly 2 blank rows initially, matching Zoho)
   const [lines, setLines] = useState<VoucherLine[]>([
-    { id: 'line-1', accountId: '', account: null, debit: 0, credit: 0, memo: '' },
-    { id: 'line-2', accountId: '', account: null, debit: 0, credit: 0, memo: '' },
+    { id: 'line-1', accountId: '', account: null, description: '', contactId: '', debit: '', credit: '' },
+    { id: 'line-2', accountId: '', account: null, description: '', contactId: '', debit: '', credit: '' },
   ]);
 
   // Account selector popover trigger tracking
@@ -535,14 +456,76 @@ export const JournalVoucherForm: React.FC = () => {
   const triggerRefs = useRef<{ [index: number]: HTMLButtonElement | null }>({});
   const createNameInputRef = useRef<HTMLInputElement>(null);
 
-  // Modals & Drawers
+  // Modals
   const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [createAccountName, setCreateAccountName] = useState<string>('');
   const [createAccountCode, setCreateAccountCode] = useState<string>('');
   const [createAccountCategory, setCreateAccountCategory] = useState<string>('EXPENSE');
 
-  // Fetch Chart of Accounts
+  // Attachments (up to 5 files, 10MB each)
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Prefill next sequential journal number if not editing draft
+  const { data: countData } = useQuery({
+    queryKey: ['journal-entries-count'],
+    queryFn: async () => {
+      const res = await api.get('/journal-entries', { params: { limit: 1 } });
+      const total = res.data?.meta?.total ?? res.data?.total ?? 0;
+      return Number(total);
+    },
+    staleTime: 60000,
+  });
+
+  useEffect(() => {
+    if (countData !== undefined && !searchParams.get('draftId')) {
+      setJournalNumber(String(countData + 1));
+    }
+  }, [countData, searchParams]);
+
+  // Restore draft if draftId is in URL
+  useEffect(() => {
+    const draftId = searchParams.get('draftId');
+    if (!draftId) return;
+
+    const companyId = useSessionStore.getState().user?.companyId;
+    if (!companyId) return;
+
+    try {
+      const raw = localStorage.getItem(`billaura_manual_journal_drafts_${companyId}`);
+      if (raw) {
+        const drafts = JSON.parse(raw);
+        const found = drafts.find((d: any) => d.id === draftId);
+        if (found) {
+          if (found.date) setVoucherDate(found.date.split('T')[0]);
+          if (found.reverseDate) setReverseDate(found.reverseDate.split('T')[0]);
+          if (found.publishReverseOnlyOnDate !== undefined) setPublishReverseOnlyOnDate(found.publishReverseOnlyOnDate);
+          if (found.journalNo) setJournalNumber(found.journalNo);
+          if (found.reference) setReferenceNo(found.reference);
+          if (found.notes || found.description) setNotes(found.notes || found.description);
+          if (found.reportingMethod) setReportingMethod(found.reportingMethod);
+          if (found.currency) setCurrency(found.currency);
+          if (Array.isArray(found.lines) && found.lines.length >= 2) {
+            setLines(found.lines.map((l: any, idx: number) => ({
+              id: l.id || `line-${Date.now()}-${idx}`,
+              accountId: l.accountId || '',
+              account: l.account || null,
+              description: l.description || '',
+              contactId: l.contactId || '',
+              debit: l.debit !== undefined && l.debit !== 0 ? l.debit : '',
+              credit: l.credit !== undefined && l.credit !== 0 ? l.credit : '',
+            })));
+          }
+          notification.info('Draft loaded into manual journal form.');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load draft', e);
+    }
+  }, [searchParams]);
+
+  // Real Accounts from Chart of Accounts
   const {
     data: accountsResponse,
     isLoading: accountsLoading,
@@ -563,7 +546,36 @@ export const JournalVoucherForm: React.FC = () => {
     return Array.isArray(accountsResponse) ? accountsResponse : [];
   }, [accountsResponse]);
 
-  // Calculations for Double Entry using integer paise to avoid float precision drift
+  // Real Customers & Vendors for Contact Dropdown
+  const { data: customersData, isLoading: customersLoading } = useQuery<any>({
+    queryKey: ['customers'],
+    queryFn: () => api.get('/customers').catch(() => ({ data: [] })),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: vendorsData, isLoading: vendorsLoading } = useQuery<any>({
+    queryKey: ['vendors'],
+    queryFn: () => api.get('/vendors').catch(() => ({ data: [] })),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const contactOptions = useMemo(() => {
+    const list: { id: string; name: string; type: string }[] = [];
+    const custs = Array.isArray(customersData?.data) ? customersData.data : Array.isArray(customersData) ? customersData : [];
+    const vends = Array.isArray(vendorsData?.data) ? vendorsData.data : Array.isArray(vendorsData) ? vendorsData : [];
+
+    custs.forEach((c: any) => {
+      const name = c.displayName || c.name || c.companyName || 'Customer';
+      list.push({ id: c.id, name, type: 'Customer' });
+    });
+    vends.forEach((v: any) => {
+      const name = v.displayName || v.name || v.companyName || 'Vendor';
+      list.push({ id: v.id, name, type: 'Vendor' });
+    });
+    return list;
+  }, [customersData, vendorsData]);
+
+  // Decimal-safe calculations using integer paise to avoid float precision drift
   const totalDebit = useMemo(() => {
     const sumPaise = lines.reduce(
       (acc, curr) => acc + Math.round((Number(curr.debit) || 0) * 100),
@@ -592,110 +604,62 @@ export const JournalVoucherForm: React.FC = () => {
     return difference === 0 && totalDebit > 0;
   }, [difference, totalDebit]);
 
-  // Accounting Impact Telemetry
-  const accountingImpact = useMemo(() => {
-    let pnlImpact = 0;
-    let assetChange = 0;
-    let liabilityChange = 0;
-    let equityChange = 0;
-    let cashBankChange = 0;
-
-    lines.forEach((line) => {
-      if (!line.account) return;
-      const cat = line.account.category;
-      const isDr = (Number(line.debit) || 0) > 0;
-      const amt = isDr ? Number(line.debit) : Number(line.credit);
-
-      if (amt <= 0) return;
-
-      const isCashOrBank =
-        line.account.name.toLowerCase().includes('cash') ||
-        line.account.name.toLowerCase().includes('bank') ||
-        line.account.parent?.name.toLowerCase().includes('cash') ||
-        line.account.parent?.name.toLowerCase().includes('bank');
-
-      if (cat === 'EXPENSE') {
-        pnlImpact += isDr ? -amt : amt;
-      } else if (cat === 'REVENUE') {
-        pnlImpact += isDr ? -amt : amt;
-      } else if (cat === 'ASSET') {
-        assetChange += isDr ? amt : -amt;
-        if (isCashOrBank) {
-          cashBankChange += isDr ? amt : -amt;
-        }
-      } else if (cat === 'LIABILITY') {
-        liabilityChange += isDr ? -amt : amt;
-      } else if (cat === 'EQUITY') {
-        equityChange += isDr ? -amt : amt;
-      }
-    });
-
-    const isPureBalanceSheet = lines.some((l) => l.account) && pnlImpact === 0;
-
-    return {
-      pnlImpact,
-      assetChange,
-      liabilityChange,
-      equityChange,
-      cashBankChange,
-      isPureBalanceSheet,
-    };
-  }, [lines]);
-
-  // Handle Debit Entry
-  const handleDebitChange = (index: number, val: number) => {
+  // Handle Debit Entry: enforces mutual exclusion (typing debit clears credit)
+  const handleDebitChange = (index: number, valStr: string) => {
+    const num = parseFloat(valStr);
+    const debitVal = isNaN(num) || num < 0 ? '' : num;
     setLines((prev) => {
       const next = [...prev];
       next[index] = {
         ...next[index],
-        debit: val,
-        credit: val > 0 ? 0 : next[index].credit,
+        debit: valStr === '' ? '' : debitVal,
+        credit: debitVal !== '' && Number(debitVal) > 0 ? '' : next[index].credit,
       };
       return next;
     });
   };
 
-  // Handle Credit Entry
-  const handleCreditChange = (index: number, val: number) => {
+  // Handle Credit Entry: enforces mutual exclusion (typing credit clears debit)
+  const handleCreditChange = (index: number, valStr: string) => {
+    const num = parseFloat(valStr);
+    const creditVal = isNaN(num) || num < 0 ? '' : num;
     setLines((prev) => {
       const next = [...prev];
       next[index] = {
         ...next[index],
-        credit: val,
-        debit: val > 0 ? 0 : next[index].debit,
+        credit: valStr === '' ? '' : creditVal,
+        debit: creditVal !== '' && Number(creditVal) > 0 ? '' : next[index].debit,
       };
       return next;
     });
   };
 
-  // Add Line with Smart Tally Balancing
-  const handleAddLine = useCallback(() => {
-    const curDebit = lines.reduce((acc, curr) => acc + (Number(curr.debit) || 0), 0);
-    const curCredit = lines.reduce((acc, curr) => acc + (Number(curr.credit) || 0), 0);
-    const diff = curDebit - curCredit;
+  // Add Row: immediately appends a usable line
+  const handleAddRow = () => {
+    setLines((prev) => [
+      ...prev,
+      {
+        id: `line-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        accountId: '',
+        account: null,
+        description: '',
+        contactId: '',
+        debit: '',
+        credit: '',
+      },
+    ]);
+  };
 
-    const newLine: VoucherLine = {
-      id: `line-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      accountId: '',
-      account: null,
-      debit: diff < 0 ? Math.abs(diff) : 0,
-      credit: diff > 0 ? diff : 0,
-      memo: '',
-    };
-
-    setLines((prev) => [...prev, newLine]);
-  }, [lines]);
-
-  // Remove Line
-  const handleRemoveLine = (index: number) => {
+  // Remove Row: enforced minimum 2 rows
+  const handleRemoveRow = (index: number) => {
     if (lines.length <= 2) {
-      notification.error('A double-entry voucher must contain at least 2 lines.');
+      notification.warning('A manual journal must have at least two journal lines.');
       return;
     }
-    setLines((prev) => prev.filter((_, i) => i !== index));
+    setLines((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  // Select Account from Popover or Creation
+  // Select Account from Popover
   const handleSelectAccount = (account: AccountOption, targetIndex?: number) => {
     const idx = targetIndex !== undefined ? targetIndex : activeSelectorIndex;
     if (idx === null || idx === undefined) return;
@@ -713,7 +677,7 @@ export const JournalVoucherForm: React.FC = () => {
     setActiveSelectorIndex(null);
   };
 
-  // Open Quick Create Ledger Modal (Closes Dropdown immediately while preserving target row)
+  // Quick Create Account
   const handleOpenQuickCreate = (searchTerm: string) => {
     setCreateTargetLineIndex(activeSelectorIndex);
     setActiveSelectorIndex(null);
@@ -723,7 +687,6 @@ export const JournalVoucherForm: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  // Close Quick Create Ledger Modal (Dropdown remains closed)
   const handleCloseCreateModal = () => {
     setShowCreateModal(false);
     setCreateTargetLineIndex(null);
@@ -731,39 +694,6 @@ export const JournalVoucherForm: React.FC = () => {
     setCreateAccountCode('');
   };
 
-  // Apply Educational Template
-  const handleApplyTemplate = (tmpl: (typeof EDUCATIONAL_TEMPLATES)[0]) => {
-    const newLines: VoucherLine[] = [];
-
-    tmpl.exampleLines.forEach((ex, idx) => {
-      const matched =
-        allAccounts.find(
-          (a) =>
-            a.category === ex.category &&
-            a.name.toLowerCase().includes(ex.nameQuery.toLowerCase())
-        ) ||
-        allAccounts.find((a) => a.category === ex.category) ||
-        null;
-
-      newLines.push({
-        id: `line-${Date.now()}-${idx}`,
-        accountId: matched ? matched.id : '',
-        account: matched,
-        debit: ex.isDebit ? ex.amount : 0,
-        credit: !ex.isDebit ? ex.amount : 0,
-        memo: '',
-      });
-    });
-
-    setLines(newLines);
-    if (!mainNarration) {
-      setMainNarration(tmpl.narration);
-    }
-    setShowTemplateModal(false);
-    notification.success(`Loaded template: ${tmpl.title}`);
-  };
-
-  // Quick Account Creation
   const handleQuickCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createAccountName.trim()) return;
@@ -794,781 +724,912 @@ export const JournalVoucherForm: React.FC = () => {
       }
 
       handleCloseCreateModal();
-      notification.success(`Created ledger account '${createdAcc.name}'`);
+      notification.success(`Created account '${createdAcc.name}'`);
     } catch (err: any) {
-      notification.error(err.response?.data?.message || 'Failed to create ledger');
+      notification.error(err.response?.data?.message || 'Failed to create account');
     }
   };
 
-  // Auto-focus account name input when Quick Create modal opens
-  useEffect(() => {
-    let timer: any = null;
-    if (showCreateModal) {
-      timer = setTimeout(() => {
-        createNameInputRef.current?.focus();
-      }, 50);
-    }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [showCreateModal]);
+  // Apply Educational Template
+  const handleApplyTemplate = (tmpl: (typeof EDUCATIONAL_TEMPLATES)[0]) => {
+    const newLines: VoucherLine[] = [];
 
-  // Escape key and scroll lock for modals
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (showCreateModal) handleCloseCreateModal();
-        if (showTemplateModal) setShowTemplateModal(false);
+    tmpl.exampleLines.forEach((ex, idx) => {
+      const matched =
+        allAccounts.find(
+          (a) =>
+            a.category === ex.category &&
+            a.name.toLowerCase().includes(ex.nameQuery.toLowerCase())
+        ) ||
+        allAccounts.find((a) => a.category === ex.category) ||
+        null;
+
+      newLines.push({
+        id: `line-${Date.now()}-${idx}`,
+        accountId: matched ? matched.id : '',
+        account: matched,
+        description: '',
+        contactId: '',
+        debit: ex.isDebit ? ex.amount : '',
+        credit: !ex.isDebit ? ex.amount : '',
+      });
+    });
+
+    setLines(newLines);
+    if (!notes) {
+      setNotes(tmpl.narration);
+    }
+    setShowTemplateModal(false);
+    notification.success(`Loaded template: ${tmpl.title}`);
+  };
+
+  // Attachments Handling
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newFiles = Array.from(files);
+    if (attachments.length + newFiles.length > 5) {
+      notification.warning('You can attach a maximum of 5 files.');
+      return;
+    }
+
+    for (const f of newFiles) {
+      if (f.size > 10 * 1024 * 1024) {
+        notification.error(`File "${f.name}" exceeds the 10MB limit.`);
+        return;
       }
-    };
-
-    if (showCreateModal || showTemplateModal) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
     }
 
-    return () => {
-      document.body.style.overflow = 'unset';
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showCreateModal, showTemplateModal]);
+    setAttachments((prev) => [...prev, ...newFiles]);
+  };
 
-  // Submit Mutation
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // Validation function with clear, actionable toast feedback
+  const getValidationError = useCallback((): string | null => {
+    if (isRecurring && !profileName.trim()) {
+      return 'Profile Name is required for recurring journals.';
+    }
+    if (!voucherDate) {
+      return 'Date is required.';
+    }
+    if (!notes.trim()) {
+      return 'Notes are required.';
+    }
+    if (notes.length > 500) {
+      return 'Notes must be within 500 characters.';
+    }
+    if (lines.length < 2) {
+      return 'At least two journal lines are required.';
+    }
+
+    const missingAccIdx = lines.findIndex((l) => !l.accountId);
+    if (missingAccIdx !== -1) {
+      return `Please select an account for line ${missingAccIdx + 1}.`;
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      const dr = Number(l.debit) || 0;
+      const cr = Number(l.credit) || 0;
+      if (dr <= 0 && cr <= 0) {
+        return `Line ${i + 1} has zero debit and credit. Enter a debit or credit amount.`;
+      }
+      if (dr > 0 && cr > 0) {
+        return `Line ${i + 1} cannot have both debit and credit amounts greater than zero.`;
+      }
+    }
+
+    if (totalDebit <= 0 || totalCredit <= 0) {
+      return 'Journal total debits and credits must be greater than zero.';
+    }
+
+    if (!isBalanced) {
+      return `The journal is out of balance by ${formatINR(difference)}. Total debits must equal total credits.`;
+    }
+
+    return null;
+  }, [isRecurring, profileName, voucherDate, notes, lines, totalDebit, totalCredit, isBalanced, difference]);
+
+  // Save / Publish Mutation
   const postMutation = useMutation({
     mutationFn: async () => {
       const payload = {
         date: voucherDate,
-        reference: referenceNo.trim() || undefined,
-        description: mainNarration.trim(),
-        lines: lines.map((l) => ({
-          accountId: l.accountId,
-          debit: Number(l.debit) || 0,
-          credit: Number(l.credit) || 0,
-          description: l.memo.trim() || undefined,
-        })),
+        reference: referenceNo.trim() || `JN-${journalNumber}`.trim(),
+        description: notes.trim(),
+        lines: lines.map((l) => {
+          const contact = contactOptions.find((c) => c.id === l.contactId);
+          const memo = l.description.trim();
+          const lineDesc = contact
+            ? `[${contact.type}: ${contact.name}] ${memo}`.trim()
+            : memo || undefined;
+
+          return {
+            accountId: l.accountId,
+            debit: Number(l.debit) || 0,
+            credit: Number(l.credit) || 0,
+            description: lineDesc,
+          };
+        }),
       };
 
-      const res = await api.post('/journal-entries', payload);
-      return res;
+      return api.post('/journal-entries', payload);
     },
     onSuccess: async () => {
-      notification.success('Journal Voucher posted successfully to General Ledger!');
+      const draftId = searchParams.get('draftId');
+      const companyId = useSessionStore.getState().user?.companyId;
+      if (draftId && companyId) {
+        try {
+          const storageKey = `billaura_manual_journal_drafts_${companyId}`;
+          const raw = localStorage.getItem(storageKey);
+          if (raw) {
+            const list = JSON.parse(raw);
+            localStorage.setItem(storageKey, JSON.stringify(list.filter((d: any) => d.id !== draftId)));
+          }
+        } catch {}
+      }
+
+      notification.success('Manual journal published successfully to General Ledger!');
       await erpInvalidate.journalEntry(queryClient);
+      await queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      await queryClient.invalidateQueries({ queryKey: ['accounts-lookup-full'] });
       navigate('/journal-entries');
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.message || err.message || 'Failed to post voucher';
+      const msg = err.response?.data?.message || err.message || 'Failed to publish manual journal';
       notification.error(msg);
     },
   });
 
-  // Deterministic validation function returning either null (valid) or the exact error toast message
-  const getValidationError = useCallback((): string | null => {
-    if (!voucherDate) {
-      return 'Voucher date is required.';
-    }
-
-    if (lines.length < 2) {
-      return 'Add at least two journal lines with valid ledger accounts.';
-    }
-
-    // Check if all lines are missing accounts
-    const noAccountCount = lines.filter((l) => !l.accountId).length;
-    if (noAccountCount === lines.length) {
-      return 'Add at least two journal lines with valid ledger accounts.';
-    }
-
-    // Check if any specific line is missing an account
-    const missingAccIdx = lines.findIndex((l) => !l.accountId);
-    if (missingAccIdx !== -1) {
-      return 'Select a ledger account for all journal lines.';
-    }
-
-    // Validate line amounts
-    for (let i = 0; i < lines.length; i++) {
-      const l = lines[i];
-      const d = Number(l.debit);
-      const c = Number(l.credit);
-
-      if (isNaN(d) || isNaN(c)) {
-        return 'Please enter a valid amount.';
+  // Handle Save and Publish vs Save as Draft
+  const handleSave = (asDraft = false) => {
+    if (asDraft) {
+      if (!voucherDate) {
+        notification.error('Please enter a date for the draft journal.');
+        return;
       }
-      if (d < 0 || c < 0) {
-        return 'Negative amounts are not permitted. Please enter a valid amount.';
+      const companyId = useSessionStore.getState().user?.companyId;
+      if (!companyId) {
+        notification.error('Company context is required to save drafts.');
+        return;
       }
-      if (d > 0 && c > 0) {
-        return `Journal line ${i + 1} cannot have both a debit and a credit amount.`;
+
+      const draftId = searchParams.get('draftId') || `draft-${Date.now()}`;
+      const draftData = {
+        id: draftId,
+        status: 'DRAFT',
+        date: voucherDate,
+        reverseDate,
+        publishReverseOnlyOnDate,
+        journalNo: journalNumber,
+        reference: referenceNo,
+        notes: notes.trim(),
+        description: notes.trim(),
+        reportingMethod,
+        currency,
+        lines: lines.map((l) => ({
+          id: l.id,
+          accountId: l.accountId,
+          account: l.account ? { id: l.account.id, name: l.account.name, code: l.account.code } : null,
+          description: l.description,
+          contactId: l.contactId,
+          debit: Number(l.debit) || 0,
+          credit: Number(l.credit) || 0,
+        })),
+        createdAt: new Date().toISOString(),
+      };
+
+      try {
+        const storageKey = `billaura_manual_journal_drafts_${companyId}`;
+        const raw = localStorage.getItem(storageKey);
+        const existing = raw ? JSON.parse(raw) : [];
+        const filtered = existing.filter((d: any) => d.id !== draftId);
+        localStorage.setItem(storageKey, JSON.stringify([draftData, ...filtered]));
+        notification.success('Journal saved as draft. General Ledger remains unaffected.');
+        navigate('/journal-entries');
+      } catch {
+        notification.error('Failed to save draft locally.');
       }
-      if (d === 0 && c === 0) {
-        return `Enter an amount for journal line ${i + 1}.`;
-      }
-    }
-
-    const hasDebit = lines.some((l) => (Number(l.debit) || 0) > 0);
-    const hasCredit = lines.some((l) => (Number(l.credit) || 0) > 0);
-    if (!hasDebit || !hasCredit) {
-      return 'A journal voucher must have at least one debit entry and one credit entry.';
-    }
-
-    // Integer paise comparison for absolute floating precision safety
-    const totalDebitPaise = Math.round(lines.reduce((s, l) => s + (Number(l.debit) || 0) * 100, 0));
-    const totalCreditPaise = Math.round(lines.reduce((s, l) => s + (Number(l.credit) || 0) * 100, 0));
-
-    if (totalDebitPaise <= 0 || totalCreditPaise <= 0) {
-      return 'Voucher must have non-zero debit and credit amounts.';
-    }
-
-    if (totalDebitPaise !== totalCreditPaise) {
-      const diff = Math.abs(totalDebitPaise - totalCreditPaise) / 100;
-      if (totalCreditPaise === 0) {
-        return `Voucher is unbalanced by ${formatINR(diff)}. Add the corresponding credit entry before posting.`;
-      }
-      return `Voucher is unbalanced by ${formatINR(diff)}. Debit and credit must be equal.`;
-    }
-
-    if (!mainNarration.trim()) {
-      return 'Narration is required.';
-    }
-
-    return null;
-  }, [voucherDate, lines, mainNarration]);
-
-  const currentValidationError = getValidationError();
-  const isFormFullyValid = currentValidationError === null;
-  const disabledReason = currentValidationError || '';
-
-  // Unified submission handler used by BOTH Top and Bottom Save & Post buttons
-  const handleSaveAndPost = () => {
-    // Prevent duplicate submission while mutation in flight
-    if (postMutation.isPending) return;
-
-    const errorMsg = getValidationError();
-    if (errorMsg) {
-      notification.error(errorMsg);
       return;
     }
 
+    // Publish flow
+    const error = getValidationError();
+    if (error) {
+      notification.error(error);
+      return;
+    }
     postMutation.mutate();
   };
 
-  // Hotkey listener (Alt+A to add row)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'a' || e.key === 'A')) {
-        e.preventDefault();
-        handleAddLine();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleAddLine]);
-
   return (
-    <PageLayout className="w-full h-auto space-y-4 pb-12">
-      {/* ── STANDARD BILL AURA PAGE HEADER ───────────────────────────── */}
-      <PageHeader
-        title="Journal Voucher"
-        description="Record and post double-entry general journal vouchers"
-        backTo="/journal-entries"
-        secondaryAction={
-          <Button
+    <div className="h-full w-full bg-white text-[#333] flex flex-col font-sans select-none overflow-hidden">
+      {/* 1. Header Bar (Full width, bottom border) */}
+      <div className="bg-white border-b border-[#e5e7eb] px-6 py-3 flex items-center justify-between shrink-0 z-10">
+        <h1 className="text-xl font-semibold text-[#1e2540] tracking-tight">
+          {isRecurring ? 'New Recurring Journal' : 'New Journal'}
+        </h1>
+
+        <div className="flex items-center gap-4">
+          <button
             type="button"
-            variant="secondary"
             onClick={() => setShowTemplateModal(true)}
+            className="text-xs text-[#408dfb] hover:underline cursor-pointer font-medium flex items-center gap-1.5"
           >
-            <BookOpen className="w-4 h-4 mr-1.5" />
-            Standard Templates
-          </Button>
-        }
-        primaryAction={
-          <Button
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Choose Template</span>
+          </button>
+          <button
             type="button"
-            variant="primary"
-            disabled={postMutation.isPending}
-            title={isFormFullyValid ? 'Save and post double-entry voucher to General Ledger' : disabledReason}
-            onClick={handleSaveAndPost}
-            className={!isFormFullyValid ? 'opacity-90 hover:opacity-100' : 'shadow-md'}
+            onClick={() => navigate('/journal-entries')}
+            className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+            title="Close"
           >
-            <Save className="w-4 h-4 mr-1.5" />
-            {postMutation.isPending ? 'Posting...' : 'Save & Post Voucher'}
-          </Button>
-        }
-      />
-
-      {/* ── VOUCHER DETAILS CARD ─────────────────────────────────────── */}
-      <div className="bg-white dark:bg-[#1E1C26] border border-border rounded-xl p-4 shadow-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-              Voucher Date <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              required
-              value={voucherDate}
-              onChange={(e) => setVoucherDate(e.target.value)}
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-foreground focus:outline-none focus:border-accent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-              Voucher No / Reference
-            </label>
-            <input
-              type="text"
-              placeholder="Auto: JV-YYYY-00001"
-              value={referenceNo}
-              onChange={(e) => setReferenceNo(e.target.value)}
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-accent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-              Voucher Scope
-            </label>
-            <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border border-border/80 rounded-lg text-xs font-medium text-foreground">
-              <span className="w-2 h-2 rounded-full bg-accent" />
-              <span>General Journal (Double-Entry Direct Adjustment)</span>
-            </div>
-          </div>
+            <X className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      {/* ── ACCOUNT PARTICULARS & JOURNAL GRID (DOMINANT WORKSPACE) ──── */}
-      <div className="bg-white dark:bg-[#1E1C26] border border-border rounded-xl shadow-xs w-full h-auto">
-        <div className="p-3.5 border-b border-border flex items-center justify-between bg-muted/20">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
-            Account Particulars & Entry Lines
-          </h2>
-          <span className="text-xs text-muted-foreground hidden sm:inline">
-            Press <kbd className="px-1.5 py-0.5 bg-background border border-border rounded text-[10px] font-mono">Alt + A</kbd> to add row
-          </span>
+      {/* 2. Scrollable Body: Left-aligned, no mx-auto, no card wrapper */}
+      <div className="flex-1 overflow-y-auto pl-6 pr-6 pt-6 pb-20">
+        {/* Recurring Profile Section (if recurring mode) */}
+        {isRecurring && (
+          <div className="mb-6 p-4 bg-[#f9f9fb] border border-[#e5e7eb] rounded-[4px] max-w-[900px] space-y-4">
+            <div className="text-xs font-semibold text-blue-900 uppercase tracking-wider flex items-center gap-2">
+              <Repeat className="w-4 h-4 text-[#408dfb]" /> Recurring Profile
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+              <div>
+                <label className="block text-[#333] mb-1 font-medium">
+                  Profile Name <span className="text-[#e54545]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="e.g. Monthly Rent Accrual"
+                  className="w-full h-[36px] px-3 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[#333] mb-1 font-medium">
+                  Repeat Every <span className="text-[#e54545]">*</span>
+                </label>
+                <select
+                  value={repeatEvery}
+                  onChange={(e) => setRepeatEvery(e.target.value)}
+                  className="w-full h-[36px] px-3 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none cursor-pointer"
+                >
+                  <option value="Week">Week</option>
+                  <option value="2 Weeks">2 Weeks</option>
+                  <option value="Month">Month</option>
+                  <option value="2 Months">2 Months</option>
+                  <option value="3 Months">3 Months</option>
+                  <option value="6 Months">6 Months</option>
+                  <option value="Year">Year</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[#333] mb-1 font-medium">Starts On</label>
+                <input
+                  type="date"
+                  value={startsOn}
+                  onChange={(e) => setStartsOn(e.target.value)}
+                  className="w-full h-[36px] px-3 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[#333] font-medium">Ends On</label>
+                  <label className="inline-flex items-center gap-1 text-[11px] text-gray-500 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={neverExpires}
+                      onChange={(e) => setNeverExpires(e.target.checked)}
+                      className="rounded text-[#408dfb]"
+                    />
+                    Never Expires
+                  </label>
+                </div>
+                <input
+                  type="date"
+                  disabled={neverExpires}
+                  value={endsOn}
+                  onChange={(e) => setEndsOn(e.target.value)}
+                  className="w-full h-[36px] px-3 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] disabled:bg-gray-100 disabled:text-gray-400 focus:border-[#408dfb] outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2A. Top Fields Section (Stacked, Left-aligned, Label-Left / Input-Right) */}
+        <div className="space-y-4 max-w-[660px]">
+          {/* 1. Date* */}
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+            <label className="w-[160px] shrink-0 text-[13px] text-[#333] font-normal">
+              Date <span className="text-[#e54545]">*</span>
+            </label>
+            <div className="w-full max-w-[480px]">
+              <input
+                type="date"
+                value={voucherDate}
+                onChange={(e) => setVoucherDate(e.target.value)}
+                className="w-full h-[36px] px-3 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* 2. Reverse Journal Date */}
+          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-4">
+            <label className="w-[160px] shrink-0 text-[13px] text-[#333] font-normal pt-2">
+              Reverse Journal Date
+            </label>
+            <div className="w-full max-w-[480px] space-y-1.5">
+              <input
+                type="date"
+                value={reverseDate}
+                onChange={(e) => setReverseDate(e.target.value)}
+                placeholder="dd/MM/yyyy"
+                className="w-full h-[36px] px-3 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none transition-colors"
+              />
+              <label className="flex items-center gap-1.5 text-[12px] text-[#666] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={publishReverseOnlyOnDate}
+                  onChange={(e) => setPublishReverseOnlyOnDate(e.target.checked)}
+                  className="rounded border-[#d9dce3] text-[#408dfb] focus:ring-0"
+                />
+                <span>Publish reverse journal only on the reverse journal date</span>
+                <span title="The reverse journal will be posted automatically on the specified date">
+                  <HelpCircle className="w-3.5 h-3.5 text-[#999]" />
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* 3. Journal#* */}
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+            <label className="w-[160px] shrink-0 text-[13px] text-[#333] font-normal">
+              Journal# <span className="text-[#e54545]">*</span>
+            </label>
+            <div className="w-full max-w-[480px] relative flex items-center">
+              <input
+                type="text"
+                value={journalNumber}
+                onChange={(e) => setJournalNumber(e.target.value)}
+                className="w-full h-[36px] pl-3 pr-9 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const val = prompt('Set Journal Number Series / Prefix:', journalNumber);
+                  if (val) setJournalNumber(val.trim());
+                }}
+                className="absolute right-2 text-gray-400 hover:text-[#408dfb] p-1 cursor-pointer"
+                title="Configure auto-number series"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* 4. Reference# */}
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+            <label className="w-[160px] shrink-0 text-[13px] text-[#333] font-normal">
+              Reference#
+            </label>
+            <div className="w-full max-w-[480px]">
+              <input
+                type="text"
+                value={referenceNo}
+                onChange={(e) => setReferenceNo(e.target.value)}
+                className="w-full h-[36px] px-3 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* 5. Notes* */}
+          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-4">
+            <label className="w-[160px] shrink-0 text-[13px] text-[#333] font-normal pt-2">
+              Notes <span className="text-[#e54545]">*</span>
+            </label>
+            <div className="w-full max-w-[480px] space-y-1">
+              <textarea
+                rows={3}
+                maxLength={500}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Max. 500 characters"
+                className="w-full px-3 py-2 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none resize-y transition-colors"
+              />
+              <div className="text-right text-[11px] text-[#999]">
+                {notes.length} / 500 characters
+              </div>
+            </div>
+          </div>
+
+          {/* 6. Reporting Method */}
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+            <label className="w-[160px] shrink-0 text-[13px] text-[#333] font-normal flex items-center gap-1">
+              <span>Reporting Method</span>
+              <span title="Select how this journal impacts accrual vs cash accounting reports">
+                <HelpCircle className="w-3.5 h-3.5 text-[#999]" />
+              </span>
+            </label>
+            <div className="w-full max-w-[480px] flex items-center gap-5 text-[13px] text-[#333]">
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="reportingMethod"
+                  value="both"
+                  checked={reportingMethod === 'both'}
+                  onChange={() => setReportingMethod('both')}
+                  className="text-[#408dfb] focus:ring-0 cursor-pointer"
+                />
+                <span>Accrual and Cash</span>
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="reportingMethod"
+                  value="accrual"
+                  checked={reportingMethod === 'accrual'}
+                  onChange={() => setReportingMethod('accrual')}
+                  className="text-[#408dfb] focus:ring-0 cursor-pointer"
+                />
+                <span>Accrual Only</span>
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="reportingMethod"
+                  value="cash"
+                  checked={reportingMethod === 'cash'}
+                  onChange={() => setReportingMethod('cash')}
+                  className="text-[#408dfb] focus:ring-0 cursor-pointer"
+                />
+                <span>Cash Only</span>
+              </label>
+            </div>
+          </div>
+
+          {/* 7. Currency */}
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+            <label className="w-[160px] shrink-0 text-[13px] text-[#333] font-normal">
+              Currency
+            </label>
+            <div className="w-full max-w-[480px]">
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-full h-[36px] px-3 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none transition-colors cursor-pointer"
+              >
+                <option value="INR">INR - Indian Rupee</option>
+                <option value="USD">USD - US Dollar</option>
+                <option value="EUR">EUR - Euro</option>
+                <option value="GBP">GBP - British Pound</option>
+                <option value="AED">AED - UAE Dirham</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        <div className="w-full h-auto overflow-x-auto overflow-y-visible">
-          <table className="w-full text-left border-collapse h-auto">
-            <thead>
-              <tr className="bg-[#34303F] text-white text-xs select-none">
-                <th className="py-2.5 px-3 w-16 text-center font-semibold">By / To</th>
-                <th className="py-2.5 px-4 font-semibold w-5/12">Account Particulars (Ledger)</th>
-                <th className="py-2.5 px-4 w-44 text-right font-semibold">Debit (Dr ₹)</th>
-                <th className="py-2.5 px-4 w-44 text-right font-semibold">Credit (Cr ₹)</th>
-                <th className="py-2.5 px-4 font-semibold hidden md:table-cell">Line Memo</th>
-                <th className="py-2.5 px-3 w-12 text-center font-semibold"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border text-xs h-auto">
-              {lines.map((line, index) => {
-                const isDebitSide = (Number(line.debit) || 0) > 0;
-                const isCreditSide = (Number(line.credit) || 0) > 0;
-                const byToLabel = isDebitSide
-                  ? 'By (Dr)'
-                  : isCreditSide
-                  ? 'To (Cr)'
-                  : index === 0
-                  ? 'By (Dr)'
-                  : 'To (Cr)';
-                const categoryMeta = line.account ? CATEGORY_META[line.account.category] : null;
-
-                return (
-                  <tr key={line.id} className="hover:bg-muted/20 transition-colors">
-                    {/* By / To Column */}
-                    <td className="py-3 px-3 text-center align-top">
-                      <span
-                        className={`inline-block px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider border ${
-                          isDebitSide
-                            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
-                            : isCreditSide
-                            ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
-                            : 'bg-muted text-muted-foreground border-border'
-                        }`}
-                      >
-                        {byToLabel}
-                      </span>
-                    </td>
-
-                    {/* Account Particulars Column */}
-                    <td className="py-3 px-4 align-top">
+        {/* 2B. Journal Lines Table (Left-aligned, max-w-[900px], mt-8) */}
+        <div className="mt-8 max-w-[900px] w-full">
+          <div className="overflow-x-auto w-full border-t border-b border-[#e5e7eb]">
+            <table className="w-full text-left border-collapse text-[13px] table-fixed">
+              <thead className="bg-[#f9f9fb] text-[#666] text-[11px] font-semibold uppercase tracking-wider border-b border-[#e5e7eb]">
+                <tr>
+                  <th style={{ width: '30%' }} className="py-2.5 px-3 border-r border-[#e5e7eb]">ACCOUNT *</th>
+                  <th style={{ width: '28%' }} className="py-2.5 px-3 border-r border-[#e5e7eb]">DESCRIPTION</th>
+                  <th style={{ width: '18%' }} className="py-2.5 px-3 border-r border-[#e5e7eb]">CONTACT</th>
+                  <th style={{ width: '12%' }} className="py-2.5 px-3 text-right border-r border-[#e5e7eb]">DEBITS</th>
+                  <th style={{ width: '12%' }} className="py-2.5 px-3 text-right border-r border-[#e5e7eb]">CREDITS</th>
+                  <th style={{ width: '32px' }} className="py-2.5 px-1 text-center"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e5e7eb]">
+                {lines.map((line, idx) => (
+                  <tr key={line.id} className="group hover:bg-[#fafafa] transition-colors h-[44px]">
+                    {/* Account Selector (30%) */}
+                    <td className="p-0 border-r border-[#e5e7eb] relative">
                       <button
                         ref={(el) => {
-                          triggerRefs.current[index] = el;
+                          triggerRefs.current[idx] = el;
                         }}
                         type="button"
-                        onClick={() => setActiveSelectorIndex(index)}
-                        className={`w-full text-left px-3 py-2 bg-background border rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                          line.account
-                            ? 'border-border hover:border-accent'
-                            : 'border-dashed border-border hover:border-accent text-muted-foreground'
+                        onClick={() => setActiveSelectorIndex(idx)}
+                        className={`w-full h-[44px] px-3 text-left text-[13px] flex items-center justify-between cursor-pointer border-0 outline-none ${
+                          line.account ? 'text-[#333]' : 'text-gray-400'
                         }`}
                       >
-                        {line.account ? (
-                          <div className="flex-1 min-w-0 pr-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-foreground truncate">
-                                {line.account.name}
-                              </span>
-                              {line.account.code && (
-                                <span className="text-[10px] font-mono px-1.5 py-0.2 bg-muted text-muted-foreground rounded">
-                                  {line.account.code}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5 truncate flex items-center gap-2">
-                              <span>{line.account.parent?.name || categoryMeta?.label} · {categoryMeta?.label}</span>
-                              {line.account.balance !== undefined && (
-                                <span>
-                                  · Balance: <strong>{formatINR(Math.abs(line.account.balance))}</strong>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">Select Ledger Account...</span>
-                        )}
-                        <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span className="truncate">
+                          {line.account ? line.account.name : 'Select an account'}
+                        </span>
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0 ml-1" />
                       </button>
                     </td>
 
-                    {/* Debit Column */}
-                    <td className="py-3 px-4 align-top">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={line.debit || ''}
-                        onChange={(e) => handleDebitChange(index, parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-right font-mono font-bold text-xs text-foreground focus:outline-none focus:border-accent"
-                      />
-                    </td>
-
-                    {/* Credit Column */}
-                    <td className="py-3 px-4 align-top">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={line.credit || ''}
-                        onChange={(e) => handleCreditChange(index, parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-right font-mono font-bold text-xs text-foreground focus:outline-none focus:border-accent"
-                      />
-                    </td>
-
-                    {/* Line Memo Column */}
-                    <td className="py-3 px-4 align-top hidden md:table-cell">
+                    {/* Description (28%) */}
+                    <td className="p-0 border-r border-[#e5e7eb]">
                       <input
                         type="text"
-                        placeholder="Optional memo..."
-                        value={line.memo}
+                        value={line.description}
                         onChange={(e) => {
                           const val = e.target.value;
                           setLines((prev) => {
                             const next = [...prev];
-                            next[index] = { ...next[index], memo: val };
+                            next[idx] = { ...next[idx], description: val };
                             return next;
                           });
                         }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent"
+                        placeholder="Description"
+                        className="w-full h-[44px] px-3 bg-transparent border-0 outline-none text-[13px] text-[#333] placeholder:text-gray-400"
                       />
                     </td>
 
-                    {/* Delete Column */}
-                    <td className="py-3 px-3 text-center align-top">
+                    {/* Contact Selector (18%) */}
+                    <td className="p-0 border-r border-[#e5e7eb]">
+                      <select
+                        value={line.contactId || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLines((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], contactId: val };
+                            return next;
+                          });
+                        }}
+                        disabled={customersLoading || vendorsLoading}
+                        className="w-full h-[44px] px-3 bg-transparent border-0 outline-none text-[13px] text-[#333] cursor-pointer"
+                      >
+                        <option value="">Select Contact</option>
+                        {contactOptions.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* Debits (12%) */}
+                    <td className="p-0 border-r border-[#e5e7eb]">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={line.debit}
+                        onChange={(e) => handleDebitChange(idx, e.target.value)}
+                        placeholder=""
+                        className="w-full h-[44px] px-3 bg-transparent border-0 outline-none text-[13px] text-right tabular-nums text-[#333]"
+                      />
+                    </td>
+
+                    {/* Credits (12%) */}
+                    <td className="p-0 border-r border-[#e5e7eb]">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={line.credit}
+                        onChange={(e) => handleCreditChange(idx, e.target.value)}
+                        placeholder=""
+                        className="w-full h-[44px] px-3 bg-transparent border-0 outline-none text-[13px] text-right tabular-nums text-[#333]"
+                      />
+                    </td>
+
+                    {/* Delete Row Action (Far right, appears on row hover) */}
+                    <td className="p-0 text-center">
                       <button
                         type="button"
-                        onClick={() => handleRemoveLine(index)}
+                        onClick={() => handleRemoveRow(idx)}
                         disabled={lines.length <= 2}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
-                        title="Delete Row"
+                        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-[#e54545] disabled:opacity-0 p-1 cursor-pointer transition-opacity"
+                        title={lines.length <= 2 ? 'At least two lines required' : 'Delete row'}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Add Line Strip */}
-        <div className="p-3 border-t border-border flex items-center justify-between bg-muted/10">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleAddLine}
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" /> Add Journal Line
-          </Button>
-
-          <span className="text-xs text-muted-foreground font-medium">
-            {lines.length} lines in voucher
-          </span>
-        </div>
-
-        {/* ── LIVE BALANCE SUMMARY BAR ───────────────────────────────── */}
-        <div className="p-4 bg-muted/30 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-6 text-xs font-mono">
-            <div>
-              <span className="text-muted-foreground text-[10px] uppercase font-bold block">
-                Total Debit (Dr)
-              </span>
-              <span className="text-sm font-black text-blue-600 dark:text-blue-400">
-                {formatINR(totalDebit)}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-muted-foreground text-[10px] uppercase font-bold block">
-                Total Credit (Cr)
-              </span>
-              <span className="text-sm font-black text-purple-600 dark:text-purple-400">
-                {formatINR(totalCredit)}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-muted-foreground text-[10px] uppercase font-bold block">
-                Difference
-              </span>
-              <span
-                className={`text-sm font-black ${
-                  difference === 0 ? 'text-emerald-500' : 'text-red-500'
-                }`}
-              >
-                {formatINR(difference)}
-              </span>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          <div>
-            {isBalanced ? (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>Voucher Balanced ({formatINR(totalDebit)})</span>
-              </div>
-            ) : totalDebit > 0 || totalCredit > 0 ? (
-              <div className="inline-flex flex-col sm:items-end gap-1">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>Unbalanced by {formatINR(difference)}</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground font-medium">
-                  Debits must equal credits before posting
-                </span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground border border-border text-xs font-medium">
-                <span>Enter line debit and credit amounts</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── NARRATION / PARTICULARS ──────────────────────────────────── */}
-      <div className="bg-white dark:bg-[#1E1C26] border border-border rounded-xl p-4 shadow-xs">
-        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-          Narration / Particulars <span className="text-red-500">*</span>
-        </label>
-        <div className="relative">
-          <textarea
-            rows={2}
-            required
-            placeholder="Explain why this transaction was recorded (e.g. Being office furniture purchased for administrative use paid via bank transfer)"
-            value={mainNarration}
-            onChange={(e) => setMainNarration(e.target.value)}
-            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-accent"
-          />
-          {!mainNarration && (
+          {/* "+ Add New Row" Pill Button (Below table, left-aligned) */}
+          <div className="mt-3">
             <button
               type="button"
-              onClick={() => setMainNarration('Being ')}
-              className="absolute right-3 bottom-3 text-[10px] font-bold text-accent hover:underline bg-background/80 px-2 py-0.5 rounded border border-border cursor-pointer"
+              onClick={handleAddRow}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#eef4ff] text-[#408dfb] rounded-[4px] text-[12px] font-medium hover:bg-blue-100/70 transition-colors cursor-pointer"
             >
-              Insert "Being ..."
+              <Plus className="w-3.5 h-3.5 text-[#408dfb]" />
+              <span>Add New Row</span>
             </button>
-          )}
+          </div>
+
+          {/* 2C. Totals Box (Aligned to the RIGHT end of the max-w-[900px] table container) */}
+          <div className="flex justify-end mt-4">
+            <div className="w-[420px] bg-[#f9f9fb] rounded-[6px] px-5 py-4 space-y-2.5 border border-[#e5e7eb]/60">
+              {/* Sub Total */}
+              <div className="flex justify-between items-center text-[13px] text-[#555]">
+                <span className="font-medium">Sub Total</span>
+                <div className="flex gap-6 tabular-nums text-[13px] text-[#333]">
+                  <span className="w-24 text-right">{formatINR(totalDebit, true)}</span>
+                  <span className="w-24 text-right">{formatINR(totalCredit, true)}</span>
+                </div>
+              </div>
+
+              {/* Total (₹) */}
+              <div className="flex justify-between items-center text-[15px] font-bold text-[#1e2540] pt-2 border-t border-[#e5e7eb]">
+                <span>Total ({currency === 'INR' ? '₹' : currency})</span>
+                <div className="flex gap-6 tabular-nums text-[15px]">
+                  <span className="w-24 text-right">{formatINR(totalDebit, true)}</span>
+                  <span className="w-24 text-right">{formatINR(totalCredit, true)}</span>
+                </div>
+              </div>
+
+              {/* Difference */}
+              <div className="flex justify-between items-center text-[13px] text-[#e54545] pt-2 border-t border-[#e5e7eb]">
+                <span className="font-medium">Difference</span>
+                <div className="w-24 text-right tabular-nums text-[13px] font-medium">
+                  {difference > 0 ? formatINR(difference, true) : '0.00'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2D. Attachments (Below table section, left-aligned) */}
+          <div className="mt-8">
+            <label className="block text-[13px] text-[#333] font-medium mb-2">
+              Attachments
+            </label>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              multiple
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-dashed border-[#cbd5e1] hover:border-[#408dfb] text-[#333] rounded-[4px] text-[12px] font-medium cursor-pointer transition-colors shadow-2xs"
+            >
+              <Upload className="w-3.5 h-3.5 text-[#666]" />
+              <span>Upload File</span>
+              <ChevronDown className="w-3 h-3 text-[#666]" />
+            </button>
+
+            <div className="text-[11px] text-[#999] mt-1.5">
+              You can upload a maximum of 5 files, 10MB each
+            </div>
+
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-3">
+                {attachments.map((file, idx) => (
+                  <div
+                    key={`${file.name}-${idx}`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#f9f9fb] border border-[#e5e7eb] rounded-[4px] text-xs text-[#333]"
+                  >
+                    <Paperclip className="w-3.5 h-3.5 text-[#408dfb]" />
+                    <span className="truncate max-w-[180px] font-medium">{file.name}</span>
+                    <span className="text-[10px] text-gray-500">
+                      ({(file.size / (1024 * 1024)).toFixed(1)} MB)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(idx)}
+                      className="text-gray-400 hover:text-[#e54545] p-0.5 cursor-pointer ml-1"
+                      title="Remove file"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── COMPACT ACCOUNTING IMPACT STRIP ──────────────────────────── */}
-      <div className="bg-white dark:bg-[#1E1C26] border border-border rounded-xl p-4 shadow-xs">
-        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
-          <span>Accounting Impact Telemetry</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3 bg-background border border-border/80 rounded-lg">
-            <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground mb-1">
-              <span>Profit & Loss</span>
-              <Receipt className="w-3.5 h-3.5" />
-            </div>
-            {accountingImpact.pnlImpact === 0 ? (
-              <span className="text-xs font-bold text-muted-foreground">
-                ₹0.00 · Pure Balance Sheet Movement
-              </span>
-            ) : accountingImpact.pnlImpact < 0 ? (
-              <span className="text-xs font-bold text-rose-500">
-                Reduces Profit by {formatINR(Math.abs(accountingImpact.pnlImpact))}
-              </span>
-            ) : (
-              <span className="text-xs font-bold text-emerald-500">
-                Increases Profit by {formatINR(accountingImpact.pnlImpact)}
-              </span>
-            )}
-          </div>
-
-          <div className="p-3 bg-background border border-border/80 rounded-lg">
-            <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground mb-1">
-              <span>Balance Sheet Position</span>
-              <Building2 className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-xs font-bold text-foreground">
-              Assets: {formatINR(accountingImpact.assetChange)}
-            </span>
-          </div>
-
-          <div className="p-3 bg-background border border-border/80 rounded-lg">
-            <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground mb-1">
-              <span>Cash / Bank Liquidity</span>
-              <Wallet className="w-3.5 h-3.5" />
-            </div>
-            {accountingImpact.cashBankChange === 0 ? (
-              <span className="text-xs font-bold text-muted-foreground">
-                No Cash/Bank Movement
-              </span>
-            ) : accountingImpact.cashBankChange > 0 ? (
-              <span className="text-xs font-bold text-emerald-500">
-                +{formatINR(accountingImpact.cashBankChange)} Liquid Inflow
-              </span>
-            ) : (
-              <span className="text-xs font-bold text-amber-500">
-                -{formatINR(Math.abs(accountingImpact.cashBankChange))} Liquid Outflow
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── FOOTER ACTIONS ───────────────────────────────────────────── */}
-      <div className="flex items-center justify-between pt-2">
-        <button
-          type="button"
-          onClick={() => {
-            setLines([
-              { id: 'line-1', accountId: '', account: null, debit: 0, credit: 0, memo: '' },
-              { id: 'line-2', accountId: '', account: null, debit: 0, credit: 0, memo: '' },
-            ]);
-            setMainNarration('');
-            setReferenceNo('');
-          }}
-          className="text-xs font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 cursor-pointer"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset Voucher</span>
-        </button>
-
+      {/* 3. Footer Action Bar (Fixed to bottom, full width, 12px 24px padding) */}
+      <div className="bg-white border-t border-[#e5e7eb] px-6 py-3 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
-          {!isFormFullyValid && !postMutation.isPending && (
-            <span className="text-[11px] font-medium text-muted-foreground hidden sm:inline">
-              {disabledReason}
-            </span>
-          )}
-          <Button
+          <button
             type="button"
-            variant="primary"
+            onClick={() => handleSave(false)}
             disabled={postMutation.isPending}
-            title={isFormFullyValid ? 'Save and post double-entry voucher to General Ledger' : disabledReason}
-            onClick={handleSaveAndPost}
-            className={!isFormFullyValid ? 'opacity-90 hover:opacity-100' : 'shadow-md'}
+            className="h-[36px] px-5 bg-[#408dfb] hover:bg-[#3078e0] disabled:bg-blue-300 text-white rounded-[4px] text-[13px] font-medium flex items-center gap-2 transition-colors cursor-pointer"
           >
-            <Save className="w-4 h-4 mr-1.5" />
-            {postMutation.isPending ? 'Posting Voucher...' : 'Save & Post Voucher'}
-          </Button>
+            {postMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            <span>Save and Publish</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSave(true)}
+            disabled={postMutation.isPending}
+            className="h-[36px] px-5 bg-white border border-[#d9dce3] hover:bg-gray-50 text-[#333] rounded-[4px] text-[13px] font-medium transition-colors cursor-pointer"
+          >
+            Save as Draft
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/journal-entries')}
+            disabled={postMutation.isPending}
+            className="h-[36px] px-4 bg-white border border-[#d9dce3] hover:bg-gray-50 text-[#333] rounded-[4px] text-[13px] font-medium transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setIsRecurring(!isRecurring)}
+            className="text-[13px] text-[#408dfb] hover:underline font-medium inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <Repeat className="w-4 h-4" />
+            <span>{isRecurring ? 'Convert to Normal Journal' : 'Make Recurring'}</span>
+          </button>
         </div>
       </div>
 
-      {/* ── FLOATING PORTAL ACCOUNT SELECTOR ─────────────────────────── */}
-      {activeSelectorIndex !== null && (
+      {/* Floating Account Selector Portal */}
+      {activeSelectorIndex !== null && triggerRefs.current[activeSelectorIndex] && (
         <FloatingAccountSelector
-          isOpen={activeSelectorIndex !== null}
+          isOpen={true}
           onClose={() => setActiveSelectorIndex(null)}
-          triggerRef={{ current: triggerRefs.current[activeSelectorIndex] || null }}
+          triggerRef={{ current: triggerRefs.current[activeSelectorIndex] }}
           selectedAccountId={lines[activeSelectorIndex]?.accountId}
-          onSelect={handleSelectAccount}
+          onSelect={(acc) => handleSelectAccount(acc, activeSelectorIndex)}
           accounts={allAccounts}
           isLoading={accountsLoading}
           isError={accountsError}
-          onRetry={() => refetchAccounts()}
+          onRetry={refetchAccounts}
           onQuickCreate={handleOpenQuickCreate}
         />
       )}
 
-      {/* ── EDUCATIONAL TEMPLATES MODAL ──────────────────────────────── */}
-      {showTemplateModal &&
-        createPortal(
-          <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4">
-            <div
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in cursor-pointer"
-              onClick={() => setShowTemplateModal(false)}
-            />
-            <div className="relative w-full max-w-2xl bg-white dark:bg-[#1E1C26] border border-border/80 rounded-2xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden text-left z-10 animate-in zoom-in-95 fade-in duration-150">
-              <div className="p-4 border-b border-border flex items-center justify-between bg-muted/20">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-accent" />
-                  <h3 className="text-sm font-bold text-foreground">
-                    Standard Journal Voucher Templates
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowTemplateModal(false)}
-                  className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                  aria-label="Close dialog"
+      {/* Educational Templates Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full border border-gray-200 overflow-hidden text-xs">
+            <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#408DFB]" />
+                <h3 className="font-semibold text-gray-900 text-sm">Choose Standard Journal Template</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(false)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 max-h-[60vh] overflow-y-auto space-y-3">
+              {EDUCATIONAL_TEMPLATES.map((tmpl) => (
+                <div
+                  key={tmpl.id}
+                  onClick={() => handleApplyTemplate(tmpl)}
+                  className="p-3 border border-gray-200 rounded hover:border-[#408DFB] hover:bg-blue-50/30 cursor-pointer transition-all"
                 >
-                  <X className="w-4 h-4" />
-                </button>
+                  <div className="font-semibold text-gray-900 mb-1">{tmpl.title}</div>
+                  <p className="text-gray-600 text-[11px] mb-2">{tmpl.description}</p>
+                  <div className="flex items-center justify-between text-[11px] text-gray-400 bg-gray-50 px-2 py-1 rounded">
+                    <span>Default Narration: "{tmpl.narration}"</span>
+                    <span className="text-[#408DFB] font-semibold">Apply Template →</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 text-right">
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(false)}
+                className="px-4 py-1.5 text-xs bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-100 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Create Account Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <form
+            onSubmit={handleQuickCreateSubmit}
+            className="bg-white rounded-lg shadow-xl max-w-md w-full border border-gray-200 overflow-hidden text-xs"
+          >
+            <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <h3 className="font-semibold text-gray-900 text-sm">Create New Account</h3>
+              <button
+                type="button"
+                onClick={handleCloseCreateModal}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">
+                  Account Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={createAccountCategory}
+                  onChange={(e) => setCreateAccountCategory(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] bg-white cursor-pointer"
+                >
+                  <option value="ASSET">Asset</option>
+                  <option value="LIABILITY">Liability</option>
+                  <option value="EQUITY">Equity</option>
+                  <option value="REVENUE">Income</option>
+                  <option value="EXPENSE">Expense</option>
+                </select>
               </div>
 
-              <div className="p-4 overflow-y-auto space-y-3">
-                <div className="p-3 bg-accent/5 border border-accent/20 rounded-lg text-xs space-y-1">
-                  <span className="font-bold text-accent block uppercase text-[10px] tracking-wider">
-                    The Golden Rules of Accounting
-                  </span>
-                  <p className="text-foreground text-xs">
-                    • <strong>Assets & Expenses:</strong> Debit increases balance; Credit decreases balance.
-                  </p>
-                  <p className="text-foreground text-xs">
-                    • <strong>Liabilities, Equity & Revenues:</strong> Credit increases balance; Debit decreases balance.
-                  </p>
-                </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">
+                  Account Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  ref={createNameInputRef}
+                  type="text"
+                  required
+                  value={createAccountName}
+                  onChange={(e) => setCreateAccountName(e.target.value)}
+                  placeholder="e.g. Office Stationery"
+                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
+                />
+              </div>
 
-                <div className="space-y-2">
-                  {EDUCATIONAL_TEMPLATES.map((tmpl) => (
-                    <div
-                      key={tmpl.id}
-                      className="p-3 bg-background border border-border rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    >
-                      <div className="flex-1">
-                        <h4 className="text-xs font-bold text-foreground">{tmpl.title}</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">{tmpl.description}</p>
-                        <p className="text-[11px] text-accent mt-1 italic">"{tmpl.narration}"</p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleApplyTemplate(tmpl)}
-                      >
-                        Use Template
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">Account Code</label>
+                <input
+                  type="text"
+                  value={createAccountCode}
+                  onChange={(e) => setCreateAccountCode(e.target.value)}
+                  placeholder="e.g. 5010"
+                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
+                />
               </div>
             </div>
-          </div>,
-          document.body
-        )}
 
-      {/* ── QUICK CREATE ACCOUNT MODAL ───────────────────────────────── */}
-      {showCreateModal &&
-        createPortal(
-          <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4">
-            {/* Full-viewport backdrop covering sidebar, header, table */}
-            <div
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in cursor-pointer"
-              onClick={handleCloseCreateModal}
-            />
-
-            {/* Centered Modal Dialog */}
-            <div
-              className="relative w-full max-w-md bg-white dark:bg-[#1E1C26] border border-border/80 rounded-2xl shadow-2xl overflow-hidden text-left z-10 animate-in zoom-in-95 fade-in duration-150"
-              role="dialog"
-              aria-modal="true"
-            >
-              <div className="p-4 border-b border-border flex items-center justify-between bg-muted/20">
-                <h3 className="text-xs font-bold text-foreground uppercase tracking-tight">
-                  Quick Create Ledger Account
-                </h3>
-                <button
-                  type="button"
-                  onClick={handleCloseCreateModal}
-                  className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                  aria-label="Close dialog"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleQuickCreateSubmit} className="p-4 space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Account Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    ref={createNameInputRef}
-                    type="text"
-                    required
-                    placeholder="e.g. Office Supplies"
-                    value={createAccountName}
-                    onChange={(e) => setCreateAccountName(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:border-accent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Account Code
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 5201"
-                    value={createAccountCode}
-                    onChange={(e) => setCreateAccountCode(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono text-foreground focus:outline-none focus:border-accent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Accounting Category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={createAccountCategory}
-                    onChange={(e) => setCreateAccountCategory(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-foreground focus:outline-none focus:border-accent"
-                  >
-                    <option value="EXPENSE">Expense (Indirect & Direct Costs)</option>
-                    <option value="ASSET">Asset (Cash, Bank, Property, Receivable)</option>
-                    <option value="LIABILITY">Liability (Debt, Payable, Taxes)</option>
-                    <option value="EQUITY">Equity (Owner Capital, Earnings)</option>
-                    <option value="REVENUE">Revenue (Sales & Operating Income)</option>
-                  </select>
-                </div>
-
-                <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleCloseCreateModal}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" variant="primary" size="sm">
-                    Create Ledger
-                  </Button>
-                </div>
-              </form>
+            <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCloseCreateModal}
+                className="px-3 py-1.5 text-xs bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 text-xs bg-[#408DFB] text-white rounded font-semibold hover:bg-blue-600 cursor-pointer"
+              >
+                Save and Select
+              </button>
             </div>
-          </div>,
-          document.body
-        )}
-    </PageLayout>
+          </form>
+        </div>
+      )}
+    </div>
   );
 };
+
+export default JournalVoucherForm;

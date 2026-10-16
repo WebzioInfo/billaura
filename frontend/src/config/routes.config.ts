@@ -31,7 +31,6 @@ export const ROUTES = {
     CATEGORIES: '/categories',
     BRANDS: '/brands',
     UNITS: '/units',
-    WAREHOUSES: '/warehouses',
     ADJUSTMENTS: '/inventory',
     STOCK_TRANSFER: '/stock-transfer',
     REPORTS: '/reports/inventory',

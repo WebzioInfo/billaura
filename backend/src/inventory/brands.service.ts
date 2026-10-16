@@ -185,7 +185,13 @@ export class BrandsService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
     
-    await this.findOne(id);
+    const brand = await this.findOne(id);
+    if (brand._count?.products > 0) {
+      throw new ConflictException(
+        `Cannot delete brand "${brand.brandName}" as it is linked to ${brand._count.products} product(s). Please reassign or delete the products first.`
+      );
+    }
+
     return this.prisma.brand.update({
       where: { id },
       data: { deletedAt: new Date() }

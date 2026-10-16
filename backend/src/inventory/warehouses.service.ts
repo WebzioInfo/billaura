@@ -46,7 +46,7 @@ export class WarehousesService {
     }
 
     const warehouse = await this.prisma.warehouse.findFirst({
-      where: { id },
+      where: { id, companyId },
     });
 
     if (!warehouse) {

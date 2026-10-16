@@ -31,21 +31,16 @@ const ROUTE_LABELS: Record<string, { group: string; label: string }> = {
   '/bills/new': { group: 'Purchases', label: 'New Bill' },
   '/purchase-orders': { group: 'Purchases', label: 'Purchase Orders' },
   '/purchase-orders/new': { group: 'Purchases', label: 'New Purchase Order' },
-  '/goods-receipts': { group: 'Purchases', label: 'Goods Receipts' },
   '/debit-notes': { group: 'Purchases', label: 'Debit Notes' },
   '/vendors': { group: 'Purchases', label: 'Vendors' },
   '/vendors/new': { group: 'Purchases', label: 'New Vendor' },
 
   // Inventory
-  '/inventory': { group: 'Inventory', label: 'Inventory Dashboard' },
+  '/inventory': { group: 'Inventory', label: 'Inventory Adjustments' },
   '/products': { group: 'Inventory', label: 'Products & Items' },
   '/categories': { group: 'Inventory', label: 'Item Categories' },
   '/brands': { group: 'Inventory', label: 'Brands' },
   '/units': { group: 'Inventory', label: 'Units of Measure' },
-  '/warehouses': { group: 'Inventory', label: 'Warehouses' },
-  '/batches': { group: 'Inventory', label: 'Batches & Expiry' },
-  '/serials': { group: 'Inventory', label: 'Serial Numbers' },
-  '/bom': { group: 'Inventory', label: 'Bill of Materials' },
   '/stock-transfer': { group: 'Inventory', label: 'Stock Transfers' },
 
   // Accounting

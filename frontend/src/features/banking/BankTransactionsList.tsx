@@ -1,123 +1,186 @@
-import React from 'react';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { PageLayout } from '@/shared/components/layout/PageLayout';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableLoader, StatusBadge, DateCell, CurrencyCell, Button } from '@/shared/components/ui';
-import { Pagination } from '@/shared/components/ui/Pagination';
-import { usePagination } from '@/shared/hooks/usePagination';
-import apiClient from '@/core/api';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import {
+  ArrowLeftRight,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Search,
+  Filter,
+  CheckCircle2,
+  Calendar,
+} from 'lucide-react';
+import { apiClient as api } from '@/core/api/apiClient';
+import {
+  ZohoPageHeader,
+  ZohoListTable,
+  ZohoStatusText,
+} from '@/shared/components/zoho';
 
-export const BankTransactionsList = () => {
-  const { data: transactions = [], isLoading } = useQuery({
+const formatINR = (val: number, forceDecimals = true) => {
+  const isNegative = val < 0;
+  const abs = Math.abs(val);
+  const formatted = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: forceDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
+  }).format(abs);
+  return isNegative ? `-${formatted}` : formatted;
+};
+
+export const BankTransactionsList: React.FC = () => {
+  const navigate = useNavigate();
+  const [activeView, setActiveView] = useState<string>('All Transactions');
+  const [search, setSearch] = useState<string>('');
+
+  const { data: transactions = [], isLoading } = useQuery<any[]>({
     queryKey: ['bank-transactions'],
     queryFn: async () => {
-      const res = await apiClient.get('/finance/bank/transactions');
-      const items = res.data || [];
+      const res = await api.get<any>('/finance/bank/transactions');
+      const items = res.data || res || [];
       return Array.isArray(items) ? items : [];
-    }
+    },
   });
 
-  // TODO: Endpoint /finance/bank/transactions should support server-side pagination (?page=&limit=)
-  const {
-    page,
-    limit,
-    paginatedData,
-    totalPages,
-    totalItems,
-    setPage,
-    setLimit,
-  } = usePagination({
-    data: transactions,
-    tableKey: 'bank_transactions',
-    defaultLimit: 25,
-  });
+  const filteredTransactions = useMemo(() => {
+    let list = transactions;
+
+    if (activeView === 'Uncategorised') {
+      list = list.filter((t) => !t.category && !t.accountId);
+    } else if (activeView === 'Categorised') {
+      list = list.filter((t) => Boolean(t.category || t.accountId));
+    } else if (activeView === 'Reconciled') {
+      list = list.filter((t) => Boolean(t.isReconciled || t.reconciled || t.status === 'RECONCILED'));
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (t) =>
+          (t.description && t.description.toLowerCase().includes(q)) ||
+          (t.reference && t.reference.toLowerCase().includes(q)) ||
+          (t.bankAccount?.name && t.bankAccount.name.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [transactions, activeView, search]);
+
+  const columns = [
+    {
+      key: 'date',
+      label: 'DATE',
+      width: '12%',
+      render: (row: any) => (
+        <span className="text-gray-600 text-xs">
+          {row.date ? new Date(row.date).toLocaleDateString('en-IN') : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'account',
+      label: 'ACCOUNT',
+      width: '20%',
+      render: (row: any) => (
+        <span className="font-semibold text-gray-900 truncate block">
+          {row.bankAccount?.name || 'Bank Account'}
+        </span>
+      ),
+    },
+    {
+      key: 'details',
+      label: 'TRANSACTION DETAILS',
+      width: '30%',
+      render: (row: any) => (
+        <div className="truncate">
+          <span className="font-medium text-gray-800 block truncate">
+            {row.description || row.narration || row.reference || '—'}
+          </span>
+          {row.reference && (
+            <span className="text-[11px] text-gray-400 font-mono">Ref: {row.reference}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      label: 'TYPE',
+      width: '12%',
+      render: (row: any) => {
+        const isCredit = row.type === 'DEPOSIT' || row.type === 'CREDIT' || Number(row.credit || 0) > 0;
+        return (
+          <span className="inline-flex items-center gap-1 text-xs text-gray-600">
+            {isCredit ? (
+              <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <ArrowUpRight className="w-3.5 h-3.5 text-amber-600" />
+            )}
+            {row.type || (isCredit ? 'Deposit' : 'Withdrawal')}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'amount',
+      label: 'AMOUNT',
+      width: '14%',
+      align: 'right' as const,
+      render: (row: any) => {
+        const amt = Number(row.amount || row.debit || row.credit || 0);
+        return <span className="font-mono text-gray-900 font-semibold">{formatINR(amt)}</span>;
+      },
+    },
+    {
+      key: 'status',
+      label: 'STATUS',
+      width: '12%',
+      align: 'center' as const,
+      render: (row: any) => {
+        const isRec = Boolean(row.isReconciled || row.reconciled || row.status === 'RECONCILED');
+        const isCat = Boolean(row.category || row.accountId || row.status === 'CATEGORISED');
+        const statusText = isRec ? 'RECONCILED' : isCat ? 'CATEGORISED' : 'UNCATEGORISED';
+        return <ZohoStatusText status={statusText} />;
+      },
+    },
+  ];
+
+  const TXN_VIEWS = [
+    { id: 'All Transactions', label: 'All Transactions' },
+    { id: 'Uncategorised', label: 'Uncategorised' },
+    { id: 'Categorised', label: 'Categorised' },
+    { id: 'Reconciled', label: 'Reconciled' },
+  ];
 
   return (
-    <PageLayout
-      isLoading={isLoading && transactions.length === 0}
-      loadingTitle="Loading Bank Transactions..."
-      loadingDescription="Fetching cleared and pending bank transactions..."
-    >
-      <PageHeader
+    <div className="flex flex-col h-full bg-white select-none">
+      <ZohoPageHeader
         title="Bank Transactions"
-        count={transactions.length}
-        primaryAction={
-          <Button variant="primary">
-            <ArrowLeftRight className="w-4 h-4 mr-1.5" /> Record Transfer
-          </Button>
-        }
+        views={TXN_VIEWS}
+        activeViewId={activeView}
+        onViewChange={(v) => setActiveView(v)}
+        newAction={{
+          label: 'Record Transfer',
+          onClick: () => navigate('/journal-entries/new'),
+        }}
       />
 
-      <div className="flex-1 min-h-0 flex flex-col bg-surface dark:bg-[#17161C] border border-border rounded-xl shadow-xs overflow-hidden mt-3">
-        <div className="flex-1 min-h-0 overflow-auto scrollbar-overlay">
-          <table className="w-full text-left border-collapse text-[14px]">
-            <thead className="sticky top-0 z-20 bg-[#34303F] dark:bg-[#1E1C26] text-white font-medium select-none shadow-xs h-12">
-              <tr>
-                <th className="pl-6 pr-4 py-3 text-white font-medium text-[14px]">Date</th>
-                <th className="px-4 py-3 text-white font-medium text-[14px]">Account</th>
-                <th className="px-4 py-3 text-white font-medium text-[14px]">Type</th>
-                <th className="px-4 py-3 text-white font-medium text-[14px]">Description</th>
-                <th className="px-4 py-3 text-white font-medium text-[14px] text-right">Amount</th>
-                <th className="pr-6 pl-4 py-3 text-white font-medium text-[14px] text-center">Reconciled</th>
-              </tr>
-            </thead>
-            <tbody className="divide-none text-[14px]">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                    Loading transactions...
-                  </td>
-                </tr>
-              ) : transactions.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                    No transactions found.
-                  </td>
-                </tr>
-              ) : (
-                paginatedData.map((txn: any, idx: number) => {
-                  const isEven = idx % 2 === 1;
-                  return (
-                    <tr
-                      key={txn.id}
-                      className={cn(
-                        'h-[52px] border-b border-border/30 transition-colors duration-120',
-                        isEven
-                          ? 'bg-[#F9FAFB] dark:bg-[#1C1B22] hover:bg-[#F3F4F6] dark:hover:bg-[#24232C]'
-                          : 'bg-white dark:bg-[#17161C] hover:bg-[#F3F4F6] dark:hover:bg-[#24232C]'
-                      )}
-                    >
-                      <td className="pl-6 pr-4 py-2">
-                        <DateCell date={txn.date} />
-                      </td>
-                      <td className="px-4 py-2 font-medium text-foreground">{txn.bankAccount?.name || '—'}</td>
-                      <td className="px-4 py-2 text-muted-foreground">{txn.type}</td>
-                      <td className="px-4 py-2 text-muted-foreground">{txn.description || txn.reference || '—'}</td>
-                      <td className="px-4 py-2 text-right">
-                        <CurrencyCell amount={Number(txn.amount || 0)} className="tabular-nums font-semibold text-foreground" />
-                      </td>
-                      <td className="pr-6 pl-4 py-2 text-center">
-                        <StatusBadge status={txn.isReconciled ? 'RECONCILED' : 'PENDING'} />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          totalItems={totalItems}
-          pageSize={limit}
-          onPageChange={setPage}
-          onPageSizeChange={setLimit}
-          entityName="transactions"
+      <div className="flex-1 min-h-0 flex flex-col">
+        <ZohoListTable
+          columns={columns}
+          data={filteredTransactions}
+          keyField={(row: any) => row.id}
+          isLoading={isLoading}
+          emptyState={<div className="p-12 text-center text-xs text-gray-400">No bank transactions found.</div>}
+          pagination={{
+            currentPage: 1,
+            totalCount: filteredTransactions.length,
+            pageSize: filteredTransactions.length || 25,
+            onPageChange: () => {},
+            onPageSizeChange: () => {},
+          }}
         />
       </div>
-    </PageLayout>
+    </div>
   );
 };

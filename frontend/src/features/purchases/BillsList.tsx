@@ -1,52 +1,42 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Plus, Receipt, Search, Filter, Eye, Edit, Copy, DollarSign, 
-  Trash2, X, Download, FileText, Calendar, Building, ListFilter,
-  CheckCircle, AlertTriangle, ShieldAlert, Sparkles, Send, Briefcase, Printer, ArrowRight, ExternalLink
-} from 'lucide-react';
-import { 
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Card, Button, 
-  IconButton, PageHeader, KpiCard, LoadingState, TableLoader, TableSkeleton, 
-  SummaryCardLoader, StatusBadge, CurrencyCell, DateCell, RelativeDueCell, SearchableSelect
-} from '@/shared/components/ui';
-import { PageLayout } from '@/shared/components/layout/PageLayout';
-import { DataTable } from '@/shared/components/ui/data-table/DataTable';
-import { usePagination } from '@/shared/hooks/usePagination';
-import { ColumnDef } from '@tanstack/react-table';
-import apiClient from '@/core/api';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  FileText,
+  Edit,
+  Printer,
+  Trash2,
+  DollarSign,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  ArrowUpRight,
+  LayoutGrid,
+  List,
+  Eye,
+  AlertCircle,
+  X,
+} from 'lucide-react';
+import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
-import { formatCurrency, formatDate } from '@/shared/utils/formatters';
-import { useBankAccounts } from '@/features/banking/hooks/useBankAccounts';
-import { ExportService } from '@/core/services/ExportService';
-import { DocumentEngine } from '@/core/reporting/DocumentEngine';
-import { DeleteDialog, ConfirmDialog } from '@/shared/components/ui';
-import { PdfDownloadButton } from '../../shared/components/pdf/PdfDownloadButton';
-import { BillOcrReviewViewer } from './components/BillOcrReviewViewer';
+import {
+  ZohoPageHeader,
+  ZohoListTable,
+  ZohoColumn,
+  ZohoSplitDetail,
+  ZohoSplitListItem,
+  ZohoPDFPreview,
+  ZohoStatusText,
+  ZohoViewOption,
+} from '@/shared/components/zoho';
+import { DeleteDialog } from '@/shared/components/ui';
 
 interface Vendor {
   id: string;
   name: string;
   gstin?: string;
   state?: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-}
-
-interface Warehouse {
-  id: string;
-  name: string;
-}
-
-interface BankAccount {
-  id: string;
-  name: string;
-  currentBalance: number;
 }
 
 interface PurchaseItem {
@@ -61,7 +51,7 @@ interface PurchaseItem {
   cgstAmount: number;
   sgstAmount: number;
   igstAmount: number;
-  product?: Product;
+  product?: { name: string };
 }
 
 interface Purchase {
@@ -69,6 +59,7 @@ interface Purchase {
   purchaseNo: string;
   vendorId: string;
   date: string;
+  dueDate?: string;
   status: string;
   subTotal: number;
   taxTotal: number;
@@ -81,93 +72,46 @@ interface Purchase {
   billingAddress?: string;
   shippingAddress?: string;
   placeOfSupply?: string;
-  taxMode?: string;
-  isRcm?: boolean;
-  gstBreakup?: any;
   vendor: Vendor;
   items: PurchaseItem[];
   allocations?: any[];
-  attachments?: any[];
 }
 
-export const BillsList = () => {
+export const BillsList: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [viewingDoc, setViewingDoc] = useState<{ url: string; fileName: string; mimeType: string } | null>(null);
 
-  // Filters State
-  const [search, setSearch] = useState('');
-  const [selectedVendorId, setSelectedVendorId] = useState('');
-  const [billStatus, setBillStatus] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [gstType, setGstType] = useState('');
-  const [warehouseId, setWarehouseId] = useState('');
-  const [minAmount, setMinAmount] = useState('');
-  const [maxAmount, setMaxAmount] = useState('');
-  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-
-  // Modal / Selection State
-  const [selectedBill, setSelectedBill] = useState<Purchase | null>(null);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentBill, setPaymentBill] = useState<Purchase | null>(null);
+  const [activeView, setActiveView] = useState('ALL');
+  const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [isKpiVisible, setIsKpiVisible] = useState(true);
+  const [isPaymentsCollapsed, setIsPaymentsCollapsed] = useState(false);
   const [journalEntries, setJournalEntries] = useState<any[]>([]);
   const [isLoadingJournals, setIsLoadingJournals] = useState(false);
-  const [billToCancel, setBillToCancel] = useState<Purchase | null>(null);
   const [billToDelete, setBillToDelete] = useState<Purchase | null>(null);
 
-  // Payment Form State
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-  const [paymentAmount, setPaymentAmount] = useState(0);
-  const [selectedBankAccountId, setSelectedBankAccountId] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
-  const [paymentReference, setPaymentReference] = useState('');
-
-  // Fetch Queries
-  const { data: bills = [], isLoading: loadingBills } = useQuery<Purchase[]>({
+  // Queries
+  const { data: bills = [], isLoading, isError, error, refetch } = useQuery<Purchase[]>({
     queryKey: ['bills'],
     queryFn: async () => {
       const res = await apiClient.get('/purchases');
       const data = res.data?.data || res.data || [];
       return Array.isArray(data) ? data : [];
-    }
-  });
-
-  const { data: vendors = [] } = useQuery<Vendor[]>({
-    queryKey: ['vendors'],
-    queryFn: async () => {
-      const res = await apiClient.get('/vendors');
-      const data = res.data?.data || res.data || [];
-      return Array.isArray(data) ? data : [];
-    }
-  });
-
-  const { data: bankAccounts = [] } = useQuery<BankAccount[]>({
-    queryKey: ['bankAccounts'],
-    queryFn: async () => {
-      const res = await apiClient.get('/bank-accounts');
-      const data = res.data?.data || res.data || [];
-      return Array.isArray(data) ? data : [];
-    }
-  });
-
-  const { data: warehouses = [] } = useQuery<Warehouse[]>({
-    queryKey: ['warehouses'],
-    queryFn: async () => {
-      const res = await apiClient.get('/warehouses');
-      const data = res.data?.data || res.data || [];
-      return Array.isArray(data) ? data : [];
-    }
+    },
   });
 
   const { data: meData } = useQuery<any>({
     queryKey: ['auth', 'me'],
     queryFn: () => apiClient.get('/auth/me'),
+    staleTime: 5 * 60 * 1000,
   });
 
-  const companyProfile = meData?.data?.company || meData?.company || { name: 'Your Company', address: 'N/A', email: 'N/A' };
+  const companyProfile = meData?.data?.company || meData?.company || null;
+
+  // Selected bill
+  const selectedBill = useMemo(() => {
+    return bills.find((b) => b.id === selectedBillId) || null;
+  }, [bills, selectedBillId]);
 
   // Fetch journal entries for selected bill
   useEffect(() => {
@@ -176,23 +120,22 @@ export const BillsList = () => {
       setIsLoadingJournals(true);
       try {
         const res = await apiClient.get('/journal-entries', {
-          params: { search: selectedBill.purchaseNo }
+          params: { search: selectedBill.purchaseNo },
         });
         const list = res.data?.data || res.data || [];
         setJournalEntries(Array.isArray(list) ? list : []);
       } catch (err) {
-        console.error('Error fetching journal entries', err);
         setJournalEntries([]);
       } finally {
         setIsLoadingJournals(false);
       }
     };
-    if (isViewModalOpen && selectedBill) {
+    if (selectedBill) {
       fetchJournals();
     }
-  }, [isViewModalOpen, selectedBill]);
+  }, [selectedBill]);
 
-  // Mutations
+  // Delete Mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiClient.delete(`/purchases/${id}`);
@@ -202,1091 +145,551 @@ export const BillsList = () => {
       await erpInvalidate.purchaseBill(queryClient, {
         vendorId: billToDelete?.vendorId || undefined,
       });
+      setBillToDelete(null);
+      if (selectedBillId === billToDelete?.id) {
+        setSelectedBillId(null);
+      }
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to delete bill');
-    }
+    },
   });
 
-  const paymentMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      await apiClient.post('/purchases/payments', payload);
-    },
-    onSuccess: async () => {
-      notification.success('Vendor payment recorded successfully');
-      setIsPaymentModalOpen(false);
-      await erpInvalidate.purchaseReceipt(queryClient, {
-        vendorId: paymentBill?.vendorId || undefined,
-        accountId: selectedBankAccountId || undefined,
-      });
-    },
-    onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to record payment');
-    }
-  });
+  // KPI Computations
+  const kpis = useMemo(() => {
+    let totalOutstanding = 0;
+    let dueToday = 0;
+    let dueWithin30 = 0;
+    let overdueBills = 0;
 
-  const cancelMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiClient.delete(`/purchases/${id}`);
-    },
-    onSuccess: async () => {
-      notification.success('Bill cancelled and ledger entries reverted successfully');
-      await erpInvalidate.purchaseBill(queryClient, {
-        vendorId: billToCancel?.vendorId || undefined,
-      });
-    },
-    onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to cancel bill');
-    }
-  });
-
-  // Calculations
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
-  };
-
-  const getOutstandingBalance = (bill: Purchase) => {
-    return Number(bill.grandTotal) - Number(bill.amountPaid);
-  };
-
-  const isBillOverdue = (bill: Purchase) => {
-    const dueDateStr = bill.gstBreakup?.dueDate;
-    if (!dueDateStr) return false;
-    const dueDate = new Date(dueDateStr);
-    return dueDate < new Date() && getOutstandingBalance(bill) > 0;
-  };
-
-  // Stats
-  const stats = React.useMemo(() => {
     const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+    const todayStr = now.toISOString().split('T')[0];
+    const in30Days = new Date();
+    in30Days.setDate(in30Days.getDate() + 30);
 
-    let totalCount = 0;
-    let unpaidCount = 0;
-    let paidCount = 0;
-    let partialCount = 0;
-    let overdueCount = 0;
-    let outstandingAmt = 0;
-    let gstCredit = 0;
-    let currentMonthPurchases = 0;
+    bills.forEach((b) => {
+      const balance = Math.max(0, Number(b.grandTotal || 0) - Number(b.amountPaid || 0));
+      totalOutstanding += balance;
 
-    bills.forEach(b => {
-      const gTotal = Number(b.grandTotal || 0);
-      const paidAmt = Number(b.amountPaid || 0);
-      const taxAmt = Number(b.taxTotal || 0);
-      const balance = gTotal - paidAmt;
-      const bDate = new Date(b.date);
-
-      totalCount++;
-      outstandingAmt += balance;
-      gstCredit += taxAmt;
-
-      if (paidAmt === 0) unpaidCount++;
-      else if (balance > 0) partialCount++;
-      else paidCount++;
-
-      if (isBillOverdue(b)) overdueCount++;
-
-      if (bDate.getMonth() === currentMonth && bDate.getFullYear() === currentYear) {
-        currentMonthPurchases += gTotal;
+      if (b.dueDate && balance > 0) {
+        const due = new Date(b.dueDate);
+        const dueStr = due.toISOString().split('T')[0];
+        if (dueStr === todayStr) {
+          dueToday += balance;
+        } else if (due < now) {
+          overdueBills += balance;
+        } else if (due <= in30Days) {
+          dueWithin30 += balance;
+        }
       }
     });
 
-    return {
-      totalCount, unpaidCount, paidCount, partialCount, overdueCount,
-      outstandingAmt, gstCredit, currentMonthPurchases
-    };
+    return { totalOutstanding, dueToday, dueWithin30, overdueBills };
   }, [bills]);
 
-  const handleExport = () => {
-    if (!filteredBills || filteredBills.length === 0) return;
-    const headers = ['Purchase No', 'Date', 'Vendor', 'Status', 'Tax Mode', 'Sub Total', 'Tax', 'Grand Total', 'Amount Paid'];
-    const data = filteredBills.map((b: any) => [
-      b.purchaseNo || '',
-      b.date ? new Date(b.date).toLocaleDateString() : '',
-      b.vendor?.name || '',
-      b.status || '',
-      b.taxMode || '',
-      b.subTotal || 0,
-      b.taxTotal || 0,
-      b.grandTotal || 0,
-      b.amountPaid || 0
-    ]);
-    
-    ExportService.exportExcel({
-      filename: `Bills_Export_${new Date().toISOString().split('T')[0]}.xlsx`,
-      sheetName: 'Bills',
-      title: 'Vendor Bills',
-      headers,
-      data
-    });
-  };
+  // Views Filter
+  const views: ZohoViewOption[] = [
+    { id: 'ALL', label: 'All Bills', count: bills.length },
+    {
+      id: 'DRAFT',
+      label: 'Draft',
+      count: bills.filter((b) => b.status === 'DRAFT').length,
+    },
+    {
+      id: 'UNPAID',
+      label: 'Unpaid / Open',
+      count: bills.filter((b) => Number(b.grandTotal) > Number(b.amountPaid)).length,
+    },
+    {
+      id: 'OVERDUE',
+      label: 'Overdue',
+      count: bills.filter((b) => {
+        const bal = Number(b.grandTotal) - Number(b.amountPaid);
+        return bal > 0 && b.dueDate && new Date(b.dueDate) < new Date();
+      }).length,
+    },
+    {
+      id: 'PAID',
+      label: 'Paid',
+      count: bills.filter((b) => Number(b.grandTotal) <= Number(b.amountPaid) && Number(b.grandTotal) > 0).length,
+    },
+  ];
 
-  const handlePrint = async () => {
-    if (!filteredBills || filteredBills.length === 0) return;
-    
-    await DocumentEngine.generateTablePDF({
-      title: 'Vendor Bills Register',
-      columns: [
-        { header: 'Bill No', dataKey: 'billNo', width: 25 },
-        { header: 'Date', dataKey: 'date', width: 25 },
-        { header: 'Vendor', dataKey: 'vendor' },
-        { header: 'Grand Total', dataKey: 'total', align: 'right' },
-        { header: 'Status', dataKey: 'status', align: 'center' }
-      ],
-      data: filteredBills.map((b: any) => ({
-        billNo: b.purchaseNo || '',
-        date: b.date ? new Date(b.date).toLocaleDateString() : '',
-        vendor: b.vendor?.name || '',
-        total: formatCurrency(Number(b.grandTotal || 0)),
-        status: b.status
-      })),
-      orientation: 'landscape'
-    });
-  };
-
-  // Client Side Filtering
-  const filteredBills = React.useMemo(() => {
-    return bills.filter(b => {
-      const matchesSearch = 
-        b.purchaseNo.toLowerCase().includes(search.toLowerCase()) ||
-        b.vendor?.name?.toLowerCase().includes(search.toLowerCase()) ||
-        (b.reference && b.reference.toLowerCase().includes(search.toLowerCase()));
-
-      if (!matchesSearch) return false;
-
-      if (selectedVendorId && b.vendorId !== selectedVendorId) return false;
-
-      if (billStatus) {
-        if (billStatus === 'OVERDUE' && !isBillOverdue(b)) return false;
-        if (billStatus === 'CANCELLED' && b.status !== 'CANCELLED') return false;
-        if (billStatus === 'SENT' && b.status !== 'SENT') return false;
+  const filteredBills = useMemo(() => {
+    return bills.filter((b) => {
+      if (activeView === 'DRAFT') return b.status === 'DRAFT';
+      if (activeView === 'UNPAID') return Number(b.grandTotal) > Number(b.amountPaid);
+      if (activeView === 'OVERDUE') {
+        const bal = Number(b.grandTotal) - Number(b.amountPaid);
+        return bal > 0 && b.dueDate && new Date(b.dueDate) < new Date();
       }
-
-      if (paymentStatus) {
-        const balance = getOutstandingBalance(b);
-        if (paymentStatus === 'PAID' && b.status !== 'PAID') return false;
-        if (paymentStatus === 'PARTIAL' && b.status !== 'PARTIAL') return false;
-        if (paymentStatus === 'UNPAID' && b.amountPaid !== 0) return false;
+      if (activeView === 'PAID') {
+        return Number(b.grandTotal) <= Number(b.amountPaid) && Number(b.grandTotal) > 0;
       }
-
-      if (startDate && new Date(b.date) < new Date(startDate)) return false;
-      if (endDate && new Date(b.date) > new Date(endDate)) return false;
-
-      if (gstType) {
-        const hasIGST = Number(b.igstAmount) > 0;
-        if (gstType === 'IGST' && !hasIGST) return false;
-        if (gstType === 'CGST_SGST' && hasIGST) return false;
-      }
-
-      if (warehouseId) {
-        const whId = b.gstBreakup?.warehouseId;
-        if (whId !== warehouseId) return false;
-      }
-
-      if (minAmount && Number(b.grandTotal) < Number(minAmount)) return false;
-      if (maxAmount && Number(b.grandTotal) > Number(maxAmount)) return false;
-
       return true;
     });
-  }, [bills, search, selectedVendorId, billStatus, paymentStatus, startDate, endDate, gstType, warehouseId, minAmount, maxAmount]);
+  }, [bills, activeView]);
 
-  const handleOpenPayment = (bill: Purchase) => {
-    setPaymentBill(bill);
-    setPaymentAmount(getOutstandingBalance(bill));
-    setPaymentDate(new Date().toISOString().split('T')[0]);
-    setPaymentReference('');
-    if (bankAccounts.length > 0) {
-      setSelectedBankAccountId(bankAccounts[0].id);
-    }
-    setIsPaymentModalOpen(true);
-  };
-
-  const handleRecordPayment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!paymentBill) return;
-    if (paymentAmount <= 0) {
-      notification.error('Payment amount must be greater than zero');
-      return;
-    }
-    if (paymentAmount > getOutstandingBalance(paymentBill)) {
-      notification.error('Payment amount cannot exceed the outstanding balance');
-      return;
-    }
-    if (!selectedBankAccountId) {
-      notification.error('Please select a bank account');
-      return;
-    }
-
-    paymentMutation.mutate({
-      vendorId: paymentBill.vendorId,
-      purchaseId: paymentBill.id,
-      bankAccountId: selectedBankAccountId,
-      date: paymentDate,
-      amount: Number(paymentAmount),
-      method: paymentMethod,
-      reference: paymentReference
-    });
-  };
-
-  const parseLineDescription = (desc: string) => {
-    try {
-      if (desc.startsWith('{') && desc.endsWith('}')) {
-        const parsed = JSON.parse(desc);
-        return {
-          text: parsed.text || 'Item details',
-          discount: parsed.discount || 0
-        };
+  const getBillStatus = (bill: Purchase) => {
+    if (bill.status === 'DRAFT') return 'DRAFT';
+    const total = Number(bill.grandTotal || 0);
+    const paid = Number(bill.amountPaid || 0);
+    if (total > 0 && paid >= total) return 'PAID';
+    if (bill.dueDate) {
+      const due = new Date(bill.dueDate);
+      const today = new Date();
+      if (due < today) {
+        const diffDays = Math.ceil((today.getTime() - due.getTime()) / (1000 * 3600 * 24));
+        return `OVERDUE BY ${diffDays} DAYS`;
       }
-    } catch (e) {}
-    return { text: desc, discount: 0 };
+    }
+    if (paid > 0 && paid < total) return 'PARTIALLY PAID';
+    return 'OPEN';
   };
 
-  // Unified pagination (Client-side slicing for bills; TODO: endpoint should support server-side pagination)
-  const {
-    page,
-    limit,
-    totalPages,
-    totalItems,
-    setPage,
-    setLimit,
-    resetPage,
-    paginatedData,
-  } = usePagination({
-    tableKey: 'bills',
-    data: filteredBills,
-    itemLabel: 'bills',
-  });
+  const splitItems = useMemo<ZohoSplitListItem[]>(() => {
+    return filteredBills.map((b) => ({
+      id: b.id,
+      name: b.vendor?.name || 'Unknown Vendor',
+      amount: `₹${(Number(b.grandTotal) || 0).toLocaleString('en-IN')}`,
+      number: b.purchaseNo,
+      date: b.date ? new Date(b.date).toLocaleDateString('en-GB') : '',
+      status: getBillStatus(b),
+    }));
+  }, [filteredBills]);
 
-  const columns = useMemo<ColumnDef<any>[]>(() => [
+  // Columns definition
+  const columns: ZohoColumn<Purchase>[] = [
     {
-      accessorKey: 'purchaseNo',
-      header: 'Bill Code',
-      cell: ({ row }) => (
-        <span className="tabular-nums font-medium text-[#111827] dark:text-[#EDEDED]">
-          {row.original.purchaseNo}
+      key: 'date',
+      label: 'Date',
+      width: '110px',
+      render: (b) => (
+        <span className="text-[#2B2F36] font-medium">
+          {b.date ? new Date(b.date).toLocaleDateString('en-GB') : '-'}
         </span>
       ),
     },
     {
-      accessorKey: 'vendor',
-      header: 'Vendor',
-      cell: ({ row }) => (
-        <span className="font-medium text-[#111827] dark:text-[#EDEDED]">
-          {row.original.vendor?.name || '—'}
+      key: 'purchaseNo',
+      label: 'Bill#',
+      width: '130px',
+      render: (b) => (
+        <span className="text-[#408DFB] hover:underline font-medium font-mono cursor-pointer">
+          {b.purchaseNo}
         </span>
       ),
     },
     {
-      accessorKey: 'date',
-      header: 'Bill Date',
-      cell: ({ row }) => <DateCell date={row.original.date} />,
-    },
-    {
-      accessorKey: 'dueDate',
-      header: 'Due Date',
-      cell: ({ row }) => (
-        <RelativeDueCell
-          dueDate={row.original.gstBreakup?.dueDate}
-          isPaid={row.original.status === 'PAID'}
-        />
+      key: 'reference',
+      label: 'Reference Number',
+      width: '150px',
+      render: (b) => (
+        <span className="text-[#6B7280]">{b.reference || '-'}</span>
       ),
     },
     {
-      accessorKey: 'reference',
-      header: 'Ref / Invoice No',
-      cell: ({ row }) => (
-        <span className="text-[13px] text-[#4B5563] dark:text-[#9CA3AF] tabular-nums">
-          {row.original.reference || '—'}
+      key: 'vendor',
+      label: 'Vendor Name',
+      render: (b) => (
+        <span className="text-[#2B2F36] font-medium truncate block max-w-[200px]">
+          {b.vendor?.name || 'Unknown Vendor'}
         </span>
       ),
     },
     {
-      accessorKey: 'subTotal',
-      header: () => <div className="text-right">Subtotal</div>,
-      cell: ({ row }) => <CurrencyCell amount={Number(row.original.subTotal)} />,
+      key: 'status',
+      label: 'Status',
+      width: '140px',
+      render: (b) => <ZohoStatusText status={getBillStatus(b)} />,
     },
     {
-      accessorKey: 'taxTotal',
-      header: () => <div className="text-right">GST Tax</div>,
-      cell: ({ row }) => <CurrencyCell amount={Number(row.original.taxTotal)} />,
-    },
-    {
-      accessorKey: 'grandTotal',
-      header: () => <div className="text-right">Total</div>,
-      cell: ({ row }) => (
-        <CurrencyCell
-          amount={Number(row.original.grandTotal)}
-          className="font-semibold text-foreground text-right"
-        />
+      key: 'dueDate',
+      label: 'Due Date',
+      width: '110px',
+      render: (b) => (
+        <span className="text-[#6B7280]">
+          {b.dueDate ? new Date(b.dueDate).toLocaleDateString('en-GB') : '-'}
+        </span>
       ),
     },
     {
-      accessorKey: 'amountPaid',
-      header: () => <div className="text-right">Paid</div>,
-      cell: ({ row }) => <CurrencyCell amount={Number(row.original.amountPaid)} />,
+      key: 'grandTotal',
+      label: 'Amount',
+      align: 'right',
+      width: '120px',
+      render: (b) => (
+        <span className="font-semibold text-[#2B2F36] tabular-nums">
+          ₹{(Number(b.grandTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        </span>
+      ),
     },
     {
-      accessorKey: 'balance',
-      header: () => <div className="text-right">Balance</div>,
-      cell: ({ row }) => {
-        const balance = getOutstandingBalance(row.original);
+      key: 'balance',
+      label: 'Balance Due',
+      align: 'right',
+      width: '120px',
+      render: (b) => {
+        const bal = Math.max(0, Number(b.grandTotal || 0) - Number(b.amountPaid || 0));
         return (
-          <CurrencyCell
-            amount={balance}
-            className={balance > 0 ? 'font-semibold text-amber-600 dark:text-amber-400 text-right' : 'text-right'}
-          />
+          <span className={`font-semibold tabular-nums ${bal > 0 ? 'text-[#E54B4B]' : 'text-[#6B7280]'}`}>
+            ₹{bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </span>
         );
       },
     },
-    {
-      accessorKey: 'status',
-      header: () => <div className="text-center">Status</div>,
-      cell: ({ row }) => {
-        const isOverdue = isBillOverdue(row.original);
-        return (
-          <div className="text-center">
-            <StatusBadge
-              status={
-                isOverdue && row.original.status !== 'PAID'
-                  ? 'OVERDUE'
-                  : row.original.status || 'POSTED'
-              }
-            />
-          </div>
-        );
-      },
-    },
-    {
-      id: 'actions',
-      header: () => <div className="text-right">Actions</div>,
-      cell: ({ row }) => {
-        const bill = row.original;
-        const balance = getOutstandingBalance(bill);
-        return (
-          <div className="flex items-center justify-end gap-1">
-            <IconButton
-              icon={Eye}
-              aria-label="View Audit Ledger & Details"
-              tooltip="View Audit Ledger & Details"
-              size="dense"
-              variant="ghost"
-              onClick={() => {
-                setSelectedBill(bill);
-                setIsViewModalOpen(true);
-              }}
-            />
-            <IconButton
-              icon={Edit}
-              aria-label="Edit Bill"
-              tooltip="Edit Bill Details"
-              size="dense"
-              variant="ghost"
-              disabled={bill.status === 'PAID'}
-              onClick={() => navigate(`/bills/new?edit=${bill.id}`)}
-            />
-            <IconButton
-              icon={Copy}
-              aria-label="Duplicate Bill"
-              tooltip="Duplicate Bill"
-              size="dense"
-              variant="ghost"
-              onClick={() => navigate(`/bills/new?duplicate=${bill.id}`)}
-            />
-            <IconButton
-              icon={DollarSign}
-              aria-label="Record Payment"
-              tooltip="Record Payout Allocation"
-              size="dense"
-              variant="ghost"
-              disabled={balance <= 0}
-              onClick={() => handleOpenPayment(bill)}
-            />
-            <IconButton
-              icon={X}
-              aria-label={cancelMutation.isPending && cancelMutation.variables === bill.id ? "Cancelling Bill..." : "Cancel Bill"}
-              tooltip={cancelMutation.isPending && cancelMutation.variables === bill.id ? "Cancelling Bill..." : "Cancel & Reverse Entries"}
-              size="dense"
-              variant="danger-ghost"
-              disabled={bill.status === 'PAID' || cancelMutation.isPending || deleteMutation.isPending}
-              isLoading={cancelMutation.isPending && cancelMutation.variables === bill.id}
-              onClick={() => setBillToCancel(bill)}
-            />
-            <IconButton
-              icon={Trash2}
-              aria-label={deleteMutation.isPending && deleteMutation.variables === bill.id ? "Deleting Bill..." : "Delete Bill"}
-              tooltip={deleteMutation.isPending && deleteMutation.variables === bill.id ? "Deleting Bill..." : "Delete Bill"}
-              size="dense"
-              variant="danger-ghost"
-              disabled={bill.status === 'PAID' || cancelMutation.isPending || deleteMutation.isPending}
-              isLoading={deleteMutation.isPending && deleteMutation.variables === bill.id}
-              onClick={() => setBillToDelete(bill)}
-            />
-          </div>
-        );
-      },
-    },
-  ], [navigate, isBillOverdue, getOutstandingBalance]);
+  ];
 
   return (
-    <>
-      <PageLayout
-        isLoading={loadingBills && bills.length === 0}
-        loadingTitle="Loading Bills..."
-        loadingDescription="Fetching vendor bills and expenses..."
-      >
-        <PageHeader
-          title="Bills"
-          count={bills.length}
-          secondaryAction={
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="md" onClick={handleExport}>
-                Export
-              </Button>
-              <IconButton
-                icon={Printer}
-                aria-label="Print Bills"
-                tooltip="Print List"
-                size="md"
-                variant="secondary"
-                onClick={handlePrint}
-              />
-            </div>
-          }
-          primaryAction={
-            <Button
-              onClick={() => navigate('/bills/new')}
-              variant="primary"
-              size="md"
-            >
-              <Plus className="w-4 h-4" /> New Bill
-            </Button>
-          }
-        />
+    <div className="h-full flex flex-col bg-white overflow-hidden select-none">
+      {/* 1. Zoho Page Header with View Switcher & Split + New */}
+      <ZohoPageHeader
+        title="All Bills"
+        views={views}
+        activeViewId={activeView}
+        onViewChange={(vId) => setActiveView(vId)}
+        newAction={{
+          label: '+ New',
+          onClick: () => navigate('/bills/new'),
+          splitItems: [
+            { label: 'New Bill', onClick: () => navigate('/bills/new') },
+            { label: 'Import Bills', onClick: () => notification.info('Import Bills via CSV') },
+          ],
+        }}
+        onRefresh={() => queryClient.invalidateQueries({ queryKey: ['bills'] })}
+        moreActions={[
+          {
+            label: viewMode === 'list' ? 'Card View' : 'List View',
+            onClick: () => setViewMode(viewMode === 'list' ? 'card' : 'list'),
+          },
+          { label: 'Export Bills', onClick: () => notification.info('Exporting Bills to CSV...') },
+        ]}
+      />
 
-        {/* Stats Dashboard Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0 mb-3">
-          <KpiCard
-            label="Total Outstanding"
-            value={loadingBills ? '—' : formatCurrency(stats.outstandingAmt)}
-            helperText={`${stats.unpaidCount + stats.partialCount} active bills`}
-            isLoading={loadingBills}
-          />
-          <KpiCard
-            label="GST Input Credit"
-            value={loadingBills ? '—' : formatCurrency(stats.gstCredit)}
-            helperText="Accumulated input credit"
-            indicatorDot="collected"
-            isLoading={loadingBills}
-          />
-          <KpiCard
-            label="Overdue Bills"
-            value={loadingBills ? '—' : stats.overdueCount.toString()}
-            helperText="Requires payout attention"
-            indicatorDot="overdue"
-            isLoading={loadingBills}
-          />
-          <KpiCard
-            label="Purchases This Month"
-            value={loadingBills ? '—' : formatCurrency(stats.currentMonthPurchases)}
-            helperText="Current billing cycle"
-            isLoading={loadingBills}
-          />
-        </div>
-
-        {/* Expandable Filters Section */}
-        {isFilterPanelOpen && (
-          <div className="bg-surface border border-border p-3.5 rounded-xl shadow-xs shrink-0 mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-            <div>
-              <SearchableSelect
-                label="Vendor"
-                placeholder="All Vendors"
-                searchPlaceholder="Search vendor..."
-                value={selectedVendorId}
-                onChange={val => { setSelectedVendorId(val); resetPage(); }}
-                options={vendors}
-                mapOption={v => ({ label: v.name, value: v.id })}
-                clearable
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Bill Status</label>
-              <select
-                value={billStatus}
-                onChange={e => { setBillStatus(e.target.value); resetPage(); }}
-                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
-              >
-                <option value="">All Statuses</option>
-                <option value="SENT">Approved / Posted</option>
-                <option value="OVERDUE">Overdue</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Payment Status</label>
-              <select
-                value={paymentStatus}
-                onChange={e => { setPaymentStatus(e.target.value); resetPage(); }}
-                className="w-full h-8 bg-background border border-border rounded-[6px] px-2 text-[13px] text-foreground focus:outline-none"
-              >
-                <option value="">All Payment Statuses</option>
-                <option value="UNPAID">Unpaid</option>
-                <option value="PARTIAL">Partially Paid</option>
-                <option value="PAID">Paid</option>
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setSelectedVendorId('');
-                  setBillStatus('');
-                  setPaymentStatus('');
-                  setStartDate('');
-                  setEndDate('');
-                  setGstType('');
-                  setWarehouseId('');
-                  setMinAmount('');
-                  setMaxAmount('');
-                  setSearch('');
-                  resetPage();
-                }}
-                className="w-full h-8 text-[13px]"
-              >
-                Reset Filters
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <DataTable
-          columns={columns}
-          data={paginatedData}
-          totalItems={totalItems}
-          manualPagination={true}
-          pagination={{
-            pageIndex: page - 1,
-            pageSize: limit,
-          }}
-          onPaginationChange={(updater: any) => {
-            const next = typeof updater === 'function' ? updater({ pageIndex: page - 1, pageSize: limit }) : updater;
-            if (next.pageIndex !== undefined) setPage(next.pageIndex + 1);
-            if (next.pageSize !== undefined) setLimit(next.pageSize);
-          }}
-          isLoading={loadingBills}
-          storageKey="bills"
-          searchPlaceholder="Search bills by number, vendor, reference..."
-          globalFilter={search}
-          onGlobalFilterChange={(val) => {
-            setSearch(val);
-            resetPage();
-          }}
-          toolbarExtras={
-            <Button
-              variant={isFilterPanelOpen ? 'primary' : 'secondary'}
-              size="md"
-              onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-              className="text-[13px]"
-            >
-              <Filter className="w-3.5 h-3.5" />
-              Filters
-              {(selectedVendorId || billStatus || paymentStatus || startDate || endDate || gstType || warehouseId || minAmount || maxAmount) && (
-                <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5" />
-              )}
-            </Button>
-          }
-          exportFilename="Bills_List"
-          itemLabel="bills"
-          emptyText="No purchase bills found"
-          emptyDescription="Try adjusting your filters or record a new bill to track vendor balances."
-          emptyActionLabel="Record Vendor Bill"
-          onEmptyAction={() => navigate('/bills/new')}
-        />
-      </PageLayout>
-
-      {/* Record Payment Modal */}
-      {isPaymentModalOpen && paymentBill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-card border border-border/80 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col scale-in duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-muted/20">
-              <h3 className="font-extrabold text-lg text-foreground flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-emerald-500" /> Record Outbound Payment
-              </h3>
-              <button onClick={() => setIsPaymentModalOpen(false)} className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
-              <div className="bg-muted/10 border border-border/40 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Bill Number:</span>
-                  <span className="font-mono font-bold text-foreground">{paymentBill.purchaseNo}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Vendor Name:</span>
-                  <span className="font-semibold text-foreground">{paymentBill.vendor?.name}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Grand Total:</span>
-                  <span className="font-bold text-foreground">{formatCurrency(Number(paymentBill.grandTotal))}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Already Paid:</span>
-                  <span className="font-bold text-emerald-500">{formatCurrency(Number(paymentBill.amountPaid))}</span>
-                </div>
-                <div className="flex justify-between text-xs pt-1.5 border-t border-border/40 font-bold">
-                  <span className="text-foreground">Pending Balance Due:</span>
-                  <span className="text-amber-500">{formatCurrency(getOutstandingBalance(paymentBill))}</span>
-                </div>
+      {/* 2. KPI Strip above the table with Hide link */}
+      {isKpiVisible && !selectedBill && (
+        <div className="bg-[#F8F9FB] border-b border-[#E5E7EB] px-6 py-3 flex items-center justify-between shrink-0 text-xs">
+          <div className="flex items-center gap-6 flex-1 max-w-5xl divide-x divide-[#E5E7EB]">
+            {/* 1. Total Outstanding Payables with orange circle icon */}
+            <div className="flex items-center gap-3 pr-6">
+              <div className="w-8 h-8 rounded-full bg-[#FEF3C7] border border-[#FDE68A] flex items-center justify-center text-[#D97706] shrink-0">
+                <ArrowUpRight className="w-4 h-4" />
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Payment Date</label>
-                <input
-                  type="date"
-                  value={paymentDate}
-                  onChange={e => setPaymentDate(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Payment Amount (INR)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={getOutstandingBalance(paymentBill)}
-                  value={paymentAmount}
-                  onChange={e => setPaymentAmount(Number(e.target.value))}
-                  required
-                  className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all font-bold"
-                />
-              </div>
-
               <div>
-                <SearchableSelect
-                  label="Source Bank / Cash Account *"
-                  placeholder="Select Account..."
-                  searchPlaceholder="Search bank or cash account..."
-                  value={selectedBankAccountId}
-                  onChange={val => setSelectedBankAccountId(val)}
-                  options={bankAccounts}
-                  mapOption={b => ({
-                    label: b.name,
-                    value: b.id,
-                    subLabel: `Balance: ${formatCurrency(b.currentBalance)}`
-                  })}
-                />
+                <span className="text-[#6B7280] block text-[11px] font-medium">Total Outstanding Payables</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-[#2B2F36] tabular-nums">
+                    ₹{kpis.totalOutstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => queryClient.invalidateQueries({ queryKey: ['bills'] })}
+                    className="text-[11px] text-[#408DFB] hover:underline cursor-pointer"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Payment Method</label>
-                <select
-                  value={paymentMethod}
-                  onChange={e => setPaymentMethod(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-                >
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="CASH">Cash</option>
-                  <option value="CHEQUE">Cheque</option>
-                  <option value="UPI">UPI</option>
-                  <option value="CREDIT_CARD">Credit Card</option>
-                  <option value="NEFT">NEFT</option>
-                  <option value="RTGS">RTGS</option>
-                  <option value="IMPS">IMPS</option>
-                  <option value="WALLET">Wallet</option>
-                </select>
-              </div>
+            {/* 2. Due Today */}
+            <div className="pl-6 pr-6">
+              <span className="text-[#6B7280] block text-[11px] font-medium">Due Today</span>
+              <span className="text-sm font-bold text-[#D97706] tabular-nums">
+                ₹{kpis.dueToday.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Reference / Tx Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. UTR Number, Cheque Ref"
-                  value={paymentReference}
-                  onChange={e => setPaymentReference(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
-                />
-              </div>
+            {/* 3. Due Within 30 Days */}
+            <div className="pl-6 pr-6">
+              <span className="text-[#6B7280] block text-[11px] font-medium">Due Within 30 Days</span>
+              <span className="text-sm font-bold text-[#2B2F36] tabular-nums">
+                ₹{kpis.dueWithin30.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
 
-              <div className="pt-4 flex gap-3">
-                <Button type="button" variant="outline" onClick={() => setIsPaymentModalOpen(false)} className="w-full font-bold">
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={paymentMutation.isPending}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10"
-                >
-                  {paymentMutation.isPending ? 'Processing...' : 'Post Outbound Payout'} <ArrowRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </form>
+            {/* 4. OverDue Bills */}
+            <div className="pl-6">
+              <span className="text-[#6B7280] block text-[11px] font-medium">OverDue Bills</span>
+              <span className="text-sm font-bold text-[#E54B4B] tabular-nums">
+                ₹{kpis.overdueBills.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsKpiVisible(false)}
+            className="text-[11px] text-[#408DFB] hover:underline cursor-pointer ml-4 shrink-0 font-medium flex items-center gap-0.5"
+          >
+            <ChevronUp className="w-3.5 h-3.5" />
+            Hide
+          </button>
+        </div>
+      )}
+      {!isKpiVisible && !selectedBill && (
+        <div className="bg-[#F8F9FB] border-b border-[#E5E7EB] px-6 py-1 flex justify-end shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsKpiVisible(true)}
+            className="text-[11px] text-[#408DFB] hover:underline cursor-pointer font-medium flex items-center gap-0.5"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+            Show Summary
+          </button>
         </div>
       )}
 
-      {/* View Details Drawer/Modal */}
-      {isViewModalOpen && selectedBill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-card border-l border-border/80 w-full max-w-4xl h-full flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-muted/20">
-              <div>
-                <h3 className="font-extrabold text-lg text-foreground flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-primary" /> Purchase Bill: <span className="font-mono text-primary">{selectedBill.purchaseNo}</span>
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Auditing transactions, journal postings, and inventory movement records.</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <PdfDownloadButton
-                  filename={`Bill-${selectedBill.purchaseNo}.pdf`}
-                  data={{
-                    company: { name: companyProfile.name || '', address: companyProfile.address || '', email: companyProfile.email || '' },
-                    customer: { name: selectedBill.vendor?.name || 'Unknown', address: selectedBill.vendor?.state || 'N/A' },
-                    document: { title: 'Purchase Bill', documentNo: selectedBill.purchaseNo, date: selectedBill.date, status: selectedBill.status },
-                    items: selectedBill.items?.map(i => {
-                      const parsed = parseLineDescription(i.description);
-                      return {
-                        id: i.id,
-                        description: parsed.text,
-                        qty: Number(i.qty),
-                        rate: Number(i.rate),
-                        taxPercent: Number(i.taxPercent || 0),
-                        taxAmount: Number(i.taxAmount || 0),
-                        total: Number(i.total || 0)
-                      };
-                    }) || [],
-                    totals: {
-                      subTotal: Number(selectedBill.subTotal),
-                      taxTotal: Number(selectedBill.taxTotal),
-                      grandTotal: Number(selectedBill.grandTotal),
-                      amountPaid: Number(selectedBill.amountPaid || 0),
-                      balance: getOutstandingBalance(selectedBill),
-                      currency: 'INR'
-                    }
-                  }}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg shadow-sm"
-                />
-                <button onClick={() => setIsViewModalOpen(false)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors">
-                  <X className="w-6 h-6" />
+      {/* 3. Main Workspace: ListTable or SplitDetail */}
+      <div className="flex-1 overflow-hidden">
+        {selectedBill ? (
+          <ZohoSplitDetail
+            moduleTitle="All Bills"
+            items={splitItems}
+            selectedId={selectedBill.id}
+            onSelect={(id) => setSelectedBillId(id)}
+            onNew={() => navigate('/bills/new')}
+            onClose={() => setSelectedBillId(null)}
+            detailTitle={selectedBill.purchaseNo}
+            detailActions={
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/bills/new?edit=${selectedBill.id}`)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] rounded-[4px] text-xs font-medium text-[#2B2F36] cursor-pointer"
+                >
+                  <Edit className="w-3.5 h-3.5 text-[#6B7280]" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] rounded-[4px] text-xs font-medium text-[#2B2F36] cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-[#6B7280]" />
+                  <span>PDF/Print</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/vendor-payments/new?vendorId=${selectedBill.vendorId || ''}&billId=${selectedBill.id}`)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#408DFB] hover:bg-[#2563EB] text-white rounded-[4px] text-xs font-medium cursor-pointer"
+                >
+                  <DollarSign className="w-3.5 h-3.5" />
+                  <span>Record Payment</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillToDelete(selectedBill)}
+                  className="p-1 bg-white border border-[#CBD5E1] hover:bg-[#FEF2F2] rounded-[4px] text-[#6B7280] hover:text-[#DC2626] cursor-pointer"
+                  title="Delete Bill"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
-            </div>
+            }
+          >
+            <div className="p-6 space-y-6 max-w-4xl mx-auto">
+              {/* Collapsible Payments Made */}
+              {Number(selectedBill.amountPaid) > 0 && (
+                <div className="border border-[#CBD5E1] rounded-[4px] bg-[#F8F9FB] overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsPaymentsCollapsed(!isPaymentsCollapsed)}
+                    className="w-full px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-[#2B2F36] cursor-pointer hover:bg-[#F3F4F6]"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {isPaymentsCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      Payments Made (1)
+                    </span>
+                    <span className="text-green-700 font-bold">
+                      -₹{Number(selectedBill.amountPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </button>
 
-            {/* Scrollable Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Header Info */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-muted/10 border border-border/40 rounded-lg p-5">
-                <div className="space-y-1">
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Vendor details</div>
-                  <div className="font-bold text-foreground">{selectedBill.vendor?.name}</div>
-                  <div className="text-xs text-muted-foreground">GSTIN: {selectedBill.vendor?.gstin || 'N/A'}</div>
-                  <div className="text-xs text-muted-foreground">Place of Supply: {selectedBill.placeOfSupply || 'Intrastate'}</div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Date & Warehouse</div>
-                  <div className="text-xs text-foreground flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                    Bill Date: {new Date(selectedBill.date).toLocaleDateString()}
-                  </div>
-                  {selectedBill.gstBreakup?.dueDate && (
-                    <div className="text-xs text-foreground flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                      Due Date: {new Date(selectedBill.gstBreakup.dueDate).toLocaleDateString()}
+                  {!isPaymentsCollapsed && (
+                    <div className="p-3 bg-white border-t border-[#CBD5E1] text-xs">
+                      <div className="flex justify-between items-center py-1 text-[#6B7280]">
+                        <span>Payment recorded towards {selectedBill.purchaseNo}</span>
+                        <span className="font-semibold text-[#2B2F36]">
+                          ₹{Number(selectedBill.amountPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     </div>
                   )}
-                  <div className="text-xs text-foreground flex items-center gap-1.5">
-                    <Building className="w-3.5 h-3.5 text-muted-foreground" />
-                    Storage: {warehouses.find(w => w.id === selectedBill.gstBreakup?.warehouseId)?.name || 'Default Warehouse'}
+                </div>
+              )}
+
+              {/* PDF Preview Card with Corner Ribbon */}
+              <ZohoPDFPreview
+                status={getBillStatus(selectedBill)}
+                onPrint={() => window.print()}
+                onDownload={() => window.print()}
+              >
+                <div className="space-y-6 text-xs text-[#2B2F36]">
+                  {/* Bill Header */}
+                  <div className="flex justify-between items-start border-b border-[#E5E7EB] pb-4">
+                    <div>
+                      <h2 className="text-lg font-bold text-[#2B2F36] uppercase tracking-wide">VENDOR BILL</h2>
+                      <p className="font-mono text-xs text-[#6B7280] mt-0.5">{selectedBill.purchaseNo}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-sm text-[#2B2F36]">{selectedBill.vendor?.name}</p>
+                      {selectedBill.vendor?.gstin && <p className="text-[11px] text-[#6B7280]">GSTIN: {selectedBill.vendor.gstin}</p>}
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-1">
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reference & RCM</div>
-                  <div className="text-xs text-foreground">Invoice No: <span className="font-mono font-semibold">{selectedBill.reference || 'N/A'}</span></div>
-                  <div className="text-xs text-foreground">Tax Mode: <span className="font-mono font-semibold">{selectedBill.taxMode || 'CGST_SGST'}</span></div>
-                  <div className="text-xs text-foreground">Reverse Charge (RCM): {selectedBill.isRcm ? 'Yes' : 'No'}</div>
-                </div>
-              </div>
+                  {/* Dates & Reference */}
+                  <div className="grid grid-cols-3 gap-4 py-2 text-xs">
+                    <div>
+                      <span className="text-[#6B7280] block text-[11px]">Bill Date</span>
+                      <span className="font-semibold">{selectedBill.date ? new Date(selectedBill.date).toLocaleDateString('en-GB') : '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#6B7280] block text-[11px]">Due Date</span>
+                      <span className="font-semibold">{selectedBill.dueDate ? new Date(selectedBill.dueDate).toLocaleDateString('en-GB') : '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#6B7280] block text-[11px]">Reference#</span>
+                      <span className="font-semibold">{selectedBill.reference || '-'}</span>
+                    </div>
+                  </div>
 
-              {/* Source Document Attachment Info */}
-              {selectedBill.attachments && selectedBill.attachments.length > 0 && (() => {
-                const firstAttachment = selectedBill.attachments[0];
-                return (
-                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                          <FileText className="w-5 h-5" />
+                  {/* Line Items Table */}
+                  <div className="border border-[#CBD5E1] rounded-[4px] overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-[#F8F9FB] border-b border-[#CBD5E1] text-[#6B7280] font-semibold">
+                        <tr>
+                          <th className="py-2 px-3 text-left">Item Details</th>
+                          <th className="py-2 px-2 text-right">Qty</th>
+                          <th className="py-2 px-3 text-right">Rate</th>
+                          <th className="py-2 px-3 text-right">Tax %</th>
+                          <th className="py-2 px-3 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E5E7EB]">
+                        {selectedBill.items?.map((it, idx) => (
+                          <tr key={idx} className="hover:bg-[#F9FAFB]">
+                            <td className="py-2 px-3 font-medium text-[#2B2F36]">
+                              {it.product?.name || it.description}
+                            </td>
+                            <td className="py-2 px-2 text-right">{it.qty}</td>
+                            <td className="py-2 px-3 text-right">₹{Number(it.rate).toFixed(2)}</td>
+                            <td className="py-2 px-3 text-right">{it.taxPercent}%</td>
+                            <td className="py-2 px-3 text-right font-semibold">₹{Number(it.total).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Totals Breakdown */}
+                  <div className="flex justify-end">
+                    <div className="w-72 space-y-1.5 text-xs bg-[#F8F9FB] p-4 rounded-[4px] border border-[#CBD5E1]">
+                      <div className="flex justify-between text-[#6B7280]">
+                        <span>Sub Total</span>
+                        <span className="font-medium text-[#2B2F36]">₹{Number(selectedBill.subTotal || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-[#6B7280]">
+                        <span>Taxes (GST)</span>
+                        <span className="font-medium text-[#2B2F36]">₹{Number(selectedBill.taxTotal || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-sm text-[#2B2F36] pt-1.5 border-t border-[#CBD5E1]">
+                        <span>Total (₹)</span>
+                        <span>₹{Number(selectedBill.grandTotal || 0).toFixed(2)}</span>
+                      </div>
+                      {Number(selectedBill.amountPaid) > 0 && (
+                        <div className="flex justify-between text-red-600 font-semibold pt-1 border-t border-[#E5E7EB]">
+                          <span>Payments Made</span>
+                          <span>-₹{Number(selectedBill.amountPaid).toFixed(2)}</span>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-foreground">Original Vendor Bill Document</span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                              Cloudinary Archived
-                            </span>
-                            {firstAttachment.ocrStatus === 'VERIFIED' && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                                OCR Verified
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            {firstAttachment.originalFileName}
-                            {firstAttachment.confidence && ` • Confidence: ${Math.round(Number(firstAttachment.confidence) * 100)}%`}
-                          </p>
-                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-sm text-[#E54B4B] pt-1 border-t border-[#CBD5E1] bg-red-50/50 p-1.5 rounded-[2px]">
+                        <span>Balance Due</span>
+                        <span>₹{Math.max(0, Number(selectedBill.grandTotal || 0) - Number(selectedBill.amountPaid || 0)).toFixed(2)}</span>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setViewingDoc({
-                            url: firstAttachment.secureUrl,
-                            fileName: firstAttachment.originalFileName,
-                            mimeType: firstAttachment.mimeType || 'image/jpeg',
-                          })}
-                          className="text-xs font-semibold h-8"
-                        >
-                          <Eye className="w-3.5 h-3.5 mr-1 text-primary" />
-                          Preview Bill
-                        </Button>
-                        <a
-                          href={firstAttachment.secureUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center justify-center text-xs font-semibold h-8 px-2.5 rounded-lg border border-border bg-background hover:bg-muted text-foreground transition-colors"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5 mr-1" />
-                          Fullscreen
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Items Grid */}
-              <div className="space-y-2">
-                <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider">Itemized Line Entries</h4>
-                <div className="border border-border/80 rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/20">
-                        <TableHead className="font-bold py-2.5 px-4 text-xs">Product Item</TableHead>
-                        <TableHead className="font-bold py-2.5 px-4 text-right text-xs">Quantity</TableHead>
-                        <TableHead className="font-bold py-2.5 px-4 text-right text-xs">Rate</TableHead>
-                        <TableHead className="font-bold py-2.5 px-4 text-right text-xs">Discount</TableHead>
-                        <TableHead className="font-bold py-2.5 px-4 text-right text-xs">Tax %</TableHead>
-                        <TableHead className="font-bold py-2.5 px-4 text-right text-xs">Tax Amount</TableHead>
-                        <TableHead className="font-bold py-2.5 px-4 text-right text-xs">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedBill.items?.map((item: PurchaseItem) => {
-                        const parsed = parseLineDescription(item.description);
-                        return (
-                          <TableRow key={item.id} className="border-b border-border/40 text-xs">
-                            <TableCell className="py-2.5 px-4">
-                              <div className="font-bold text-foreground">{item.product?.name || 'Unknown Product'}</div>
-                              {parsed.text && <div className="text-[10px] text-muted-foreground mt-0.5">{parsed.text}</div>}
-                            </TableCell>
-                            <TableCell className="py-2.5 px-4 text-right font-mono">{Number(item.qty).toLocaleString()}</TableCell>
-                            <TableCell className="py-2.5 px-4 text-right font-mono">{formatCurrency(Number(item.rate))}</TableCell>
-                            <TableCell className="py-2.5 px-4 text-right font-mono text-muted-foreground">{parsed.discount > 0 ? `${parsed.discount}%` : '-'}</TableCell>
-                            <TableCell className="py-2.5 px-4 text-right font-mono text-muted-foreground">{Number(item.taxPercent)}%</TableCell>
-                            <TableCell className="py-2.5 px-4 text-right font-mono text-muted-foreground">{formatCurrency(Number(item.taxAmount))}</TableCell>
-                            <TableCell className="py-2.5 px-4 text-right font-mono font-bold text-foreground">{formatCurrency(Number(item.total))}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-
-              {/* Totals Summary */}
-              <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
-                {/* GST Breakup */}
-                <div className="w-full md:w-1/2 space-y-2">
-                  <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider">GST Distribution Summary</h4>
-                  <div className="border border-border/50 rounded-lg p-4 space-y-2 bg-muted/10">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Central GST (CGST Input):</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(Number(selectedBill.cgstAmount))}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">State GST (SGST Input):</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(Number(selectedBill.sgstAmount))}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Integrated GST (IGST Input):</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(Number(selectedBill.igstAmount))}</span>
-                    </div>
-                    <div className="flex justify-between text-xs pt-1.5 border-t border-border/40 font-bold">
-                      <span className="text-foreground">Total Tax Input Credit:</span>
-                      <span className="text-primary">{formatCurrency(Number(selectedBill.taxTotal))}</span>
                     </div>
                   </div>
                 </div>
+              </ZohoPDFPreview>
 
-                {/* Subtotals */}
-                <div className="w-full md:w-1/2 space-y-2">
-                  <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider">Financial Calculations</h4>
-                  <div className="border border-border/50 rounded-lg p-4 space-y-2 bg-muted/10">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Gross Subtotal:</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(Number(selectedBill.subTotal))}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">GST Taxes:</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(Number(selectedBill.taxTotal))}</span>
-                    </div>
-                    {selectedBill.gstBreakup?.roundOff !== undefined && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Round Off Adjustment:</span>
-                        <span className="font-semibold text-foreground">{formatCurrency(Number(selectedBill.gstBreakup.roundOff))}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-xs pt-1.5 border-t border-border/40 font-bold text-foreground">
-                      <span>Grand Billing Total:</span>
-                      <span>{formatCurrency(Number(selectedBill.grandTotal))}</span>
-                    </div>
-                    <div className="flex justify-between text-xs font-semibold text-emerald-500">
-                      <span>Outbound Payments Settled:</span>
-                      <span>{formatCurrency(Number(selectedBill.amountPaid))}</span>
-                    </div>
-                    <div className="flex justify-between text-xs pt-1.5 border-t border-border/40 font-black text-amber-500">
-                      <span>Current Ledger Balance:</span>
-                      <span>{formatCurrency(getOutstandingBalance(selectedBill))}</span>
-                    </div>
-                  </div>
+              {/* Journal Entries Section */}
+              <div className="border border-[#CBD5E1] rounded-[4px] overflow-hidden bg-white">
+                <div className="bg-[#F8F9FB] px-4 py-2.5 border-b border-[#CBD5E1] flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-[#2B2F36] uppercase tracking-wider">
+                    Journal
+                  </h4>
+                  <span className="text-[11px] text-[#6B7280]">
+                    Amount is displayed in your base currency INR
+                  </span>
                 </div>
-              </div>
 
-              {/* Automatic Journal Voucher Entry Audit */}
-              <div className="space-y-2">
-                <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <CheckCircle className="w-4 h-4 text-emerald-500" /> Automatic General Ledger Journal Audit
-                </h4>
-                {isLoadingJournals ? (
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5 p-3">
-                    Loading ledger entries...
-                  </div>
-                ) : journalEntries.length === 0 ? (
-                  <div className="text-xs text-red-500 bg-red-500/5 border border-red-500/10 rounded-lg p-4">
-                    Warning: No journal posting records found for this bill. Contact ledger administration.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {journalEntries.map((je: any) => (
-                      <div key={je.id} className="border border-border/60 rounded-lg overflow-hidden bg-card text-xs">
-                        <div className="bg-muted/30 px-4 py-2 flex items-center justify-between border-b border-border/40">
-                          <div>
-                            Journal Voucher: <span className="font-mono font-bold text-foreground">{je.journalNo || je.reference}</span>
-                          </div>
-                          <div className="text-muted-foreground text-[10px]">
-                            Posted Date: {new Date(je.date).toLocaleDateString()}
-                          </div>
-                        </div>
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-muted/10">
-                              <TableHead className="font-bold py-1.5 px-4 text-[10px]">Ledger Account</TableHead>
-                              <TableHead className="font-bold py-1.5 px-4 text-[10px] text-right">Debit (Dr)</TableHead>
-                              <TableHead className="font-bold py-1.5 px-4 text-[10px] text-right">Credit (Cr)</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {je.lines?.map((line: any) => (
-                              <TableRow key={line.id} className="border-b border-border/20">
-                                <TableCell className="py-2 px-4 font-semibold text-foreground">
-                                  {line.account?.name}
-                                </TableCell>
-                                <TableCell className="py-2 px-4 text-right font-mono text-foreground">
-                                  {Number(line.debit) > 0 ? formatCurrency(Number(line.debit)) : '-'}
-                                </TableCell>
-                                <TableCell className="py-2 px-4 text-right font-mono text-foreground">
-                                  {Number(line.credit) > 0 ? formatCurrency(Number(line.credit)) : '-'}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="p-4">
+                  {journalEntries.length > 0 ? (
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[#E5E7EB] text-[#6B7280] text-left">
+                          <th className="py-2">ACCOUNT</th>
+                          <th className="py-2 text-right">DEBIT</th>
+                          <th className="py-2 text-right">CREDIT</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E5E7EB]">
+                        {journalEntries.map((je: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className="py-2 font-medium">{je.account?.name || je.accountName || 'Accounts Payable'}</td>
+                            <td className="py-2 text-right tabular-nums">{je.debit ? `₹${Number(je.debit).toFixed(2)}` : '-'}</td>
+                            <td className="py-2 text-right tabular-nums">{je.credit ? `₹${Number(je.credit).toFixed(2)}` : '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="text-center py-4 text-xs text-[#6B7280]">
+                      No journal lines generated yet for this transaction.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-border/60 bg-muted/10 text-right">
-              <Button onClick={() => setIsViewModalOpen(false)} variant="primary" className="font-bold">
-                Close Audit View
-              </Button>
-            </div>
+          </ZohoSplitDetail>
+        ) : isError ? (
+          <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-white">
+            <AlertCircle className="w-10 h-10 text-[#E54B4B] mb-2" />
+            <p className="text-sm font-semibold text-[#2B2F36]">Failed to load vendor bills</p>
+            <p className="text-xs text-[#6B7280] max-w-sm mt-1">
+              {(error as any)?.response?.data?.message || (error as any)?.message || 'An error occurred while fetching bills from the server.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-4 px-3 py-1.5 bg-[#408DFB] text-white rounded-[4px] text-xs font-medium hover:bg-[#2563EB] cursor-pointer"
+            >
+              Retry Loading
+            </button>
           </div>
-        </div>
-      )}
-      <ConfirmDialog
-        isOpen={!!billToCancel}
-        onClose={() => {
-          if (!cancelMutation.isPending) setBillToCancel(null);
-        }}
-        onConfirm={async () => {
-          if (billToCancel) {
-            await cancelMutation.mutateAsync(billToCancel.id);
-            setBillToCancel(null);
-          }
-        }}
-        title="Cancel Purchase Bill"
-        message={<span>Cancel bill <strong>{billToCancel?.purchaseNo}</strong>? This will reverse ledger accounts and stock changes.</span>}
-        confirmText="Cancel Bill"
-        loadingText="Cancelling..."
-        variant="danger"
-        isLoading={cancelMutation.isPending}
-      />
-      <DeleteDialog
-        isOpen={!!billToDelete}
-        onClose={() => {
-          if (!deleteMutation.isPending) setBillToDelete(null);
-        }}
-        onConfirm={async () => {
-          if (billToDelete) {
-            await deleteMutation.mutateAsync(billToDelete.id);
-            setBillToDelete(null);
-          }
-        }}
-        isLoading={deleteMutation.isPending}
-        entityName="Purchase Bill"
-        entityId={billToDelete?.purchaseNo}
-        warningText="This action is irreversible."
-      />
-      
-      {/* Interactive Bill OCR Review Viewer Modal */}
-      {viewingDoc && (
-        <BillOcrReviewViewer
-          isOpen={!!viewingDoc}
-          onClose={() => setViewingDoc(null)}
-          documentUrl={viewingDoc.url}
-          fileName={viewingDoc.fileName}
-          mimeType={viewingDoc.mimeType}
+        ) : (
+          <ZohoListTable
+            columns={columns}
+            data={filteredBills}
+            isLoading={isLoading}
+            keyField="id"
+            onRowClick={(b) => setSelectedBillId(b.id)}
+          />
+        )}
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {billToDelete && (
+        <DeleteDialog
+          isOpen={!!billToDelete}
+          onClose={() => setBillToDelete(null)}
+          onConfirm={() => deleteMutation.mutate(billToDelete.id)}
+          entityName={`Bill ${billToDelete.purchaseNo}`}
+          warningText={`Are you sure you want to delete bill "${billToDelete.purchaseNo}"? This action cannot be undone.`}
         />
       )}
-    </>
+    </div>
   );
 };
+
+export default BillsList;

@@ -44,7 +44,14 @@ export class ReceiptsService {
         : {}),
       ...(query.customerId ? { businessPartnerId: query.customerId } : {}),
       ...(query.paymentMethod ? { payments: { some: { paymentMethod: query.paymentMethod } } } : {}),
-      ...(query.status ? { status: query.status } : {}),
+      ...(query.status
+        ? {
+            status:
+              query.status === 'PAID'
+                ? { in: ['PAID', 'COMPLETED'] }
+                : query.status,
+          }
+        : {}),
       ...(query.startDate && query.endDate
         ? {
             date: {
@@ -76,7 +83,7 @@ export class ReceiptsService {
     }
 
     const receipt = await this.prisma.receipt.findFirst({
-      where: { id },
+      where: { id, companyId },
       include: {
         businessPartner: true,
         receivedBy: true,
@@ -84,6 +91,7 @@ export class ReceiptsService {
         allocations: { include: { invoice: true } },
         attachments: true,
         audits: { include: { user: true } },
+        account: true,
       },
     });
 
@@ -91,7 +99,19 @@ export class ReceiptsService {
       throw new NotFoundException(`Receipt with ID ${id} not found`);
     }
 
-    return receipt;
+    const createAudit = receipt.audits?.find((a) => a.action === 'CREATE');
+    const details = (createAudit?.details as any) || {};
+
+    return {
+      ...receipt,
+      isAdvance: details.isAdvance ?? (receipt.allocations?.length === 0),
+      placeOfSupply: details.placeOfSupply ?? null,
+      descriptionOfSupply: details.descriptionOfSupply ?? null,
+      taxRate: details.taxRate ?? null,
+      taxAmount: details.taxAmount ?? null,
+      bankCharges: details.bankCharges ?? (receipt.payments?.[0]?.bankCharges ? Number(receipt.payments[0].bankCharges) : 0),
+      tdsAmount: details.tdsAmount ?? 0,
+    };
   }
 
   async getSummary() {
@@ -135,6 +155,7 @@ export class ReceiptsService {
     };
   }
 
+
   async create(dto: CreateReceiptDto, userId: string, txClient?: Prisma.TransactionClient) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
@@ -160,8 +181,19 @@ export class ReceiptsService {
       0,
     );
 
-    if (Number(dto.amount) > totalOutstanding + 0.01) {
+    const isAdvance = dto.isAdvance || (dto as any).type === 'ADVANCE';
+    if (!isAdvance && (!dto.allocations || dto.allocations.length === 0) && Number(dto.amount) > totalOutstanding + 0.01) {
       throw new BadRequestException('Receipt amount exceeds outstanding balance');
+    }
+
+    if (dto.allocations && dto.allocations.length > 0) {
+      const totalAllocated = dto.allocations.reduce((sum, a) => sum + Number(a.amount), 0);
+      const totalCustomerCredit = Number(dto.amount) + (dto.tdsAmount && Number(dto.tdsAmount) > 0 ? Number(dto.tdsAmount) : 0);
+      if (totalAllocated > totalCustomerCredit + 0.01) {
+        throw new BadRequestException(
+          `Total allocated amount (₹${totalAllocated.toFixed(2)}) cannot exceed total receipt amount with TDS (₹${totalCustomerCredit.toFixed(2)})`
+        );
+      }
     }
 
     const normalizedSplits = dto.splitPayments && dto.splitPayments.length > 0
@@ -244,7 +276,8 @@ export class ReceiptsService {
 
     const execute = async (tx: Prisma.TransactionClient) => {
       // 1. Generate receipt number
-      const receiptNo = await this.sequenceService.generateNextSequence(companyId, 'RECEIPT', tx);
+      const receiptNo = dto.receiptNo?.trim() || await this.sequenceService.generateNextSequence(companyId, 'RECEIPT', tx);
+      const isDraft = dto.status === 'DRAFT';
 
       // 2. Create Receipt record and Payments
       const receipt = await tx.receipt.create({
@@ -257,7 +290,8 @@ export class ReceiptsService {
           currency: dto.currency || 'INR',
           exchangeRate: dto.exchangeRate || 1.0,
           receivedById: userId,
-          status: 'COMPLETED',
+          accountId: normalizedSplits[0]?.accountId || dto.accountId || null,
+          status: isDraft ? 'DRAFT' : 'COMPLETED',
           payments: {
             create: normalizedSplits.map(split => ({
               account: { connect: { id: split.accountId! } },
@@ -268,14 +302,32 @@ export class ReceiptsService {
               transactionId: split.transactionId || null,
               clearanceDate: split.clearanceDate ? new Date(split.clearanceDate) : null,
               bankCharges: split.bankCharges || 0,
-              notes: dto.notes || null
-            }))
-          }
+              notes: dto.notes || null,
+            })),
+          },
         },
       });
 
+      // 2b. Persist Attachments if provided
+      if (dto.attachments && Array.isArray(dto.attachments) && dto.attachments.length > 0) {
+        await tx.receiptAttachment.createMany({
+          data: dto.attachments.map((att: any) => ({
+            receiptId: receipt.id,
+            fileName: att.fileName || att.name || 'attachment',
+            fileUrl: att.fileUrl || att.url || '',
+            fileSize: Number(att.fileSize || att.size || 0),
+            mimeType: att.mimeType || att.type || 'application/octet-stream',
+          })),
+        });
+      }
+
+      if (isDraft) {
+        return receipt;
+      }
+
       // 3. Invoice Allocation
       let remainingAmount = Number(dto.amount);
+      let allocatedAmount = 0;
 
       if (dto.allocations && dto.allocations.length > 0) {
         // Manual allocation
@@ -291,7 +343,7 @@ export class ReceiptsService {
           }
 
           const newPaid = Number(inv.amountPaid) + alloc.amount;
-          const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIAL';
+          const status = newPaid >= Number(inv.grandTotal) - 0.005 ? 'PAID' : 'PARTIAL';
 
           await tx.invoice.update({
             where: { id: inv.id },
@@ -305,8 +357,9 @@ export class ReceiptsService {
               amount: alloc.amount,
             },
           });
+          allocatedAmount += alloc.amount;
         }
-      } else {
+      } else if (!isAdvance) {
         // FIFO Auto allocation
         const invoices = await tx.invoice.findMany({
           where: {
@@ -325,7 +378,7 @@ export class ReceiptsService {
 
           if (allocate > 0) {
             const newPaid = Number(inv.amountPaid) + allocate;
-            const status = newPaid >= Number(inv.grandTotal) ? 'PAID' : 'PARTIAL';
+            const status = newPaid >= Number(inv.grandTotal) - 0.005 ? 'PAID' : 'PARTIAL';
 
             await tx.invoice.update({
               where: { id: inv.id },
@@ -341,30 +394,53 @@ export class ReceiptsService {
             });
 
             remainingAmount -= allocate;
+            allocatedAmount += allocate;
           }
         }
       }
+
+      const tdsAmount = dto.tdsAmount && Number(dto.tdsAmount) > 0 ? Number(dto.tdsAmount) : 0;
+      const bankCharges = dto.bankCharges && Number(dto.bankCharges) > 0 ? Number(dto.bankCharges) : 0;
+      const totalCustomerCredit = Number(dto.amount) + tdsAmount;
+      const unappliedAmount = isAdvance
+        ? Number(dto.amount)
+        : Math.max(0, totalCustomerCredit - allocatedAmount);
 
       // 4. Update Customer Receivable balance
       await tx.businessPartner.update({
         where: { id: dto.businessPartnerId },
         data: {
           receivableBalance: {
-            decrement: dto.amount,
+            decrement: totalCustomerCredit,
           },
         },
       });
 
-      // 5. Update Cash/Bank Account balances
+      // 5. Update Cash/Bank Account balances on BankAccount/CashAccount (accountingEngine updates GL Account)
       for (const split of normalizedSplits) {
-        await tx.account.update({
-          where: { id: split.accountId! },
-          data: {
-            balance: {
-              increment: split.amount,
-            },
-          },
-        });
+        const splitBankCharges = Number(split.bankCharges || 0);
+        const netSplitAmount = Number(split.amount) - splitBankCharges;
+        if (split.accountId) {
+          const bankAcc = await tx.bankAccount.findFirst({
+            where: { OR: [{ id: split.accountId }, { accountId: split.accountId }], companyId },
+          });
+          if (bankAcc) {
+            await tx.bankAccount.update({
+              where: { id: bankAcc.id },
+              data: { currentBalance: { increment: netSplitAmount } },
+            });
+          } else {
+            const cashAcc = await tx.cashAccount.findFirst({
+              where: { OR: [{ id: split.accountId }, { accountId: split.accountId }], companyId },
+            });
+            if (cashAcc) {
+              await tx.cashAccount.update({
+                where: { id: cashAcc.id },
+                data: { currentBalance: { increment: netSplitAmount } },
+              });
+            }
+          }
+        }
       }
 
       // 6. Write Customer Statement
@@ -373,11 +449,11 @@ export class ReceiptsService {
           companyId,
           businessPartnerId: dto.businessPartnerId,
           date: new Date(dto.date),
-          type: 'PAYMENT',
+          type: isAdvance ? 'ADVANCE' : 'PAYMENT',
           reference: receiptNo,
           debit: 0,
-          credit: dto.amount,
-          balance: Number(customer.receivableBalance) - dto.amount,
+          credit: totalCustomerCredit,
+          balance: Number(customer.receivableBalance) - totalCustomerCredit,
         },
       });
 
@@ -391,20 +467,104 @@ export class ReceiptsService {
         });
       }
 
-      const journalLines = [
-        ...normalizedSplits.map(split => ({
-          accountId: split.accountId!,
-          debit: split.amount,
-          credit: 0
-        })),
-        { accountId: arAccount.id, debit: 0, credit: dto.amount }
-      ];
+      let advanceAccount = await tx.account.findFirst({
+        where: {
+          companyId,
+          OR: [
+            { name: 'Customer Advances' },
+            { name: 'Unearned Revenue' },
+            { name: 'Advance from Customers' },
+          ],
+        },
+      });
+      if (!advanceAccount) {
+        advanceAccount = await tx.account.create({
+          data: {
+            companyId,
+            name: 'Customer Advances',
+            category: 'LIABILITY',
+            subCategory: 'CURRENT_LIABILITY',
+            balance: 0,
+          },
+        });
+      }
+
+      const journalLines: Array<{ accountId: string; debit: number; credit: number }> = [];
+
+      // Debits to Bank / Cash accounts (Net deposited into bank/cash)
+      normalizedSplits.forEach((split) => {
+        const splitBankCharges = Number(split.bankCharges || 0);
+        const netDeposit = Number(split.amount) - splitBankCharges;
+        if (netDeposit > 0) {
+          journalLines.push({
+            accountId: split.accountId!,
+            debit: netDeposit,
+            credit: 0,
+          });
+        }
+      });
+
+      // TDS Receivable debit if applicable
+      if (tdsAmount > 0) {
+        let tdsAccount = await tx.account.findFirst({
+          where: { companyId, name: 'TDS Receivable' },
+        });
+        if (!tdsAccount) {
+          tdsAccount = await tx.account.create({
+            data: { companyId, name: 'TDS Receivable', category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+          });
+        }
+        journalLines.push({
+          accountId: tdsAccount.id,
+          debit: tdsAmount,
+          credit: 0,
+        });
+      }
+
+      // Bank charges expense debit if recorded
+      if (bankCharges > 0) {
+        let bankChargesAccount = await tx.account.findFirst({
+          where: { companyId, name: 'Bank Charges' },
+        });
+        if (!bankChargesAccount) {
+          bankChargesAccount = await tx.account.create({
+            data: { companyId, name: 'Bank Charges', category: 'EXPENSE', balance: 0 },
+          });
+        }
+        journalLines.push({
+          accountId: bankChargesAccount.id,
+          debit: bankCharges,
+          credit: 0,
+        });
+      }
+
+      // Credits:
+      // 1. Credit Accounts Receivable for amount allocated to invoices
+      const arCredit = isAdvance ? 0 : Math.min(totalCustomerCredit, allocatedAmount);
+      if (arCredit > 0) {
+        journalLines.push({
+          accountId: arAccount.id,
+          debit: 0,
+          credit: arCredit,
+        });
+      }
+
+      // 2. Credit Customer Advances liability for unapplied balance or full advance
+      if (unappliedAmount > 0) {
+        journalLines.push({
+          accountId: advanceAccount.id,
+          debit: 0,
+          credit: unappliedAmount,
+        });
+      }
 
       await this.accountingEngine.postTransaction({
         companyId,
         date: new Date(dto.date),
         reference: receiptNo,
-        description: `Automatic receipt posting ${receiptNo}`,
+        description: isAdvance
+          ? `Customer advance received ${receiptNo}`
+          : `Receipt payment received ${receiptNo}`,
         lines: journalLines,
       }, tx);
 
@@ -414,7 +574,20 @@ export class ReceiptsService {
           receiptId: receipt.id,
           userId,
           action: 'CREATE',
-          details: JSON.parse(JSON.stringify({ dto })),
+          details: JSON.parse(
+            JSON.stringify({
+              isAdvance,
+              placeOfSupply: dto.placeOfSupply,
+              descriptionOfSupply: dto.descriptionOfSupply,
+              taxRate: dto.taxRate,
+              taxAmount: dto.taxAmount,
+              bankCharges,
+              tdsAmount,
+              accountId: dto.accountId,
+              allocations: dto.allocations,
+              excessAmount: unappliedAmount,
+            })
+          ),
         },
       });
 
@@ -498,16 +671,29 @@ export class ReceiptsService {
         },
       });
 
-      // 3. Revert Cash/Bank Account balances
+      // 3. Revert Cash/Bank Account balances on BankAccount/CashAccount (GL Account is reverted by accountingEngine.reverseTransaction below)
       for (const payment of receipt.payments) {
-        await tx.account.update({
-          where: { id: payment.accountId },
-          data: {
-            balance: {
-              decrement: payment.amount,
-            },
-          },
+        const bankCharges = Number(payment.bankCharges || 0);
+        const netDeposit = Number(payment.amount) - bankCharges;
+        const bankAcc = await tx.bankAccount.findFirst({
+          where: { OR: [{ id: payment.accountId }, { accountId: payment.accountId }], companyId },
         });
+        if (bankAcc) {
+          await tx.bankAccount.update({
+            where: { id: bankAcc.id },
+            data: { currentBalance: { decrement: netDeposit } },
+          });
+        } else {
+          const cashAcc = await tx.cashAccount.findFirst({
+            where: { OR: [{ id: payment.accountId }, { accountId: payment.accountId }], companyId },
+          });
+          if (cashAcc) {
+            await tx.cashAccount.update({
+              where: { id: cashAcc.id },
+              data: { currentBalance: { decrement: netDeposit } },
+            });
+          }
+        }
       }
 
       // 4. Revert Customer Statement (create contra entry or delete)
@@ -700,7 +886,7 @@ export class ReceiptsService {
     }, { timeout: 40000 });
   }
 
-  async getNextNumber(type: string) {
+  async getNextNumber(type?: string): Promise<string> {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -717,19 +903,36 @@ export class ReceiptsService {
     } else if (type === 'EXPENSE') {
       docType = 'EXPENSE';
       prefix = 'EXP';
+    } else if (type?.toUpperCase() === 'ADVANCE' || type === 'customer_advance') {
+      docType = 'ADVANCE';
+      prefix = 'ADV';
     } else {
-      throw new BadRequestException('Invalid receipt type');
+      docType = 'PAYMENT_RECEIPT';
+      prefix = 'RCP';
     }
 
     // Generate receipt number preview without actually consuming it
-    // Wait, generateNextSequence actually consumes it!
-    // Since this is a preview function, we should use getConfig.
     const config = await this.sequenceService.getConfig(companyId, docType);
     if (config) {
       const nextNumber = config.currentNumber + 1;
       return `${config.prefix || prefix + '-'}${String(nextNumber).padStart(config.padding || 5, '0')}`;
     }
-    return `${prefix}-00001`;
+
+    const lastReceipt = await this.prisma.receipt.findFirst({
+      where: { companyId },
+      orderBy: { createdAt: 'desc' },
+      select: { receiptNo: true },
+    });
+    if (lastReceipt?.receiptNo) {
+      const match = lastReceipt.receiptNo.match(/^(.*?)(\d+)$/);
+      if (match) {
+        const p = match[1];
+        const num = parseInt(match[2], 10) + 1;
+        return `${p}${num.toString().padStart(match[2].length, '0')}`;
+      }
+    }
+
+    return `${prefix}-1001`;
   }
 
   async preview(dto: any) {
@@ -859,7 +1062,7 @@ export class ReceiptsService {
         where: {
           companyId,
           deletedAt: null,
-          ...(status ? { status } : {}),
+          ...(status ? { status: status === 'PAID' ? { in: ['PAID', 'COMPLETED'] } : status } : {}),
           ...(startDate || endDate ? {
             date: {
               ...(startDate ? { gte: startDate } : {}),
@@ -876,6 +1079,7 @@ export class ReceiptsService {
         include: {
           businessPartner: true,
           account: true,
+          payments: { include: { account: true } },
         }
       });
 
@@ -887,7 +1091,7 @@ export class ReceiptsService {
           receiptNo: s.receiptNo,
           date: s.date,
           partyName: s.businessPartner?.name || 'N/A',
-          paymentLedgerName: s.account?.name || 'N/A',
+          paymentLedgerName: s.account?.name || s.payments?.[0]?.account?.name || 'Cash/Bank',
           expenseLedgerName: '—',
           amount: Number(s.amount),
           status: s.status,
@@ -1094,6 +1298,49 @@ export class ReceiptsService {
         },
       });
 
+      // Reclassification from Customer Advances (Liability) to Accounts Receivable (Asset)
+      let arAccount = await tx.account.findFirst({
+        where: { companyId, name: 'Accounts Receivable' },
+      });
+      if (!arAccount) {
+        arAccount = await tx.account.create({
+          data: { companyId, name: 'Accounts Receivable', category: 'ASSET', balance: 0 },
+        });
+      }
+
+      let advanceAccount = await tx.account.findFirst({
+        where: {
+          companyId,
+          OR: [
+            { name: 'Customer Advances' },
+            { name: 'Unearned Revenue' },
+            { name: 'Advance from Customers' },
+          ],
+        },
+      });
+      if (!advanceAccount) {
+        advanceAccount = await tx.account.create({
+          data: {
+            companyId,
+            name: 'Customer Advances',
+            category: 'LIABILITY',
+            subCategory: 'CURRENT_LIABILITY',
+            balance: 0,
+          },
+        });
+      }
+
+      await this.accountingEngine.postTransaction({
+        companyId,
+        date: new Date(),
+        reference: `ALLOC-${allocation.id}`,
+        description: `Apply advance ${receipt.receiptNo} to Invoice ${invoice.invoiceNo}`,
+        lines: [
+          { accountId: advanceAccount.id, debit: allocateAmount, credit: 0 },
+          { accountId: arAccount.id, debit: 0, credit: allocateAmount },
+        ],
+      }, tx);
+
       await tx.receiptAudit.create({
         data: {
           receiptId: receipt.id,
@@ -1206,6 +1453,19 @@ export class ReceiptsService {
             status: newStatus as any,
           },
         });
+
+        // Reverse reclassification journal entry if present
+        const allocJournal = await tx.journalEntry.findFirst({
+          where: { companyId, reference: `ALLOC-${allocation.id}` },
+        });
+        if (allocJournal) {
+          await this.accountingEngine.reverseTransaction(
+            allocJournal.id,
+            companyId,
+            tx,
+            `Reversal of advance allocation ${allocation.id}`
+          );
+        }
 
         // 3. Log receipt audit
         await tx.receiptAudit.create({

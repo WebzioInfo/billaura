@@ -17,7 +17,7 @@ export class PurchasesService {
     private readonly sequenceService: SequenceService
   ) {}
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: PaginationQueryDto & { status?: string; vendorId?: string }) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -27,10 +27,14 @@ export class PurchasesService {
 
     const where: Prisma.PurchaseWhereInput = {
       companyId,
+      deletedAt: null,
+      ...(query.status ? { status: query.status as any } : {}),
+      ...(query.vendorId ? { businessPartnerId: query.vendorId } : {}),
       ...(query.search
         ? {
             OR: [
               { purchaseNo: { contains: query.search } },
+              { reference: { contains: query.search } },
               { businessPartner: { name: { contains: query.search } } },
             ],
           }
@@ -48,7 +52,113 @@ export class PurchasesService {
       this.prisma.purchase.count({ where }),
     ]);
 
-    return toPaginatedResult(data, total, query);
+    const enriched = data.map((b) => {
+      const meta = (b.gstBreakup as any) || {};
+      const dueDate = meta.dueDate || (b.date ? new Date(b.date).toISOString().split('T')[0] : undefined);
+      return {
+        ...b,
+        dueDate,
+        vendor: b.businessPartner,
+      };
+    });
+
+    return toPaginatedResult(enriched, total, query);
+  }
+
+  async getNextNumber(): Promise<{ nextNumber: string }> {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const nextNumber = await this.sequenceService.previewNextSequence(companyId, 'BILL');
+    return { nextNumber };
+  }
+
+  async getPaymentTerms(): Promise<Array<{ name: string; days: number }>> {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const defaultTerms = [
+      { name: 'Due on Receipt', days: 0 },
+      { name: 'Net 15', days: 15 },
+      { name: 'Net 30', days: 30 },
+      { name: 'Net 45', days: 45 },
+      { name: 'Net 60', days: 60 },
+      { name: 'Due end of the month', days: 30 },
+      { name: 'Due end of next month', days: 60 },
+    ];
+
+    const settings = await this.prisma.companySettings.findUnique({
+      where: { companyId },
+    });
+
+    const customTerms = (settings?.invoiceSettings as any)?.paymentTerms;
+    if (Array.isArray(customTerms) && customTerms.length > 0) {
+      const map = new Map<string, { name: string; days: number }>();
+      defaultTerms.forEach((t) => map.set(t.name.toLowerCase(), t));
+      customTerms.forEach((t: any) => {
+        if (t?.name && t?.days !== undefined) {
+          map.set(t.name.toLowerCase(), { name: t.name, days: Number(t.days) });
+        }
+      });
+      return Array.from(map.values());
+    }
+
+    return defaultTerms;
+  }
+
+  async createPaymentTerm(dto: { termName: string; dueAfter: number }): Promise<{ name: string; days: number }> {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const termName = dto.termName?.trim();
+    const dueAfter = Number(dto.dueAfter);
+
+    if (!termName) {
+      throw new BadRequestException('Term Name is required');
+    }
+    if (isNaN(dueAfter) || dueAfter < 0) {
+      throw new BadRequestException('Due After must be a non-negative number of days');
+    }
+
+    const currentTerms = await this.getPaymentTerms();
+    if (currentTerms.some((t) => t.name.toLowerCase() === termName.toLowerCase())) {
+      throw new ConflictException(`Payment term "${termName}" already exists`);
+    }
+
+    const newTerm = { name: termName, days: dueAfter };
+    const updatedTerms = [...currentTerms, newTerm];
+
+    const settings = await this.prisma.companySettings.findUnique({
+      where: { companyId },
+    });
+
+    const currentInvoiceSettings = (settings?.invoiceSettings as any) || {};
+    const newInvoiceSettings = {
+      ...currentInvoiceSettings,
+      paymentTerms: updatedTerms,
+    };
+
+    if (settings) {
+      await this.prisma.companySettings.update({
+        where: { id: settings.id },
+        data: { invoiceSettings: newInvoiceSettings },
+      });
+    } else {
+      await this.prisma.companySettings.create({
+        data: {
+          companyId,
+          invoiceSettings: newInvoiceSettings,
+        },
+      });
+    }
+
+    return newTerm;
   }
 
   async findOne(id: string) {
@@ -58,7 +168,7 @@ export class PurchasesService {
     }
 
     const purchase = await this.prisma.purchase.findFirst({
-      where: { id },
+      where: { id, companyId },
       include: { businessPartner: true, items: { include: { product: true } }, attachments: true },
     });
 
@@ -66,7 +176,46 @@ export class PurchasesService {
       throw new NotFoundException(`Purchase with ID ${id} not found`);
     }
 
-    return purchase;
+    const meta = (purchase.gstBreakup as any) || {};
+    const parsedItems = purchase.items.map((it) => {
+      let extra: any = {};
+      try {
+        if (it.description && it.description.startsWith('{')) {
+          extra = JSON.parse(it.description);
+        }
+      } catch (_) {}
+
+      return {
+        ...it,
+        description: extra.text || it.description || '',
+        accountId: extra.accountId || null,
+        customerId: extra.customerId || null,
+        discount: extra.discount !== undefined ? extra.discount : 0,
+        unit: extra.unit || 'Pcs',
+      };
+    });
+
+    return {
+      ...purchase,
+      vendor: purchase.businessPartner,
+      dueDate: meta.dueDate || (purchase.date ? new Date(purchase.date).toISOString().split('T')[0] : undefined),
+      paymentTerms: meta.paymentTerms || 'Due on Receipt',
+      orderNumber: meta.orderNumber || purchase.reference || '',
+      poId: meta.poId || null,
+      subject: meta.subject || '',
+      notes: meta.notes || '',
+      termsConditions: meta.termsConditions || '',
+      discount: meta.discount || 0,
+      discountType: meta.discountType || '%',
+      discountAmount: meta.discountAmount || 0,
+      adjustment: meta.adjustment || 0,
+      tdsTcsType: meta.tdsTcsType || 'NONE',
+      tdsTcsRate: meta.tdsTcsRate || 0,
+      tdsTcsAmount: meta.tdsTcsAmount || Number(purchase.tdsAmount || purchase.tcsAmount || 0),
+      tdsTcsTaxId: meta.tdsTcsTaxId || null,
+      attachedFiles: meta.attachedFiles || [],
+      items: parsedItems,
+    };
   }
 
   async create(dto: CreatePurchaseDto, txClient?: Prisma.TransactionClient) {
@@ -84,8 +233,22 @@ export class PurchasesService {
     }
 
     const execute = async (tx: Prisma.TransactionClient) => {
-      // 1. Generate purchase number using SequenceService
-      const purchaseNo = await this.sequenceService.generateNextSequence(companyId, 'BILL', tx);
+      // 1. Bill number: use supplied purchaseNo or generate next sequence
+      let purchaseNo: string;
+      if (dto.purchaseNo && dto.purchaseNo.trim()) {
+        const candidateNo = dto.purchaseNo.trim();
+        const existing = await tx.purchase.findFirst({
+          where: { companyId, purchaseNo: candidateNo, deletedAt: null },
+        });
+        if (existing) {
+          throw new ConflictException(`Bill number "${candidateNo}" already exists for this organization`);
+        }
+        purchaseNo = candidateNo;
+      } else {
+        purchaseNo = await this.sequenceService.generateNextSequence(companyId, 'BILL', tx);
+      }
+
+      const docStatus = dto.status === 'DRAFT' ? 'DRAFT' : 'SENT';
 
       // Interstate check
       const company = await tx.company.findUnique({
@@ -109,10 +272,9 @@ export class PurchasesService {
       for (const item of dto.items) {
         let product: any = null;
 
-        // 1. Transactional candidate product creation if requested by user
+        // Transactional candidate product creation if requested
         if (item.createAsNewProduct && item.newProductData?.name) {
           const normName = item.newProductData.name.trim();
-          // Server-side duplicate protection check
           const existing = await tx.product.findFirst({
             where: {
               companyId,
@@ -136,7 +298,7 @@ export class PurchasesService {
                 unit: item.newProductData.unit || 'NOS',
                 itemType: finalItemType,
                 hsnCode: item.newProductData.hsnCode || null,
-                gstRate: item.newProductData.gstRate !== undefined ? Number(item.newProductData.gstRate) : Number(item.taxPercent || 18),
+                gstRate: item.newProductData.gstRate !== undefined ? Number(item.newProductData.gstRate) : Number(item.taxPercent || item.taxRate || 18),
                 taxPreference: 'TAXABLE',
                 purchasePrice: Number(item.rate || 0),
                 sellingPrice: Number(item.rate || 0),
@@ -163,9 +325,9 @@ export class PurchasesService {
         const qty = Number(item.qty);
         const lineSubtotal = rate * qty;
         const discountAmt = item.discount ? (lineSubtotal * Number(item.discount)) / 100 : 0;
-        const lineTotalAfterDiscount = lineSubtotal - discountAmt;
+        const lineTotalAfterDiscount = Math.max(0, lineSubtotal - discountAmt);
         
-        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : Number(product?.gstRate || 18);
+        const taxRate = item.taxPercent !== undefined ? Number(item.taxPercent) : (item.taxRate !== undefined ? Number(item.taxRate) : Number(product?.gstRate || 18));
         
         const gstResult = GSTEngine.calculate({
            taxableAmount: lineTotalAfterDiscount,
@@ -186,6 +348,9 @@ export class PurchasesService {
           description: JSON.stringify({
             text: item.description || product?.name || 'Bill Line Item',
             discount: item.discount || 0,
+            accountId: item.accountId || null,
+            customerId: item.customerId || null,
+            unit: item.unit || 'Pcs',
             skippedProduct: !product,
           }),
           qty,
@@ -198,7 +363,7 @@ export class PurchasesService {
           igstAmount: gstResult.igstAmount,
         });
 
-        let debitAccountId = product?.purchaseAccountId || product?.inventoryAccountId;
+        let debitAccountId = item.accountId || product?.purchaseAccountId || product?.inventoryAccountId;
         if (!debitAccountId) {
           const defaultAccName = product ? 'Inventory Asset' : 'Direct Expenses';
           const defaultAccCat = product ? 'ASSET' : 'EXPENSE';
@@ -210,13 +375,42 @@ export class PurchasesService {
               data: { companyId, name: defaultAccName, category: defaultAccCat, balance: 0 },
             });
           }
-          debitAccountId = targetAccount.id;
+          debitAccountId = targetAccount?.id || 'acc-direct-expense';
         }
         
         accountDebits[debitAccountId] = (accountDebits[debitAccountId] || 0) + lineTotalAfterDiscount;
       }
 
-      const grandTotal = subTotal + taxTotal;
+      const adjustment = Number(dto.adjustment || 0);
+      let tdsAmount = 0;
+      let tcsAmount = 0;
+      if (dto.tdsTcsType === 'TDS') {
+        tdsAmount = dto.tdsTcsAmount !== undefined ? Number(dto.tdsTcsAmount) : (subTotal * Number(dto.tdsTcsRate || 0)) / 100;
+      } else if (dto.tdsTcsType === 'TCS') {
+        tcsAmount = dto.tdsTcsAmount !== undefined ? Number(dto.tdsTcsAmount) : (subTotal * Number(dto.tdsTcsRate || 0)) / 100;
+      }
+
+      const grandTotal = Number((subTotal + taxTotal + adjustment - tdsAmount + tcsAmount).toFixed(2));
+
+      const metaBundle = {
+        ...(typeof dto.gstBreakup === 'object' ? dto.gstBreakup : {}),
+        poId: dto.poId || undefined,
+        orderNumber: dto.orderNumber || undefined,
+        paymentTerms: dto.paymentTerms || 'Due on Receipt',
+        dueDate: dto.dueDate || undefined,
+        subject: dto.subject || undefined,
+        notes: dto.notes || undefined,
+        termsConditions: dto.termsConditions || undefined,
+        discount: dto.discount || 0,
+        discountType: dto.discountType || '%',
+        discountAmount: dto.discountAmount || 0,
+        adjustment: dto.adjustment || 0,
+        tdsTcsType: dto.tdsTcsType || 'NONE',
+        tdsTcsRate: dto.tdsTcsRate || 0,
+        tdsTcsAmount: tdsAmount || tcsAmount || 0,
+        tdsTcsTaxId: dto.tdsTcsTaxId || undefined,
+        attachedFiles: dto.attachedFiles || [],
+      };
 
       // 3. Create Purchase record
       const purchase = await tx.purchase.create({
@@ -225,7 +419,7 @@ export class PurchasesService {
           businessPartnerId: dto.vendorId,
           purchaseNo,
           date: new Date(dto.date),
-          status: 'SENT',
+          status: docStatus,
           subTotal,
           taxTotal,
           grandTotal,
@@ -235,13 +429,15 @@ export class PurchasesService {
           igstAmount: totalIgst,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
-          reference: dto.reference || null,
+          reference: dto.orderNumber || dto.reference || null,
           billingAddress: dto.billingAddress || null,
           shippingAddress: dto.shippingAddress || null,
           placeOfSupply: dto.placeOfSupply || null,
           taxMode: (dto.taxMode as any) || 'CGST_SGST',
           isRcm: dto.isRcm || false,
-          gstBreakup: dto.gstBreakup || null,
+          tdsAmount,
+          tcsAmount,
+          gstBreakup: metaBundle,
           items: {
             create: itemsToCreate,
           },
@@ -257,137 +453,161 @@ export class PurchasesService {
         });
       }
 
-      // 4. Update vendor payable balance
-      await tx.businessPartner.update({
-        where: { id: dto.vendorId },
-        data: {
-          payableBalance: {
-            increment: grandTotal,
+      // 4. If OPEN, update vendor balance, stock, and general ledger
+      if (docStatus !== 'DRAFT') {
+        // Update vendor payable balance
+        await tx.businessPartner.update({
+          where: { id: dto.vendorId },
+          data: {
+            payableBalance: {
+              increment: grandTotal,
+            },
           },
-        },
-      });
-
-      // 5. Increase stock quantities and create movement logs
-      const metaWarehouseId = dto.gstBreakup?.warehouseId;
-      const skipStockUpdate = dto.gstBreakup?.skipStockUpdate;
-      let targetWarehouse = null;
-      if (metaWarehouseId) {
-        targetWarehouse = await tx.warehouse.findFirst({
-          where: { id: metaWarehouseId, companyId },
         });
-      }
-      if (!targetWarehouse) {
-        targetWarehouse = await tx.warehouse.findFirst({
-          where: { companyId, isDefault: true },
-        });
-      }
 
-      if (targetWarehouse && !skipStockUpdate) {
-        for (const item of itemsToCreate) {
-          if (!item.productId) continue; // Skip non-catalog / skipped items
-
-          const prod = await tx.product.findFirst({
-            where: { id: item.productId, companyId },
+        // 5. Increase stock quantities and create movement logs
+        const metaWarehouseId = dto.gstBreakup?.warehouseId;
+        const skipStockUpdate = dto.gstBreakup?.skipStockUpdate;
+        let targetWarehouse = null;
+        if (metaWarehouseId) {
+          targetWarehouse = await tx.warehouse.findFirst({
+            where: { id: metaWarehouseId, companyId },
           });
-          if (prod && (prod.isService || !prod.isInventoryItem)) continue; // Skip services
-
-          const stock = await tx.stock.findFirst({
-            where: { companyId, productId: item.productId, warehouseId: targetWarehouse.id },
+        }
+        if (!targetWarehouse) {
+          targetWarehouse = await tx.warehouse.findFirst({
+            where: { companyId, isDefault: true },
           });
+        }
 
-          const currentQty = stock ? Number(stock.quantity) : 0;
-          const newQty = currentQty + item.qty;
+        if (targetWarehouse && !skipStockUpdate) {
+          for (const item of itemsToCreate) {
+            if (!item.productId) continue;
 
-          if (stock) {
-            await tx.stock.update({
-              where: { id: stock.id },
-              data: {
-                quantity: newQty,
-                availableQuantity: newQty,
-              },
+            const prod = await tx.product.findFirst({
+              where: { id: item.productId, companyId },
             });
-          } else {
-            await tx.stock.create({
+            if (prod && (prod.isService || !prod.isInventoryItem)) continue;
+
+            const stock = await tx.stock.findFirst({
+              where: { companyId, productId: item.productId, warehouseId: targetWarehouse.id },
+            });
+
+            const currentQty = stock ? Number(stock.quantity) : 0;
+            const newQty = currentQty + item.qty;
+
+            if (stock) {
+              await tx.stock.update({
+                where: { id: stock.id },
+                data: {
+                  quantity: newQty,
+                  availableQuantity: newQty,
+                },
+              });
+            } else {
+              await tx.stock.create({
+                data: {
+                  companyId,
+                  productId: item.productId,
+                  warehouseId: targetWarehouse.id,
+                  quantity: newQty,
+                  availableQuantity: newQty,
+                },
+              });
+            }
+
+            // Stock ledger entry
+            await tx.stockLedger.create({
               data: {
                 companyId,
                 productId: item.productId,
-                warehouseId: targetWarehouse.id,
-                quantity: newQty,
-                availableQuantity: newQty,
+                type: 'PURCHASE',
+                quantityBefore: currentQty,
+                quantityChange: item.qty,
+                quantityAfter: newQty,
+                notes: `Received via Purchase ${purchaseNo}`,
+                referenceId: purchase.id,
+                referenceType: 'PURCHASE'
               },
             });
           }
-
-          // Stock ledger entry
-          await tx.stockLedger.create({
-            data: {
-              companyId,
-              productId: item.productId,
-              type: 'PURCHASE',
-              quantityBefore: currentQty,
-              quantityChange: item.qty,
-              quantityAfter: newQty,
-              notes: `Received via Purchase ${purchaseNo}`,
-              referenceId: purchase.id,
-              referenceType: 'PURCHASE'
-            },
-          });
         }
-      }
 
-      // 6. Post automatic journal entry to General Ledger
-      let apAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Accounts Payable' },
-      });
-      if (!apAccount) {
-        apAccount = await tx.account.create({
-          data: { companyId, name: 'Accounts Payable', category: 'LIABILITY', balance: 0 },
+        // 6. Post automatic balanced journal entry to General Ledger
+        let apAccount = await tx.account.findFirst({
+          where: { companyId, name: 'Accounts Payable' },
         });
-      }
-
-      const getTaxAccount = async (name: string) => {
-        let acc = await tx.account.findFirst({ where: { companyId, name } });
-        if (!acc) {
-          acc = await tx.account.create({
-            data: { companyId, name, category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+        if (!apAccount) {
+          apAccount = await tx.account.create({
+            data: { companyId, name: 'Accounts Payable', category: 'LIABILITY', balance: 0 },
           });
         }
-        return acc;
-      };
 
-      const cgstAccount = isInterState ? null : await getTaxAccount('Input CGST');
-      const sgstAccount = isInterState ? null : await getTaxAccount('Input SGST');
-      const igstAccount = isInterState ? await getTaxAccount('Input IGST') : null;
+        const getTaxAccount = async (name: string, category: 'ASSET' | 'LIABILITY' = 'ASSET') => {
+          let acc = await tx.account.findFirst({ where: { companyId, name } });
+          if (!acc) {
+            acc = await tx.account.create({
+              data: { companyId, name, category, balance: 0 },
+            });
+          }
+          return acc;
+        };
 
-      const journalLines: { accountId: string; debit: number; credit: number }[] = [];
-      
-      // Debit dynamic accounts
-      for (const [accountId, amount] of Object.entries(accountDebits)) {
-        journalLines.push({ accountId, debit: amount, credit: 0 });
+        const cgstAccount = isInterState ? null : await getTaxAccount('Input CGST', 'ASSET');
+        const sgstAccount = isInterState ? null : await getTaxAccount('Input SGST', 'ASSET');
+        const igstAccount = isInterState ? await getTaxAccount('Input IGST', 'ASSET') : null;
+
+        const journalLines: { accountId: string; debit: number; credit: number }[] = [];
+        
+        // Debit expense/asset accounts
+        for (const [accountId, amount] of Object.entries(accountDebits)) {
+          journalLines.push({ accountId, debit: amount, credit: 0 });
+        }
+
+        // Credit Accounts Payable
+        journalLines.push({ accountId: apAccount.id, debit: 0, credit: grandTotal });
+
+        // Debit Input GST
+        const cgstAmt = totalCgst;
+        const sgstAmt = totalSgst;
+        const igstAmt = totalIgst;
+
+        if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
+          journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });
+          journalLines.push({ accountId: sgstAccount.id, debit: sgstAmt, credit: 0 });
+        }
+        if (isInterState && igstAmt > 0 && igstAccount) {
+          journalLines.push({ accountId: igstAccount.id, debit: igstAmt, credit: 0 });
+        }
+
+        // TDS/TCS journal line balancing
+        if (tdsAmount > 0) {
+          const tdsAcc = await getTaxAccount('TDS Payable', 'LIABILITY');
+          journalLines.push({ accountId: tdsAcc.id, debit: 0, credit: tdsAmount });
+        }
+        if (tcsAmount > 0) {
+          const tcsAcc = await getTaxAccount('TCS Receivable', 'ASSET');
+          journalLines.push({ accountId: tcsAcc.id, debit: tcsAmount, credit: 0 });
+        }
+
+        // Adjustment balancing
+        if (adjustment !== 0) {
+          const adjAcc = await getTaxAccount('Expense Adjustments', 'LIABILITY');
+          if (adjustment > 0) {
+            journalLines.push({ accountId: adjAcc.id, debit: adjustment, credit: 0 });
+          } else {
+            journalLines.push({ accountId: adjAcc.id, debit: 0, credit: Math.abs(adjustment) });
+          }
+        }
+
+        await this.accountingEngine.postTransaction({
+          companyId,
+          date: new Date(dto.date),
+          reference: purchaseNo,
+          description: `Automatic purchase billing posting ${purchaseNo}`,
+          lines: journalLines,
+        }, tx);
       }
-
-      // Credit Accounts Payable
-      journalLines.push({ accountId: apAccount.id, debit: 0, credit: grandTotal });
-
-      const cgstAmt = totalCgst;
-      const sgstAmt = totalSgst;
-      const igstAmt = totalIgst;
-
-      if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
-        journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });
-        journalLines.push({ accountId: sgstAccount.id, debit: sgstAmt, credit: 0 });
-      }
-      if (isInterState && igstAmt > 0 && igstAccount) {
-        journalLines.push({ accountId: igstAccount.id, debit: igstAmt, credit: 0 });
-      }
-
-      await this.accountingEngine.postTransaction({
-        companyId,
-        date: new Date(dto.date),
-        reference: purchaseNo,
-        description: `Automatic purchase billing posting ${purchaseNo}`,
-        lines: journalLines,
-      }, tx);
 
       return purchase;
     };
@@ -410,79 +630,82 @@ export class PurchasesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Revert original purchase effects
-      
-      // Revert vendor payable balance
-      await tx.businessPartner.update({
-        where: { id: purchase.businessPartnerId },
-        data: {
-          payableBalance: {
-            decrement: purchase.grandTotal,
+      const wasActive = purchase.status !== 'DRAFT';
+
+      // 1. Revert original purchase effects only if it was active
+      if (wasActive) {
+        // Revert vendor payable balance
+        await tx.businessPartner.update({
+          where: { id: purchase.businessPartnerId },
+          data: {
+            payableBalance: {
+              decrement: purchase.grandTotal,
+            },
           },
-        },
-      });
+        });
 
-      // Find original journal entries and revert balances, then delete them
-      const originalEntries = await tx.journalEntry.findMany({
-        where: { reference: purchase.purchaseNo },
-        include: { lines: true },
-      });
+        // Find original journal entries and revert balances, then delete them
+        const originalEntries = await tx.journalEntry.findMany({
+          where: { reference: purchase.purchaseNo },
+          include: { lines: true },
+        });
 
-      for (const entry of originalEntries) {
-        for (const line of entry.lines) {
-          const change = Number(line.credit || 0) - Number(line.debit || 0); // debit decreases, credit increases
-          await tx.account.update({
-            where: { id: line.accountId },
-            data: { balance: { increment: change } },
-          });
-        }
-        await tx.journalLine.deleteMany({ where: { journalEntryId: entry.id } });
-        await tx.journalEntry.delete({ where: { id: entry.id } });
-      }
-
-      // Revert Stock quantities
-      const stockLedgers = await tx.stockLedger.findMany({
-        where: { referenceId: purchase.id, referenceType: 'PURCHASE' },
-      });
-
-      for (const ledger of stockLedgers) {
-        const changeQty = Number(ledger.quantityChange) * -1;
-
-        const originalWarehouseId = (purchase.gstBreakup as any)?.warehouseId;
-        
-        let targetWh = null;
-        if (originalWarehouseId) {
-          targetWh = await tx.warehouse.findFirst({
-            where: { id: originalWarehouseId, companyId },
-          });
-        }
-        if (!targetWh) {
-          targetWh = await tx.warehouse.findFirst({
-            where: { companyId, isDefault: true },
-          });
-        }
-
-        if (targetWh) {
-          const stock = await tx.stock.findFirst({
-            where: { companyId: purchase.companyId, productId: ledger.productId, warehouseId: targetWh.id },
-          });
-
-          if (stock) {
-            const currentQty = Number(stock.quantity);
-            const newQty = currentQty + changeQty;
-            
-            await tx.stock.update({
-              where: { id: stock.id },
-              data: { quantity: newQty, availableQuantity: newQty },
+        for (const entry of originalEntries) {
+          for (const line of entry.lines) {
+            const change = Number(line.credit || 0) - Number(line.debit || 0); // debit decreases, credit increases
+            await tx.account.update({
+              where: { id: line.accountId },
+              data: { balance: { increment: change } },
             });
           }
+          await tx.journalLine.deleteMany({ where: { journalEntryId: entry.id } });
+          await tx.journalEntry.delete({ where: { id: entry.id } });
         }
+
+        // Revert Stock quantities
+        const stockLedgers = await tx.stockLedger.findMany({
+          where: { referenceId: purchase.id, referenceType: 'PURCHASE' },
+        });
+
+        for (const ledger of stockLedgers) {
+          const changeQty = Number(ledger.quantityChange) * -1;
+
+          const originalWarehouseId = (purchase.gstBreakup as any)?.warehouseId;
+          
+          let targetWh = null;
+          if (originalWarehouseId) {
+            targetWh = await tx.warehouse.findFirst({
+              where: { id: originalWarehouseId, companyId },
+            });
+          }
+          if (!targetWh) {
+            targetWh = await tx.warehouse.findFirst({
+              where: { companyId, isDefault: true },
+            });
+          }
+
+          if (targetWh) {
+            const stock = await tx.stock.findFirst({
+              where: { companyId: purchase.companyId, productId: ledger.productId, warehouseId: targetWh.id },
+            });
+
+            if (stock) {
+              const currentQty = Number(stock.quantity);
+              const newQty = currentQty + changeQty;
+              
+              await tx.stock.update({
+                where: { id: stock.id },
+                data: { quantity: newQty, availableQuantity: newQty },
+              });
+            }
+          }
+        }
+        
+        // Delete stock ledger entries of this purchase
+        await tx.stockLedger.deleteMany({
+          where: { referenceId: purchase.id, referenceType: 'PURCHASE' },
+        });
       }
-      
-      // Delete stock ledger entries of this purchase
-      await tx.stockLedger.deleteMany({
-        where: { referenceId: purchase.id, referenceType: 'PURCHASE' },
-      });
 
       // Delete the old purchase items
       await tx.purchaseItem.deleteMany({
@@ -606,7 +829,7 @@ export class PurchasesService {
           igstAmount: gstResult.igstAmount,
         });
 
-        let debitAccountId = product?.purchaseAccountId || product?.inventoryAccountId;
+        let debitAccountId = item.accountId || product?.purchaseAccountId || product?.inventoryAccountId;
         if (!debitAccountId) {
           const defaultAccName = product ? 'Inventory Asset' : 'Direct Expenses';
           const defaultAccCat = product ? 'ASSET' : 'EXPENSE';
@@ -618,19 +841,52 @@ export class PurchasesService {
               data: { companyId, name: defaultAccName, category: defaultAccCat, balance: 0 },
             });
           }
-          debitAccountId = targetAccount.id;
+          debitAccountId = targetAccount?.id || 'acc-direct-expense';
         }
         
         accountDebits[debitAccountId] = (accountDebits[debitAccountId] || 0) + lineTotalAfterDiscount;
       }
 
-      const grandTotal = subTotal + taxTotal;
+      const adjustment = Number(dto.adjustment || 0);
+      let tdsAmount = 0;
+      let tcsAmount = 0;
+      if (dto.tdsTcsType === 'TDS') {
+        tdsAmount = dto.tdsTcsAmount !== undefined ? Number(dto.tdsTcsAmount) : (subTotal * Number(dto.tdsTcsRate || 0)) / 100;
+      } else if (dto.tdsTcsType === 'TCS') {
+        tcsAmount = dto.tdsTcsAmount !== undefined ? Number(dto.tdsTcsAmount) : (subTotal * Number(dto.tdsTcsRate || 0)) / 100;
+      }
+
+      const grandTotal = Number((subTotal + taxTotal + adjustment - tdsAmount + tcsAmount).toFixed(2));
+      const newDocStatus = dto.status === 'DRAFT' ? 'DRAFT' : 'SENT';
+
+      const existingMeta = (purchase.gstBreakup as any) || {};
+      const metaBundle = {
+        ...existingMeta,
+        ...(typeof dto.gstBreakup === 'object' ? dto.gstBreakup : {}),
+        poId: dto.poId !== undefined ? dto.poId : existingMeta.poId,
+        orderNumber: dto.orderNumber !== undefined ? dto.orderNumber : existingMeta.orderNumber,
+        paymentTerms: dto.paymentTerms || existingMeta.paymentTerms || 'Due on Receipt',
+        dueDate: dto.dueDate !== undefined ? dto.dueDate : existingMeta.dueDate,
+        subject: dto.subject !== undefined ? dto.subject : existingMeta.subject,
+        notes: dto.notes !== undefined ? dto.notes : existingMeta.notes,
+        termsConditions: dto.termsConditions !== undefined ? dto.termsConditions : existingMeta.termsConditions,
+        discount: dto.discount !== undefined ? dto.discount : existingMeta.discount || 0,
+        discountType: dto.discountType || existingMeta.discountType || '%',
+        discountAmount: dto.discountAmount !== undefined ? dto.discountAmount : existingMeta.discountAmount || 0,
+        adjustment: dto.adjustment !== undefined ? dto.adjustment : existingMeta.adjustment || 0,
+        tdsTcsType: dto.tdsTcsType || existingMeta.tdsTcsType || 'NONE',
+        tdsTcsRate: dto.tdsTcsRate !== undefined ? dto.tdsTcsRate : existingMeta.tdsTcsRate || 0,
+        tdsTcsAmount: tdsAmount || tcsAmount || 0,
+        tdsTcsTaxId: dto.tdsTcsTaxId !== undefined ? dto.tdsTcsTaxId : existingMeta.tdsTcsTaxId,
+        attachedFiles: dto.attachedFiles !== undefined ? dto.attachedFiles : existingMeta.attachedFiles || [],
+      };
 
       // 4. Update Purchase record
       const updatedPurchase = await tx.purchase.update({
         where: { id },
         data: {
           businessPartnerId: dto.vendorId,
+          status: newDocStatus,
           date: new Date(dto.date),
           subTotal,
           taxTotal,
@@ -640,13 +896,15 @@ export class PurchasesService {
           igstAmount: totalIgst,
           cessAmount: 0,
           totalTaxAmount: taxTotal,
-          reference: dto.reference || null,
+          reference: dto.orderNumber || dto.reference || purchase.reference,
           billingAddress: dto.billingAddress || null,
           shippingAddress: dto.shippingAddress || null,
           placeOfSupply: dto.placeOfSupply || null,
           taxMode: (dto.taxMode as any) || 'CGST_SGST',
           isRcm: dto.isRcm || false,
-          gstBreakup: dto.gstBreakup || null,
+          tdsAmount,
+          tcsAmount,
+          gstBreakup: metaBundle,
           items: {
             create: itemsToCreate,
           },
@@ -662,136 +920,155 @@ export class PurchasesService {
         });
       }
 
-      // 5. Update vendor payable balance
-      await tx.businessPartner.update({
-        where: { id: dto.vendorId },
-        data: {
-          payableBalance: {
-            increment: grandTotal,
+      // 5. If new status is OPEN, post accounting entries
+      if (newDocStatus !== 'DRAFT') {
+        // Update vendor payable balance
+        await tx.businessPartner.update({
+          where: { id: dto.vendorId },
+          data: {
+            payableBalance: {
+              increment: grandTotal,
+            },
           },
-        },
-      });
-
-      // 6. Increase stock quantities and create movement logs
-      const metaWarehouseId = dto.gstBreakup?.warehouseId;
-      let targetWarehouse = null;
-      if (metaWarehouseId) {
-        targetWarehouse = await tx.warehouse.findFirst({
-          where: { id: metaWarehouseId, companyId },
         });
-      }
-      if (!targetWarehouse) {
-        targetWarehouse = await tx.warehouse.findFirst({
-          where: { companyId, isDefault: true },
-        });
-      }
 
-      if (targetWarehouse) {
-        for (const item of itemsToCreate) {
-          if (!item.productId) continue; // Skip non-catalog / skipped items
-
-          const prod = await tx.product.findFirst({
-            where: { id: item.productId, companyId },
+        // 6. Increase stock quantities and create movement logs
+        const metaWarehouseId = dto.gstBreakup?.warehouseId;
+        let targetWarehouse = null;
+        if (metaWarehouseId) {
+          targetWarehouse = await tx.warehouse.findFirst({
+            where: { id: metaWarehouseId, companyId },
           });
-          if (prod && (prod.isService || !prod.isInventoryItem)) continue; // Skip services
-
-          const stock = await tx.stock.findFirst({
-            where: { companyId, productId: item.productId, warehouseId: targetWarehouse.id },
+        }
+        if (!targetWarehouse) {
+          targetWarehouse = await tx.warehouse.findFirst({
+            where: { companyId, isDefault: true },
           });
+        }
 
-          const currentQty = stock ? Number(stock.quantity) : 0;
-          const newQty = currentQty + item.qty;
+        if (targetWarehouse) {
+          for (const item of itemsToCreate) {
+            if (!item.productId) continue;
 
-          if (stock) {
-            await tx.stock.update({
-              where: { id: stock.id },
-              data: {
-                quantity: newQty,
-                availableQuantity: newQty,
-              },
+            const prod = await tx.product.findFirst({
+              where: { id: item.productId, companyId },
             });
-          } else {
-            await tx.stock.create({
+            if (prod && (prod.isService || !prod.isInventoryItem)) continue;
+
+            const stock = await tx.stock.findFirst({
+              where: { companyId, productId: item.productId, warehouseId: targetWarehouse.id },
+            });
+
+            const currentQty = stock ? Number(stock.quantity) : 0;
+            const newQty = currentQty + item.qty;
+
+            if (stock) {
+              await tx.stock.update({
+                where: { id: stock.id },
+                data: {
+                  quantity: newQty,
+                  availableQuantity: newQty,
+                },
+              });
+            } else {
+              await tx.stock.create({
+                data: {
+                  companyId,
+                  productId: item.productId,
+                  warehouseId: targetWarehouse.id,
+                  quantity: newQty,
+                  availableQuantity: newQty,
+                },
+              });
+            }
+
+            // Stock ledger entry
+            await tx.stockLedger.create({
               data: {
                 companyId,
                 productId: item.productId,
-                warehouseId: targetWarehouse.id,
-                quantity: newQty,
-                availableQuantity: newQty,
+                type: 'PURCHASE',
+                quantityBefore: currentQty,
+                quantityChange: item.qty,
+                quantityAfter: newQty,
+                notes: `Received via Purchase Update ${purchase.purchaseNo}`,
+                referenceId: purchase.id,
+                referenceType: 'PURCHASE'
               },
             });
           }
-
-          // Stock ledger entry
-          await tx.stockLedger.create({
-            data: {
-              companyId,
-              productId: item.productId,
-              type: 'PURCHASE',
-              quantityBefore: currentQty,
-              quantityChange: item.qty,
-              quantityAfter: newQty,
-              notes: `Received via Purchase Update ${purchase.purchaseNo}`,
-              referenceId: purchase.id,
-              referenceType: 'PURCHASE'
-            },
-          });
         }
-      }
 
-      // 7. Post automatic journal entry to General Ledger
-      let apAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Accounts Payable' },
-      });
-      if (!apAccount) {
-        apAccount = await tx.account.create({
-          data: { companyId, name: 'Accounts Payable', category: 'LIABILITY', balance: 0 },
+        // 7. Post automatic journal entry to General Ledger
+        let apAccount = await tx.account.findFirst({
+          where: { companyId, name: 'Accounts Payable' },
         });
-      }
-
-      const getTaxAccount = async (name: string) => {
-        let acc = await tx.account.findFirst({ where: { companyId, name } });
-        if (!acc) {
-          acc = await tx.account.create({
-            data: { companyId, name, category: 'ASSET', subCategory: 'CURRENT_ASSET', balance: 0 },
+        if (!apAccount) {
+          apAccount = await tx.account.create({
+            data: { companyId, name: 'Accounts Payable', category: 'LIABILITY', balance: 0 },
           });
         }
-        return acc;
-      };
 
-      const cgstAccount = isInterState ? null : await getTaxAccount('Input CGST');
-      const sgstAccount = isInterState ? null : await getTaxAccount('Input SGST');
-      const igstAccount = isInterState ? await getTaxAccount('Input IGST') : null;
+        const getTaxAccount = async (name: string, category: 'ASSET' | 'LIABILITY' = 'ASSET') => {
+          let acc = await tx.account.findFirst({ where: { companyId, name } });
+          if (!acc) {
+            acc = await tx.account.create({
+              data: { companyId, name, category, balance: 0 },
+            });
+          }
+          return acc;
+        };
 
-      const journalLines: { accountId: string; debit: number; credit: number }[] = [];
-      
-      // Debit dynamic accounts
-      for (const [accountId, amount] of Object.entries(accountDebits)) {
-        journalLines.push({ accountId, debit: amount, credit: 0 });
-      }
+        const cgstAccount = isInterState ? null : await getTaxAccount('Input CGST', 'ASSET');
+        const sgstAccount = isInterState ? null : await getTaxAccount('Input SGST', 'ASSET');
+        const igstAccount = isInterState ? await getTaxAccount('Input IGST', 'ASSET') : null;
 
-      // Credit Accounts Payable
-      journalLines.push({ accountId: apAccount.id, debit: 0, credit: grandTotal });
+        const journalLines: { accountId: string; debit: number; credit: number }[] = [];
+        
+        for (const [accountId, amount] of Object.entries(accountDebits)) {
+          journalLines.push({ accountId, debit: amount, credit: 0 });
+        }
+
+        journalLines.push({ accountId: apAccount.id, debit: 0, credit: grandTotal });
 
         const cgstAmt = totalCgst;
         const sgstAmt = totalSgst;
         const igstAmt = totalIgst;
 
-      if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
-        journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });
-        journalLines.push({ accountId: sgstAccount.id, debit: sgstAmt, credit: 0 });
-      }
-      if (isInterState && igstAmt > 0 && igstAccount) {
-        journalLines.push({ accountId: igstAccount.id, debit: igstAmt, credit: 0 });
-      }
+        if (!isInterState && cgstAmt > 0 && cgstAccount && sgstAccount) {
+          journalLines.push({ accountId: cgstAccount.id, debit: cgstAmt, credit: 0 });
+          journalLines.push({ accountId: sgstAccount.id, debit: sgstAmt, credit: 0 });
+        }
+        if (isInterState && igstAmt > 0 && igstAccount) {
+          journalLines.push({ accountId: igstAccount.id, debit: igstAmt, credit: 0 });
+        }
 
-      await this.accountingEngine.postTransaction({
-        companyId,
-        date: new Date(dto.date),
-        reference: purchase.purchaseNo,
-        description: `Automatic purchase billing posting ${purchase.purchaseNo} (Updated)`,
-        lines: journalLines,
-      }, tx);
+        if (tdsAmount > 0) {
+          const tdsAcc = await getTaxAccount('TDS Payable', 'LIABILITY');
+          journalLines.push({ accountId: tdsAcc.id, debit: 0, credit: tdsAmount });
+        }
+        if (tcsAmount > 0) {
+          const tcsAcc = await getTaxAccount('TCS Receivable', 'ASSET');
+          journalLines.push({ accountId: tcsAcc.id, debit: tcsAmount, credit: 0 });
+        }
+
+        if (adjustment !== 0) {
+          const adjAcc = await getTaxAccount('Expense Adjustments', 'LIABILITY');
+          if (adjustment > 0) {
+            journalLines.push({ accountId: adjAcc.id, debit: adjustment, credit: 0 });
+          } else {
+            journalLines.push({ accountId: adjAcc.id, debit: 0, credit: Math.abs(adjustment) });
+          }
+        }
+
+        await this.accountingEngine.postTransaction({
+          companyId,
+          date: new Date(dto.date),
+          reference: purchase.purchaseNo,
+          description: `Automatic purchase billing posting ${purchase.purchaseNo} (Updated)`,
+          lines: journalLines,
+        }, tx);
+      }
 
       return updatedPurchase;
     }, { timeout: 20000 });
@@ -804,59 +1081,63 @@ export class PurchasesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // Revert vendor outstanding balance
-      await tx.businessPartner.update({
-        where: { id: purchase.businessPartnerId },
-        data: {
-          payableBalance: {
-            decrement: purchase.grandTotal,
+      const wasActive = purchase.status !== 'DRAFT';
+
+      if (wasActive) {
+        // Revert vendor outstanding balance
+        await tx.businessPartner.update({
+          where: { id: purchase.businessPartnerId },
+          data: {
+            payableBalance: {
+              decrement: purchase.grandTotal,
+            },
           },
-        },
-      });
-
-      // Find original journal entries and create reversals using AccountingEngineService
-      const originalEntries = await tx.journalEntry.findMany({
-        where: { reference: purchase.purchaseNo, companyId: purchase.companyId },
-      });
-
-      for (const entry of originalEntries) {
-        await this.accountingEngine.reverseTransaction(entry.id, purchase.companyId, tx, `Reversal for deleted purchase ${purchase.purchaseNo}`);
-      }
-
-      // Revert Stock Ledger
-      const stockLedgers = await tx.stockLedger.findMany({
-        where: { referenceId: purchase.id, referenceType: 'PURCHASE' },
-      });
-
-      for (const ledger of stockLedgers) {
-        const changeQty = Number(ledger.quantityChange) * -1;
-
-        const stock = await tx.stock.findFirst({
-          where: { companyId: purchase.companyId, productId: ledger.productId },
         });
 
-        if (stock) {
-          const currentQty = Number(stock.quantity);
-          const newQty = currentQty + changeQty;
-          
-          await tx.stock.update({
-            where: { id: stock.id },
-            data: { quantity: newQty, availableQuantity: newQty },
+        // Find original journal entries and create reversals using AccountingEngineService
+        const originalEntries = await tx.journalEntry.findMany({
+          where: { reference: purchase.purchaseNo, companyId: purchase.companyId },
+        });
+
+        for (const entry of originalEntries) {
+          await this.accountingEngine.reverseTransaction(entry.id, purchase.companyId, tx, `Reversal for deleted purchase ${purchase.purchaseNo}`);
+        }
+
+        // Revert Stock Ledger
+        const stockLedgers = await tx.stockLedger.findMany({
+          where: { referenceId: purchase.id, referenceType: 'PURCHASE' },
+        });
+
+        for (const ledger of stockLedgers) {
+          const changeQty = Number(ledger.quantityChange) * -1;
+
+          const stock = await tx.stock.findFirst({
+            where: { companyId: purchase.companyId, productId: ledger.productId },
           });
 
-          await tx.stockLedger.create({
-            data: {
-              companyId: purchase.companyId,
-              productId: ledger.productId,
-              type: 'ADJUSTMENT',
-              quantityBefore: currentQty,
-              quantityChange: changeQty,
-              quantityAfter: newQty,
-              notes: `Reversal of Purchase ${purchase.purchaseNo}`,
-              referenceId: purchase.id,
-              referenceType: 'PURCHASE_REVERSAL',
-            }
-          });
+          if (stock) {
+            const currentQty = Number(stock.quantity);
+            const newQty = currentQty + changeQty;
+            
+            await tx.stock.update({
+              where: { id: stock.id },
+              data: { quantity: newQty, availableQuantity: newQty },
+            });
+
+            await tx.stockLedger.create({
+              data: {
+                companyId: purchase.companyId,
+                productId: ledger.productId,
+                type: 'ADJUSTMENT',
+                quantityBefore: currentQty,
+                quantityChange: changeQty,
+                quantityAfter: newQty,
+                notes: `Reversal of Purchase ${purchase.purchaseNo}`,
+                referenceId: purchase.id,
+                referenceType: 'PURCHASE_REVERSAL',
+              }
+            });
+          }
         }
       }
 

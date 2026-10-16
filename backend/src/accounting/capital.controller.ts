@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from "@nestjs/common";
+import { Controller, Post, Get, Body, UseGuards } from "@nestjs/common";
 import { CapitalService } from "./capital.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
@@ -16,6 +16,11 @@ export class CreateCapitalTransactionDto {
 @Controller("capital")
 export class CapitalController {
   constructor(private readonly capitalService: CapitalService) {}
+
+  @Get()
+  async getCapitalOverview() {
+    return this.capitalService.getCapitalOverview();
+  }
 
   @Post()
   async recordCapitalTransaction(@Body() dto: CreateCapitalTransactionDto) {

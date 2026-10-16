@@ -5,8 +5,22 @@ import {
   IsNumber,
   IsDateString,
   IsEnum,
-} from "class-validator";
-import { PaymentMethod } from "@prisma/client";
+  IsArray,
+  ValidateNested,
+  IsBoolean,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { PaymentMethod } from '@prisma/client';
+
+export class BillAllocationItemDto {
+  @IsString()
+  @IsNotEmpty()
+  purchaseId: string;
+
+  @IsNumber()
+  @IsNotEmpty()
+  amount: number;
+}
 
 export class CreatePurchasePaymentDto {
   @IsString()
@@ -15,7 +29,29 @@ export class CreatePurchasePaymentDto {
 
   @IsString()
   @IsOptional()
+  paymentNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentNo?: string;
+
+  @IsString()
+  @IsOptional()
+  type?: 'BILL_PAYMENT' | 'VENDOR_ADVANCE';
+
+  @IsString()
+  @IsOptional()
+  status?: 'DRAFT' | 'PAID';
+
+  @IsString()
+  @IsOptional()
   purchaseId?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BillAllocationItemDto)
+  @IsOptional()
+  allocations?: BillAllocationItemDto[];
 
   @IsString()
   @IsOptional()
@@ -36,5 +72,50 @@ export class CreatePurchasePaymentDto {
   @IsString()
   @IsOptional()
   reference?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
+  chequeNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  sourceOfSupply?: string;
+
+  @IsString()
+  @IsOptional()
+  destinationOfSupply?: string;
+
+  @IsString()
+  @IsOptional()
+  descriptionOfSupply?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isRcm?: boolean;
+
+  @IsString()
+  @IsOptional()
+  tdsTaxId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  tdsRate?: number;
+
+  @IsNumber()
+  @IsOptional()
+  tdsAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  depositToAccountId?: string;
+
+  @IsArray()
+  @IsOptional()
+  attachedFiles?: any[];
 }
 
+export class UpdatePurchasePaymentDto extends CreatePurchasePaymentDto {}

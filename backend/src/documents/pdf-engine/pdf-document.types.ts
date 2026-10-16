@@ -49,6 +49,8 @@ export interface PdfDocumentMeta {
   watermark?: string;
   notes?: string;
   terms?: string;
+  expiryDate?: string;
+  salesperson?: string;
 }
 
 export interface PdfLineItem {
@@ -102,4 +104,5 @@ export interface PdfDocumentData {
   items: PdfLineItem[];
   totals: PdfTotalsData;
   taxBreakup?: PdfTaxBreakupItem[];
+  template?: any;
 }

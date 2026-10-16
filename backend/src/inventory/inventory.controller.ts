@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Query, UseGuards } from "@nestjs/common";
 import { InventoryService } from "./inventory.service";
-import { StockAdjustDto } from "./dto/stock-adjust.dto";
+import { StockAdjustDto, StockQueryDto } from "./dto/stock-adjust.dto";
 import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
@@ -16,7 +16,16 @@ export class InventoryController {
   }
 
   @Get("stocks")
-  async getStocks(@Query() query: PaginationQueryDto) {
+  async getStocks(@Query() query: StockQueryDto) {
     return this.inventoryService.getStocks(query);
+  }
+
+  @Get("transactions")
+  async getTransactions(
+    @Query("productId") productId?: string,
+    @Query("warehouseId") warehouseId?: string,
+    @Query() query?: PaginationQueryDto,
+  ) {
+    return this.inventoryService.getTransactions(productId, warehouseId, query);
   }
 }

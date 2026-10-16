@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Body,
   Param,
@@ -15,19 +16,24 @@ import { SalesOrdersService } from "./sales-orders.service";
 import {
   CreateSalesOrderDto,
   UpdateSalesOrderDto,
+  SalesOrderQueryDto,
 } from "./dto/sales-order.dto";
-import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 
 @UseGuards(JwtAuthGuard, TenantGuard)
-@Controller("sales-orders")
+@Controller(["sales-orders", "sales/orders"])
 export class SalesOrdersController {
   constructor(private readonly salesOrdersService: SalesOrdersService) {}
 
   @Get()
-  async findAll(@Query() query: PaginationQueryDto) {
+  async findAll(@Query() query: SalesOrderQueryDto) {
     return this.salesOrdersService.findAll(query);
+  }
+
+  @Get("next-number")
+  async getNextNumber() {
+    return this.salesOrdersService.getNextOrderNumber();
   }
 
   @Get(":id")
@@ -42,6 +48,11 @@ export class SalesOrdersController {
 
   @Patch(":id")
   async update(@Param("id") id: string, @Body() dto: UpdateSalesOrderDto) {
+    return this.salesOrdersService.update(id, dto);
+  }
+
+  @Put(":id")
+  async replace(@Param("id") id: string, @Body() dto: UpdateSalesOrderDto) {
     return this.salesOrdersService.update(id, dto);
   }
 

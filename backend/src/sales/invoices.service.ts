@@ -534,12 +534,331 @@ export class InvoicesService {
       };
     }
 
+    const gstBreakupParsed =
+      typeof invoice.gstBreakup === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(invoice.gstBreakup);
+            } catch {
+              return {};
+            }
+          })()
+        : invoice.gstBreakup || {};
+
     return {
       ...invoice,
+      paymentTerms: (invoice as any).paymentTerms || gstBreakupParsed?.paymentTerms || 'Due on Receipt',
       ...archiveInfo,
       journalEntries,
       auditLogs: relatedAuditLogs,
     };
+  }
+
+  /**
+   * Concurrency-safe, atomic double-entry journal posting for sales invoices.
+   * Resolves product-specific sales accounts, Output GST (CGST/SGST/IGST/Cess),
+   * round-off balancing, Accounts Receivable, and immediate payment receipts.
+   */
+  private async postInvoiceJournal(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    invoice: { id: string; invoiceNo: string; invoiceType: string },
+    lineAccountingDetails: {
+      productId?: string | null;
+      productName?: string;
+      salesAccountId?: string | null;
+      taxableAmount: number;
+    }[],
+    subTotal: number,
+    grandTotal: number,
+    totalCgst: number,
+    totalSgst: number,
+    totalIgst: number,
+    totalCess: number,
+    isInterState: boolean,
+    isCreditNote: boolean,
+    categorySnapshot: any,
+    invoiceDate: Date,
+    description: string,
+    amountPaid: number = 0,
+    paymentMode?: string,
+    paymentReference?: string,
+    userId?: string,
+    partnerId?: string,
+  ) {
+    let arAccount = await tx.account.findFirst({
+      where: { companyId, name: { in: ['Accounts Receivable', 'Trade Receivables'] } },
+    });
+    if (!arAccount) {
+      arAccount = await tx.account.create({
+        data: {
+          companyId,
+          name: 'Accounts Receivable',
+          category: 'ASSET',
+          subCategory: 'CURRENT_ASSET' as any,
+          balance: 0,
+        },
+      });
+    }
+
+    const defaultRevenueName = invoice.invoiceType === 'FEE_RECEIPT' ? 'Fee Revenue' : 'Sales Revenue';
+    let defaultRevenueAccount = await tx.account.findFirst({
+      where: { companyId, name: { in: [defaultRevenueName, 'Sales Revenue'] } },
+    });
+
+    if (categorySnapshot?.defaultSalesAccountId) {
+      const catAccount = await tx.account.findFirst({
+        where: { id: categorySnapshot.defaultSalesAccountId, companyId },
+      });
+      if (catAccount) defaultRevenueAccount = catAccount;
+    }
+
+    if (!defaultRevenueAccount) {
+      defaultRevenueAccount = await tx.account.create({
+        data: {
+          companyId,
+          name: defaultRevenueName,
+          category: 'REVENUE',
+          subCategory: 'SALES_REVENUE' as any,
+          balance: 0,
+        },
+      });
+    }
+
+    // Resolve revenue accounts per line item (product-specific mapping with fallback)
+    const accountRevenueMap = new Map<string, number>();
+    for (const line of lineAccountingDetails) {
+      let lineAccountId = defaultRevenueAccount.id;
+      if (line.salesAccountId) {
+        const specificAcc = await tx.account.findFirst({
+          where: { id: line.salesAccountId, companyId },
+        });
+        if (!specificAcc) {
+          throw new BadRequestException(
+            `Sales account configured for product "${line.productName}" (ID: ${line.salesAccountId}) does not exist or does not belong to this company.`
+          );
+        }
+        lineAccountId = specificAcc.id;
+      }
+      const prev = accountRevenueMap.get(lineAccountId) || 0;
+      accountRevenueMap.set(lineAccountId, prev + line.taxableAmount);
+    }
+
+    const revenueEntries: { accountId: string; amount: number }[] = [];
+    let accumulatedRevenue = 0;
+    const entriesArray = Array.from(accountRevenueMap.entries());
+    for (let i = 0; i < entriesArray.length; i++) {
+      const [accId, rawAmt] = entriesArray[i];
+      if (i === entriesArray.length - 1) {
+        const finalAmt = Number((subTotal - accumulatedRevenue).toFixed(2));
+        if (finalAmt > 0) {
+          revenueEntries.push({ accountId: accId, amount: finalAmt });
+        }
+      } else {
+        const roundedAmt = Number(rawAmt.toFixed(2));
+        accumulatedRevenue += roundedAmt;
+        if (roundedAmt > 0) {
+          revenueEntries.push({ accountId: accId, amount: roundedAmt });
+        }
+      }
+    }
+    if (revenueEntries.length === 0 && subTotal > 0) {
+      revenueEntries.push({ accountId: defaultRevenueAccount.id, amount: subTotal });
+    }
+
+    const getTaxAccount = async (name: string, altName?: string) => {
+      let acc = await tx.account.findFirst({
+        where: { companyId, name: { in: [name, altName || ''].filter(Boolean) } },
+      });
+      if (!acc) {
+        acc = await tx.account.create({
+          data: {
+            companyId,
+            name,
+            category: 'LIABILITY',
+            subCategory: 'CURRENT_LIABILITY' as any,
+            balance: 0,
+          },
+        });
+      }
+      return acc;
+    };
+
+    const cgstAccount = isInterState ? null : await getTaxAccount('Output CGST', 'CGST Output Payable');
+    const sgstAccount = isInterState ? null : await getTaxAccount('Output SGST', 'SGST Output Payable');
+    const igstAccount = isInterState ? await getTaxAccount('Output IGST', 'IGST Output Payable') : null;
+    const cessAccount = totalCess > 0 ? await getTaxAccount('Output Cess') : null;
+
+    const journalLines: any[] = isCreditNote
+      ? [
+          ...revenueEntries.map((rev) => ({ accountId: rev.accountId, debit: rev.amount, credit: 0 })),
+          { accountId: arAccount.id, debit: 0, credit: grandTotal },
+        ]
+      : [
+          { accountId: arAccount.id, debit: grandTotal, credit: 0 },
+          ...revenueEntries.map((rev) => ({ accountId: rev.accountId, debit: 0, credit: rev.amount })),
+        ];
+
+    if (!isInterState && totalCgst > 0 && cgstAccount && sgstAccount) {
+      journalLines.push({
+        accountId: cgstAccount.id,
+        debit: isCreditNote ? totalCgst : 0,
+        credit: isCreditNote ? 0 : totalCgst,
+      });
+      journalLines.push({
+        accountId: sgstAccount.id,
+        debit: isCreditNote ? totalSgst : 0,
+        credit: isCreditNote ? 0 : totalSgst,
+      });
+    }
+    if (isInterState && totalIgst > 0 && igstAccount) {
+      journalLines.push({
+        accountId: igstAccount.id,
+        debit: isCreditNote ? totalIgst : 0,
+        credit: isCreditNote ? 0 : totalIgst,
+      });
+    }
+    if (totalCess > 0 && cessAccount) {
+      journalLines.push({
+        accountId: cessAccount.id,
+        debit: isCreditNote ? totalCess : 0,
+        credit: isCreditNote ? 0 : totalCess,
+      });
+    }
+
+    const exactTaxSum = isInterState ? totalIgst + totalCess : totalCgst + totalSgst + totalCess;
+    const exactSum = Number((subTotal + exactTaxSum).toFixed(2));
+    const roundOff = Number((grandTotal - exactSum).toFixed(2));
+
+    if (roundOff !== 0) {
+      let roundOffAcc = await tx.account.findFirst({
+        where: {
+          companyId,
+          name: { in: ['Round Off', 'Rounding Off', 'Round Off Account', 'Rounding Adjustment'] },
+        },
+      });
+      if (!roundOffAcc) {
+        roundOffAcc = await tx.account.create({
+          data: {
+            companyId,
+            name: 'Round Off',
+            category: 'EXPENSE',
+            subCategory: 'OTHER_EXPENSE' as any,
+            balance: 0,
+          },
+        });
+      }
+      if (roundOff > 0) {
+        journalLines.push({
+          accountId: roundOffAcc.id,
+          debit: isCreditNote ? roundOff : 0,
+          credit: isCreditNote ? 0 : roundOff,
+        });
+      } else {
+        journalLines.push({
+          accountId: roundOffAcc.id,
+          debit: isCreditNote ? 0 : Math.abs(roundOff),
+          credit: isCreditNote ? Math.abs(roundOff) : 0,
+        });
+      }
+    }
+
+    // Immediate payment receipt if paid on issue
+    if (amountPaid > 0 && !isCreditNote) {
+      const isCash = (paymentMode || '').toUpperCase() === 'CASH';
+      const defaultPaymentAccName = isCash ? 'Cash' : 'Bank Accounts';
+      let paymentAccount = await tx.account.findFirst({
+        where: { companyId, name: defaultPaymentAccName },
+      });
+      if (!paymentAccount) {
+        paymentAccount = await tx.account.create({
+          data: {
+            companyId,
+            name: defaultPaymentAccName,
+            category: 'ASSET',
+            subCategory: 'CURRENT_ASSET' as any,
+            balance: 0,
+          },
+        });
+      }
+
+      journalLines.push({
+        accountId: paymentAccount.id,
+        debit: amountPaid,
+        credit: 0,
+      });
+      journalLines.push({
+        accountId: arAccount.id,
+        debit: 0,
+        credit: amountPaid,
+      });
+
+      // Create Receipt and Allocation record for payment history traceability if not already created
+      if (partnerId) {
+        const receiptNo = await this.sequenceService.generateUniversalSequence(
+          companyId,
+          'PAYMENT_RECEIPT',
+          {},
+          tx
+        );
+
+        let validUserId = userId;
+        if (!validUserId) {
+          const companyUser = await tx.companyUser.findFirst({ where: { companyId } });
+          validUserId = companyUser?.userId;
+        }
+        if (!validUserId) {
+          const fallbackUser = await tx.user.findFirst();
+          validUserId = fallbackUser?.id;
+        }
+
+        if (validUserId) {
+          await tx.receipt.create({
+            data: {
+              companyId,
+              receiptNo,
+              date: invoiceDate,
+              businessPartnerId: partnerId,
+              amount: amountPaid,
+              currency: 'INR',
+              exchangeRate: 1.0,
+              receivedById: validUserId,
+              status: 'COMPLETED',
+              payments: {
+                create: [
+                  {
+                    account: { connect: { id: paymentAccount.id } },
+                    paymentMethod: (paymentMode as any) || (isCash ? 'CASH' : 'BANK_TRANSFER'),
+                    amount: amountPaid,
+                    referenceNo: paymentReference || null,
+                    notes: `Payment for invoice ${invoice.invoiceNo}`,
+                  },
+                ],
+              },
+              allocations: {
+                create: [
+                  {
+                    invoiceId: invoice.id,
+                    amount: amountPaid,
+                  },
+                ],
+              },
+            },
+          });
+        }
+      }
+    }
+
+    await this.accountingEngine.postTransaction(
+      {
+        companyId,
+        date: invoiceDate,
+        reference: invoice.invoiceNo,
+        description,
+        lines: journalLines,
+      },
+      tx
+    );
   }
 
   /**
@@ -555,6 +874,7 @@ export class InvoicesService {
     docType: string,
     isCreditNote: boolean,
     specifiedWarehouseId?: string,
+    allowNegativeStock: boolean = false,
   ) {
     // 1. Idempotency check: has stock already been deducted for this invoice?
     const existingMovement = (tx.stockLedger as any)?.findFirst
@@ -625,7 +945,7 @@ export class InvoicesService {
     }
 
     // 4. Pre-validate stock availability for outgoing sales
-    if (!isCreditNote) {
+    if (!isCreditNote && !allowNegativeStock) {
       for (const [productId, { totalQty, product }] of aggregatedQtyPerProduct.entries()) {
         const stock = await tx.stock.findFirst({
           where: { companyId, productId: product.id, warehouseId },
@@ -650,7 +970,7 @@ export class InvoicesService {
       });
 
       if (!stock) {
-        if (!isCreditNote) {
+        if (!isCreditNote && !allowNegativeStock) {
           throw new BadRequestException(
             `Insufficient stock for product "${product.name}". Available: 0, Requested: ${itemQty}`
           );
@@ -669,39 +989,50 @@ export class InvoicesService {
       const currentQty = Number(stock.quantity);
 
       if (!isCreditNote) {
-        // Atomic deduction with conditional lock to eliminate race conditions
-        let updateResult = { count: 1 };
-        if ((tx.stock as any)?.updateMany) {
-          updateResult = await tx.stock.updateMany({
-            where: {
-              id: stock.id,
-              companyId,
-              quantity: { gte: itemQty },
-              availableQuantity: { gte: itemQty },
-            },
+        if (allowNegativeStock) {
+          // Force continue authorized: deduct stock directly, allowing negative balance
+          await tx.stock.update({
+            where: { id: stock.id },
             data: {
               quantity: { decrement: itemQty },
               availableQuantity: { decrement: itemQty },
             },
           });
         } else {
-          await tx.stock.update({
-            where: { id: stock.id },
-            data: {
-              quantity: currentQty - itemQty,
-              availableQuantity: currentQty - itemQty,
-            },
-          });
-        }
+          // Atomic deduction with conditional lock to eliminate race conditions
+          let updateResult = { count: 1 };
+          if ((tx.stock as any)?.updateMany) {
+            updateResult = await tx.stock.updateMany({
+              where: {
+                id: stock.id,
+                companyId,
+                quantity: { gte: itemQty },
+                availableQuantity: { gte: itemQty },
+              },
+              data: {
+                quantity: { decrement: itemQty },
+                availableQuantity: { decrement: itemQty },
+              },
+            });
+          } else {
+            await tx.stock.update({
+              where: { id: stock.id },
+              data: {
+                quantity: currentQty - itemQty,
+                availableQuantity: currentQty - itemQty,
+              },
+            });
+          }
 
-        if (updateResult.count === 0) {
-          const refreshed = (tx.stock as any)?.findUnique
-            ? await tx.stock.findUnique({ where: { id: stock.id } })
-            : null;
-          const refreshedQty = refreshed ? Number(refreshed.availableQuantity ?? refreshed.quantity) : 0;
-          throw new BadRequestException(
-            `Insufficient stock for product "${product.name}". Available: ${refreshedQty}, Requested: ${itemQty}`
-          );
+          if (updateResult.count === 0) {
+            const refreshed = (tx.stock as any)?.findUnique
+              ? await tx.stock.findUnique({ where: { id: stock.id } })
+              : null;
+            const refreshedQty = refreshed ? Number(refreshed.availableQuantity ?? refreshed.quantity) : 0;
+            throw new BadRequestException(
+              `Insufficient stock for product "${product.name}". Available: ${refreshedQty}, Requested: ${itemQty}`
+            );
+          }
         }
       } else {
         // Return / Credit Note: increment stock
@@ -846,7 +1177,7 @@ export class InvoicesService {
       });
       const companyState = company?.state?.trim().toLowerCase() || '';
       const supplyState = dto.placeOfSupply?.trim().toLowerCase() || companyState;
-      const isInterState = supplyState && companyState && supplyState !== companyState;
+      const isInterState = Boolean(supplyState && companyState && supplyState !== companyState);
 
       const bpTaxPreference = customer?.taxPreference || 'TAXABLE';
 
@@ -862,6 +1193,12 @@ export class InvoicesService {
       let totalIgst = 0;
       let totalCess = 0;
       const itemsToCreate = [];
+      const lineAccountingDetails: {
+        productId?: string | null;
+        productName?: string;
+        salesAccountId?: string | null;
+        taxableAmount: number;
+      }[] = [];
 
       for (const item of dto.items) {
         if (!item || typeof item !== 'object') {
@@ -888,7 +1225,13 @@ export class InvoicesService {
           }
         }
 
-        const lineTotal = Number((qty * rate).toFixed(2));
+        const rawLineTotal = Number((qty * rate).toFixed(2));
+        const lineDiscount = item.discount
+          ? item.discountType === 'amount'
+            ? Number(item.discount)
+            : Number(((rawLineTotal * Number(item.discount)) / 100).toFixed(2))
+          : 0;
+        const lineTotal = Math.max(0, Number((rawLineTotal - lineDiscount).toFixed(2)));
 
         // Resolve item-level tax preference
         let lineTaxPref = item.taxPreference || overrideTaxPref || product?.taxPreference || bpTaxPreference;
@@ -937,6 +1280,13 @@ export class InvoicesService {
           igstAmount: gstResult.igstAmount,
           cessAmount: gstResult.cessAmount,
         });
+
+        lineAccountingDetails.push({
+          productId: product?.id || null,
+          productName: product?.name || item.description || 'Item',
+          salesAccountId: item.accountId || product?.salesAccountId || null,
+          taxableAmount: gstResult.taxableAmount,
+        });
       }
 
       subTotal = Number(subTotal.toFixed(2));
@@ -947,7 +1297,10 @@ export class InvoicesService {
       const taxTotal = isInterState
         ? Number((totalIgst + totalCess).toFixed(2))
         : Number((totalCgst + totalSgst + totalCess).toFixed(2));
-      const exactGrandTotal = Number((subTotal + taxTotal).toFixed(2));
+      const adjustment = dto.adjustment ? Number(dto.adjustment) : 0;
+      const tdsTcsAmount = dto.tdsTcsAmount ? Number(dto.tdsTcsAmount) : 0;
+      const tdsTcsMultiplier = dto.tdsTcsType === 'TDS' ? -1 : dto.tdsTcsType === 'TCS' ? 1 : 0;
+      const exactGrandTotal = Math.max(0, Number((subTotal + taxTotal + adjustment + (tdsTcsAmount * tdsTcsMultiplier)).toFixed(2)));
       let grandTotal = exactGrandTotal;
       if (dto.grandTotal !== undefined && !isNaN(Number(dto.grandTotal))) {
         const diff = Math.abs(Number(dto.grandTotal) - exactGrandTotal);
@@ -1012,6 +1365,7 @@ export class InvoicesService {
             companyId,
             businessPartnerId: partnerId,
             commissionRecordId,
+            templateId: dto.templateId || undefined,
             invoiceNo: invoiceNo || '',
             invoiceType: docType,
             placeOfSupply: dto.placeOfSupply || company?.state || '',
@@ -1028,13 +1382,23 @@ export class InvoicesService {
             cessAmount: totalCess,
             totalTaxAmount: taxTotal,
             gstBreakup: {
-              notes: dto.notes,
+              notes: dto.notes || dto.customerNotes,
               termsConditions: dto.termsConditions,
               documentType: docType,
               paymentMode: dto.paymentMode,
               paymentReference: dto.paymentReference,
+              paymentTerms: dto.paymentTerms,
               sourceDocumentId: dto.sourceDocumentId,
               sourceDocumentType: dto.sourceDocumentType,
+              reason: dto.reason,
+              subject: dto.subject,
+              salesperson: dto.salesperson,
+              referenceNo: dto.referenceNo || dto.orderNumber,
+              adjustment: dto.adjustment,
+              tdsTcsType: dto.tdsTcsType,
+              tdsTcsAmount: dto.tdsTcsAmount,
+              tdsTcsTaxId: dto.tdsTcsTaxId,
+              originalInvoiceNo: dto.originalInvoiceNo,
             },
             invoiceCategoryId: dto.invoiceCategoryId || null,
             taxTreatmentId: dto.taxTreatmentId || null,
@@ -1102,209 +1466,31 @@ export class InvoicesService {
           docType,
           isCreditNote,
           dto.warehouseId,
+          dto.allowNegativeStock === true,
         );
 
-        // D. Post Balanced Journal Entry to General Ledger
-        let arAccount = await tx.account.findFirst({
-          where: { companyId, name: 'Accounts Receivable' },
-        });
-        if (!arAccount) {
-          arAccount = await tx.account.create({
-            data: { companyId, name: 'Accounts Receivable', category: 'ASSET', balance: 0 },
-          });
-        }
-
-        const defaultRevenueName = docType === 'FEE_RECEIPT' ? 'Fee Revenue' : 'Sales Revenue';
-        let revenueAccount = await tx.account.findFirst({
-          where: { companyId, name: defaultRevenueName },
-        });
-
-        if (categorySnapshot?.defaultSalesAccountId) {
-          const catAccount = await tx.account.findUnique({
-            where: { id: categorySnapshot.defaultSalesAccountId },
-          });
-          if (catAccount) revenueAccount = catAccount;
-        }
-
-        if (!revenueAccount) {
-          revenueAccount = await tx.account.create({
-            data: { companyId, name: defaultRevenueName, category: 'REVENUE', balance: 0 },
-          });
-        }
-
-        const getTaxAccount = async (name: string) => {
-          let acc = await tx.account.findFirst({ where: { companyId, name } });
-          if (!acc) {
-            acc = await tx.account.create({
-              data: { companyId, name, category: 'LIABILITY', subCategory: 'CURRENT_LIABILITY', balance: 0 },
-            });
-          }
-          return acc;
-        };
-
-        const cgstAccount = isInterState ? null : await getTaxAccount('Output CGST');
-        const sgstAccount = isInterState ? null : await getTaxAccount('Output SGST');
-        const igstAccount = isInterState ? await getTaxAccount('Output IGST') : null;
-        const cessAccount = totalCess > 0 ? await getTaxAccount('Output Cess') : null;
-
-        const journalLines = isCreditNote
-          ? [
-              { accountId: revenueAccount.id, debit: subTotal, credit: 0 },
-              { accountId: arAccount.id, debit: 0, credit: grandTotal },
-            ]
-          : [
-              { accountId: arAccount.id, debit: grandTotal, credit: 0 },
-              { accountId: revenueAccount.id, debit: 0, credit: subTotal },
-            ];
-
-        if (!isInterState && totalCgst > 0 && cgstAccount && sgstAccount) {
-          journalLines.push({
-            accountId: cgstAccount.id,
-            debit: isCreditNote ? totalCgst : 0,
-            credit: isCreditNote ? 0 : totalCgst,
-          });
-          journalLines.push({
-            accountId: sgstAccount.id,
-            debit: isCreditNote ? totalSgst : 0,
-            credit: isCreditNote ? 0 : totalSgst,
-          });
-        }
-        if (isInterState && totalIgst > 0 && igstAccount) {
-          journalLines.push({
-            accountId: igstAccount.id,
-            debit: isCreditNote ? totalIgst : 0,
-            credit: isCreditNote ? 0 : totalIgst,
-          });
-        }
-        if (totalCess > 0 && cessAccount) {
-          journalLines.push({
-            accountId: cessAccount.id,
-            debit: isCreditNote ? totalCess : 0,
-            credit: isCreditNote ? 0 : totalCess,
-          });
-        }
-
-        const exactTaxSum = isInterState ? totalIgst + totalCess : totalCgst + totalSgst + totalCess;
-        const exactSum = Number((subTotal + exactTaxSum).toFixed(2));
-        const roundOff = Number((grandTotal - exactSum).toFixed(2));
-
-        if (roundOff !== 0) {
-          let roundOffAcc = await tx.account.findFirst({
-            where: { companyId, name: { in: ['Round Off', 'Rounding Off', 'Round Off Account', 'Rounding Adjustment'] } },
-          });
-          if (!roundOffAcc) {
-            roundOffAcc = await tx.account.create({
-              data: { companyId, name: 'Round Off', category: 'EXPENSE', subCategory: 'OTHER_EXPENSE' as any, balance: 0 },
-            });
-          }
-          if (roundOff > 0) {
-            journalLines.push({
-              accountId: roundOffAcc.id,
-              debit: isCreditNote ? roundOff : 0,
-              credit: isCreditNote ? 0 : roundOff,
-            });
-          } else {
-            journalLines.push({
-              accountId: roundOffAcc.id,
-              debit: isCreditNote ? 0 : Math.abs(roundOff),
-              credit: isCreditNote ? Math.abs(roundOff) : 0,
-            });
-          }
-        }
-
-        // If paid immediately, record payment receipt and cash/bank accounting entry
-        if (amountPaid > 0 && !isCreditNote) {
-          const isCash = (dto.paymentMode || '').toUpperCase() === 'CASH';
-          const defaultPaymentAccName = isCash ? 'Cash' : 'Bank Accounts';
-          let paymentAccount = await tx.account.findFirst({
-            where: { companyId, name: defaultPaymentAccName },
-          });
-          if (!paymentAccount) {
-            paymentAccount = await tx.account.create({
-              data: {
-                companyId,
-                name: defaultPaymentAccName,
-                category: 'ASSET',
-                subCategory: 'CURRENT_ASSET',
-                balance: 0,
-              },
-            });
-          }
-
-          journalLines.push({
-            accountId: paymentAccount.id,
-            debit: amountPaid,
-            credit: 0,
-          });
-          journalLines.push({
-            accountId: arAccount.id,
-            debit: 0,
-            credit: amountPaid,
-          });
-
-          // Create Receipt and Allocation record for payment history traceability
-          const receiptNo = await this.sequenceService.generateUniversalSequence(
-            companyId,
-            'PAYMENT_RECEIPT',
-            {},
-            tx
-          );
-
-          let validUserId = userId;
-          if (!validUserId) {
-            const companyUser = await tx.companyUser.findFirst({ where: { companyId } });
-            validUserId = companyUser?.userId;
-          }
-          if (!validUserId) {
-            const fallbackUser = await tx.user.findFirst();
-            validUserId = fallbackUser?.id;
-          }
-
-          if (validUserId) {
-            await tx.receipt.create({
-              data: {
-                companyId,
-                receiptNo,
-                date: invoiceDate,
-                businessPartnerId: partnerId,
-                amount: amountPaid,
-                currency: 'INR',
-                exchangeRate: 1.0,
-                receivedById: validUserId,
-                status: 'COMPLETED',
-                payments: {
-                  create: [
-                    {
-                      account: { connect: { id: paymentAccount.id } },
-                      paymentMethod: (dto.paymentMode as any) || (isCash ? 'CASH' : 'BANK_TRANSFER'),
-                      amount: amountPaid,
-                      referenceNo: dto.paymentReference || null,
-                      notes: `Payment for invoice ${invoiceNo}`,
-                    },
-                  ],
-                },
-                allocations: {
-                  create: [
-                    {
-                      invoiceId: invoice.id,
-                      amount: amountPaid,
-                    },
-                  ],
-                },
-              },
-            });
-          }
-        }
-
-        await this.accountingEngine.postTransaction(
-          {
-            companyId,
-            date: invoiceDate,
-            reference: invoiceNo,
-            description: `Automatic ${docType} posting ${invoiceNo}`,
-            lines: journalLines,
-          },
-          tx
+        // D. Post Balanced Journal Entry to General Ledger with product-level revenue accounts
+        await this.postInvoiceJournal(
+          tx,
+          companyId,
+          invoice,
+          lineAccountingDetails,
+          subTotal,
+          grandTotal,
+          totalCgst,
+          totalSgst,
+          totalIgst,
+          totalCess,
+          isInterState,
+          isCreditNote,
+          categorySnapshot,
+          invoiceDate,
+          `Automatic ${docType} posting ${invoiceNo}`,
+          amountPaid,
+          dto.paymentMode,
+          dto.paymentReference,
+          userId,
+          partnerId,
         );
       }
 
@@ -1402,10 +1588,13 @@ export class InvoicesService {
             companyId: invoice.companyId,
             deletedAt: null,
             id: { not: invoice.id },
-            status: { not: 'CANCELLED' },
+            status: { notIn: ['CANCELLED', 'DRAFT'] },
           },
         });
-        const totalInvoiced = remainingInvoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0);
+        const totalInvoiced = remainingInvoices.reduce((sum, inv) => {
+          const isCredit = inv.invoiceType === 'CREDIT_NOTE';
+          return isCredit ? sum - Number(inv.grandTotal) : sum + Number(inv.grandTotal);
+        }, 0);
 
         const receipts = await tx.receipt.findMany({
           where: {
@@ -1602,10 +1791,10 @@ export class InvoicesService {
         });
       }
 
-      // 2. Revert customer receivable balance:
-      // Decrementing by invoice.grandTotal reverses the invoice receivable.
-      // Any payments made remain on the customer ledger as unallocated credit / advance.
-      if (invoice.businessPartnerId) {
+      const wasPosted = invoice.status !== 'DRAFT';
+
+      // 2. Revert customer receivable balance (only for posted invoices):
+      if (invoice.businessPartnerId && wasPosted) {
         const customer = await tx.businessPartner.findUnique({
           where: { id: invoice.businessPartnerId },
         });
@@ -1636,81 +1825,85 @@ export class InvoicesService {
       }
 
       // 3. Find original journal entries and create reversals using AccountingEngineService
-      const originalEntries = await tx.journalEntry.findMany({
-        where: { reference: invoice.invoiceNo, companyId: invoice.companyId },
-      });
-
-      for (const entry of originalEntries) {
-        // Prevent duplicate reversals
-        const alreadyReversed = await tx.journalEntry.findFirst({
-          where: { companyId: invoice.companyId, reference: `REV-${entry.id}` },
+      if (wasPosted) {
+        const originalEntries = await tx.journalEntry.findMany({
+          where: { reference: invoice.invoiceNo, companyId: invoice.companyId },
         });
-        if (!alreadyReversed) {
-          await this.accountingEngine.reverseTransaction(
-            entry.id,
-            invoice.companyId,
-            tx,
-            `Cancellation reversal for invoice ${invoice.invoiceNo}: ${dto.reason.trim()}`
-          );
+
+        for (const entry of originalEntries) {
+          // Prevent duplicate reversals
+          const alreadyReversed = await tx.journalEntry.findFirst({
+            where: { companyId: invoice.companyId, reference: `REV-${entry.id}` },
+          });
+          if (!alreadyReversed) {
+            await this.accountingEngine.reverseTransaction(
+              entry.id,
+              invoice.companyId,
+              tx,
+              `Cancellation reversal for invoice ${invoice.invoiceNo}: ${dto.reason.trim()}`
+            );
+          }
         }
       }
 
       // 4. Revert Stock Ledger / physical stock
-      const stockLedgers = await tx.stockLedger.findMany({
-        where: {
-          referenceId: invoice.id,
-          referenceType: { in: ['INVOICE', 'INVOICE_RESTORE', 'SALE'] },
-        },
-      });
+      if (wasPosted) {
+        const stockLedgers = await tx.stockLedger.findMany({
+          where: {
+            referenceId: invoice.id,
+            referenceType: { in: ['INVOICE', 'INVOICE_RESTORE', 'SALE'] },
+          },
+        });
 
-      const existingCancellations = await tx.stockLedger.findMany({
-        where: {
-          companyId: invoice.companyId,
-          referenceId: invoice.id,
-          referenceType: 'INVOICE_CANCELLATION',
-        },
-      });
+        const existingCancellations = await tx.stockLedger.findMany({
+          where: {
+            companyId: invoice.companyId,
+            referenceId: invoice.id,
+            referenceType: 'INVOICE_CANCELLATION',
+          },
+        });
 
-      if (existingCancellations.length === 0) {
-        for (const ledger of stockLedgers) {
-          const changeQty = Number(ledger.quantityChange) * -1; // reverse the decrement
+        if (existingCancellations.length === 0) {
+          for (const ledger of stockLedgers) {
+            const changeQty = Number(ledger.quantityChange) * -1; // reverse the decrement
 
-          let whId: string | null = null;
-          if (ledger.notes) {
-            const match = ledger.notes.match(/\[Warehouse:\s*([^\]]+)\]/);
-            if (match && match[1]) whId = match[1].trim();
-          }
+            let whId: string | null = null;
+            if (ledger.notes) {
+              const match = ledger.notes.match(/\[Warehouse:\s*([^\]]+)\]/);
+              if (match && match[1]) whId = match[1].trim();
+            }
 
-          const stock = whId
-            ? await tx.stock.findFirst({
-                where: { companyId: invoice.companyId, productId: ledger.productId, warehouseId: whId },
-              })
-            : await tx.stock.findFirst({
-                where: { companyId: invoice.companyId, productId: ledger.productId },
+            const stock = whId
+              ? await tx.stock.findFirst({
+                  where: { companyId: invoice.companyId, productId: ledger.productId, warehouseId: whId },
+                })
+              : await tx.stock.findFirst({
+                  where: { companyId: invoice.companyId, productId: ledger.productId },
+                });
+
+            if (stock) {
+              const currentQty = Number(stock.quantity);
+              const newQty = currentQty + changeQty;
+
+              await tx.stock.update({
+                where: { id: stock.id },
+                data: { quantity: newQty, availableQuantity: newQty },
               });
 
-          if (stock) {
-            const currentQty = Number(stock.quantity);
-            const newQty = currentQty + changeQty;
-
-            await tx.stock.update({
-              where: { id: stock.id },
-              data: { quantity: newQty, availableQuantity: newQty },
-            });
-
-            await tx.stockLedger.create({
-              data: {
-                companyId: invoice.companyId,
-                productId: ledger.productId,
-                type: 'ADJUSTMENT',
-                quantityBefore: currentQty,
-                quantityChange: changeQty,
-                quantityAfter: newQty,
-                notes: `Cancellation of Invoice ${invoice.invoiceNo}: ${dto.reason.trim()}${whId ? ` [Warehouse: ${whId}]` : ''}`,
-                referenceId: invoice.id,
-                referenceType: 'INVOICE_CANCELLATION',
-              },
-            });
+              await tx.stockLedger.create({
+                data: {
+                  companyId: invoice.companyId,
+                  productId: ledger.productId,
+                  type: 'ADJUSTMENT',
+                  quantityBefore: currentQty,
+                  quantityChange: changeQty,
+                  quantityAfter: newQty,
+                  notes: `Cancellation of Invoice ${invoice.invoiceNo}: ${dto.reason.trim()}${whId ? ` [Warehouse: ${whId}]` : ''}`,
+                  referenceId: invoice.id,
+                  referenceType: 'INVOICE_CANCELLATION',
+                },
+              });
+            }
           }
         }
       }
@@ -1859,6 +2052,7 @@ export class InvoicesService {
 
     return this.prisma.$transaction(async (tx) => {
       const docType = this.normalizeInvoiceType(dto.invoiceType || dto.documentType || invoice.invoiceType);
+      const isCreditNote = docType === 'CREDIT_NOTE';
       const invoiceDate = dto.date ? new Date(dto.date) : invoice.date;
       const dueDate = dto.dueDate ? new Date(dto.dueDate) : invoice.dueDate;
 
@@ -1901,6 +2095,12 @@ export class InvoicesService {
       }
 
       const itemsToCreate: any[] = [];
+      const lineAccountingDetails: {
+        productId?: string | null;
+        productName?: string;
+        salesAccountId?: string | null;
+        taxableAmount: number;
+      }[] = [];
       let subTotal = 0;
       let totalCgst = 0;
       let totalSgst = 0;
@@ -1965,6 +2165,13 @@ export class InvoicesService {
           igstAmount: gstResult.igstAmount,
           cessAmount: gstResult.cessAmount,
         });
+
+        lineAccountingDetails.push({
+          productId: product?.id || null,
+          productName: product?.name || item.description || 'Item',
+          salesAccountId: product?.salesAccountId || null,
+          taxableAmount: gstResult.taxableAmount,
+        });
       }
 
       subTotal = Number(subTotal.toFixed(2));
@@ -1994,6 +2201,7 @@ export class InvoicesService {
         where: { id },
         data: {
           businessPartnerId: partnerId,
+          templateId: dto.templateId !== undefined ? dto.templateId : undefined,
           placeOfSupply: dto.placeOfSupply || invoice.placeOfSupply,
           date: invoiceDate,
           dueDate: dueDate,
@@ -2007,6 +2215,12 @@ export class InvoicesService {
           igstAmount: totalIgst,
           cessAmount: totalCess,
           totalTaxAmount: taxTotal,
+          gstBreakup: {
+            ...(typeof invoice.gstBreakup === 'object' && invoice.gstBreakup !== null ? invoice.gstBreakup : {}),
+            notes: dto.notes ?? (invoice.gstBreakup as any)?.notes,
+            termsConditions: dto.termsConditions ?? (invoice.gstBreakup as any)?.termsConditions,
+            paymentTerms: dto.paymentTerms ?? (invoice.gstBreakup as any)?.paymentTerms,
+          },
           categorySnapshot: categorySnapshot as unknown as Prisma.InputJsonValue,
           taxSnapshot: (taxSnapshot || {
             taxPreference: overrideTaxPref || bpTaxPreference,
@@ -2020,9 +2234,14 @@ export class InvoicesService {
         include: { items: true, businessPartner: true },
       });
 
-      // If transitioning to an issued status, execute accounting and inventory policies
-      if (targetStatus !== 'DRAFT') {
-        const netReceivableDelta = Number((grandTotal - amountPaid).toFixed(2));
+      // If transitioning to an issued status or updating an issued invoice, execute accounting and inventory policies
+      const wasDraft = invoice.status === 'DRAFT';
+      const willBeDraft = targetStatus === 'DRAFT';
+      const isInitialIssue = wasDraft && !willBeDraft;
+      const isAlreadyIssued = !wasDraft && !willBeDraft;
+
+      if (isInitialIssue) {
+        const netReceivableDelta = isCreditNote ? -grandTotal : Number((grandTotal - amountPaid).toFixed(2));
 
         if (customer && netReceivableDelta !== 0) {
           await tx.businessPartner.update({
@@ -2038,8 +2257,8 @@ export class InvoicesService {
             date: invoiceDate,
             type: docType,
             reference: invoice.invoiceNo,
-            debit: grandTotal,
-            credit: amountPaid,
+            debit: isCreditNote ? 0 : grandTotal,
+            credit: isCreditNote ? grandTotal : amountPaid,
             balance: Number((Number(customer?.receivableBalance || 0) + netReceivableDelta).toFixed(2)),
           },
         });
@@ -2051,71 +2270,117 @@ export class InvoicesService {
           updated,
           itemsToCreate,
           docType,
-          false,
+          isCreditNote,
           dto.warehouseId,
+          dto.allowNegativeStock === true,
         );
 
-        // Post balanced Journal Entry
-        let arAccount = await tx.account.findFirst({ where: { companyId, name: { in: ['Accounts Receivable', 'Trade Receivables'] } } })
-          || await tx.account.create({ data: { companyId, name: 'Accounts Receivable', category: 'ASSET', subCategory: 'CURRENT_ASSET' as any, balance: 0 } });
-        
-        const defaultRevenueName = updated.invoiceType === 'FEE_RECEIPT' ? 'Fee Revenue' : 'Sales Revenue';
-        let revenueAccount = await tx.account.findFirst({ where: { companyId, name: { in: [defaultRevenueName, 'Sales Revenue'] } } })
-          || await tx.account.create({ data: { companyId, name: defaultRevenueName, category: 'REVENUE', subCategory: 'SALES_REVENUE' as any, balance: 0 } });
+        // Post balanced Journal Entry with product-specific revenue accounts
+        await this.postInvoiceJournal(
+          tx,
+          companyId,
+          updated,
+          lineAccountingDetails,
+          subTotal,
+          grandTotal,
+          totalCgst,
+          totalSgst,
+          totalIgst,
+          totalCess,
+          isInterState,
+          isCreditNote,
+          categorySnapshot,
+          invoiceDate,
+          `Invoice ${invoice.invoiceNo} issued`,
+          amountPaid,
+          dto.paymentMode,
+          dto.paymentReference,
+          userId,
+          partnerId,
+        );
+      } else if (isAlreadyIssued) {
+        // Controlled adjustment for already-issued invoice:
+        const oldNetReceivable = isCreditNote
+          ? -Number(invoice.grandTotal)
+          : Number((Number(invoice.grandTotal) - Number(invoice.amountPaid)).toFixed(2));
+        const newNetReceivable = isCreditNote
+          ? -grandTotal
+          : Number((grandTotal - amountPaid).toFixed(2));
+        const receivableDelta = Number((newNetReceivable - oldNetReceivable).toFixed(2));
 
-        const finalGrandTotal = Number(Number(updated.grandTotal || 0).toFixed(2));
-        const finalSubTotal = Number(Number(updated.subTotal || 0).toFixed(2));
-        const cgst = Number(Number(totalCgst || updated.cgstAmount || 0).toFixed(2));
-        const sgst = Number(Number(totalSgst || updated.sgstAmount || 0).toFixed(2));
-        const igst = Number(Number(totalIgst || updated.igstAmount || 0).toFixed(2));
-        const cess = Number(Number(totalCess || updated.cessAmount || 0).toFixed(2));
-        const totalTax = Number((cgst + sgst + igst + cess).toFixed(2));
-
-        const exactSum = Number((finalSubTotal + totalTax).toFixed(2));
-        const roundOff = Number((finalGrandTotal - exactSum).toFixed(2));
-
-        const journalLines: any[] = [
-          { accountId: arAccount.id, debit: finalGrandTotal, credit: 0 },
-          { accountId: revenueAccount.id, debit: 0, credit: finalSubTotal },
-        ];
-
-        const getTaxAccount = async (name: string, altName?: string) => {
-          let acc = await tx.account.findFirst({ where: { companyId, name: { in: [name, altName || ''].filter(Boolean) } } });
-          if (!acc) acc = await tx.account.create({ data: { companyId, name, category: 'LIABILITY', subCategory: 'CURRENT_LIABILITY' as any, balance: 0 } });
-          return acc;
-        };
-
-        if (cgst > 0) journalLines.push({ accountId: (await getTaxAccount('Output CGST', 'CGST Output Payable')).id, debit: 0, credit: cgst });
-        if (sgst > 0) journalLines.push({ accountId: (await getTaxAccount('Output SGST', 'SGST Output Payable')).id, debit: 0, credit: sgst });
-        if (igst > 0) journalLines.push({ accountId: (await getTaxAccount('Output IGST', 'IGST Output Payable')).id, debit: 0, credit: igst });
-        if (cess > 0) journalLines.push({ accountId: (await getTaxAccount('Output Cess')).id, debit: 0, credit: cess });
-
-        if (roundOff !== 0) {
-          let roundOffAcc = await tx.account.findFirst({
-            where: { companyId, name: { in: ['Round Off', 'Rounding Off', 'Round Off Account', 'Rounding Adjustment'] } },
+        if (customer && receivableDelta !== 0) {
+          await tx.businessPartner.update({
+            where: { id: partnerId },
+            data: { receivableBalance: { increment: receivableDelta } },
           });
-          if (!roundOffAcc) {
-            roundOffAcc = await tx.account.create({
-              data: { companyId, name: 'Round Off', category: 'EXPENSE', subCategory: 'OTHER_EXPENSE' as any, balance: 0 },
-            });
-          }
-          if (roundOff > 0) {
-            journalLines.push({ accountId: roundOffAcc.id, debit: 0, credit: roundOff });
-          } else {
-            journalLines.push({ accountId: roundOffAcc.id, debit: Math.abs(roundOff), credit: 0 });
-          }
+
+          await tx.customerStatement.create({
+            data: {
+              companyId,
+              businessPartnerId: partnerId,
+              date: invoiceDate,
+              type: 'INVOICE_ADJUSTMENT',
+              reference: invoice.invoiceNo,
+              debit: receivableDelta > 0 ? receivableDelta : 0,
+              credit: receivableDelta < 0 ? Math.abs(receivableDelta) : 0,
+              balance: Number((Number(customer?.receivableBalance || 0) + receivableDelta).toFixed(2)),
+            },
+          });
         }
 
-        await this.accountingEngine.postTransaction(
-          {
+        // Check if financial details or items changed
+        const financialChanged =
+          Math.abs(Number(invoice.grandTotal) - grandTotal) > 0.001 ||
+          Math.abs(Number(invoice.subTotal) - subTotal) > 0.001 ||
+          Math.abs(Number(invoice.taxTotal) - taxTotal) > 0.001 ||
+          new Date(invoice.date).getTime() !== new Date(invoiceDate).getTime() ||
+          itemsToCreate.length !== (invoice.items?.length || 0);
+
+        if (financialChanged) {
+          // Reversal of existing journal entries before re-posting updated entry
+          const existingJournals = await tx.journalEntry.findMany({
+            where: { companyId, reference: invoice.invoiceNo },
+            include: { lines: true },
+          });
+
+          for (const entry of existingJournals) {
+            const alreadyReversed = await tx.journalEntry.findFirst({
+              where: { companyId, reference: `REV-${entry.id}` },
+            });
+            if (!alreadyReversed) {
+              await this.accountingEngine.reverseTransaction(
+                entry.id,
+                companyId,
+                tx,
+                `Adjustment reversal for updated invoice ${invoice.invoiceNo}`
+              );
+            }
+          }
+
+          // Post updated balanced journal entry
+          await this.postInvoiceJournal(
+            tx,
             companyId,
-            date: invoiceDate,
-            reference: invoice.invoiceNo,
-            description: `Invoice ${invoice.invoiceNo} issued`,
-            lines: journalLines,
-          },
-          tx
-        );
+            updated,
+            lineAccountingDetails,
+            subTotal,
+            grandTotal,
+            totalCgst,
+            totalSgst,
+            totalIgst,
+            totalCess,
+            isInterState,
+            isCreditNote,
+            categorySnapshot,
+            invoiceDate,
+            `Invoice ${invoice.invoiceNo} updated`,
+            amountPaid,
+            dto.paymentMode,
+            dto.paymentReference,
+            userId,
+            partnerId,
+          );
+        }
       }
 
       return updated;
@@ -2189,13 +2454,12 @@ export class InvoicesService {
         });
 
         if (!existingJournal) {
-          // Re-post General Ledger
-          let arAccount = await tx.account.findFirst({ where: { companyId, name: { in: ['Accounts Receivable', 'Trade Receivables'] } } })
-            || await tx.account.create({ data: { companyId, name: 'Accounts Receivable', category: 'ASSET', subCategory: 'CURRENT_ASSET' as any, balance: 0 } });
-          
-          const defaultRevenueName = invoice.invoiceType === 'FEE_RECEIPT' ? 'Fee Revenue' : 'Sales Revenue';
-          let revenueAccount = await tx.account.findFirst({ where: { companyId, name: { in: [defaultRevenueName, 'Sales Revenue'] } } })
-            || await tx.account.create({ data: { companyId, name: defaultRevenueName, category: 'REVENUE', subCategory: 'SALES_REVENUE' as any, balance: 0 } });
+          const lineAccountingDetails = (invoice.items || []).map((it: any) => ({
+            productId: it.productId,
+            productName: it.description || 'Item',
+            salesAccountId: it.product?.salesAccountId || null,
+            taxableAmount: Number((Number(it.qty) * Number(it.rate)).toFixed(2)),
+          }));
 
           const grandTotal = Number(Number(invoice.grandTotal || 0).toFixed(2));
           const subTotal = Number(Number(invoice.subTotal || 0).toFixed(2));
@@ -2203,53 +2467,29 @@ export class InvoicesService {
           const sgst = Number(Number(invoice.sgstAmount || 0).toFixed(2));
           const igst = Number(Number(invoice.igstAmount || 0).toFixed(2));
           const cess = Number(Number(invoice.cessAmount || 0).toFixed(2));
-          const totalTax = Number((cgst + sgst + igst + cess).toFixed(2));
-
-          const exactSum = Number((subTotal + totalTax).toFixed(2));
-          const roundOff = Number((grandTotal - exactSum).toFixed(2));
-
-          const journalLines: any[] = [
-            { accountId: arAccount.id, debit: grandTotal, credit: 0 },
-            { accountId: revenueAccount.id, debit: 0, credit: subTotal },
-          ];
-
-          const getTaxAccount = async (name: string, altName?: string) => {
-            let acc = await tx.account.findFirst({ where: { companyId, name: { in: [name, altName || ''].filter(Boolean) } } });
-            if (!acc) acc = await tx.account.create({ data: { companyId, name, category: 'LIABILITY', subCategory: 'CURRENT_LIABILITY' as any, balance: 0 } });
-            return acc;
-          };
-
-          if (cgst > 0) journalLines.push({ accountId: (await getTaxAccount('Output CGST', 'CGST Output Payable')).id, debit: 0, credit: cgst });
-          if (sgst > 0) journalLines.push({ accountId: (await getTaxAccount('Output SGST', 'SGST Output Payable')).id, debit: 0, credit: sgst });
-          if (igst > 0) journalLines.push({ accountId: (await getTaxAccount('Output IGST', 'IGST Output Payable')).id, debit: 0, credit: igst });
-          if (cess > 0) journalLines.push({ accountId: (await getTaxAccount('Output Cess')).id, debit: 0, credit: cess });
-
-          if (roundOff !== 0) {
-            let roundOffAcc = await tx.account.findFirst({
-              where: { companyId, name: { in: ['Round Off', 'Rounding Off', 'Round Off Account', 'Rounding Adjustment'] } },
-            });
-            if (!roundOffAcc) {
-              roundOffAcc = await tx.account.create({
-                data: { companyId, name: 'Round Off', category: 'EXPENSE', subCategory: 'OTHER_EXPENSE' as any, balance: 0 },
-              });
-            }
-            if (roundOff > 0) {
-              journalLines.push({ accountId: roundOffAcc.id, debit: 0, credit: roundOff });
-            } else {
-              journalLines.push({ accountId: roundOffAcc.id, debit: Math.abs(roundOff), credit: 0 });
-            }
-          }
+          const isInterState = Boolean(
+            invoice.placeOfSupply &&
+            invoice.company?.state &&
+            invoice.placeOfSupply.trim().toLowerCase() !== invoice.company.state.trim().toLowerCase()
+          );
 
           try {
-            await this.accountingEngine.postTransaction(
-              {
-                companyId,
-                date: invoice.date,
-                reference: invoice.invoiceNo,
-                description: `Restored invoice ${invoice.invoiceNo}`,
-                lines: journalLines,
-              },
-              tx
+            await this.postInvoiceJournal(
+              tx,
+              companyId,
+              restored,
+              lineAccountingDetails,
+              subTotal,
+              grandTotal,
+              cgst,
+              sgst,
+              igst,
+              cess,
+              isInterState,
+              invoice.invoiceType === 'CREDIT_NOTE',
+              invoice.categorySnapshot,
+              invoice.date,
+              `Restored invoice ${invoice.invoiceNo}`
             );
           } catch (postErr: any) {
             this.logger.error(

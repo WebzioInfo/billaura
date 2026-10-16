@@ -23,12 +23,11 @@ const LandingPage = lazy(() => import('../features/public/LandingPage').then(m =
 const AboutPage = lazy(() => import('../features/public/AboutPage').then(m => ({ default: m.AboutPage })));
 const SupportPage = lazy(() => import('../features/public/SupportPage').then(m => ({ default: m.SupportPage })));
 
-const WarehousesList = lazy(() => import('../features/inventory/WarehousesList').then(m => ({ default: m.WarehousesList })));
-const BatchesList = lazy(() => import('../features/inventory/BatchesList').then(m => ({ default: m.BatchesList })));
-const SerialsList = lazy(() => import('../features/inventory/SerialsList').then(m => ({ default: m.SerialsList })));
 const CategoriesList = lazy(() => import('../features/inventory/CategoriesList').then(m => ({ default: m.CategoriesList })));
-const BomList = lazy(() => import('../features/inventory/BomList').then(m => ({ default: m.BomList })));
 const ProductsList = lazy(() => import('../features/inventory/ProductsList').then(m => ({ default: m.ProductsList })));
+const ProductForm = lazy(() => import('../features/inventory/ProductForm').then(m => ({ default: m.ProductForm })));
+const InventoryAdjustmentsList = lazy(() => import('../features/inventory/InventoryAdjustmentsList').then(m => ({ default: m.InventoryAdjustmentsList })));
+const InventoryAdjustmentForm = lazy(() => import('../features/inventory/InventoryAdjustmentForm').then(m => ({ default: m.InventoryAdjustmentForm })));
 const BrandsList = lazy(() => import('../features/inventory/BrandsList').then(m => ({ default: m.BrandsList })));
 const UnitsMasterPage = lazy(() => import('../features/inventory/UnitsMasterPage').then(m => ({ default: m.UnitsMasterPage })));
 
@@ -51,17 +50,22 @@ const CustomerSegmentManager = lazy(() => import('../features/crm/CustomerSegmen
 const CustomerDepartmentManager = lazy(() => import('../features/crm/CustomerDepartmentManager').then(m => ({ default: m.CustomerDepartmentManager })));
 const VendorsList = lazy(() => import('../features/vendors/VendorsList').then(m => ({ default: m.VendorsList })));
 const VendorProfile = lazy(() => import('../features/vendors/VendorProfile').then(m => ({ default: m.VendorProfile })));
+const VendorForm = lazy(() => import('../features/vendors/VendorForm').then(m => ({ default: m.VendorForm })));
 
 const InvoicesList = lazy(() => import('../features/sales/InvoicesList').then(m => ({ default: m.InvoicesList })));
 const InvoicePrintView = lazy(() => import('../features/sales/InvoicePrintView').then(m => ({ default: m.InvoicePrintView })));
 const SalesDocumentForm = lazy(() => import('../features/sales/SalesDocumentForm').then(m => ({ default: m.SalesDocumentForm })));
 const InvoiceDetails = lazy(() => import('../features/sales/InvoiceDetails').then(m => ({ default: m.InvoiceDetails })));
+const InvoicePaymentPage = lazy(() => import('../features/sales/InvoicePaymentPage').then(m => ({ default: m.InvoicePaymentPage })));
 const ReceiptsList = lazy(() => import('../features/sales/ReceiptsList').then(m => ({ default: m.ReceiptsList })));
 const ReceiptForm = lazy(() => import('../features/sales/ReceiptForm').then(m => ({ default: m.ReceiptForm })));
 const SalesOrdersList = lazy(() => import('../features/sales/SalesOrdersList').then(m => ({ default: m.SalesOrdersList })));
 const DeliveryNotesList = lazy(() => import('../features/sales/DeliveryNotesList').then(m => ({ default: m.DeliveryNotesList })));
 const QuotationsList = lazy(() => import('../features/sales/QuotationsList').then(m => ({ default: m.QuotationsList })));
 const QuotationDetails = lazy(() => import('../features/sales/QuotationDetails').then(m => ({ default: m.QuotationDetails })));
+const QuotationForm = lazy(() => import('../features/sales/QuotationForm').then(m => ({ default: m.QuotationForm })));
+const CreditNotesList = lazy(() => import('../features/sales/CreditNotesList').then(m => ({ default: m.CreditNotesList })));
+const CreditNoteForm = lazy(() => import('../features/sales/CreditNoteForm').then(m => ({ default: m.CreditNoteForm })));
 const RecurringInvoicesList = lazy(() => import('../features/sales/RecurringInvoicesList').then(m => ({ default: m.RecurringInvoicesList })));
 
 const BillsList = lazy(() => import('../features/purchases/BillsList').then(m => ({ default: m.BillsList })));
@@ -69,21 +73,19 @@ const BillForm = lazy(() => import('../features/purchases/BillForm').then(m => (
 const PurchaseOrdersList = lazy(() => import('../features/purchases/PurchaseOrdersList').then(m => ({ default: m.PurchaseOrdersList })));
 const PurchaseOrderForm = lazy(() => import('../features/purchases/PurchaseOrderForm').then(m => ({ default: m.PurchaseOrderForm })));
 const PurchaseOrderDetails = lazy(() => import('../features/purchases/PurchaseOrderDetails').then(m => ({ default: m.PurchaseOrderDetails })));
-const GoodsReceiptsList = lazy(() => import('../features/purchases/GoodsReceiptsList').then(m => ({ default: m.GoodsReceiptsList })));
-const TrialBalance = lazy(() => import('../features/reports/TrialBalance').then(m => ({ default: m.TrialBalance })));
-const BalanceSheet = lazy(() => import('../features/reports/BalanceSheet').then(m => ({ default: m.BalanceSheet })));
-const GeneralLedger = lazy(() => import('../features/reports/GeneralLedger').then(m => ({ default: m.GeneralLedger })));
-const DayBook = lazy(() => import('../features/reports/DayBook').then(m => ({ default: m.DayBook })));
-const FinancialReports = lazy(() => import('../features/reports/FinancialReports').then(m => ({ default: m.FinancialReports })));
-const DepartmentalReport = lazy(() => import('../features/reports/DepartmentalReport').then(m => ({ default: m.DepartmentalReport })));
+const PaymentsMadeList = lazy(() => import('../features/purchases/PaymentsMadeList').then(m => ({ default: m.PaymentsMadeList })));
+const PaymentMadeForm = lazy(() => import('../features/purchases/PaymentMadeForm').then(m => ({ default: m.PaymentMadeForm })));
+const VendorCreditsList = lazy(() => import('../features/purchases/VendorCreditsList').then(m => ({ default: m.VendorCreditsList })));
+const VendorCreditForm = lazy(() => import('../features/purchases/VendorCreditForm').then(m => ({ default: m.VendorCreditForm })));
+const ReportsCenter = lazy(() => import('../features/reports/ReportsCenter').then(m => ({ default: m.ReportsCenter })));
+const ReportViewer = lazy(() => import('../features/reports/ReportViewer').then(m => ({ default: m.ReportViewer })));
+const DocumentsList = lazy(() => import('../features/documents/DocumentsList').then(m => ({ default: m.DocumentsList })));
 const EmployeeProfilePage = lazy(() => import('../features/hr/pages/EmployeeProfilePage').then(m => ({ default: m.EmployeeProfilePage })));
 const AttendanceList = lazy(() => import('../features/hr/AttendanceList').then(m => ({ default: m.AttendanceList })));
 const SubscriptionManager = lazy(() => import('../features/settings/SubscriptionManager').then(m => ({ default: m.SubscriptionManager })));
 const TemplatesList = lazy(() => import('../features/settings/TemplatesList').then(m => ({ default: m.TemplatesList })));
 const NotificationsCenter = lazy(() => import('../features/common/NotificationsCenter').then(m => ({ default: m.NotificationsCenter })));
 const GlobalSearch = lazy(() => import('../features/common/GlobalSearch').then(m => ({ default: m.GlobalSearch })));
-const CashFlowDashboard = lazy(() => import('../features/reports/CashFlowDashboard').then(m => ({ default: m.CashFlowDashboard })));
-const ReportView = lazy(() => import('../features/reports/ReportView').then(m => ({ default: m.ReportView })));
 const InvoiceConfiguration = lazy(() => import('../features/settings/InvoiceConfiguration').then(m => ({ default: m.InvoiceConfiguration })));
 
 // --- Onboarding & Auth Pages ---
@@ -107,6 +109,7 @@ const SalesDashboard = lazy(() => import('../features/sales/SalesDashboard').the
 const PurchasesDashboard = lazy(() => import('../features/purchases/PurchasesDashboard').then(m => ({ default: m.PurchasesDashboard })));
 const TaxesDashboard = lazy(() => import('../features/taxes/TaxesDashboard').then(m => ({ default: m.TaxesDashboard })));
 const ExpensesDashboard = lazy(() => import('../features/expenses/ExpensesDashboard').then(m => ({ default: m.ExpensesDashboard })));
+const ExpenseForm = lazy(() => import('../features/expenses/ExpenseForm').then(m => ({ default: m.ExpenseForm })));
 const TemplateBuilder = lazy(() => import('../pages/settings/TemplateBuilder'));
 const HelpCenterPortal = lazy(() => import('../pages/help/HelpCenterPortal'));
 
@@ -122,9 +125,6 @@ const CreateCompany = lazy(() => import('../features/platform/companies/CreateCo
 const CompanyDetails = lazy(() => import('../features/platform/companies/CompanyDetails').then(m => ({ default: m.CompanyDetails })));
 import { PageLoader } from '../shared/components/ui/LoadingSystem';
 import { ComingSoon } from '../shared/components/ui/ComingSoon';
-
-const CustomerStatement = lazy(() => import('../features/reports/CustomerStatement'));
-const CustomerAgeing = lazy(() => import('../features/reports/CustomerAgeing'));
 
 const LoadingFallback = () => (
   <div className="h-screen w-screen flex flex-col items-center justify-center bg-white text-slate-800 space-y-6 select-none relative overflow-hidden">
@@ -275,33 +275,44 @@ export const router = createBrowserRouter([
       { path: 'customer-segments', element: <CustomerSegmentManager /> },
       { path: 'customer-departments', element: <CustomerDepartmentManager /> },
       { path: 'vendors', element: <VendorsList /> },
-      { path: 'vendors/new', element: <CustomerForm /> },
+      { path: 'vendors/new', element: <VendorForm /> },
       { path: 'vendors/:id', element: <VendorProfile /> },
-      { path: 'vendors/:id/edit', element: <CustomerForm /> },
+      { path: 'vendors/:id/edit', element: <VendorForm /> },
       { path: 'products', element: <ProductsList /> },
+      { path: 'products/new', element: <ProductForm /> },
+      { path: 'products/:id', element: <ProductsList /> },
+      { path: 'products/:id/edit', element: <ProductForm /> },
       { path: 'services', element: <ProductsList /> },
       { path: 'categories', element: <CategoriesList /> },
       { path: 'brands', element: <BrandsList /> },
       { path: 'units', element: <UnitsMasterPage /> },
-      { path: 'inventory', element: <InventoryDashboard /> },
-      { path: 'warehouses', element: <WarehousesList /> },
-      { path: 'batches', element: <BatchesList /> },
-      { path: 'serials', element: <SerialsList /> },
-      { path: 'bom', element: <BomList /> },
+      { path: 'inventory', element: <InventoryAdjustmentsList /> },
+      { path: 'inventory/adjustments/new', element: <InventoryAdjustmentForm onClose={() => window.history.back()} /> },
+      { path: 'inventory-dashboard', element: <InventoryDashboard /> },
+
       { path: 'sales', element: <SalesDashboard /> },
       { path: 'quotations', element: <QuotationsList /> },
-      { path: 'quotations/new', element: <SalesDocumentForm initialDocType="QUOTATION" /> },
+      { path: 'quotations/new', element: <QuotationForm /> },
       { path: 'quotations/:id', element: <QuotationDetails /> },
+      { path: 'quotations/:id/edit', element: <QuotationForm /> },
+      { path: 'sales/quotes', element: <QuotationsList /> },
+      { path: 'sales/quotes/new', element: <QuotationForm /> },
+      { path: 'sales/quotes/:id', element: <QuotationDetails /> },
+      { path: 'sales/quotes/:id/edit', element: <QuotationForm /> },
       { path: 'sales-orders', element: <SalesOrdersList /> },
       { path: 'sales-orders/new', element: <SalesDocumentForm initialDocType="SALES_ORDER" /> },
+      { path: 'sales-orders/:id/edit', element: <SalesDocumentForm initialDocType="SALES_ORDER" /> },
       { path: 'delivery-challans', element: <DeliveryNotesList /> },
       { path: 'delivery-challans/new', element: <SalesDocumentForm initialDocType="DELIVERY_CHALLAN" /> },
       { path: 'delivery-notes', element: <DeliveryNotesList /> },
       { path: 'delivery-notes/new', element: <SalesDocumentForm initialDocType="DELIVERY_CHALLAN" /> },
-      { path: 'credit-notes', element: <InvoicesList /> },
-      { path: 'credit-notes/new', element: <SalesDocumentForm initialDocType="CREDIT_NOTE" /> },
+      { path: 'credit-notes', element: <CreditNotesList /> },
+      { path: 'credit-notes/new', element: <CreditNoteForm /> },
+      { path: 'credit-notes/:id/edit', element: <CreditNoteForm /> },
       { path: 'invoices', element: <InvoicesList /> },
       { path: 'invoices/:id', element: <InvoiceDetails /> },
+      { path: 'invoices/:id/payment', element: <InvoicePaymentPage /> },
+      { path: 'invoices/:id/record-payment', element: <InvoicePaymentPage /> },
       { path: 'invoices/:id/edit', element: <SalesDocumentForm initialDocType="INVOICE" /> },
       { path: 'invoices/:id/print', element: <InvoicePrintView /> },
       { path: 'invoices/new', element: <SalesDocumentForm initialDocType="INVOICE" /> },
@@ -310,6 +321,10 @@ export const router = createBrowserRouter([
       { path: 'receipts/new', element: <ReceiptForm /> },
       { path: 'receipts/:id', element: <ReceiptForm /> },
       { path: 'receipts/:id/edit', element: <ReceiptForm /> },
+      { path: 'payments-received', element: <ReceiptsList /> },
+      { path: 'payments-received/new', element: <ReceiptForm /> },
+      { path: 'payments-received/:id', element: <ReceiptForm /> },
+      { path: 'payments-received/:id/edit', element: <ReceiptForm /> },
       { path: 'sales/receipts/new', element: <Navigate to="/receipts/new" replace /> },
       { path: 'purchase/receipts/new', element: <Navigate to="/receipts/new" replace /> },
       { path: 'expense/receipts/new', element: <Navigate to="/receipts/new" replace /> },
@@ -320,16 +335,27 @@ export const router = createBrowserRouter([
       { path: 'purchase-orders/new', element: <PurchaseOrderForm /> },
       { path: 'purchase-orders/:id', element: <PurchaseOrderDetails /> },
       { path: 'purchase-orders/:id/edit', element: <PurchaseOrderForm /> },
-      { path: 'goods-receipts', element: <GoodsReceiptsList /> },
-      { path: 'goods-receipts/new', element: <PurchaseOrderForm /> },
+      { path: 'goods-receipts', element: <Navigate to="/purchases" replace /> },
+      { path: 'goods-receipts/*', element: <Navigate to="/purchases" replace /> },
       { path: 'bills', element: <BillsList /> },
       { path: 'bills/new', element: <BillForm /> },
-      { path: 'debit-notes', element: <BillsList /> },
-      { path: 'debit-notes/new', element: <BillForm /> },
-      { path: 'vendor-payments', element: <PurchasesDashboard /> },
-      { path: 'vendor-payments/new', element: <Navigate to="/receipts/new" replace /> },
+      { path: 'bills/:id/edit', element: <BillForm /> },
+      { path: 'debit-notes', element: <VendorCreditsList /> },
+      { path: 'debit-notes/new', element: <VendorCreditForm /> },
+      { path: 'vendor-credits', element: <VendorCreditsList /> },
+      { path: 'vendor-credits/new', element: <VendorCreditForm /> },
+      { path: 'vendor-payments', element: <PaymentsMadeList /> },
+      { path: 'vendor-payments/new', element: <PaymentMadeForm /> },
+      { path: 'vendor-payments/:id', element: <PaymentMadeForm /> },
+      { path: 'vendor-payments/:id/edit', element: <PaymentMadeForm /> },
+      { path: 'payments-made', element: <PaymentsMadeList /> },
+      { path: 'payments-made/new', element: <PaymentMadeForm /> },
+      { path: 'payments-made/:id', element: <PaymentMadeForm /> },
+      { path: 'payments-made/:id/edit', element: <PaymentMadeForm /> },
       { path: 'stock-transfer', element: <InventoryDashboard /> },
       { path: 'expenses', element: <ExpensesDashboard /> },
+      { path: 'expenses/new', element: <ExpenseForm /> },
+      { path: 'expenses/:id/edit', element: <ExpenseForm /> },
       { path: 'other-income', element: <IncomeDashboard /> },
       { path: 'banking', element: <BankingDashboard /> },
       { path: 'bank-transactions', element: <BankTransactionsList /> },
@@ -344,26 +370,34 @@ export const router = createBrowserRouter([
       { path: 'journal-entries/:id', element: <JournalEntryDetails /> },
       { path: 'contra-voucher', element: <JournalVoucherForm /> },
       { path: 'capital', element: <CapitalDashboard /> },
-      { path: 'general-ledger', element: <GeneralLedger /> },
-      { path: 'day-book', element: <DayBook /> },
-      { path: 'trial-balance', element: <TrialBalance /> },
-      { path: 'balance-sheet', element: <BalanceSheet /> },
-      { path: 'profit-loss', element: <ProfitLossDashboard /> },
-      { path: 'cash-flow', element: <CashFlowDashboard /> },
+      // Reports Module: ONE Reports Center + ONE Report Viewer
+      { path: 'reports', element: <ReportsCenter /> },
+      { path: 'reports/:reportKey', element: <ReportViewer /> },
+
+      // Legacy Report Route Redirects (All redirect to new Report Viewer or Reports Center)
+      { path: 'reports-center', element: <Navigate to="/reports" replace /> },
+      { path: 'reports/financial', element: <Navigate to="/reports" replace /> },
+      { path: 'general-ledger', element: <Navigate to="/reports/general-ledger" replace /> },
+      { path: 'day-book', element: <Navigate to="/reports/day-book" replace /> },
+      { path: 'trial-balance', element: <Navigate to="/reports/trial-balance" replace /> },
+      { path: 'balance-sheet', element: <Navigate to="/reports/balance-sheet" replace /> },
+      { path: 'profit-loss', element: <Navigate to="/reports/profit-and-loss" replace /> },
+      { path: 'cash-flow', element: <Navigate to="/reports/cash-flow-statement" replace /> },
+      { path: 'sales-register', element: <Navigate to="/reports/sales-by-customer" replace /> },
+      { path: 'purchase-register', element: <Navigate to="/reports/purchases-by-vendor" replace /> },
+      { path: 'reports/departmental', element: <Navigate to="/reports/departmental-performance" replace /> },
+      { path: 'reports/sales', element: <Navigate to="/reports/sales-by-customer" replace /> },
+      { path: 'reports/purchases', element: <Navigate to="/reports/purchases-by-vendor" replace /> },
+      { path: 'reports/gst', element: <Navigate to="/reports/tax-summary" replace /> },
+      { path: 'reports/inventory', element: <Navigate to="/reports" replace /> },
+
+      // Filing & Compliance / Taxes Dashboards
       { path: 'gst', element: <TaxesDashboard /> },
       { path: 'taxes', element: <TaxesDashboard /> },
       { path: 'gstr-1', element: <TaxesDashboard /> },
       { path: 'gstr-3b', element: <TaxesDashboard /> },
-      { path: 'sales-register', element: <ReportView title="Sales Register" /> },
-      { path: 'purchase-register', element: <ReportView title="Purchase Register" /> },
-      { path: 'hsn-summary', element: <ReportView title="HSN Summary" /> },
-      { path: 'reports', element: <FinancialReports /> },
-      { path: 'reports/financial', element: <FinancialReports /> },
-      { path: 'reports/departmental', element: <DepartmentalReport /> },
-      { path: 'reports/sales', element: <ReportView title="Sales Report" /> },
-      { path: 'reports/purchases', element: <ReportView title="Purchases Report" /> },
-      { path: 'reports/gst', element: <TaxesDashboard /> },
-      { path: 'reports/inventory', element: <ReportView title="Inventory Report" /> },
+      { path: 'documents', element: <DocumentsList /> },
+      { path: 'documents/:folder', element: <DocumentsList /> },
       { path: 'reports/payroll', element: <PayrollDashboard /> },
       { path: 'reports/attendance', element: <AttendanceReportPage /> },
       { path: 'salary-slips', element: <PayrollDashboard /> },
@@ -396,19 +430,19 @@ export const router = createBrowserRouter([
       { path: 'integrations', element: <Navigate to="/settings?tab=integrations" replace /> },
       { path: 'profile', element: <UserProfilePage /> },
       { path: 'subscription', element: <Navigate to="/settings?tab=subscription" replace /> },
-      { path: 'backup-restore', element: <Navigate to="/settings?tab=backup" replace /> },
-      { path: 'settings/templates', element: <TemplatesList /> }, // We can make a list page later
-      { path: 'invoice-engine', element: <InvoiceConfiguration /> },
+      { path: 'settings/templates', element: <TemplatesList /> },
+      { path: 'invoice-engine', element: <Navigate to="/settings/templates?type=invoice" replace /> },
       { path: 'settings/templates/new', element: <TemplateBuilder /> },
+      { path: 'settings/templates/:id/edit', element: <TemplateBuilder /> },
       { path: 'settings/templates/:id', element: <TemplateBuilder /> },
       { path: 'help', element: <HelpCenterPortal /> },
       { path: 'notifications', element: <NotificationsCenter /> },
       { path: 'search', element: <GlobalSearch /> },
       { path: 'crm', element: <CrmDashboard /> },
       
-      // Reports
-      { path: 'customer-statements', element: <CustomerStatement /> },
-      { path: 'reports/customer-ageing', element: <CustomerAgeing /> },
+      // Legacy Customer Statement & Ageing Redirects
+      { path: 'customer-statements', element: <Navigate to="/reports/customer-balance-summary" replace /> },
+      { path: 'reports/customer-ageing', element: <Navigate to="/reports/ar-aging-summary" replace /> },
       
       // Placeholders for unimplemented features have been removed to enforce nested routing
     ],

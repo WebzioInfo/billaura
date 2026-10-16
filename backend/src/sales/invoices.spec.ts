@@ -198,6 +198,42 @@ describe('InvoicesService - Production Test Matrix (Phase 15)', () => {
           if (where.id === mockServiceProduct.id && where.companyId === mockCompanyId) {
             return Promise.resolve(mockServiceProduct);
           }
+          if (where.id === 'prod-rev-a') {
+            return Promise.resolve({
+              id: 'prod-rev-a',
+              companyId: mockCompanyId,
+              name: 'Product A with Custom Income Account',
+              gstRate: 18,
+              salesAccountId: 'acc-sales-prod-a',
+              taxPreference: 'TAXABLE',
+              isService: true,
+              isTrackStock: false,
+            });
+          }
+          if (where.id === 'prod-rev-b') {
+            return Promise.resolve({
+              id: 'prod-rev-b',
+              companyId: mockCompanyId,
+              name: 'Product B with Custom Income Account',
+              gstRate: 18,
+              salesAccountId: 'acc-sales-prod-b',
+              taxPreference: 'TAXABLE',
+              isService: true,
+              isTrackStock: false,
+            });
+          }
+          if (where.id === 'prod-invalid-acc') {
+            return Promise.resolve({
+              id: 'prod-invalid-acc',
+              companyId: mockCompanyId,
+              name: 'Defective Product Account',
+              gstRate: 18,
+              salesAccountId: 'invalid-account-id',
+              taxPreference: 'TAXABLE',
+              isService: true,
+              isTrackStock: false,
+            });
+          }
           return Promise.resolve(null);
         }),
         findUnique: jest.fn().mockImplementation(({ where }) => {
@@ -220,6 +256,7 @@ describe('InvoicesService - Production Test Matrix (Phase 15)', () => {
         create: jest.fn().mockResolvedValue({ id: 'stk-1', quantity: 90 }),
       },
       stockLedger: {
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockImplementation(({ where }) => {
           return Promise.resolve(stockMovements.filter(sm => sm.referenceId === where?.referenceId));
         }),
@@ -231,6 +268,10 @@ describe('InvoicesService - Production Test Matrix (Phase 15)', () => {
       },
       account: {
         findFirst: jest.fn().mockImplementation(({ where }) => {
+          if (where?.id) {
+            if (where.id === 'invalid-account-id') return Promise.resolve(null);
+            return Promise.resolve({ id: where.id, name: `Account-${where.id}`, category: 'REVENUE', balance: 0 });
+          }
           const accName = where.name?.in ? where.name.in[0] : where.name;
           return Promise.resolve({ id: `acc-${accName}`, name: accName, category: 'ASSET', balance: 0 });
         }),
@@ -1603,5 +1644,309 @@ describe('InvoicesService - Production Test Matrix (Phase 15)', () => {
     expect(result.success).toBe(true);
     expect(result.message).toBe('Invoice corrected successfully. You can now create the replacement invoice.');
     expect(result.data.status).toBe('CANCELLED');
+  });
+
+  // TEST 45: Product-specific sales income accounts are posted correctly in multi-item invoice
+  it('TEST 45: Product-specific sales income accounts post distinct credit lines in General Ledger', async () => {
+    const prodA = {
+      id: 'prod-rev-a',
+      name: 'Product A with Custom Income Account',
+      gstRate: 18,
+      salesAccountId: 'acc-sales-prod-a',
+      taxPreference: 'TAXABLE',
+      isService: true,
+      isTrackStock: false,
+    };
+    const prodB = {
+      id: 'prod-rev-b',
+      name: 'Product B with Custom Income Account',
+      gstRate: 18,
+      salesAccountId: 'acc-sales-prod-b',
+      taxPreference: 'TAXABLE',
+      isService: true,
+      isTrackStock: false,
+    };
+
+    const invoice = await service.create({
+      businessPartnerId: mockCustomer.id,
+      invoiceType: 'TAX_INVOICE',
+      date: '2026-10-15',
+      placeOfSupply: '27',
+      status: 'SENT',
+      items: [
+        { productId: prodA.id, qty: 10, rate: 60, taxPercent: 18 }, // taxable 600, GST 108
+        { productId: prodB.id, qty: 10, rate: 40, taxPercent: 18 }, // taxable 400, GST 72
+      ],
+    });
+
+    expect(invoice).toBeDefined();
+    expect(invoice.subTotal).toBe(1000);
+    expect(invoice.grandTotal).toBe(1180);
+
+    // Verify journal posting has distinct credits for both product accounts
+    expect(journalTransactions).toHaveLength(1);
+    const journal = journalTransactions[0];
+    const lines = journal.lines;
+
+    // Line 1: AR Debit 1180
+    const arDebit = lines.find((l: any) => l.debit === 1180);
+    expect(arDebit).toBeDefined();
+
+    // Line 2: Product A Sales Credit 600
+    const prodACredit = lines.find((l: any) => l.accountId === 'acc-sales-prod-a' && l.credit === 600);
+    expect(prodACredit).toBeDefined();
+
+    // Line 3: Product B Sales Credit 400
+    const prodBCredit = lines.find((l: any) => l.accountId === 'acc-sales-prod-b' && l.credit === 400);
+    expect(prodBCredit).toBeDefined();
+
+    // Line 4 & 5: CGST 90 & SGST 90
+    const cgstLine = lines.find((l: any) => l.credit === 90);
+    const sgstLine = lines.find((l: any) => l.credit === 90);
+    expect(cgstLine).toBeDefined();
+    expect(sgstLine).toBeDefined();
+
+    // Verify total journal debits equal total credits
+    const totalDebits = lines.reduce((sum: number, l: any) => sum + Number(l.debit || 0), 0);
+    const totalCredits = lines.reduce((sum: number, l: any) => sum + Number(l.credit || 0), 0);
+    expect(totalDebits).toBe(1180);
+    expect(totalCredits).toBe(1180);
+  });
+
+  // TEST 46: Invalid product sales account mapping throws descriptive BadRequestException
+  it('TEST 46: Throws descriptive BadRequestException if product sales account mapping is invalid', async () => {
+    const invalidProd = {
+      id: 'prod-invalid-acc',
+      name: 'Defective Product Account',
+      gstRate: 18,
+      salesAccountId: 'invalid-account-id',
+      taxPreference: 'TAXABLE',
+      isService: true,
+      isTrackStock: false,
+    };
+
+    await expect(
+      service.create({
+        businessPartnerId: mockCustomer.id,
+        invoiceType: 'TAX_INVOICE',
+        date: '2026-10-15',
+        placeOfSupply: 'Maharashtra',
+        status: 'SENT',
+        items: [{ productId: invalidProd.id, qty: 1, rate: 1000 }],
+      })
+    ).rejects.toThrow('Sales account configured for product "Defective Product Account" (ID: invalid-account-id) does not exist');
+  });
+
+  // TEST 47: Draft invoice does not increment customer receivable or post journals
+  it('TEST 47: Saving as Draft strictly prevents GL posting and does not increment customer balance', async () => {
+    const draft = await service.create({
+      businessPartnerId: mockCustomer.id,
+      invoiceType: 'TAX_INVOICE',
+      date: '2026-10-15',
+      placeOfSupply: 'Maharashtra',
+      status: 'DRAFT',
+      items: [{ productId: mockProduct.id, qty: 10, rate: 100 }],
+    });
+
+    expect(draft.status).toBe('DRAFT');
+    expect(journalTransactions).toHaveLength(0);
+    expect(mockTx.businessPartner.update).not.toHaveBeenCalled();
+  });
+
+  // TEST 48: Immediate payment on invoice issue records payment receipt and decrements customer receivable
+  it('TEST 48: Immediate payment records payment receipt, debits bank, and reduces net receivable', async () => {
+    const paidInvoice = await service.create({
+      businessPartnerId: mockCustomer.id,
+      invoiceType: 'TAX_INVOICE',
+      date: '2026-10-15',
+      placeOfSupply: 'Maharashtra',
+      status: 'SENT',
+      amountPaid: 500,
+      paymentMode: 'BANK_TRANSFER',
+      items: [{ productId: mockProduct.id, qty: 10, rate: 100, taxPercent: 18 }], // grandTotal 1180
+    });
+
+    expect(paidInvoice.grandTotal).toBe(1180);
+    expect(paidInvoice.amountPaid).toBe(500);
+
+    // Customer balance incremented by net outstanding: 1180 - 500 = 680
+    expect(mockTx.businessPartner.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          receivableBalance: { increment: 680 },
+        }),
+      })
+    );
+
+    // Balanced journal entry includes bank debit of 500 and AR credit of 500
+    const journal = journalTransactions[0];
+    const bankDebit = journal.lines.find((l: any) => l.debit === 500);
+    expect(bankDebit).toBeDefined();
+
+    const totalDebits = journal.lines.reduce((s: number, l: any) => s + l.debit, 0);
+    const totalCredits = journal.lines.reduce((s: number, l: any) => s + l.credit, 0);
+    expect(totalDebits).toBe(totalCredits);
+  });
+
+  // TEST 49: Statutory lock prohibits direct modification of issued invoices
+  it('TEST 49: Direct update of an already-issued invoice is blocked by statutory lock', async () => {
+    const existingIssued: any = {
+      id: 'inv-already-issued-1',
+      companyId: mockCompanyId,
+      invoiceNo: 'B2BF/ISSUED-EDIT-01',
+      status: 'SENT',
+      deletedAt: null,
+      businessPartnerId: mockCustomer.id,
+      date: new Date('2026-10-10'),
+      dueDate: new Date('2026-10-17'),
+      subTotal: 1000,
+      grandTotal: 1180,
+      amountPaid: 0,
+      items: [{ id: 'item-1', productId: mockProduct.id, qty: 10, rate: 100, taxPercent: 18 }],
+    };
+    createdInvoices.push(existingIssued);
+
+    await expect(
+      service.update(existingIssued.id, {
+        items: [{ productId: mockProduct.id, qty: 15, rate: 100, taxPercent: 18 }],
+        status: 'SENT',
+      }, mockUserId)
+    ).rejects.toThrow('Only draft invoices can be edited. Issued invoices are legally locked.');
+  });
+
+  // TEST 50: Cancelling an issued invoice posts reversal journals and reverts customer receivable balance
+  it('TEST 50: Cancelling an issued invoice decrements customer balance and posts reversal journal', async () => {
+    const issuedToCancel: any = {
+      id: 'inv-to-cancel-1',
+      companyId: mockCompanyId,
+      invoiceNo: 'B2BF/CANCEL-ME-01',
+      status: 'SENT',
+      deletedAt: null,
+      businessPartnerId: mockCustomer.id,
+      grandTotal: 1180,
+      amountPaid: 0,
+      receiptAllocations: [],
+      journalEntries: [{ id: 'je-cancel-1', reference: 'B2BF/CANCEL-ME-01' }],
+    };
+    createdInvoices.push(issuedToCancel);
+
+    mockTx.journalEntry.findMany.mockResolvedValueOnce([
+      { id: 'je-cancel-1', reference: issuedToCancel.invoiceNo, companyId: mockCompanyId, lines: [] },
+    ]);
+
+    const cancelResult = await service.cancel(
+      issuedToCancel.id,
+      { reason: 'Customer cancelled order prior to dispatch' },
+      mockUserId
+    );
+
+    expect(cancelResult.success).toBe(true);
+    expect(cancelResult.data.status).toBe('CANCELLED');
+    expect(mockTx.businessPartner.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          receivableBalance: { decrement: 1180 },
+        }),
+      })
+    );
+  });
+
+  describe('Credit Note Creation and Persistence', () => {
+    it('persists a credit note with line items, line discount, adjustment, and metadata in gstBreakup', async () => {
+      const dto: CreateInvoiceDto = {
+        documentType: 'CREDIT_NOTE',
+        customerId: mockCustomer.id,
+        date: '2026-10-16T10:00:00.000Z',
+        placeOfSupply: '27',
+        status: 'DRAFT',
+        reason: 'Sales Return',
+        subject: 'Defective batch return',
+        salesperson: 'ALI HASHIM',
+        referenceNo: 'REF-CN-001',
+        adjustment: -10,
+        items: [
+          {
+            productId: mockProduct.id,
+            qty: 2,
+            rate: 500,
+            discount: 10,
+            discountType: 'percentage',
+            accountId: 'acc-sales-return-1',
+          },
+        ],
+      };
+
+      const result = await service.create(dto);
+
+      expect(result).toBeDefined();
+      expect(result.invoiceType).toBe('CREDIT_NOTE');
+      expect(result.status).toBe('DRAFT');
+      expect((result.items as any).create).toHaveLength(1);
+      // Subtotal: 2 * 500 = 1000, 10% discount = 100, taxable = 900.
+      // 18% GST (intra-state 27 -> 27) = CGST 81 + SGST 81 = 162.
+      // Total before adjustment = 1062. Adjustment = -10 => 1052.
+      expect(result.subTotal).toBe(900);
+      expect(result.taxTotal).toBe(162);
+      expect(result.grandTotal).toBe(1052);
+      expect(result.gstBreakup).toEqual(
+        expect.objectContaining({
+          reason: 'Sales Return',
+          subject: 'Defective batch return',
+          salesperson: 'ALI HASHIM',
+          referenceNo: 'REF-CN-001',
+          adjustment: -10,
+        })
+      );
+    });
+
+    it('creates an OPEN credit note and posts balanced reverse journal entries and decrements customer receivableBalance', async () => {
+      const dto: CreateInvoiceDto = {
+        documentType: 'CREDIT_NOTE',
+        customerId: mockCustomer.id,
+        date: '2026-10-16T10:00:00.000Z',
+        placeOfSupply: '27',
+        status: 'SENT',
+        reason: 'Sales Return',
+        items: [
+          {
+            productId: mockProduct.id,
+            qty: 1,
+            rate: 1000,
+            discount: 0,
+            accountId: 'acc-sales-return-1',
+          },
+        ],
+      };
+
+      const result = await service.create(dto);
+
+      expect(result).toBeDefined();
+      expect(result.status).toBe('SENT');
+      // Subtotal 1000 + 18% GST = 1180
+      expect(result.grandTotal).toBe(1180);
+      // AR should be decremented for a credit note
+      expect(mockTx.businessPartner.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockCustomer.id },
+          data: expect.objectContaining({
+            receivableBalance: { increment: -1180 },
+          }),
+        })
+      );
+      // Journal entry should be posted for OPEN credit note
+      expect(accountingEngine.postTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId: mockCompanyId,
+          reference: expect.any(String),
+          lines: expect.arrayContaining([
+            expect.objectContaining({ accountId: 'acc-sales-return-1', debit: 1000, credit: 0 }),
+            expect.objectContaining({ accountId: 'acc-Accounts Receivable', debit: 0, credit: 1180 }),
+            expect.objectContaining({ accountId: 'acc-Output CGST', debit: 90, credit: 0 }),
+            expect.objectContaining({ accountId: 'acc-Output SGST', debit: 90, credit: 0 }),
+          ]),
+        }),
+        expect.anything()
+      );
+    });
   });
 });

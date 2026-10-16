@@ -15,8 +15,31 @@ export class ErrorBoundary extends Component<Props, State> {
     hasError: false
   };
 
+  private lastPathname: string = typeof window !== 'undefined' ? window.location.pathname : '';
+
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  public componentDidMount() {
+    window.addEventListener('popstate', this.handleRouteReset);
+  }
+
+  public componentWillUnmount() {
+    window.removeEventListener('popstate', this.handleRouteReset);
+  }
+
+  private handleRouteReset = () => {
+    if (this.state.hasError) {
+      this.setState({ hasError: false, error: undefined });
+    }
+  };
+
+  public componentDidUpdate() {
+    if (this.state.hasError && typeof window !== 'undefined' && window.location.pathname !== this.lastPathname) {
+      this.lastPathname = window.location.pathname;
+      this.setState({ hasError: false, error: undefined });
+    }
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {

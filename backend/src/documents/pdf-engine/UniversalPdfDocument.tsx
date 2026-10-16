@@ -417,13 +417,425 @@ export const UniversalPdfDocument: React.FC<{ data: PdfDocumentData; pdf?: React
   const isBillOfSupply = document.docType === 'BILL_OF_SUPPLY';
   const isInterstate = Number(totals.igstAmount || 0) > 0;
 
+  const template = (data as any).template;
+  const logoSettings = template?.logoSettings || {};
+  const logoPos = logoSettings.position || 'left';
+  const logoWidth = logoSettings.width ? Math.min(240, Math.max(40, Number(logoSettings.width))) : 140;
+  const showLogo = logoSettings.showLogo !== false;
+
   const isValidLogo = !!(
+    showLogo &&
     company.logoUrl &&
     typeof company.logoUrl === 'string' &&
     (company.logoUrl.startsWith('data:image/') ||
       company.logoUrl.startsWith('http://') ||
       company.logoUrl.startsWith('https://'))
   );
+
+  const primaryColor = template?.colors?.primary || '#1e3a8a';
+
+  if (
+    template?.theme === 'spreadsheet' ||
+    template?.name === 'Spreadsheet Template' ||
+    document.docType === 'QUOTE'
+  ) {
+    const isInterstateQuote = Number(totals.igstAmount || 0) > 0;
+    const hasHsn = items.some((it) => !!it.hsn);
+
+    const ssStyles = StyleSheet.create({
+      page: {
+        padding: 34,
+        fontFamily: 'Times-Roman',
+        fontSize: 8.5,
+        color: '#000000',
+        backgroundColor: '#ffffff',
+      },
+      outerBox: {
+        borderWidth: 1,
+        borderColor: '#000000',
+        borderStyle: 'solid',
+        width: '100%',
+      },
+      headerRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: '#000000',
+      },
+      logoCell: {
+        width: '28%',
+        borderRightWidth: 1,
+        borderRightColor: '#000000',
+        padding: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      companyCell: {
+        width: '72%',
+        padding: 8,
+        justifyContent: 'space-between',
+      },
+      companyName: {
+        fontFamily: 'Times-Bold',
+        fontSize: 14,
+        textTransform: 'uppercase',
+        marginBottom: 2,
+      },
+      companyAddress: {
+        fontSize: 8,
+        lineHeight: 1.25,
+      },
+      docTitle: {
+        fontSize: 20,
+        fontFamily: 'Times-Roman',
+        textAlign: 'right',
+        marginTop: 6,
+      },
+      metaRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: '#000000',
+      },
+      metaCellLeft: {
+        width: '50%',
+        borderRightWidth: 1,
+        borderRightColor: '#000000',
+        padding: 6,
+      },
+      metaCellRight: {
+        width: '50%',
+        padding: 6,
+      },
+      metaItem: {
+        flexDirection: 'row',
+        marginBottom: 2,
+        fontSize: 8,
+      },
+      metaLabel: {
+        width: 80,
+        fontSize: 7.5,
+      },
+      metaValue: {
+        fontFamily: 'Times-Bold',
+      },
+      partiesRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: '#000000',
+      },
+      partyColLeft: {
+        width: '50%',
+        borderRightWidth: 1,
+        borderRightColor: '#000000',
+      },
+      partyColRight: {
+        width: '50%',
+      },
+      partyHeaderStrip: {
+        backgroundColor: '#d9d9d9',
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderBottomWidth: 1,
+        borderBottomColor: '#000000',
+        fontFamily: 'Times-Bold',
+        fontSize: 8.5,
+      },
+      partyBody: {
+        padding: 6,
+        fontSize: 8,
+        lineHeight: 1.25,
+      },
+      partyNameBlue: {
+        fontFamily: 'Times-Bold',
+        color: '#2563eb',
+        fontSize: 9,
+        marginBottom: 2,
+      },
+      partyNameBlack: {
+        fontFamily: 'Times-Bold',
+        color: '#000000',
+        fontSize: 9,
+        marginBottom: 2,
+      },
+      tableHeaderRow: {
+        flexDirection: 'row',
+        backgroundColor: '#d9d9d9',
+        borderBottomWidth: 1,
+        borderBottomColor: '#000000',
+        fontFamily: 'Times-Bold',
+        fontSize: 8,
+      },
+      thCell: {
+        borderRightWidth: 1,
+        borderRightColor: '#000000',
+        padding: 3,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      tableRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: '#000000',
+        fontSize: 8,
+      },
+      tdCell: {
+        borderRightWidth: 1,
+        borderRightColor: '#000000',
+        padding: 3,
+      },
+      footerRow: {
+        flexDirection: 'row',
+      },
+      footerLeft: {
+        width: '62%',
+        borderRightWidth: 1,
+        borderRightColor: '#000000',
+        padding: 6,
+      },
+      footerRight: {
+        width: '38%',
+        justifyContent: 'space-between',
+      },
+      totalsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderBottomWidth: 1,
+        borderBottomColor: '#000000',
+        fontSize: 8.5,
+      },
+      signatureBox: {
+        height: 100,
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        paddingBottom: 6,
+      },
+      signatureLabel: {
+        fontSize: 7.5,
+        color: '#4b5563',
+      },
+    });
+
+    return (
+      <Document title={`Quote - ${document.documentNo || 'Doc'}`}>
+        <Page size="A4" style={ssStyles.page}>
+          <View style={ssStyles.outerBox}>
+            {/* Block 1: Header */}
+            <View style={ssStyles.headerRow}>
+              <View style={ssStyles.logoCell}>
+                {isValidLogo ? (
+                  <Image src={company.logoUrl} style={{ maxHeight: 60, maxWidth: 120, objectFit: 'contain' }} />
+                ) : (
+                  <Text style={{ fontFamily: 'Times-Bold', fontSize: 13, textAlign: 'center' }}>
+                    {company.name || 'COMPANY LOGO'}
+                  </Text>
+                )}
+              </View>
+              <View style={ssStyles.companyCell}>
+                <View>
+                  <Text style={ssStyles.companyName}>{company.name || 'BIOFIX TECHNOLOGY LLP'}</Text>
+                  {company.address ? <Text style={ssStyles.companyAddress}>{company.address}</Text> : null}
+                  {company.gstin ? <Text style={ssStyles.companyAddress}>GSTIN {company.gstin}</Text> : null}
+                  {company.phone ? <Text style={ssStyles.companyAddress}>{company.phone}</Text> : null}
+                  {company.email ? <Text style={ssStyles.companyAddress}>{company.email}</Text> : null}
+                </View>
+                <Text style={ssStyles.docTitle}>Quote</Text>
+              </View>
+            </View>
+
+            {/* Block 2: Meta Row */}
+            <View style={ssStyles.metaRow}>
+              <View style={ssStyles.metaCellLeft}>
+                <View style={ssStyles.metaItem}>
+                  <Text style={ssStyles.metaLabel}>Quote No</Text>
+                  <Text style={ssStyles.metaValue}>: {document.documentNo || 'QT-000022'}</Text>
+                </View>
+                <View style={ssStyles.metaItem}>
+                  <Text style={ssStyles.metaLabel}>Quote Date</Text>
+                  <Text style={ssStyles.metaValue}>: {document.date || '13/04/2026'}</Text>
+                </View>
+                <View style={ssStyles.metaItem}>
+                  <Text style={ssStyles.metaLabel}>Expiry Date</Text>
+                  <Text style={ssStyles.metaValue}>: {document.expiryDate || document.dueDate || '20/04/2026'}</Text>
+                </View>
+              </View>
+              <View style={ssStyles.metaCellRight}>
+                <View style={ssStyles.metaItem}>
+                  <Text style={{ width: 95, fontSize: 7.5 }}>Place Of Supply</Text>
+                  <Text style={ssStyles.metaValue}>: {document.placeOfSupply || company.state || 'Kerala (32)'}</Text>
+                </View>
+                <View style={ssStyles.metaItem}>
+                  <Text style={{ width: 95, fontSize: 7.5 }}>Sales person</Text>
+                  <Text style={ssStyles.metaValue}>: {document.salesperson || 'PAVITHRA'}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Block 3: Bill To / Ship To */}
+            <View style={ssStyles.partiesRow}>
+              <View style={ssStyles.partyColLeft}>
+                <Text style={ssStyles.partyHeaderStrip}>Bill To</Text>
+                <View style={ssStyles.partyBody}>
+                  <Text style={ssStyles.partyNameBlue}>{customer.name || 'Customer Name'}</Text>
+                  {customer.address ? <Text>{customer.address}</Text> : null}
+                  {customer.gstin ? <Text>GSTIN {customer.gstin}</Text> : null}
+                </View>
+              </View>
+              <View style={ssStyles.partyColRight}>
+                <Text style={ssStyles.partyHeaderStrip}>Ship To</Text>
+                <View style={ssStyles.partyBody}>
+                  <Text style={ssStyles.partyNameBlack}>{customer.name || 'Customer Name'}</Text>
+                  {customer.shippingAddress || customer.address ? (
+                    <Text>{customer.shippingAddress || customer.address}</Text>
+                  ) : null}
+                  {customer.gstin ? <Text>GSTIN {customer.gstin}</Text> : null}
+                </View>
+              </View>
+            </View>
+
+            {/* Block 4: Items Table */}
+            <View>
+              <View style={ssStyles.tableHeaderRow}>
+                <Text style={[ssStyles.thCell, { width: '5%' }]}>#</Text>
+                <Text style={[ssStyles.thCell, { width: '38%', textAlign: 'left', alignItems: 'flex-start' }]}>Item & Description</Text>
+                {hasHsn ? <Text style={[ssStyles.thCell, { width: '12%' }]}>HSN/SAC</Text> : null}
+                <Text style={[ssStyles.thCell, { width: '9%' }]}>Qty</Text>
+                <Text style={[ssStyles.thCell, { width: '11%' }]}>Rate</Text>
+                {!isInterstateQuote ? (
+                  <>
+                    <Text style={[ssStyles.thCell, { width: '6%' }]}>CGST%</Text>
+                    <Text style={[ssStyles.thCell, { width: '7%' }]}>CGST Amt</Text>
+                    <Text style={[ssStyles.thCell, { width: '6%' }]}>SGST%</Text>
+                    <Text style={[ssStyles.thCell, { width: '7%' }]}>SGST Amt</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[ssStyles.thCell, { width: '10%' }]}>IGST%</Text>
+                    <Text style={[ssStyles.thCell, { width: '12%' }]}>IGST Amt</Text>
+                  </>
+                )}
+                <Text style={[ssStyles.thCell, { width: '15%', borderRightWidth: 0 }]}>Amount</Text>
+              </View>
+
+              {items.map((it: any, idx: number) => {
+                const qty = Number(it.qty || 1);
+                const rate = Number(it.rate || 0);
+                const taxable = qty * rate;
+                const taxP = Number(it.taxPercent || 0);
+                const halfP = taxP / 2;
+                const cgstA = Number(it.cgstAmount || (taxable * halfP) / 100);
+                const sgstA = Number(it.sgstAmount || (taxable * halfP) / 100);
+                const igstA = Number(it.igstAmount || (taxable * taxP) / 100);
+
+                return (
+                  <View key={idx} style={ssStyles.tableRow}>
+                    <Text style={[ssStyles.tdCell, { width: '5%', textAlign: 'center' }]}>{idx + 1}</Text>
+                    <View style={[ssStyles.tdCell, { width: '38%' }]}>
+                      <Text style={{ fontFamily: 'Times-Bold' }}>{it.description || 'Item'}</Text>
+                    </View>
+                    {hasHsn ? <Text style={[ssStyles.tdCell, { width: '12%', textAlign: 'center' }]}>{it.hsn || '—'}</Text> : null}
+                    <View style={[ssStyles.tdCell, { width: '9%', alignItems: 'flex-end' }]}>
+                      <Text>{fmt(qty)}</Text>
+                      {it.unit ? <Text style={{ fontSize: 6.5, color: '#4b5563' }}>{it.unit}</Text> : null}
+                    </View>
+                    <Text style={[ssStyles.tdCell, { width: '11%', textAlign: 'right' }]}>{fmt(rate)}</Text>
+                    {!isInterstateQuote ? (
+                      <>
+                        <Text style={[ssStyles.tdCell, { width: '6%', textAlign: 'center' }]}>{halfP}%</Text>
+                        <Text style={[ssStyles.tdCell, { width: '7%', textAlign: 'right' }]}>{fmt(cgstA)}</Text>
+                        <Text style={[ssStyles.tdCell, { width: '6%', textAlign: 'center' }]}>{halfP}%</Text>
+                        <Text style={[ssStyles.tdCell, { width: '7%', textAlign: 'right' }]}>{fmt(sgstA)}</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={[ssStyles.tdCell, { width: '10%', textAlign: 'center' }]}>{taxP}%</Text>
+                        <Text style={[ssStyles.tdCell, { width: '12%', textAlign: 'right' }]}>{fmt(igstA)}</Text>
+                      </>
+                    )}
+                    <Text style={[ssStyles.tdCell, { width: '15%', textAlign: 'right', borderRightWidth: 0, fontFamily: 'Times-Bold' }]}>
+                      {fmt(taxable)}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Block 5: Footer Area */}
+            <View style={ssStyles.footerRow}>
+              <View style={ssStyles.footerLeft}>
+                <View style={{ marginBottom: 6 }}>
+                  <Text style={{ fontSize: 7, color: '#374151' }}>Total In Words</Text>
+                  <Text style={{ fontFamily: 'Times-BoldItalic', fontSize: 8.5, marginTop: 1 }}>
+                    {totals.amountInWords || 'Indian Rupee Zero Only'}
+                  </Text>
+                </View>
+
+                {document.notes ? (
+                  <View style={{ marginBottom: 6 }}>
+                    <Text style={{ fontFamily: 'Times-Bold', fontSize: 8 }}>Notes</Text>
+                    <Text style={{ fontSize: 7.5, marginTop: 1 }}>{document.notes}</Text>
+                  </View>
+                ) : null}
+
+                <View style={{ marginBottom: 6 }}>
+                  <Text style={{ fontFamily: 'Times-Bold', fontSize: 7.5, textTransform: 'uppercase' }}>
+                    {company.name || 'BIOFIX TECHNOLOGY'}
+                  </Text>
+                  <Text style={{ fontSize: 7.5 }}>
+                    ACCOUNT NUMBER : {company.bankInfo?.accountNumber || '2510201002100'}
+                  </Text>
+                  <Text style={{ fontSize: 7.5 }}>{company.bankInfo?.bankName || 'FEDERAL BANK'}</Text>
+                  <Text style={{ fontSize: 7.5 }}>IFSC : {company.bankInfo?.ifsc || 'FDRL0002510'}</Text>
+                  <Text style={{ fontSize: 7.5 }}>{company.bankInfo?.branch || 'KONDOTTY'} BRANCH</Text>
+                </View>
+
+                {document.terms ? (
+                  <View>
+                    <Text style={{ fontFamily: 'Times-Bold', fontSize: 8 }}>Terms & Conditions</Text>
+                    <Text style={{ fontSize: 7.5, marginTop: 1 }}>{document.terms}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={ssStyles.footerRight}>
+                <View>
+                  <View style={ssStyles.totalsRow}>
+                    <Text>Sub Total</Text>
+                    <Text style={{ fontFamily: 'Times-Bold' }}>{fmt(totals.subTotal)}</Text>
+                  </View>
+                  {!isInterstateQuote ? (
+                    <>
+                      <View style={ssStyles.totalsRow}>
+                        <Text>CGST9 (9%)</Text>
+                        <Text>{fmt(totals.cgstAmount || 0)}</Text>
+                      </View>
+                      <View style={ssStyles.totalsRow}>
+                        <Text>SGST9 (9%)</Text>
+                        <Text>{fmt(totals.sgstAmount || 0)}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={ssStyles.totalsRow}>
+                      <Text>IGST (18%)</Text>
+                      <Text>{fmt(totals.igstAmount || 0)}</Text>
+                    </View>
+                  )}
+                  <View style={[ssStyles.totalsRow, { fontFamily: 'Times-Bold', fontSize: 9.5 }]}>
+                    <Text>Total</Text>
+                    <Text>{currency}{fmt(totals.grandTotal)}</Text>
+                  </View>
+                </View>
+
+                <View style={ssStyles.signatureBox}>
+                  <Text style={ssStyles.signatureLabel}>Authorized Signature</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Page>
+      </Document>
+    );
+  }
 
   return (
     <Document title={`${document.title || 'Invoice'} - ${document.documentNo || 'Doc'}`}>
@@ -435,11 +847,18 @@ export const UniversalPdfDocument: React.FC<{ data: PdfDocumentData; pdf?: React
           </View>
         ) : null}
 
+        {/* Centered Logo if position is center */}
+        {isValidLogo && logoPos === 'center' ? (
+          <View style={{ alignItems: 'center', marginBottom: 10 }}>
+            <Image src={company.logoUrl} style={{ maxHeight: 60, maxWidth: logoWidth, objectFit: 'contain' }} />
+          </View>
+        ) : null}
+
         {/* 1. Header (Company Info & Document Meta) */}
-        <View style={styles.headerContainer}>
+        <View style={[styles.headerContainer, { borderBottomColor: primaryColor }]}>
           <View style={styles.companyCol}>
-            {isValidLogo ? (
-              <Image src={company.logoUrl} style={styles.logo} />
+            {isValidLogo && logoPos === 'left' ? (
+              <Image src={company.logoUrl} style={[styles.logo, { maxWidth: logoWidth }]} />
             ) : null}
             <Text style={styles.companyName}>{company.name || 'BILL AURA ERP'}</Text>
             {company.address ? <Text style={styles.companySubText}>{company.address}</Text> : null}
@@ -462,7 +881,12 @@ export const UniversalPdfDocument: React.FC<{ data: PdfDocumentData; pdf?: React
           </View>
 
           <View style={styles.metaCol}>
-            <Text style={styles.docTitle}>{document.title || 'TAX INVOICE'}</Text>
+            {isValidLogo && logoPos === 'right' ? (
+              <View style={{ alignItems: 'flex-end', marginBottom: 6 }}>
+                <Image src={company.logoUrl} style={[styles.logo, { maxWidth: logoWidth }]} />
+              </View>
+            ) : null}
+            <Text style={[styles.docTitle, { color: primaryColor }]}>{document.title || 'TAX INVOICE'}</Text>
             {isBillOfSupply ? (
               <Text style={styles.docBadge}>(Composition Supply - Not Eligible to Collect Tax)</Text>
             ) : null}

@@ -47,6 +47,31 @@ export class ReportsController {
     return this.reportsService.generateCashFlow(companyId, start, end);
   }
 
+  @Get("balance-sheet")
+  async getBalanceSheet(
+    @Query("asOfDate") asOfDate?: string,
+    @Query("basis") basis?: string,
+  ) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new BadRequestException("Company context is required");
+
+    const asOf = asOfDate ? new Date(asOfDate) : new Date();
+    return this.reportsService.generateBalanceSheet(companyId, asOf, basis);
+  }
+
+  @Get("trial-balance")
+  async getTrialBalance(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) throw new BadRequestException("Company context is required");
+
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.reportsService.generateTrialBalance(companyId, start, end);
+  }
+
   @Get("sales")
   async getSalesReport(@Query("startDate") startDate?: string, @Query("endDate") endDate?: string) {
     const companyId = CompanyContext.getCompanyId();

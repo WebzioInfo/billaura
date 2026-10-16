@@ -35,4 +35,6 @@ export * from './TableSkeleton';
 export * from './FiltersDrawer';
 export * from './FilterBar';
 export * from './ColumnVisibilityMenu';
+export * from './Checkbox';
+export * from './Radio';
 export * from './data-table';

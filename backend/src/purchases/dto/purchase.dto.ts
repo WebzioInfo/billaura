@@ -47,6 +47,18 @@ export class PurchaseItemDto {
 
   @IsString()
   @IsOptional()
+  accountId?: string;
+
+  @IsString()
+  @IsOptional()
+  customerId?: string;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
+
+  @IsString()
+  @IsOptional()
   description?: string;
 
   @IsNumber()
@@ -60,6 +72,10 @@ export class PurchaseItemDto {
   @IsNumber()
   @IsOptional()
   taxPercent?: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxRate?: number;
 
   @IsNumber()
   @IsOptional()
@@ -80,9 +96,33 @@ export class CreatePurchaseDto {
   @IsNotEmpty()
   vendorId: string;
 
+  @IsString()
+  @IsOptional()
+  purchaseNo?: string;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
+
   @IsDateString()
   @IsNotEmpty()
   date: string;
+
+  @IsDateString()
+  @IsOptional()
+  dueDate?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentTerms?: string;
+
+  @IsString()
+  @IsOptional()
+  orderNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  poId?: string;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -92,6 +132,54 @@ export class CreatePurchaseDto {
   @IsString()
   @IsOptional()
   reference?: string;
+
+  @IsString()
+  @IsOptional()
+  subject?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
+  termsConditions?: string;
+
+  @IsNumber()
+  @IsOptional()
+  discount?: number;
+
+  @IsString()
+  @IsOptional()
+  discountType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  discountAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  adjustment?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTcsType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  tdsTcsRate?: number;
+
+  @IsNumber()
+  @IsOptional()
+  tdsTcsAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  tdsTcsTaxId?: string;
+
+  @IsArray()
+  @IsOptional()
+  attachedFiles?: any[];
 
   @IsString()
   @IsOptional()

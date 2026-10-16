@@ -1,55 +1,62 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Eye, Edit, Trash2, Mail, Phone } from 'lucide-react';
-import { ColumnDef } from '@tanstack/react-table';
-import { PageLayout } from '@/shared/components/layout/PageLayout';
-import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { Button, IconButton } from '@/shared/components/ui';
-import { DataTable } from '@/shared/components/ui/data-table';
-import { usePagination } from '@/shared/hooks/usePagination';
+import { Trash2 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { dialog } from '@/core/services/DialogService';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  ZohoPageHeader,
+  ZohoListTable,
+  ZohoColumn,
+  ZohoEmptyState,
+} from '@/shared/components/zoho';
+import { ExportService } from '@/core/services/ExportService';
 
-export const CustomersList = () => {
+export const CustomersList: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  const [activeView, setActiveView] = useState('ACTIVE');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('ALL');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const { data: crm = [], isLoading: loading } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => {
       const res = await apiClient.get('/customers');
-      const items = res.data?.data?.items || res.data || [];
+      const items = res.data?.data?.items || res.data?.data || res.data || [];
       return Array.isArray(items) ? items : [];
-    }
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return apiClient.delete(`/customers/${id}`);
+    mutationFn: async (ids: string[]) => {
+      return Promise.all(ids.map((id) => apiClient.delete(`/customers/${id}`)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
-      notification.success('Customer deleted successfully');
+      notification.success('Customer(s) deleted successfully');
+      setSelectedIds([]);
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to delete customer');
-    }
+    },
   });
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDelete = async (ids: string[]) => {
     const confirmed = await dialog.confirmDelete(
-      'Delete Customer?',
-      `Are you sure you want to delete customer "${name}"? This action cannot be undone.`
+      'Delete Customer(s)?',
+      `Are you sure you want to delete ${ids.length} selected customer(s)? This action cannot be undone.`
     );
     if (confirmed) {
-      deleteMutation.mutate(id);
+      deleteMutation.mutate(ids);
     }
   };
 
+  // View filtering & search
   const filteredCustomers = useMemo(() => {
     return crm.filter((c: any) => {
       const matchesSearch =
@@ -61,221 +68,209 @@ export const CustomersList = () => {
         (c.phone && c.phone.includes(searchTerm)) ||
         (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      const matchesType =
-        selectedType === 'ALL' ||
-        (c.customerType && c.customerType.toUpperCase() === selectedType.toUpperCase());
+      let matchesView = true;
+      if (activeView === 'ACTIVE') {
+        matchesView = c.status !== 'INACTIVE';
+      } else if (activeView === 'INACTIVE') {
+        matchesView = c.status === 'INACTIVE';
+      }
 
-      return matchesSearch && matchesType;
+      return matchesSearch && matchesView;
     });
-  }, [crm, searchTerm, selectedType]);
+  }, [crm, searchTerm, activeView]);
 
-  const customerTypes = useMemo(() => {
-    const types = new Set<string>();
-    crm.forEach((c: any) => {
-      if (c.customerType) types.add(c.customerType);
-    });
-    return Array.from(types);
-  }, [crm]);
+  // Client-side pagination
+  const paginatedData = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredCustomers.slice(start, start + pageSize);
+  }, [filteredCustomers, page, pageSize]);
 
-  // Unified pagination (Client-side slicing for customers; TODO: endpoint should support server-side pagination)
-  const {
-    page,
-    limit,
-    totalPages,
-    totalItems,
-    setPage,
-    setLimit,
-    paginatedData,
-  } = usePagination({
-    tableKey: 'customers',
-    data: filteredCustomers,
-    itemLabel: 'customers',
-  });
+  // Export CSV
+  const handleExport = () => {
+    if (filteredCustomers.length === 0) {
+      notification.warning('No customers to export');
+      return;
+    }
+    const headers = [
+      'Name',
+      'Company Name',
+      'Email',
+      'Work Phone',
+      'Place of Supply',
+      'Receivables',
+      'Unused Credits',
+    ];
+    const rows = filteredCustomers.map((c: any) => ({
+      Name: c.name || '',
+      'Company Name': c.tradeName || c.companyName || '',
+      Email: c.email || '',
+      'Work Phone': c.phone || c.mobile || '',
+      'Place of Supply': c.placeOfSupply || c.state || '',
+      Receivables: c.balance || c.outstandingBalance || 0,
+      'Unused Credits': c.unusedCredits || 0,
+    }));
+    ExportService.exportCsv('Customers_List.csv', rows, headers);
+  };
 
-  const columns = useMemo<ColumnDef<any>[]>(() => [
-    {
-      accessorKey: 'bpCode',
-      header: 'Code',
-      cell: ({ row }) => (
-        <span className="tabular-nums text-[13px] font-medium text-[#111827] dark:text-[#EDEDED]">
-          {row.original.bpCode || '—'}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'name',
-      header: 'Customer Name',
-      cell: ({ row }) => {
-        const c = row.original;
-        return (
-          <div className="py-0.5">
-            <button
-              type="button"
-              onClick={() => navigate(`/customers/${c.id}`)}
-              className="font-medium text-[#111827] dark:text-[#EDEDED] hover:underline text-left cursor-pointer truncate block max-w-xs transition-colors"
-            >
-              {c.name}
-            </button>
-            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-              {c.customerType && (
-                <span className="inline-block text-[11px] font-medium bg-[#F3F4F6] dark:bg-[#27272A] text-[#4B5563] dark:text-[#D1D5DB] px-1.5 py-0.5 rounded-[4px]">
-                  {c.customerType}
-                </span>
-              )}
-              {c.customerSegment && (
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-[4px] text-[11px] font-medium text-white ${c.customerSegment.color || 'bg-slate-500'}`}>
-                  {c.customerSegment.name}
-                </span>
-              )}
-              {c.customerDepartment && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-[4px] text-[11px] font-medium text-[#1E40AF] bg-[#DBEAFE] dark:bg-blue-950/40 dark:text-blue-300">
-                  {c.customerDepartment.name}
-                </span>
-              )}
-            </div>
-          </div>
-        );
+  // Columns per Prompt 02: Name (blue link), Company Name, Email, Work Phone, Place of Supply, Receivables (BCY, right aligned), Unused Credits (BCY, right aligned)
+  const columns: ZohoColumn<any>[] = useMemo(
+    () => [
+      {
+        key: 'name',
+        label: 'NAME',
+        isPrimary: true,
+        width: '220px',
+        render: (row) => (
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/customers/${row.id}`);
+            }}
+            className="text-[#408DFB] hover:underline font-medium cursor-pointer truncate block"
+          >
+            {row.name || 'Unnamed'}
+          </span>
+        ),
       },
-    },
-    {
-      accessorKey: 'tradeName',
-      header: 'Trade Name / GSTIN',
-      cell: ({ row }) => {
-        const c = row.original;
-        return (
-          <div>
-            <div className="text-[14px] text-[#111827] dark:text-[#EDEDED]">{c.tradeName || '—'}</div>
-            <div className="text-[12px] text-[#6B7280] dark:text-[#9CA3AF] tabular-nums">{c.gstin || 'No GSTIN'}</div>
-          </div>
-        );
+      {
+        key: 'companyName',
+        label: 'COMPANY NAME',
+        width: '180px',
+        render: (row) => (
+          <span className="text-[#2B2F36] truncate block">
+            {row.tradeName || row.companyName || '—'}
+          </span>
+        ),
       },
-    },
-    {
-      accessorKey: 'contact',
-      header: 'Contact Details',
-      cell: ({ row }) => {
-        const c = row.original;
-        return (
-          <div>
-            <div className="text-[13px] flex items-center gap-1.5">
-              {c.email ? (
-                <>
-                  <Mail className="w-3.5 h-3.5 text-[#6B7280] dark:text-[#9CA3AF] shrink-0" />
-                  <span className="truncate max-w-[180px] text-[#4B5563] dark:text-[#D1D5DB]">{c.email}</span>
-                </>
-              ) : (
-                <span className="text-[#9CA3AF]">—</span>
-              )}
-            </div>
-            {c.phone && (
-              <div className="text-[12px] text-[#6B7280] dark:text-[#9CA3AF] tabular-nums flex items-center gap-1.5 mt-0.5">
-                <Phone className="w-3 h-3 text-[#6B7280] dark:text-[#9CA3AF] shrink-0" />
-                <span>{c.phone}</span>
-              </div>
-            )}
-          </div>
-        );
+      {
+        key: 'email',
+        label: 'EMAIL',
+        width: '200px',
+        render: (row) => (
+          <span className="text-[#6B7280] truncate block">
+            {row.email || '—'}
+          </span>
+        ),
       },
-    },
-    {
-      id: 'actions',
-      header: 'Actions',
-      cell: ({ row }) => {
-        const c = row.original;
-        return (
-          <div className="flex items-center justify-end gap-1">
-            <IconButton
-              icon={Eye}
-              aria-label="View Customer"
-              tooltip="View Customer"
-              size="dense"
-              variant="ghost"
-              onClick={() => navigate(`/customers/${c.id}`)}
-            />
-            <IconButton
-              icon={Edit}
-              aria-label="Edit Customer"
-              tooltip="Edit Customer"
-              size="dense"
-              variant="ghost"
-              onClick={() => navigate(`/customers/${c.id}/edit`)}
-            />
-            <IconButton
-              icon={Trash2}
-              aria-label="Delete Customer"
-              tooltip="Delete Customer"
-              size="dense"
-              variant="danger-ghost"
-              onClick={() => handleDelete(c.id, c.name)}
-            />
-          </div>
-        );
+      {
+        key: 'phone',
+        label: 'WORK PHONE',
+        width: '140px',
+        render: (row) => (
+          <span className="text-[#6B7280] tabular-nums truncate block">
+            {row.phone || row.mobile || '—'}
+          </span>
+        ),
       },
-    },
-  ], [navigate]);
+      {
+        key: 'placeOfSupply',
+        label: 'PLACE OF SUPPLY',
+        width: '150px',
+        render: (row) => (
+          <span className="text-[#6B7280] truncate block">
+            {row.placeOfSupply || row.state || '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'receivables',
+        label: 'RECEIVABLES (BCY)',
+        align: 'right',
+        isNumeric: true,
+        width: '150px',
+        render: (row) => {
+          const val = Number(row.balance || row.outstandingBalance || 0);
+          return (
+            <span className="font-medium text-[#2B2F36] tabular-nums">
+              ₹{val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'unusedCredits',
+        label: 'UNUSED CREDITS (BCY)',
+        align: 'right',
+        isNumeric: true,
+        width: '160px',
+        render: (row) => {
+          const val = Number(row.unusedCredits || 0);
+          return (
+            <span className="text-[#6B7280] tabular-nums">
+              ₹{val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          );
+        },
+      },
+    ],
+    [navigate]
+  );
+
+  const VIEWS = [
+    { id: 'ACTIVE', label: 'Active Customers' },
+    { id: 'ALL', label: 'All Customers' },
+    { id: 'INACTIVE', label: 'Inactive Customers' },
+  ];
 
   return (
-    <PageLayout
-      isLoading={loading && crm.length === 0}
-      loadingTitle="Loading Customers..."
-      loadingDescription="Fetching customer directory and accounts..."
-    >
-      <PageHeader
-        title="Customers"
-        count={crm.length}
-        primaryAction={
-          <Button
-            onClick={() => navigate('/customers/new')}
-            variant="primary"
-            size="md"
-          >
-            <Plus className="w-4 h-4" /> New Customer
-          </Button>
-        }
+    <div className="w-full h-full flex flex-col bg-white overflow-hidden select-none">
+      {/* 1. Zoho List Page Header */}
+      <ZohoPageHeader
+        title="Active Customers"
+        views={VIEWS}
+        activeViewId={activeView}
+        onViewChange={(vId) => {
+          setActiveView(vId);
+          setPage(1);
+        }}
+        newAction={{
+          label: 'New',
+          onClick: () => navigate('/customers/new'),
+        }}
+        onRefresh={() => queryClient.invalidateQueries({ queryKey: ['customers'] })}
+        onExport={handleExport}
       />
 
-      <DataTable
-        columns={columns}
-        data={paginatedData}
-        totalItems={totalItems}
-        manualPagination={true}
-        pagination={{
-          pageIndex: page - 1,
-          pageSize: limit,
-        }}
-        onPaginationChange={(updater: any) => {
-          const next = typeof updater === 'function' ? updater({ pageIndex: page - 1, pageSize: limit }) : updater;
-          if (next.pageIndex !== undefined) setPage(next.pageIndex + 1);
-          if (next.pageSize !== undefined) setLimit(next.pageSize);
-        }}
-        isLoading={loading}
-        storageKey="customers"
-        searchPlaceholder="Search by name, code, GST, phone..."
-        globalFilter={searchTerm}
-        onGlobalFilterChange={setSearchTerm}
-        itemLabel="customers"
-        emptyText="No customers found"
-        emptyDescription="Manage your client list and billing relationships by adding your first customer."
-        emptyActionLabel="Add First Customer"
-        onEmptyAction={() => navigate('/customers/new')}
-        toolbarExtras={
-          customerTypes.length > 0 ? (
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="h-9 text-[13px] bg-background border border-[#D1D5DB] dark:border-[#374151] rounded-[8px] px-2.5 text-foreground focus:outline-none cursor-pointer"
-              aria-label="Filter customer type"
-            >
-              <option value="ALL">All Types</option>
-              {customerTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          ) : null
-        }
-      />
-    </PageLayout>
+      {/* 2. Zoho List Table Area (Only Table Scrolls) */}
+      <div className="flex-1 p-4 overflow-hidden min-h-0 bg-white">
+        <ZohoListTable
+          columns={columns}
+          data={paginatedData}
+          keyField="id"
+          selectedIds={selectedIds}
+          onSelectChange={setSelectedIds}
+          onRowClick={(row) => navigate(`/customers/${row.id}`)}
+          isLoading={loading}
+          searchPlaceholder="Search in Customers (Name, Company, GSTIN, Phone)..."
+          onSearchChange={setSearchTerm}
+          bulkActions={[
+            {
+              label: 'Delete',
+              icon: Trash2,
+              variant: 'danger',
+              onClick: (ids) => handleDelete(ids),
+            },
+          ]}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalCount: filteredCustomers.length,
+            onPageChange: setPage,
+            onPageSizeChange: (newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            },
+          }}
+          emptyState={
+            <ZohoEmptyState
+              title="No Customers Yet"
+              description="Keep track of your clients, their contact information, and billing receivables in one place."
+              createLabel="NEW CUSTOMER"
+              onCreate={() => navigate('/customers/new')}
+            />
+          }
+        />
+      </div>
+    </div>
   );
 };

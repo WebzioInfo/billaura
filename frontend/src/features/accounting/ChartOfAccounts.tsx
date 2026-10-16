@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as xlsx from 'xlsx';
 import notification from '@/core/services/NotificationService';
 import {
@@ -11,1488 +9,941 @@ import {
   Folder,
   FolderOpen,
   ChevronRight,
-  ChevronsUpDown,
-  Download,
+  ChevronDown,
+  Lock,
+  Settings,
+  MoreVertical,
+  ExternalLink,
+  Edit2,
+  Trash2,
+  Check,
+  X,
   Loader2,
   Calendar,
-  X,
+  AlertCircle,
+  HelpCircle,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
-import { apiClient as api } from '../../core/api/apiClient';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { erpInvalidate } from '@/core/query/erpConsistency';
-import { StatusBadge, CurrencyCell, Button, DeleteDialog, Pagination } from '../../shared/components/ui';
-import { LedgerLookup } from '../../shared/components/ui/LedgerLookup';
-import { PageHeader } from '../../shared/components/ui/PageHeader';
-import { PageLayout } from '../../shared/components/layout/PageLayout';
-import { AccountingSubNav, AccountingTabId } from './components/AccountingSubNav';
-import { AccountRowActions } from './components/AccountRowActions';
-import { cn } from '@/lib/utils';
+import { apiClient as api } from '@/core/api/apiClient';
+import {
+  ZohoPageHeader,
+  ZohoListTable,
+  ZohoSplitDetail,
+  ZohoFormFooter,
+} from '@/shared/components/zoho';
 
-// --- SCHEMAS ---
-const accountSchema = z.object({
-  name: z.string().min(2, 'Name is too short'),
-  category: z.enum(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE']),
-  balance: z.number(),
-  parentId: z.string().optional().nullable(),
-});
-
-const journalLineSchema = z.object({
-  accountId: z.string().min(1, 'Select account'),
-  debit: z.number(),
-  credit: z.number(),
-});
-
-const journalEntrySchema = z.object({
-  date: z.string().nonempty('Select date'),
-  reference: z.string().optional(),
-  description: z.string().optional(),
-  lines: z.array(journalLineSchema).min(2, 'At least 2 lines are required'),
-});
-
-type AccountFormValues = z.infer<typeof accountSchema>;
-type JournalEntryFormValues = z.infer<typeof journalEntrySchema>;
-
-// --- TYPES ---
-interface Account {
-  id: string;
-  name: string;
-  code?: string;
-  category: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
-  balance: number;
-  isGroup?: boolean;
-  parentId?: string | null;
-  children?: Account[];
-  depth?: number;
-  isExpanded?: boolean;
-  hasChildren?: boolean;
-}
-
-interface JournalLine {
-  id: string;
-  accountId: string;
-  debit: number;
-  credit: number;
-  account: Account;
-}
-
-interface JournalEntry {
-  id: string;
-  date: string;
-  reference?: string;
-  description?: string;
-  lines: JournalLine[];
-}
-
-type CategoryFilter = 'ALL' | 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
-
-const formatIndianCurrency = (amount: number) => {
-  const isNegative = amount < 0;
-  const abs = Math.abs(amount);
+// Indian Currency Formatter
+const formatINR = (val: number, forceDecimals = true) => {
+  const isNegative = val < 0;
+  const abs = Math.abs(val);
   const formatted = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: 2,
+    minimumFractionDigits: forceDecimals ? 2 : 0,
     maximumFractionDigits: 2,
   }).format(abs);
   return isNegative ? `-${formatted}` : formatted;
 };
 
+export interface AccountNode {
+  id: string;
+  name: string;
+  code?: string;
+  category: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+  accountType?: string;
+  balance?: number;
+  isGroup?: boolean;
+  parentId?: string | null;
+  parent?: { id: string; name: string; code?: string } | null;
+  children?: AccountNode[];
+  depth?: number;
+  isSystem?: boolean;
+  documentsCount?: number;
+  description?: string;
+  isActive?: boolean;
+}
+
+// Explanations for Create Account Modal dark tooltip card
+const ACCOUNT_TYPE_TOOLTIPS: Record<string, { label: string; desc: string; normalBalance: string }> = {
+  ASSET: {
+    label: 'Asset',
+    desc: 'Tracks the economic resources owned by your business that will provide future financial benefits, such as cash, bank accounts, inventory, and accounts receivable.',
+    normalBalance: 'Debit (Dr)',
+  },
+  LIABILITY: {
+    label: 'Liability',
+    desc: 'Tracks financial obligations, debts, loans, vendor payables, and statutory taxes owed to third parties or statutory authorities.',
+    normalBalance: 'Credit (Cr)',
+  },
+  EQUITY: {
+    label: 'Equity',
+    desc: 'Represents the owner’s net residual stake in the business, including initial capital introduced, drawings, and accumulated retained earnings.',
+    normalBalance: 'Credit (Cr)',
+  },
+  REVENUE: {
+    label: 'Income / Revenue',
+    desc: 'Tracks gross inflows from core operating activities including product sales, service consulting fees, discounts earned, and interest income.',
+    normalBalance: 'Credit (Cr)',
+  },
+  EXPENSE: {
+    label: 'Expense',
+    desc: 'Tracks operational expenditures, bills, salaries, rent, and overhead costs incurred in running business operations.',
+    normalBalance: 'Debit (Dr)',
+  },
+};
+
 export const ChartOfAccounts: React.FC = () => {
-  const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
-  // Derive active tab from URL path
-  const path = location.pathname;
-  const activeTab: AccountingTabId = useMemo(() => {
-    if (path.includes('/journal-entries')) return 'journal';
-    if (path.includes('/trial-balance')) return 'trial';
-    if (path.includes('/profit-loss')) return 'pl';
-    if (path.includes('/balance-sheet')) return 'bs';
-    if (path.includes('/cash-flow')) return 'cf';
-    return 'coa';
-  }, [path]);
+  // Active View Switcher: Active Accounts, All Accounts, Inactive Accounts, Transaction Locking
+  const [activeView, setActiveView] = useState<string>('Active Accounts');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedAccount, setSelectedAccount] = useState<AccountNode | null>(null);
+  const [currencyMode, setCurrencyMode] = useState<'BCY' | 'FCY'>('BCY');
 
-  const handleTabChange = (tab: AccountingTabId) => {
-    if (tab === 'journal') navigate('/journal-entries');
-    else if (tab === 'trial') navigate('/trial-balance');
-    else if (tab === 'pl') navigate('/profit-loss');
-    else if (tab === 'bs') navigate('/balance-sheet');
-    else if (tab === 'cf') navigate('/cash-flow');
-    else navigate('/chart-of-accounts');
-  };
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Tree & Table States
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
+  // Tree expansion state
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(25);
 
-  // Modal controls
-  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
-  const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [parentAccountForSub, setParentAccountForSub] = useState<Account | null>(null);
-  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
+  // Create / Edit Account Modal State
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [editingAccount, setEditingAccount] = useState<AccountNode | null>(null);
+  const [modalCategory, setModalCategory] = useState<string>('EXPENSE');
+  const [modalName, setModalName] = useState<string>('');
+  const [modalCode, setModalCode] = useState<string>('');
+  const [modalParentId, setModalParentId] = useState<string>('');
+  const [modalDescription, setModalDescription] = useState<string>('');
+  const [modalWatchlist, setModalWatchlist] = useState<boolean>(false);
 
-  // Telemetry states for other tabs
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
-  const [trialBalance, setTrialBalance] = useState<any[]>([]);
-  const [profitLoss, setProfitLoss] = useState<any>({
-    revenue: [],
-    expense: [],
-    totalRevenue: 0,
-    totalExpense: 0,
-    netProfit: 0,
-  });
-  const [balanceSheet, setBalanceSheet] = useState<any>({
-    assets: [],
-    liabilities: [],
-    equity: [],
-    totalAssets: 0,
-    totalLiabilities: 0,
-    totalEquity: 0,
-  });
-  const [cashFlow, setCashFlow] = useState<any>({
-    operatingInflow: 0,
-    operatingOutflow: 0,
-    operatingNet: 0,
-    investingInflow: 0,
-    investingOutflow: 0,
-    investingNet: 0,
-    financingInflow: 0,
-    financingOutflow: 0,
-    financingNet: 0,
-    netCashFlow: 0,
-  });
+  // Transaction Locking State
+  const [lockDate, setLockDate] = useState<string>('2026-03-31');
+  const [lockReason, setLockReason] = useState<string>('Financial year end closing audit');
+  const [isLocked, setIsLocked] = useState<boolean>(true);
 
-  // Forms hooks
-  const accountForm = useForm<AccountFormValues>({
-    resolver: zodResolver(accountSchema),
-    defaultValues: { name: '', category: 'ASSET', balance: 0, parentId: null },
-  });
-
-  const journalForm = useForm<JournalEntryFormValues>({
-    resolver: zodResolver(journalEntrySchema),
-    defaultValues: {
-      date: new Date().toISOString().split('T')[0],
-      reference: '',
-      description: '',
-      lines: [
-        { accountId: '', debit: 0, credit: 0 },
-        { accountId: '', debit: 0, credit: 0 },
-      ],
-    },
-  });
-
-  const { fields, append, remove } = useFieldArray({
-    control: journalForm.control,
-    name: 'lines',
-  });
-
-  // Query: Accounts Tree
-  const { data: rawTreeData, isLoading: isLoadingAccounts } = useQuery({
+  // Queries: Chart of Accounts Tree
+  const { data: treeData = [], isLoading } = useQuery<AccountNode[]>({
     queryKey: ['accounts-tree'],
     queryFn: async () => {
       const res = await api.get<any>('/accounts/tree');
       return res.data || res || [];
     },
-    enabled: activeTab === 'coa' || activeTab === 'journal',
   });
 
-  // Initial expand: expand all root groups when data is first loaded
+  // Flat Accounts Lookup for parent account selector
+  const { data: flatAccounts = [] } = useQuery<AccountNode[]>({
+    queryKey: ['accounts-lookup-full'],
+    queryFn: async () => {
+      const res = await api.get<any>('/accounts/lookup', { params: { limit: 250 } });
+      return res.data || res || [];
+    },
+  });
+
+  // Recent transactions for the selected account in SplitDetail
+  const { data: inquiryData, isLoading: loadingInquiry } = useQuery({
+    queryKey: ['account-inquiry', selectedAccount?.id],
+    queryFn: async () => {
+      if (!selectedAccount?.id) return null;
+      const res = await api.get<any>(`/accounts/${selectedAccount.id}/inquiry`, {
+        params: { limit: 15 },
+      });
+      return res.data || res;
+    },
+    enabled: Boolean(selectedAccount?.id),
+  });
+
+  // Expand all parent nodes by default when tree data loads
   useEffect(() => {
-    if (rawTreeData && rawTreeData.length > 0 && expandedIds.size === 0) {
-      const initialExpanded = new Set<string>();
-      const addGroups = (nodes: Account[]) => {
-        nodes.forEach((node) => {
-          if (node.isGroup || (node.children && node.children.length > 0)) {
-            initialExpanded.add(node.id);
-            if (node.children) addGroups(node.children);
+    if (treeData && treeData.length > 0 && expandedIds.size === 0) {
+      const initial = new Set<string>();
+      const addGroups = (nodes: AccountNode[]) => {
+        nodes.forEach((n) => {
+          if (n.children && n.children.length > 0) {
+            initial.add(n.id);
+            addGroups(n.children);
           }
         });
       };
-      addGroups(rawTreeData);
-      setExpandedIds(initialExpanded);
+      addGroups(treeData);
+      setExpandedIds(initial);
     }
-  }, [rawTreeData]);
+  }, [treeData]);
 
-  // Compute category counts from all accounts
-  const categoryCounts = useMemo(() => {
-    const counts = {
-      ALL: 0,
-      ASSET: 0,
-      LIABILITY: 0,
-      EQUITY: 0,
-      REVENUE: 0,
-      EXPENSE: 0,
-    };
-
-    const countNodes = (nodes: Account[]) => {
-      nodes.forEach((node) => {
-        counts.ALL += 1;
-        const cat = node.category as keyof typeof counts;
-        if (counts[cat] !== undefined) {
-          counts[cat] += 1;
-        }
-        if (node.children && node.children.length > 0) {
-          countNodes(node.children);
-        }
-      });
-    };
-
-    if (rawTreeData) {
-      countNodes(rawTreeData);
-    }
-    return counts;
-  }, [rawTreeData]);
-
-  // Toggle node expansion
-  const toggleExpand = (id: string) => {
+  // Toggle expand/collapse for a parent account node
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
-  // Expand / Collapse all
-  const allGroupIds = useMemo(() => {
-    const ids = new Set<string>();
-    const collect = (nodes: Account[]) => {
-      nodes.forEach((n) => {
-        if (n.isGroup || (n.children && n.children.length > 0)) {
-          ids.add(n.id);
-          if (n.children) collect(n.children);
-        }
-      });
-    };
-    if (rawTreeData) collect(rawTreeData);
-    return ids;
-  }, [rawTreeData]);
+  // Flatten tree based on active view, search, and expansion state
+  const flattenedAccounts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const result: AccountNode[] = [];
 
-  const areAllExpanded = useMemo(() => {
-    if (allGroupIds.size === 0) return false;
-    for (const id of allGroupIds) {
-      if (!expandedIds.has(id)) return false;
-    }
-    return true;
-  }, [allGroupIds, expandedIds]);
-
-  const handleToggleExpandAll = () => {
-    if (areAllExpanded) {
-      setExpandedIds(new Set());
-    } else {
-      setExpandedIds(new Set(allGroupIds));
-    }
-  };
-
-  // Filter and flatten the tree based on search, category filter, and expansion state
-  const { visibleRows, totalMatchingAccounts } = useMemo(() => {
-    if (!rawTreeData) return { visibleRows: [], totalMatchingAccounts: 0 };
-
-    const query = searchTerm.trim().toLowerCase();
-
-    // Check if node matches filters
-    const matchesSearch = (node: Account): boolean => {
-      if (!query) return true;
-      const nameMatch = node.name.toLowerCase().includes(query);
-      const codeMatch = node.code ? node.code.toLowerCase().includes(query) : false;
-      return nameMatch || codeMatch;
-    };
-
-    const matchesCategory = (node: Account): boolean => {
-      if (categoryFilter === 'ALL') return true;
-      return node.category === categoryFilter;
-    };
-
-    // Filter tree recursively
-    const filterNode = (node: Account): Account | null => {
-      const childMatches: Account[] = [];
-      if (node.children && node.children.length > 0) {
-        for (const child of node.children) {
-          const filteredChild = filterNode(child);
-          if (filteredChild) childMatches.push(filteredChild);
-        }
-      }
-
-      const selfMatches = matchesSearch(node) && matchesCategory(node);
-      const isAncestorOfMatch = childMatches.length > 0;
-
-      if (selfMatches || isAncestorOfMatch) {
-        return {
-          ...node,
-          children: childMatches,
-        };
-      }
-      return null;
-    };
-
-    const filteredRoots: Account[] = [];
-    for (const root of rawTreeData) {
-      const filtered = filterNode(root);
-      if (filtered) filteredRoots.push(filtered);
-    }
-
-    // Count total matching accounts
-    let totalCount = 0;
-    const countFiltered = (nodes: Account[]) => {
-      nodes.forEach((n) => {
-        totalCount += 1;
-        if (n.children && n.children.length > 0) countFiltered(n.children);
-      });
-    };
-    countFiltered(filteredRoots);
-
-    // Paginate root groups if pagination is active
-    const isAllMode = pageSize >= 10000;
-    let paginatedRoots = filteredRoots;
-    if (!isAllMode && filteredRoots.length > 0) {
-      const start = (currentPage - 1) * pageSize;
-      const end = start + pageSize;
-      paginatedRoots = filteredRoots.slice(start, end);
-    }
-
-    // Flatten tree based on expansion state (if search active, auto-expand)
-    const flat: Account[] = [];
-    const flatten = (nodes: Account[], depth = 0) => {
+    const walk = (nodes: AccountNode[], depth = 0, parentName = '') => {
       nodes.forEach((node) => {
+        const matchesSearch =
+          !q ||
+          node.name.toLowerCase().includes(q) ||
+          (node.code && node.code.toLowerCase().includes(q)) ||
+          node.category.toLowerCase().includes(q);
+
+        const isActive = (node as any).isActive !== false;
+        const matchesView =
+          activeView === 'All Accounts'
+            ? true
+            : activeView === 'Inactive Accounts'
+            ? !isActive
+            : isActive;
+
         const hasChildren = Boolean(node.children && node.children.length > 0);
-        const isGroup = Boolean(node.isGroup || hasChildren);
-        const isExpanded = query ? true : expandedIds.has(node.id);
+        const isExpanded = q ? true : expandedIds.has(node.id);
 
-        flat.push({
-          ...node,
-          depth,
-          isGroup,
-          hasChildren,
-          isExpanded,
-        });
+        if (matchesSearch && matchesView) {
+          result.push({
+            ...node,
+            depth,
+            parent: parentName ? ({ name: parentName } as any) : node.parent,
+          });
+        }
 
-        if (hasChildren && (isExpanded || query)) {
-          flatten(node.children!, depth + 1);
+        if (hasChildren && (isExpanded || q)) {
+          walk(node.children!, depth + 1, node.name);
         }
       });
     };
 
-    flatten(paginatedRoots);
+    walk(treeData);
+    return result;
+  }, [treeData, searchQuery, activeView, expandedIds]);
 
-    return { visibleRows: flat, totalMatchingAccounts: totalCount };
-  }, [rawTreeData, searchTerm, categoryFilter, expandedIds, currentPage, pageSize]);
-
-  const totalPages = useMemo(() => {
-    if (pageSize >= 10000 || totalMatchingAccounts === 0) return 1;
-    // Paginate by root groups
-    const query = searchTerm.trim().toLowerCase();
-    const countRoots = (rawTreeData || []).filter((r: Account) => {
-      if (categoryFilter !== 'ALL' && r.category !== categoryFilter) return false;
-      if (query && !r.name.toLowerCase().includes(query)) return false;
-      return true;
-    }).length;
-    return Math.max(1, Math.ceil(countRoots / pageSize));
-  }, [rawTreeData, categoryFilter, searchTerm, pageSize, totalMatchingAccounts]);
-
-  // Export to Excel
-  const handleExport = () => {
-    if (!visibleRows || visibleRows.length === 0) {
-      notification.error('No accounts to export');
-      return;
-    }
-
-    const exportData = visibleRows.map((acc) => ({
-      'Account Name': `${'  '.repeat(acc.depth || 0)}${acc.name}`,
-      Category: acc.category,
-      Type: acc.isGroup ? 'Group' : 'Ledger',
-      Balance: Number(acc.balance || 0),
-    }));
-
-    const worksheet = xlsx.utils.json_to_sheet(exportData);
-    const workbook = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(workbook, worksheet, 'Chart of Accounts');
-    xlsx.writeFile(workbook, `chart_of_accounts_${new Date().toISOString().split('T')[0]}.xlsx`);
-    notification.success('Chart of accounts exported to Excel');
-  };
-
-  // Queries for other financial telemetry tabs
-  const { data: journalEntriesData, isLoading: isLoadingJournal } = useQuery({
-    queryKey: ['journal-entries'],
-    queryFn: async () => {
-      const res = await api.get<any>('/journal-entries');
-      return res.data || [];
-    },
-    enabled: activeTab === 'journal',
-  });
-
-  useEffect(() => {
-    if (journalEntriesData) setJournalEntries(journalEntriesData);
-  }, [journalEntriesData]);
-
-  const { data: trialBalanceData, isLoading: isLoadingTrial } = useQuery({
-    queryKey: ['trial-balance'],
-    queryFn: async () => {
-      const res = await api.get<any>('/accounts/trial-balance');
-      return res.data || [];
-    },
-    enabled: activeTab === 'trial',
-  });
-
-  useEffect(() => {
-    if (trialBalanceData) setTrialBalance(trialBalanceData);
-  }, [trialBalanceData]);
-
-  const { data: profitLossData, isLoading: isLoadingPL } = useQuery({
-    queryKey: ['profit-loss'],
-    queryFn: async () => {
-      const res = await api.get<any>('/accounts/profit-loss');
-      return res.data || { revenue: [], expense: [], totalRevenue: 0, totalExpense: 0, netProfit: 0 };
-    },
-    enabled: activeTab === 'pl',
-  });
-
-  useEffect(() => {
-    if (profitLossData) setProfitLoss(profitLossData);
-  }, [profitLossData]);
-
-  const { data: balanceSheetData, isLoading: isLoadingBS } = useQuery({
-    queryKey: ['balance-sheet'],
-    queryFn: async () => {
-      const res = await api.get<any>('/accounts/balance-sheet');
-      return res.data || { assets: [], liabilities: [], equity: [], totalAssets: 0, totalLiabilities: 0, totalEquity: 0 };
-    },
-    enabled: activeTab === 'bs',
-  });
-
-  useEffect(() => {
-    if (balanceSheetData) setBalanceSheet(balanceSheetData);
-  }, [balanceSheetData]);
-
-  const { data: cashFlowData, isLoading: isLoadingCF } = useQuery({
-    queryKey: ['cash-flow'],
-    queryFn: async () => {
-      const res = await api.get<any>('/accounts/cash-flow');
-      return res.data || { operatingInflow: 0, operatingOutflow: 0, operatingNet: 0, investingInflow: 0, investingOutflow: 0, investingNet: 0, financingInflow: 0, financingOutflow: 0, financingNet: 0, netCashFlow: 0 };
-    },
-    enabled: activeTab === 'cf',
-  });
-
-  useEffect(() => {
-    if (cashFlowData) setCashFlow(cashFlowData);
-  }, [cashFlowData]);
-
-  const isLoading = isLoadingAccounts || isLoadingJournal || isLoadingTrial || isLoadingPL || isLoadingBS || isLoadingCF;
-
-  // Account Form Handlers
-  const handleEditAccount = (acc: Account) => {
-    setEditingAccount(acc);
-    setParentAccountForSub(null);
-    accountForm.reset({
-      name: acc.name,
-      category: acc.category,
-      balance: Number(acc.balance || 0),
-      parentId: acc.parentId || null,
-    });
-    setIsAccountModalOpen(true);
-  };
-
-  const handleAddSubAccount = (parentAcc: Account) => {
+  // Handle open create account modal
+  const handleOpenCreate = (parentAcc?: AccountNode) => {
     setEditingAccount(null);
-    setParentAccountForSub(parentAcc);
-    accountForm.reset({
-      name: '',
-      category: parentAcc.category,
-      balance: 0,
-      parentId: parentAcc.id,
-    });
-    setIsAccountModalOpen(true);
+    setModalCategory(parentAcc ? parentAcc.category : 'EXPENSE');
+    setModalName('');
+    setModalCode('');
+    setModalParentId(parentAcc ? parentAcc.id : '');
+    setModalDescription('');
+    setModalWatchlist(false);
+    setIsModalOpen(true);
   };
 
-  const handleToggleActive = async (account: Account) => {
-    try {
-      const newStatus = !(account as any).isActive;
-      await api.patch(`/accounts/${account.id}`, { isActive: newStatus });
-      notification.success(`Account ${newStatus ? 'activated' : 'deactivated'}`);
-      queryClient.invalidateQueries({ queryKey: ['accounts-tree'] });
-    } catch (err: any) {
-      notification.error(err.response?.data?.message || 'Failed to update account status');
-    }
+  // Handle open edit account modal
+  const handleOpenEdit = (acc: AccountNode) => {
+    setEditingAccount(acc);
+    setModalCategory(acc.category);
+    setModalName(acc.name);
+    setModalCode(acc.code || '');
+    setModalParentId(acc.parentId || '');
+    setModalDescription(acc.description || '');
+    setModalWatchlist(false);
+    setIsModalOpen(true);
   };
 
-  const handleDeleteAccount = (id: string) => {
-    const findAcc = (nodes: Account[]): Account | null => {
-      for (const n of nodes) {
-        if (n.id === id) return n;
-        if (n.children) {
-          const found = findAcc(n.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-    const target = (rawTreeData && findAcc(rawTreeData)) || { id, name: 'Account' } as Account;
-    setAccountToDelete(target);
-  };
-
-  const confirmDeleteAccount = async () => {
-    if (!accountToDelete) return;
-    try {
-      await api.delete(`/accounts/${accountToDelete.id}`);
-      notification.success('Account deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['accounts-tree'] });
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
-    } catch (err: any) {
-      notification.error(err.response?.data?.message || 'Failed to delete account');
-    } finally {
-      setAccountToDelete(null);
-    }
-  };
-
-  const handleAccountSubmit = async (values: AccountFormValues) => {
-    setIsSubmitting(true);
-    try {
+  // Create / Update Account Mutation
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
-        name: values.name,
-        category: values.category,
-        balance: values.balance,
-        parentId: values.parentId || (parentAccountForSub ? parentAccountForSub.id : undefined),
+        name: modalName.trim(),
+        code: modalCode.trim() || undefined,
+        category: modalCategory,
+        parentId: modalParentId || undefined,
+        description: modalDescription.trim() || undefined,
       };
 
       if (editingAccount) {
-        await api.patch(`/accounts/${editingAccount.id}`, payload);
-        notification.success('Account updated successfully');
-      } else {
-        await api.post('/accounts', payload);
-        notification.success('New ledger account created');
+        return await api.patch(`/accounts/${editingAccount.id}`, payload);
       }
-      setIsAccountModalOpen(false);
-      setEditingAccount(null);
-      setParentAccountForSub(null);
+      return await api.post('/accounts', payload);
+    },
+    onSuccess: () => {
+      notification.success(
+        editingAccount ? 'Account updated successfully!' : 'New account created successfully!'
+      );
+      setIsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['accounts-tree'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts-lookup-full'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['account-lookup'] });
-    } catch (err: any) {
-      notification.error(err.response?.data?.message || 'Operation failed');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    },
+    onError: (err: any) => {
+      notification.error(err.response?.data?.message || 'Failed to save account');
+    },
+  });
 
-  // Journal Entry Submit
-  const handleJournalSubmit = async (values: JournalEntryFormValues) => {
-    setIsSubmitting(true);
-    const sumDebit = values.lines.reduce((s, l) => s + Number(l.debit || 0), 0);
-    const sumCredit = values.lines.reduce((s, l) => s + Number(l.credit || 0), 0);
+  // Delete Account Mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await api.delete(`/accounts/${id}`);
+    },
+    onSuccess: () => {
+      notification.success('Account deleted successfully');
+      setSelectedAccount(null);
+      queryClient.invalidateQueries({ queryKey: ['accounts-tree'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts-lookup-full'] });
+    },
+    onError: (err: any) => {
+      notification.error(err.response?.data?.message || 'Failed to delete account');
+    },
+  });
 
-    if (Math.abs(sumDebit - sumCredit) > 0.01) {
-      notification.error(`Debits (${formatIndianCurrency(sumDebit)}) must equal Credits (${formatIndianCurrency(sumCredit)})`);
-      setIsSubmitting(false);
+  // Export to Excel
+  const handleExport = () => {
+    if (!flattenedAccounts.length) {
+      notification.warning('No accounts to export');
       return;
     }
-
-    try {
-      await api.post('/journal-entries', values);
-      notification.success('Journal entry posted successfully');
-      setIsJournalModalOpen(false);
-      await erpInvalidate.journalEntry(queryClient);
-    } catch (err: any) {
-      notification.error(err.response?.data?.message || 'Posting failed');
-    } finally {
-      setIsSubmitting(false);
-    }
+    const data = flattenedAccounts.map((a) => ({
+      'Account Name': `${'  '.repeat(a.depth || 0)}${a.name}`,
+      'Account Code': a.code || '',
+      'Account Type': a.category,
+      'Parent Account': a.parent?.name || '',
+      Balance: a.balance || 0,
+    }));
+    const worksheet = xlsx.utils.json_to_sheet(data);
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Chart of Accounts');
+    xlsx.writeFile(workbook, `Chart_of_Accounts_${new Date().toISOString().split('T')[0]}.xlsx`);
+    notification.success('Exported Chart of Accounts to Excel');
   };
 
-  const watchedLines = journalForm.watch('lines') || [];
-  const totalDebit = watchedLines.reduce((s, l) => s + Number(l.debit || 0), 0);
-  const totalCredit = watchedLines.reduce((s, l) => s + Number(l.credit || 0), 0);
+  // Convert accounts to SplitDetail items
+  const splitItems = useMemo(() => {
+    return flattenedAccounts.map((acc) => {
+      const bal = Number(acc.balance || 0);
+      const isDr = acc.category === 'ASSET' || acc.category === 'EXPENSE' ? bal >= 0 : bal < 0;
+      return {
+        id: acc.id,
+        name: acc.name,
+        number: acc.code || acc.category,
+        date: acc.category,
+        amount: `${formatINR(bal)} (${isDr ? 'Dr' : 'Cr'})`,
+        status: acc.category,
+      };
+    });
+  }, [flattenedAccounts]);
 
-  return (
-    <>
-      <PageLayout
-        isLoading={isLoadingAccounts && (!rawTreeData || (rawTreeData as any)?.length === 0)}
-        loadingTitle="Loading Chart of Accounts..."
-        loadingDescription="Fetching general ledger account hierarchy..."
-        header={
-          <PageHeader
-            title="Chart of Accounts"
-            count={categoryCounts.ALL}
-            primaryAction={
-              activeTab === 'coa' ? (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setEditingAccount(null);
-                    setParentAccountForSub(null);
-                    accountForm.reset({ name: '', category: 'ASSET', balance: 0, parentId: null });
-                    setIsAccountModalOpen(true);
-                  }}
-                >
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  New Account
-                </Button>
-              ) : activeTab === 'journal' ? (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    journalForm.reset();
-                    setIsJournalModalOpen(true);
-                  }}
-                >
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  New Journal Entry
-                </Button>
-              ) : undefined
-            }
-          />
-        }
-        subNav={<AccountingSubNav activeTab={activeTab} onTabChange={handleTabChange} />}
-      >
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground gap-2">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Loading accounts...</span>
-          </div>
-        ) : activeTab === 'coa' ? (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* 1. TOOLBAR: Sitting directly on page background (NO outer card!) */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3 shrink-0">
-              {/* Left: Search input + Category Filter Pills */}
-              <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                <div className="relative min-w-[200px] max-w-xs">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search accounts..."
-                    className="h-8.5 w-full pl-9 pr-7 rounded-lg border border-border bg-surface text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                  {searchTerm && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchTerm('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                      title="Clear search"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+  // Compute balance indicator string for selected account
+  const selectedBalanceString = useMemo(() => {
+    if (!selectedAccount) return '';
+    const bal = Number(selectedAccount.balance || 0);
+    const isDr =
+      selectedAccount.category === 'ASSET' || selectedAccount.category === 'EXPENSE'
+        ? bal >= 0
+        : bal < 0;
+    return `${formatINR(bal)} (${isDr ? 'Dr' : 'Cr'})`;
+  }, [selectedAccount]);
 
-                {/* Category Filter Pills */}
-                <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                  {(
-                    [
-                      { key: 'ALL', label: 'All', count: categoryCounts.ALL },
-                      { key: 'ASSET', label: 'Asset', count: categoryCounts.ASSET },
-                      { key: 'LIABILITY', label: 'Liability', count: categoryCounts.LIABILITY },
-                      { key: 'EQUITY', label: 'Equity', count: categoryCounts.EQUITY },
-                      { key: 'REVENUE', label: 'Revenue', count: categoryCounts.REVENUE },
-                      { key: 'EXPENSE', label: 'Expense', count: categoryCounts.EXPENSE },
-                    ] as const
-                  ).map((pill) => {
-                    const isActive = categoryFilter === pill.key;
-                    return (
-                      <button
-                        key={pill.key}
-                        type="button"
-                        onClick={() => {
-                          setCategoryFilter(pill.key);
-                          setCurrentPage(1);
-                        }}
-                        className={cn(
-                          'h-7.5 px-2.5 rounded-full text-[12px] font-medium transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap select-none',
-                          isActive
-                            ? 'bg-[#111827] text-white dark:bg-[#EDEDED] dark:text-[#111827] shadow-xs'
-                            : 'bg-[#F3F4F6] text-[#4B5563] hover:bg-[#E5E7EB] dark:bg-[#26262C] dark:text-[#A1A1AA] dark:hover:bg-[#32313A]'
-                        )}
-                      >
-                        <span>{pill.label}</span>
-                        <span className="text-[11px] opacity-75 tabular-nums">({pill.count})</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+  // Recent transactions list from inquiryData
+  const recentTransactions = useMemo(() => {
+    const list = inquiryData?.transactions || inquiryData?.lines || inquiryData?.data || [];
+    return Array.isArray(list) ? list.slice(0, 8) : [];
+  }, [inquiryData]);
 
-              {/* Right: Expand all / Collapse all + Export */}
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleToggleExpandAll}
-                  className="h-8.5 px-3 rounded-lg border border-border bg-surface text-xs font-medium text-foreground hover:bg-muted/50 flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
-                  title={areAllExpanded ? 'Collapse all folders' : 'Expand all folders'}
-                >
-                  <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span>{areAllExpanded ? 'Collapse all' : 'Expand all'}</span>
-                </button>
+  const ACCOUNT_VIEWS = [
+    { id: 'Active Accounts', label: 'Active Accounts' },
+    { id: 'All Accounts', label: 'All Accounts' },
+    { id: 'Inactive Accounts', label: 'Inactive Accounts' },
+    { id: 'Transaction Locking', label: 'Transaction Locking' },
+  ];
 
-                <button
-                  type="button"
-                  onClick={handleExport}
-                  className="h-8.5 px-3 rounded-lg border border-border bg-surface text-xs font-medium text-foreground hover:bg-muted/50 flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
-                  title="Export to Excel"
-                >
-                  <Download className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span>Export</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 2. THE TABLE CARD (THE ONLY CARD ON THE PAGE) */}
-            <div className="flex-1 min-h-0 bg-surface dark:bg-[#17161C] rounded-xl border border-border shadow-xs flex flex-col overflow-hidden">
-              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto relative scrollbar-overlay">
-                <table className="w-full text-left border-collapse text-[14px]">
-                  {/* Sticky Header with #34303F dark background */}
-                  <thead className="sticky top-0 z-20 bg-[#34303F] text-white font-medium select-none shadow-xs h-12">
-                    <tr>
-                      <th className="py-3 px-4 font-medium text-white text-[14px] text-left">
-                        Account Name
-                      </th>
-                      <th className="py-3 px-4 font-medium text-white text-[14px] text-left w-[160px] min-w-[160px]">
-                        Category
-                      </th>
-                      <th className="py-3 px-4 font-medium text-white text-[14px] text-right w-[160px] min-w-[160px]">
-                        Balance
-                      </th>
-                      <th className="py-3 px-4 font-medium text-white text-[14px] text-right w-[96px] min-w-[96px] pr-4">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-
-                  {/* Zebra Alternating Rows */}
-                  <tbody className="divide-none text-[14px]">
-                    {visibleRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="py-16 text-center text-muted-foreground">
-                          No ledger accounts found matching your filters.
-                        </td>
-                      </tr>
-                    ) : (
-                      visibleRows.map((acc, index) => {
-                        const isEven = index % 2 === 1;
-                        const depth = acc.depth || 0;
-                        const isGroup = acc.isGroup;
-                        const isExpanded = acc.isExpanded;
-                        const balance = Number(acc.balance || 0);
-
-                        return (
-                          <tr
-                            key={acc.id}
-                            className={cn(
-                              'group transition-colors duration-120 h-[52px] border-b border-border/30',
-                              isEven
-                                ? 'bg-[#F9FAFB] dark:bg-[#1C1B22] hover:bg-[#F3F4F6] dark:hover:bg-[#24232C]'
-                                : 'bg-white dark:bg-[#17161C] hover:bg-[#F3F4F6] dark:hover:bg-[#24232C]'
-                            )}
-                          >
-                            {/* Column 1: Account Name + Tree Expander / Folder */}
-                            <td className="px-4 py-2 text-[14px] text-foreground">
-                              <div
-                                className="flex items-center gap-2"
-                                style={{ paddingLeft: `${depth * 20}px` }}
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                  if (isGroup && e.key === 'ArrowRight' && !isExpanded) {
-                                    e.preventDefault();
-                                    toggleExpand(acc.id);
-                                  } else if (isGroup && e.key === 'ArrowLeft' && isExpanded) {
-                                    e.preventDefault();
-                                    toggleExpand(acc.id);
-                                  }
-                                }}
-                              >
-                                {isGroup ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleExpand(acc.id);
-                                    }}
-                                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer text-[#6B7280] shrink-0"
-                                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                                  >
-                                    <ChevronRight
-                                      className={cn(
-                                        'w-4 h-4 transition-transform duration-150',
-                                        isExpanded && 'rotate-90 text-[#111827] dark:text-[#EDEDED]'
-                                      )}
-                                    />
-                                  </button>
-                                ) : (
-                                  <span className="w-5 shrink-0" />
-                                )}
-
-                                {isGroup && (
-                                  <span className="text-amber-500/90 dark:text-amber-400 shrink-0">
-                                    {isExpanded ? (
-                                      <FolderOpen className="w-4 h-4" />
-                                    ) : (
-                                      <Folder className="w-4 h-4" />
-                                    )}
-                                  </span>
-                                )}
-
-                                <span
-                                  className={cn(
-                                    'truncate tracking-tight',
-                                    isGroup
-                                      ? 'font-semibold text-foreground text-[14px]'
-                                      : 'font-normal text-foreground/90 text-[14px]'
-                                  )}
-                                >
-                                  {acc.name}
-                                </span>
-                              </div>
-                            </td>
-
-                            {/* Column 2: Category Pill with dot */}
-                            <td className="px-4 py-2 text-[14px] w-[160px] min-w-[160px]">
-                              <StatusBadge status={acc.category} />
-                            </td>
-
-                            {/* Column 3: Balance (Right-aligned, tabular-nums, ink/grey/red) */}
-                            <td className="px-4 py-2 text-[14px] text-right w-[160px] min-w-[160px] tabular-nums">
-                              {balance === 0 ? (
-                                <span className="text-[#9CA3AF] font-normal">₹0.00</span>
-                              ) : balance < 0 ? (
-                                <span className="text-[#DC2626] dark:text-[#F87171] font-medium">
-                                  {formatIndianCurrency(balance)}
-                                </span>
-                              ) : (
-                                <span className="text-[#111827] dark:text-[#EDEDED] font-medium">
-                                  {formatIndianCurrency(balance)}
-                                </span>
-                              )}
-                            </td>
-
-                            {/* Column 4: Row Actions (Portal-based) */}
-                            <td className="px-4 py-2 text-[14px] text-right w-[96px] min-w-[96px] pr-4">
-                              <AccountRowActions
-                                account={acc}
-                                onEdit={handleEditAccount}
-                                onAddSubAccount={handleAddSubAccount}
-                                onToggleActive={handleToggleActive}
-                                onDelete={() => handleDeleteAccount(acc.id)}
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 3. PINNED 56px PAGINATION FOOTER */}
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalMatchingAccounts}
-                pageSize={pageSize}
-                pageSizeOptions={[10, 25, 50, 100, 'all']}
-                onPageChange={setCurrentPage}
-                onPageSizeChange={(newSize) => {
-                  setPageSize(newSize);
-                  setCurrentPage(1);
-                }}
-                entityName="accounts"
-              />
+  // Render Transaction Locking View
+  if (activeView === 'Transaction Locking') {
+    return (
+      <div className="flex flex-col h-full bg-white select-none">
+        <ZohoPageHeader
+          title="Transaction Locking"
+          views={ACCOUNT_VIEWS}
+          activeViewId={activeView}
+          onViewChange={(view) => setActiveView(view)}
+        />
+        <div className="flex-1 max-w-3xl p-8 space-y-6">
+          <div className="flex items-start gap-4 p-4 bg-blue-50/70 border border-blue-200 rounded text-xs text-blue-900">
+            <ShieldCheck className="w-5 h-5 text-[#408DFB] shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-sm">Lock Accounting Transactions</p>
+              <p className="text-gray-600 leading-relaxed">
+                Once transactions are locked, users will not be allowed to create, edit, or delete
+                any transactions on or before the specified lock date. This prevents accidental
+                modifications after fiscal year end or statutory audit signoff.
+              </p>
             </div>
           </div>
-        ) : activeTab === 'journal' ? (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto space-y-4">
-            {journalEntries.length === 0 ? (
-              <div className="p-12 text-center text-muted-foreground bg-surface rounded-xl border border-border max-w-lg mx-auto mt-8">
-                <p className="font-semibold text-base mb-1">No journal entries recorded</p>
-                <p className="text-xs">Create your first entry using the button above.</p>
-              </div>
-            ) : (
-              journalEntries.map((je) => (
-                <div key={je.id} className="bg-surface rounded-xl border border-border p-5 space-y-3 shadow-xs">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-foreground text-sm">
-                        Reference: {je.reference || 'N/A'}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">{je.description || 'No description'}</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1 tabular-nums">
-                      <Calendar className="w-3.5 h-3.5" /> {je.date ? je.date.split('T')[0] : 'N/A'}
-                    </span>
-                  </div>
 
-                  <table className="w-full text-xs text-left border-t border-border mt-3">
-                    <thead>
-                      <tr className="text-muted-foreground uppercase py-2">
-                        <th className="py-2">Ledger Account</th>
-                        <th className="py-2 text-right">Debit</th>
-                        <th className="py-2 text-right">Credit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {je.lines.map((l) => (
-                        <tr key={l.id} className="border-b border-border/50">
-                          <td className="py-2 font-medium text-foreground">{l.account?.name}</td>
-                          <td className="py-2 text-right text-foreground font-semibold tabular-nums">
-                            {l.debit > 0 ? formatIndianCurrency(Number(l.debit)) : '—'}
-                          </td>
-                          <td className="py-2 text-right text-foreground font-semibold tabular-nums">
-                            {l.credit > 0 ? formatIndianCurrency(Number(l.credit)) : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))
-            )}
-          </div>
-        ) : activeTab === 'trial' ? (
-          <div className="flex-1 min-h-0 bg-surface rounded-xl border border-border shadow-xs flex flex-col overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-overlay">
-              <table className="w-full text-left border-collapse text-[14px]">
-                <thead className="sticky top-0 z-20 bg-[#34303F] text-white select-none h-12 shadow-xs">
-                  <tr>
-                    <th className="py-3 px-4 font-medium text-white text-[14px]">Account Ledger</th>
-                    <th className="py-3 px-4 font-medium text-white text-[14px] text-right w-44">Debit</th>
-                    <th className="py-3 px-4 font-medium text-white text-[14px] text-right w-44">Credit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trialBalance.map((item, idx) => {
-                    const isEven = idx % 2 === 1;
-                    const bal = item.balance || 0;
-                    return (
-                      <tr
-                        key={item.name}
-                        className={cn(
-                          'h-[52px] border-b border-border/30',
-                          isEven ? 'bg-[#F9FAFB] dark:bg-[#1C1B22]' : 'bg-white dark:bg-[#17161C]'
-                        )}
-                      >
-                        <td className="px-4 py-2 font-medium text-foreground">{item.name}</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-foreground">
-                          {bal > 0 ? formatIndianCurrency(bal) : '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-foreground">
-                          {bal < 0 ? formatIndianCurrency(Math.abs(bal)) : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : activeTab === 'pl' ? (
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="bg-surface p-5 rounded-xl border border-border space-y-3 shadow-xs">
-                <h3 className="text-sm font-bold text-foreground border-b border-border pb-2.5">
-                  Sales & Revenues
-                </h3>
-                <div className="space-y-2">
-                  {profitLoss.revenue.map((r: any) => (
-                    <div key={r.name} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{r.name}</span>
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {formatIndianCurrency(Math.abs(r.balance))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-surface p-5 rounded-xl border border-border space-y-3 shadow-xs">
-                <h3 className="text-sm font-bold text-foreground border-b border-border pb-2.5">
-                  Operating Expenses
-                </h3>
-                <div className="space-y-2">
-                  {profitLoss.expense.map((e: any) => (
-                    <div key={e.name} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{e.name}</span>
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {formatIndianCurrency(e.balance)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-surface p-5 rounded-xl border border-border flex justify-between items-center shadow-xs">
+          <div className="border border-[#E5E7EB] rounded-md p-6 space-y-5 bg-[#F8F9FB]">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-foreground">Net Operating Profit</h3>
-                <p className="text-xs text-muted-foreground">Matching revenue inflows and expense outflows</p>
-              </div>
-              <span
-                className={cn(
-                  'text-2xl font-black tabular-nums',
-                  profitLoss.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                )}
-              >
-                {formatIndianCurrency(profitLoss.netProfit)}
-              </span>
-            </div>
-          </div>
-        ) : activeTab === 'bs' ? (
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="bg-surface p-5 rounded-xl border border-border space-y-3 shadow-xs">
-                <h3 className="text-sm font-bold text-foreground border-b border-border pb-2.5">
-                  Assets Ledger
-                </h3>
-                <div className="space-y-2">
-                  {balanceSheet.assets.map((a: any) => (
-                    <div key={a.name} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{a.name}</span>
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {formatIndianCurrency(a.balance)}
-                      </span>
-                    </div>
-                  ))}
+                <span className="text-xs font-semibold uppercase text-gray-500 tracking-wider">
+                  Locking Status
+                </span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold ${
+                      isLocked
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {isLocked ? <Lock className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                    {isLocked ? 'Transactions Locked' : 'Transactions Unlocked'}
+                  </span>
                 </div>
               </div>
 
-              <div className="bg-surface p-5 rounded-xl border border-border space-y-3 shadow-xs">
-                <h3 className="text-sm font-bold text-foreground border-b border-border pb-2.5">
-                  Liabilities & Equity Ledger
-                </h3>
-                <div className="space-y-2">
-                  {[...balanceSheet.liabilities, ...balanceSheet.equity].map((l: any) => (
-                    <div key={l.name} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{l.name}</span>
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {formatIndianCurrency(Math.abs(l.balance))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-surface p-5 rounded-xl border border-border flex justify-between items-center shadow-xs">
-              <div>
-                <h3 className="text-base font-bold text-foreground">Statement Integrity Check</h3>
-                <p className="text-xs text-muted-foreground">Formula: Asset Balance === Liability + Equity</p>
-              </div>
-              <div className="flex gap-6 text-right">
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Assets</p>
-                  <p className="text-base font-bold text-foreground tabular-nums">
-                    {formatIndianCurrency(balanceSheet.totalAssets)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Liabilities & Equity</p>
-                  <p className="text-base font-bold text-accent tabular-nums">
-                    {formatIndianCurrency(
-                      Math.abs(balanceSheet.totalLiabilities) + Math.abs(balanceSheet.totalEquity)
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="bg-surface p-5 rounded-xl border border-border space-y-3 shadow-xs">
-                <h3 className="text-sm font-bold text-foreground border-b border-border pb-2">
-                  Operating Activities
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cash Inflow:</span>
-                    <span className="font-semibold text-emerald-600 tabular-nums">
-                      {formatIndianCurrency(cashFlow.operatingInflow)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cash Outflow:</span>
-                    <span className="font-semibold text-rose-600 tabular-nums">
-                      {formatIndianCurrency(cashFlow.operatingOutflow)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-2 font-bold">
-                    <span className="text-foreground">Net Operating:</span>
-                    <span
-                      className={cn(
-                        'tabular-nums',
-                        cashFlow.operatingNet >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                      )}
-                    >
-                      {formatIndianCurrency(cashFlow.operatingNet)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-surface p-5 rounded-xl border border-border space-y-3 shadow-xs">
-                <h3 className="text-sm font-bold text-foreground border-b border-border pb-2">
-                  Investing Activities
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cash Inflow:</span>
-                    <span className="font-semibold text-emerald-600 tabular-nums">
-                      {formatIndianCurrency(cashFlow.investingInflow)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cash Outflow:</span>
-                    <span className="font-semibold text-rose-600 tabular-nums">
-                      {formatIndianCurrency(cashFlow.investingOutflow)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-2 font-bold">
-                    <span className="text-foreground">Net Investing:</span>
-                    <span
-                      className={cn(
-                        'tabular-nums',
-                        cashFlow.investingNet >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                      )}
-                    >
-                      {formatIndianCurrency(cashFlow.investingNet)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-surface p-5 rounded-xl border border-border space-y-3 shadow-xs">
-                <h3 className="text-sm font-bold text-foreground border-b border-border pb-2">
-                  Financing Activities
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cash Inflow:</span>
-                    <span className="font-semibold text-emerald-600 tabular-nums">
-                      {formatIndianCurrency(cashFlow.financingInflow)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cash Outflow:</span>
-                    <span className="font-semibold text-rose-600 tabular-nums">
-                      {formatIndianCurrency(cashFlow.financingOutflow)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-2 font-bold">
-                    <span className="text-foreground">Net Financing:</span>
-                    <span
-                      className={cn(
-                        'tabular-nums',
-                        cashFlow.financingNet >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                      )}
-                    >
-                      {formatIndianCurrency(cashFlow.financingNet)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-surface p-5 rounded-xl border border-border flex justify-between items-center shadow-xs">
-              <div>
-                <h3 className="text-base font-bold text-foreground">Net Cash Flow Summary</h3>
-                <p className="text-xs text-muted-foreground">Net change in cash and bank balances</p>
-              </div>
-              <span
-                className={cn(
-                  'text-2xl font-black tabular-nums',
-                  cashFlow.netCashFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                )}
-              >
-                {formatIndianCurrency(cashFlow.netCashFlow)}
-              </span>
-            </div>
-          </div>
-        )}
-      </PageLayout>
-
-      {/* Account Modal (Create / Edit / Add Sub-account) */}
-      {isAccountModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs"
-            onClick={() => setIsAccountModalOpen(false)}
-          />
-          <div className="bg-surface rounded-2xl border border-border shadow-premium w-full max-w-md z-10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-muted/20">
-              <h2 className="font-bold text-base text-foreground">
-                {editingAccount
-                  ? 'Edit Ledger Account'
-                  : parentAccountForSub
-                  ? `Add Sub-account under "${parentAccountForSub.name}"`
-                  : 'Create Ledger Account'}
-              </h2>
               <button
                 type="button"
-                onClick={() => setIsAccountModalOpen(false)}
-                className="text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={() => {
+                  setIsLocked(!isLocked);
+                  notification.success(
+                    isLocked ? 'Transactions have been unlocked' : 'Transactions have been locked'
+                  );
+                }}
+                className={`px-4 py-2 text-xs font-semibold rounded cursor-pointer transition-colors ${
+                  isLocked
+                    ? 'bg-white border border-[#D1D5DB] text-gray-700 hover:bg-gray-100'
+                    : 'bg-[#408DFB] text-white hover:bg-blue-600'
+                }`}
               >
-                ✕
+                {isLocked ? 'Unlock Transactions' : 'Lock Transactions'}
               </button>
             </div>
-            <form onSubmit={accountForm.handleSubmit(handleAccountSubmit)} className="p-6 space-y-4">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-3 border-t border-[#E5E7EB]">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                  Account Name *
+                <label className="block text-gray-700 font-medium mb-1.5">
+                  Lock transactions on and before
+                </label>
+                <input
+                  type="date"
+                  value={lockDate}
+                  disabled={!isLocked}
+                  onChange={(e) => setLockDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-[#D1D5DB] rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-medium mb-1.5">
+                  Reason for locking
                 </label>
                 <input
                   type="text"
-                  {...accountForm.register('name')}
-                  placeholder="e.g. Travel Overhead Expenses"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                  value={lockReason}
+                  disabled={!isLocked}
+                  onChange={(e) => setLockReason(e.target.value)}
+                  placeholder="e.g. FY 2025-26 Tax Audit Complete"
+                  className="w-full px-3 py-2 bg-white border border-[#D1D5DB] rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
                 />
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                  Financial Category Type *
-                </label>
-                <select
-                  {...accountForm.register('category')}
-                  disabled={Boolean(parentAccountForSub)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent disabled:opacity-60"
-                >
-                  <option value="ASSET">Asset (Cash, Bank, Inventory)</option>
-                  <option value="LIABILITY">Liability (Loans, Payables)</option>
-                  <option value="EQUITY">Equity (Share Capital, Retained Earnings)</option>
-                  <option value="REVENUE">Revenue (Product Sales, Service Income)</option>
-                  <option value="EXPENSE">Expense (Salary, Rent, Consumables)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                  Opening Balance
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  {...accountForm.register('balance', { valueAsNumber: true })}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 border-t border-border pt-4 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsAccountModalOpen(false)}
-                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-sm font-semibold shadow-xs flex items-center gap-2 cursor-pointer"
-                >
-                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Save Account
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Journal Entry Modal */}
-      {isJournalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs"
-            onClick={() => setIsJournalModalOpen(false)}
-          />
-          <div className="bg-surface rounded-2xl border border-border shadow-premium w-full max-w-3xl z-10 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-muted/20 shrink-0">
-              <h2 className="font-bold text-base text-foreground">Post Manual Journal Entry</h2>
+  // Render SplitDetail View when an account is selected
+  if (selectedAccount) {
+    return (
+      <ZohoSplitDetail
+        moduleTitle="Active Accounts"
+        items={splitItems}
+        selectedId={selectedAccount.id}
+        onSelect={(id) => {
+          const acc = flattenedAccounts.find((a) => a.id === id);
+          if (acc) setSelectedAccount(acc);
+        }}
+        onNew={() => handleOpenCreate()}
+        onClose={() => setSelectedAccount(null)}
+        detailTitle={selectedAccount.name}
+        detailActions={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleOpenEdit(selectedAccount)}
+              className="px-3 py-1 bg-white border border-[#D1D5DB] hover:bg-gray-50 text-gray-700 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-gray-500" /> Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/accounting/ledger/${selectedAccount.id}`)}
+              className="px-3 py-1 bg-white border border-[#D1D5DB] hover:bg-gray-50 text-[#408DFB] rounded text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Full Ledger
+            </button>
+          </div>
+        }
+      >
+        <div className="p-6 space-y-6 text-xs text-gray-700">
+          {/* Header Block: Type (small) + Name (large) */}
+          <div className="border-b border-[#E5E7EB] pb-4">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">
+              {selectedAccount.category} ACCOUNT
+            </span>
+            <h2 className="text-xl font-bold text-[#1E2540]">{selectedAccount.name}</h2>
+            {selectedAccount.code && (
+              <span className="inline-block mt-1 text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                Code: {selectedAccount.code}
+              </span>
+            )}
+          </div>
+
+          {/* CLOSING BALANCE Large Blue */}
+          <div className="bg-[#F8F9FB] border border-[#E5E7EB] rounded-md p-4">
+            <div className="text-[11px] font-semibold uppercase text-gray-500 tracking-wider mb-1">
+              Closing Balance
+            </div>
+            <div className="text-2xl font-bold text-[#408DFB] font-mono tracking-tight">
+              {selectedBalanceString}
+            </div>
+            <div className="text-[11px] text-gray-400 mt-1">
+              Normal balance: {ACCOUNT_TYPE_TOOLTIPS[selectedAccount.category]?.normalBalance || 'Debit'}
+            </div>
+          </div>
+
+          {/* Description */}
+          {selectedAccount.description && (
+            <div className="space-y-1">
+              <span className="font-semibold text-gray-600">Description</span>
+              <p className="text-gray-700 leading-relaxed">{selectedAccount.description}</p>
+            </div>
+          )}
+
+          {/* Dashed divider */}
+          <div className="border-t border-dashed border-[#D1D5DB]" />
+
+          {/* Recent Transactions Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 text-sm">Recent Transactions</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-400">Currency:</span>
+                <div className="inline-flex rounded border border-[#D1D5DB] bg-gray-50 p-0.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setCurrencyMode('BCY')}
+                    className={`px-2 py-0.5 rounded font-medium ${
+                      currencyMode === 'BCY' ? 'bg-white shadow-xs text-[#408DFB]' : 'text-gray-500'
+                    }`}
+                  >
+                    BCY (₹)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrencyMode('FCY')}
+                    className={`px-2 py-0.5 rounded font-medium ${
+                      currencyMode === 'FCY' ? 'bg-white shadow-xs text-[#408DFB]' : 'text-gray-500'
+                    }`}
+                  >
+                    FCY
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {loadingInquiry ? (
+              <div className="py-8 text-center text-gray-400">
+                <Loader2 className="w-5 h-5 animate-spin mx-auto text-[#408DFB] mb-1" />
+                <span>Loading recent transactions...</span>
+              </div>
+            ) : recentTransactions.length === 0 ? (
+              <div className="p-6 text-center border border-dashed border-[#E5E7EB] rounded bg-gray-50 text-gray-500">
+                No transactions recorded for this account.
+              </div>
+            ) : (
+              <div className="border border-[#E5E7EB] rounded overflow-hidden">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-[#F8F9FB] border-b border-[#E5E7EB] text-gray-500 uppercase text-[10px] font-semibold">
+                    <tr>
+                      <th className="py-2 px-3">Date</th>
+                      <th className="py-2 px-3">Transaction Details</th>
+                      <th className="py-2 px-3">Type</th>
+                      <th className="py-2 px-3 text-right">Debit</th>
+                      <th className="py-2 px-3 text-right">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E5E7EB]">
+                    {recentTransactions.map((tx: any, idx: number) => (
+                      <tr key={tx.id || idx} className="hover:bg-gray-50">
+                        <td className="py-2 px-3 text-gray-600">
+                          {tx.date ? new Date(tx.date).toLocaleDateString('en-IN') : '—'}
+                        </td>
+                        <td className="py-2 px-3 font-medium text-gray-800">
+                          {tx.narration || tx.description || tx.reference || 'Journal Entry'}
+                        </td>
+                        <td className="py-2 px-3 text-gray-500">{tx.voucherType || 'Journal'}</td>
+                        <td className="py-2 px-3 text-right font-mono text-gray-700">
+                          {tx.debit ? formatINR(Number(tx.debit)) : '—'}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-gray-700">
+                          {tx.credit ? formatINR(Number(tx.credit)) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="text-right pt-2">
               <button
                 type="button"
-                onClick={() => setIsJournalModalOpen(false)}
-                className="text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={() => navigate(`/accounting/ledger/${selectedAccount.id}`)}
+                className="text-xs text-[#408DFB] hover:underline font-semibold"
               >
-                ✕
+                Show more details →
+              </button>
+            </div>
+          </div>
+        </div>
+      </ZohoSplitDetail>
+    );
+  }
+
+  // Define Columns for ZohoListTable
+  const columns = [
+    {
+      key: 'lock',
+      label: '',
+      width: '40px',
+      align: 'center' as const,
+      render: (row: AccountNode) => {
+        if (row.isSystem || row.depth === 0) {
+          return (
+            <span title="System Account">
+              <Lock className="w-3.5 h-3.5 text-gray-400 mx-auto" />
+            </span>
+          );
+        }
+        return (
+          <input
+            type="checkbox"
+            className="rounded text-[#408DFB] cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
+          />
+        );
+      },
+    },
+    {
+      key: 'name',
+      label: 'ACCOUNT NAME',
+      width: '35%',
+      render: (row: AccountNode) => {
+        const indentPx = (row.depth || 0) * 20;
+        const hasChildren = Boolean(row.children && row.children.length > 0);
+        const isExpanded = expandedIds.has(row.id);
+
+        return (
+          <div
+            style={{ paddingLeft: `${indentPx}px` }}
+            className="flex items-center gap-1.5 py-1"
+          >
+            {row.depth && row.depth > 0 ? (
+              <span className="text-gray-300 font-mono text-xs select-none">└──</span>
+            ) : null}
+
+            {hasChildren ? (
+              <button
+                type="button"
+                onClick={(e) => toggleExpand(row.id, e)}
+                className="p-0.5 rounded hover:bg-gray-100 text-gray-500"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5" />
+                )}
+              </button>
+            ) : (
+              <span className="w-4" />
+            )}
+
+            {hasChildren ? (
+              <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            ) : null}
+
+            <span
+              onClick={() => setSelectedAccount(row)}
+              className="text-[#408DFB] hover:underline font-medium cursor-pointer truncate"
+            >
+              {row.name}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'code',
+      label: 'ACCOUNT CODE',
+      width: '15%',
+      render: (row: AccountNode) => (
+        <span className="font-mono text-xs text-gray-600">{row.code || '—'}</span>
+      ),
+    },
+    {
+      key: 'category',
+      label: 'ACCOUNT TYPE',
+      width: '18%',
+      render: (row: AccountNode) => (
+        <span className="text-xs text-gray-700 font-medium">
+          {ACCOUNT_TYPE_TOOLTIPS[row.category]?.label || row.category}
+        </span>
+      ),
+    },
+    {
+      key: 'documents',
+      label: 'DOCUMENTS',
+      width: '12%',
+      align: 'center' as const,
+      render: (row: AccountNode) => (
+        <span className="text-[11px] text-gray-400">
+          {row.documentsCount ? `${row.documentsCount} docs` : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'parent',
+      label: 'PARENT ACCOUNT NAME',
+      width: '15%',
+      render: (row: AccountNode) => (
+        <span className="text-xs text-gray-500 truncate">{row.parent?.name || '—'}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      label: '',
+      width: '50px',
+      align: 'right' as const,
+      render: (row: AccountNode) => {
+        if (row.isSystem) return null;
+        return (
+          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => handleOpenCreate(row)}
+              title="Add sub-account"
+              className="p-1 text-gray-400 hover:text-[#408DFB] rounded"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenEdit(row)}
+              title="Edit Account"
+              className="p-1 text-gray-400 hover:text-gray-700 rounded"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  return (
+    <div className="flex flex-col h-full bg-white select-none">
+      {/* Zoho Page Header with View Switcher */}
+      <ZohoPageHeader
+        title={activeView}
+        views={ACCOUNT_VIEWS}
+        activeViewId={activeView}
+        onViewChange={(view) => setActiveView(view)}
+        newAction={{
+          label: '+ New Account',
+          onClick: () => handleOpenCreate(),
+        }}
+        moreActions={[
+          { label: 'Sort by Name', onClick: () => {} },
+          { label: 'Sort by Code', onClick: () => {} },
+          { label: 'Sort by Type', onClick: () => {} },
+          { label: 'Import Chart of Accounts', onClick: () => {} },
+          { label: 'Export Chart of Accounts', onClick: handleExport },
+        ]}
+      />
+
+      {/* Main List Table */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <ZohoListTable
+          columns={columns}
+          data={flattenedAccounts}
+          keyField={(row: AccountNode) => row.id}
+          isLoading={isLoading}
+          onRowClick={(row) => setSelectedAccount(row)}
+          emptyState={<div className="p-12 text-center text-xs text-gray-400">No accounts found in this view.</div>}
+          pagination={{
+            currentPage: 1,
+            totalCount: flattenedAccounts.length,
+            pageSize: flattenedAccounts.length || 25,
+            onPageChange: () => {},
+            onPageSizeChange: () => {},
+          }}
+        />
+      </div>
+
+      {/* Create / Edit Account Modal (Side-by-side with dark tooltip explanation card) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full border border-gray-200 overflow-hidden text-xs">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <h3 className="font-semibold text-gray-900 text-sm">
+                {editingAccount ? 'Edit Account' : 'Create Account'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form
-              onSubmit={journalForm.handleSubmit(handleJournalSubmit)}
-              className="p-6 overflow-y-auto space-y-6 flex-1 text-left"
-            >
-              <div className="grid grid-cols-3 gap-4 shrink-0">
+            {/* Modal Body: Left Inputs + Right Dark Card */}
+            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+              <div className="md:col-span-2 space-y-4">
+                {/* Account Type */}
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Transaction Date *
+                  <label className="block text-gray-700 font-medium mb-1">
+                    Account Type <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="date"
-                    {...journalForm.register('date')}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none"
-                  />
+                  <select
+                    value={modalCategory}
+                    onChange={(e) => setModalCategory(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] bg-white"
+                  >
+                    <option value="ASSET">Asset</option>
+                    <option value="LIABILITY">Liability</option>
+                    <option value="EQUITY">Equity</option>
+                    <option value="REVENUE">Income / Revenue</option>
+                    <option value="EXPENSE">Expense</option>
+                  </select>
                 </div>
+
+                {/* Account Name */}
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Reference No / Voucher
+                  <label className="block text-gray-700 font-medium mb-1">
+                    Account Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    {...journalForm.register('reference')}
-                    placeholder="e.g. JV-001"
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none"
+                    required
+                    value={modalName}
+                    onChange={(e) => setModalName(e.target.value)}
+                    placeholder="e.g. Traveling Expenses"
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
                   />
                 </div>
+
+                {/* Account Code with dashed-underline label */}
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Description / Memo
+                  <label className="inline-block text-gray-700 font-medium mb-1 border-b border-dashed border-gray-400 cursor-help" title="Numeric identifier for GL indexing">
+                    Account Code
                   </label>
                   <input
                     type="text"
-                    {...journalForm.register('description')}
-                    placeholder="Travel cost provision"
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none"
+                    value={modalCode}
+                    onChange={(e) => setModalCode(e.target.value)}
+                    placeholder="e.g. 6020"
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
                   />
                 </div>
-              </div>
 
-              {/* Dynamic Voucher Rows */}
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    Debit & Credit Line Items
+                {/* Parent Account (when sub-account is allowed) */}
+                <div>
+                  <label className="block text-gray-700 font-medium mb-1">
+                    Parent Account
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => append({ accountId: '', debit: 0, credit: 0 })}
-                    className="text-xs text-accent hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                  <select
+                    value={modalParentId}
+                    onChange={(e) => setModalParentId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] bg-white"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Add Line
-                  </button>
+                    <option value="">None (Top-Level Account)</option>
+                    {flatAccounts
+                      .filter((a) => a.category === modalCategory && a.id !== editingAccount?.id)
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} {a.code ? `(${a.code})` : ''}
+                        </option>
+                      ))}
+                  </select>
                 </div>
 
-                <div className="space-y-3">
-                  {fields.map((field, index) => (
-                    <div
-                      key={field.id}
-                      className="grid grid-cols-12 gap-3 items-end bg-background/50 p-3 rounded-xl border border-border"
-                    >
-                      <div className="col-span-6">
-                        <LedgerLookup
-                          value={watchedLines[index]?.accountId || ''}
-                          onChange={(val: any) => journalForm.setValue(`lines.${index}.accountId`, val)}
-                          placeholder="Select account..."
-                        />
-                      </div>
-
-                      <div className="col-span-2">
-                        <label className="block text-[10px] font-semibold text-muted-foreground uppercase mb-1">
-                          Debit
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          {...journalForm.register(`lines.${index}.debit` as const, {
-                            valueAsNumber: true,
-                          })}
-                          className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none"
-                        />
-                      </div>
-
-                      <div className="col-span-2">
-                        <label className="block text-[10px] font-semibold text-muted-foreground uppercase mb-1">
-                          Credit
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          {...journalForm.register(`lines.${index}.credit` as const, {
-                            valueAsNumber: true,
-                          })}
-                          className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none"
-                        />
-                      </div>
-
-                      <div className="col-span-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => remove(index)}
-                          disabled={fields.length === 2}
-                          className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg disabled:opacity-30 cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                {/* Description (max 500) */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-gray-700 font-medium">Description</label>
+                    <span className="text-[11px] text-gray-400">{modalDescription.length}/500</span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    maxLength={500}
+                    value={modalDescription}
+                    onChange={(e) => setModalDescription(e.target.value)}
+                    placeholder="Provide additional details regarding account scope..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] resize-none"
+                  />
                 </div>
+
+                {/* Watchlist Checkbox */}
+                <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={modalWatchlist}
+                    onChange={(e) => setModalWatchlist(e.target.checked)}
+                    className="rounded text-[#408DFB]"
+                  />
+                  <span>Add to the watchlist on my dashboard</span>
+                </label>
               </div>
 
-              {/* Integrity balance check indicator */}
-              <div className="border-t border-border pt-4 flex flex-col items-end space-y-2 text-sm shrink-0">
-                <div className="flex justify-between w-64 text-muted-foreground">
-                  <span>Total Debit:</span>
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {formatIndianCurrency(totalDebit)}
-                  </span>
+              {/* Right Side Dark Tooltip Card */}
+              <div className="bg-[#1E2540] text-white p-4 rounded-md shadow-md text-xs space-y-3">
+                <div className="flex items-center gap-1.5 text-blue-300 font-semibold uppercase text-[11px]">
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span>{ACCOUNT_TYPE_TOOLTIPS[modalCategory]?.label}</span>
                 </div>
-                <div className="flex justify-between w-64 text-muted-foreground">
-                  <span>Total Credit:</span>
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {formatIndianCurrency(totalCredit)}
-                  </span>
-                </div>
-                <div className="flex justify-between w-64 text-xs font-semibold pt-2">
-                  <span className="text-muted-foreground">Unbalance Variance:</span>
-                  <span
-                    className={cn(
-                      'tabular-nums',
-                      Math.abs(totalDebit - totalCredit) < 0.01 ? 'text-emerald-600' : 'text-rose-600'
-                    )}
-                  >
-                    {formatIndianCurrency(Math.abs(totalDebit - totalCredit))}
+                <p className="text-gray-200 leading-relaxed text-[11px]">
+                  {ACCOUNT_TYPE_TOOLTIPS[modalCategory]?.desc}
+                </p>
+                <div className="pt-2 border-t border-gray-700/60 text-[11px] text-gray-400">
+                  Normal Balance:{' '}
+                  <span className="text-white font-semibold">
+                    {ACCOUNT_TYPE_TOOLTIPS[modalCategory]?.normalBalance}
                   </span>
                 </div>
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 border-t border-border pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsJournalModalOpen(false)}
-                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-background rounded-lg cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-primary text-primary-foreground hover:bg-opacity-90 px-4 py-2 rounded-lg text-sm font-semibold shadow-xs flex items-center gap-2 cursor-pointer"
-                >
-                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Post Journal Entry
-                </button>
-              </div>
-            </form>
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-1.5 text-xs bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-100 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending || !modalName.trim()}
+                className="px-5 py-1.5 text-xs bg-[#408DFB] text-white rounded font-semibold hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1"
+              >
+                {saveMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Save
+              </button>
+            </div>
           </div>
         </div>
       )}
-
-      {/* Delete Confirmation Dialog */}
-      <DeleteDialog
-        isOpen={Boolean(accountToDelete)}
-        onClose={() => setAccountToDelete(null)}
-        onConfirm={confirmDeleteAccount}
-        entityName="Account"
-        entityId={accountToDelete?.name}
-        warningText="This action cannot be undone. Any ledger with historical transactions cannot be deleted."
-      />
-    </>
+    </div>
   );
 };

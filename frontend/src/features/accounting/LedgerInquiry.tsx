@@ -1,32 +1,67 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  Search, BookOpen, Printer, Download, ArrowUpDown, ChevronRight, X, AlertCircle
+import {
+  Search,
+  BookOpen,
+  Printer,
+  Download,
+  ArrowUpDown,
+  ChevronRight,
+  ArrowLeft,
+  X,
+  AlertCircle,
+  FileSpreadsheet,
 } from 'lucide-react';
 import apiClient from '@/core/api';
-import { Card } from '@/shared/components/ui/Card';
-import { TableLoader, PageLoader } from '@/shared/components/ui/LoadingSystem';
-import { StatusBadge } from '@/shared/components/ui';
 import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import notification from '@/core/services/NotificationService';
 import { ExportService } from '@/core/services/ExportService';
 import { DocumentEngine } from '@/core/reporting/DocumentEngine';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Formatters & Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const formatReportDate = (d: string | Date | undefined | null): string => {
+  if (!d) return '—';
+  const dateObj = new Date(d);
+  if (isNaN(dateObj.getTime())) return '—';
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = monthNames[dateObj.getMonth()];
+  const year = dateObj.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
+const formatAmount = (val: number | undefined | null, showDashForZero = true): string => {
+  const num = Number(val) || 0;
+  if (showDashForZero && Math.abs(num) < 0.005) {
+    return '—';
+  }
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num);
+};
+
 export function LedgerInquiry() {
   const { ledgerId } = useParams<{ ledgerId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
-  
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('returnTo');
+
   // Tab states
   const [activeTab, setActiveTab] = useState<'statement' | 'outstanding' | 'audit'>('statement');
-  
-  // Search query state
+
+  // Search query state for switching accounts
   const [searchVal, setSearchVal] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  
+
   // Filter states
   const [dateRange, setDateRange] = useState('FY');
   const [startDate, setStartDate] = useState('');
@@ -35,14 +70,10 @@ export function LedgerInquiry() {
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
   const [textSearch, setTextSearch] = useState('');
-  
-  // Table sorting & column resize states
+
+  // Table sorting states
   const [sortField, setSortField] = useState<string>('date');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
-  const [colWidths, setColWidths] = useState<Record<string, number>>({
-    date: 90, voucherNo: 110, voucherType: 110, reference: 100,
-    description: 280, debit: 110, credit: 110, balance: 130, status: 80
-  });
 
   // Invoice / source doc slide drawer preview
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
@@ -69,13 +100,14 @@ export function LedgerInquiry() {
       }
       if (e.key === 'Escape') {
         setPreviewDoc(null);
+        setIsSearching(false);
       }
     };
     window.addEventListener('keydown', handleGlobalKeys);
     return () => window.removeEventListener('keydown', handleGlobalKeys);
   }, [ledgerId]);
 
-  // Click outside close listener for search
+  // Click outside listener for search popup
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -95,9 +127,9 @@ export function LedgerInquiry() {
     const delay = setTimeout(async () => {
       try {
         const res = await apiClient.get('/accounts/lookup', {
-          params: { search: searchVal, limit: 8 }
+          params: { search: searchVal, limit: 8 },
         });
-        setSearchResults(res.data?.data || []);
+        setSearchResults(res.data?.data || res.data || []);
         setSelectedIndex(0);
       } catch {
         setSearchResults([]);
@@ -119,11 +151,11 @@ export function LedgerInquiry() {
           maxAmount: maxAmount || undefined,
           voucherType: voucherType || undefined,
           search: textSearch || undefined,
-        }
+        },
       });
       return res.data?.data || null;
     },
-    enabled: !!ledgerId
+    enabled: Boolean(ledgerId),
   });
 
   useDynamicTitle(inquiryData?.ledger?.name || 'Ledger Inquiry');
@@ -157,14 +189,14 @@ export function LedgerInquiry() {
     }
   }, [dateRange]);
 
-  // Search input key events
+  // Search input keyboard navigation
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev + 1) % Math.max(1, searchResults.length));
+      setSelectedIndex((prev) => (prev + 1) % Math.max(1, searchResults.length));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev - 1 + searchResults.length) % Math.max(1, searchResults.length));
+      setSelectedIndex((prev) => (prev - 1 + searchResults.length) % Math.max(1, searchResults.length));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const selection = searchResults[selectedIndex];
@@ -183,10 +215,16 @@ export function LedgerInquiry() {
     navigate(`/accounting/ledger/${ledger.id}`);
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(val);
+  // Reset filters
+  const handleClearFilters = () => {
+    setDateRange('FY');
+    setVoucherType('');
+    setMinAmount('');
+    setMaxAmount('');
+    setTextSearch('');
   };
 
+  // Export handlers
   const handleExportExcel = () => {
     if (!inquiryData || !sortedTransactions.length) {
       notification.error('No transactions to export');
@@ -194,8 +232,8 @@ export function LedgerInquiry() {
     }
 
     const headers = ['Date', 'Voucher No', 'Voucher Type', 'Reference', 'Description', 'Debit', 'Credit', 'Balance', 'Status'];
-    const data = sortedTransactions.map((t: any) => [
-      t.date.split('T')[0],
+    const exportData = sortedTransactions.map((t: any) => [
+      formatReportDate(t.date),
       t.voucherNo || '',
       t.voucherType || '',
       t.reference || '',
@@ -203,7 +241,7 @@ export function LedgerInquiry() {
       t.debit || 0,
       t.credit || 0,
       t.balance || 0,
-      t.status || ''
+      t.status || 'POSTED',
     ]);
 
     ExportService.exportExcel({
@@ -211,7 +249,7 @@ export function LedgerInquiry() {
       sheetName: 'Ledger Statement',
       title: `Ledger Statement: ${inquiryData.ledger.name}`,
       headers,
-      data
+      data: exportData,
     });
     notification.success('Excel statement exported successfully');
   };
@@ -232,40 +270,28 @@ export function LedgerInquiry() {
         { header: 'Description', dataKey: 'description' },
         { header: 'Debit', dataKey: 'debit', align: 'right' },
         { header: 'Credit', dataKey: 'credit', align: 'right' },
-        { header: 'Balance', dataKey: 'balance', align: 'right' }
+        { header: 'Balance', dataKey: 'balance', align: 'right' },
       ],
       data: sortedTransactions.map((t: any) => ({
-        date: t.date.split('T')[0],
+        date: formatReportDate(t.date),
         voucherNo: t.voucherNo || '',
         type: t.voucherType || '',
         description: t.description || '',
         debit: t.debit || 0,
         credit: t.credit || 0,
-        balance: t.balance || 0
+        balance: t.balance || 0,
       })),
-      orientation: 'landscape'
+      orientation: 'landscape',
     });
   };
 
-  const handleResize = (col: string, startWidth: number, startX: number) => {
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const width = Math.max(70, startWidth + (moveEvent.clientX - startX));
-      setColWidths(prev => ({ ...prev, [col]: width }));
-    };
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  };
-
+  // Sort transactions
   const sortedTransactions = useMemo(() => {
     const items = [...(inquiryData?.transactions || [])];
     return items.sort((a: any, b: any) => {
       let valA = a[sortField];
       let valB = b[sortField];
-      
+
       if (sortField === 'date') {
         valA = new Date(valA).getTime();
         valB = new Date(valB).getTime();
@@ -277,116 +303,269 @@ export function LedgerInquiry() {
     });
   }, [inquiryData, sortField, sortAsc]);
 
+  // Construct meta information line
+  const metaLine = useMemo(() => {
+    if (!inquiryData?.ledger) return '';
+    const parts: string[] = [];
+    if (inquiryData.ledger.parentName) {
+      parts.push(`Group: ${inquiryData.ledger.parentName}`);
+    }
+    if (inquiryData.ledger.gstin && inquiryData.ledger.gstin !== 'N/A') {
+      parts.push(`GST: ${inquiryData.ledger.gstin}`);
+    }
+    if (inquiryData.ledger.phone && inquiryData.ledger.phone !== 'N/A') {
+      parts.push(`Phone: ${inquiryData.ledger.phone}`);
+    }
+    return parts.join(' | ');
+  }, [inquiryData]);
+
+  // Status text renderer (green POSTED, grey DRAFT, red VOID/CANCELLED)
+  const renderStatus = (status: string | undefined | null) => {
+    const s = (status || 'POSTED').toUpperCase();
+    if (s === 'POSTED') {
+      return <span className="text-[#2e7d32] font-semibold text-[11px] uppercase tracking-wide">POSTED</span>;
+    }
+    if (s === 'DRAFT') {
+      return <span className="text-gray-500 font-semibold text-[11px] uppercase tracking-wide">DRAFT</span>;
+    }
+    if (s === 'VOID' || s === 'CANCELLED') {
+      return <span className="text-[#d93025] font-semibold text-[11px] uppercase tracking-wide">{s}</span>;
+    }
+    return <span className="text-gray-600 font-semibold text-[11px] uppercase tracking-wide">{s}</span>;
+  };
+
   return (
-    <div className="p-3 w-full bg-background text-foreground print:p-0 flex flex-col space-y-2 select-none h-full flex-1 min-h-0 overflow-hidden">
-      
-      {/* Search Header Row */}
-      <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-1.5 print:hidden shrink-0">
-        <div className="flex items-center gap-2">
-          {/* Compressed Breadcrumb */}
-          <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-            <span>Accounting</span>
-            <ChevronRight className="w-3 h-3" />
-            <span className="cursor-pointer hover:text-accent" onClick={() => navigate('/chart-of-accounts')}>COA</span>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-foreground">Inquiry Statement</span>
-          </div>
+    <div className="h-full w-full bg-white text-[#333] font-sans flex flex-col select-none overflow-hidden print:overflow-visible">
+      {/* 1. PAGE HEADER (Zoho account-detail style) */}
+      <div className="px-6 pt-3.5 pb-3 border-b border-[#e5e7eb] shrink-0 bg-white print:hidden">
+        {/* Breadcrumb */}
+        <div className="flex items-center text-[12px] text-gray-500 mb-1">
+          {returnTo ? (
+            <>
+              <button
+                type="button"
+                onClick={() => navigate(returnTo)}
+                className="hover:text-[#408dfb] cursor-pointer transition-colors flex items-center gap-1 font-medium text-[#408dfb]"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Back to Report
+              </button>
+              <span className="mx-1.5 text-gray-400">/</span>
+            </>
+          ) : (
+            <>
+              <span
+                onClick={() => navigate('/chart-of-accounts')}
+                className="hover:text-[#408dfb] cursor-pointer transition-colors"
+              >
+                Chart of Accounts
+              </span>
+              <span className="mx-1.5 text-gray-400">/</span>
+            </>
+          )}
+          <span className="text-gray-700 font-medium truncate max-w-[300px]">
+            {inquiryData?.ledger?.name || 'Account Detail'}
+          </span>
         </div>
 
-        {/* Dense Search Input */}
-        <div className="relative max-w-md w-full" ref={containerRef}>
-          <div className="relative bg-surface/50 border border-border/80 rounded-xl focus-within:ring-1 focus-within:ring-accent/20 focus-within:border-accent">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <input
-              id="ledger-search-input"
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search Ledger Account... (Ctrl + F)"
-              value={searchVal}
-              onChange={e => { setSearchVal(e.target.value); setIsSearching(true); }}
-              onFocus={() => setIsSearching(true)}
-              onKeyDown={handleSearchKeyDown}
-              className="w-full pl-9 pr-6 py-1.5 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
-            />
+        {/* Title Row + Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Account Title + Code Tag + Meta */}
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-[20px] font-semibold text-[#1e2540] tracking-tight">
+                {inquiryData?.ledger?.name || 'Ledger Account'}
+              </h1>
+              {inquiryData?.ledger?.code && (
+                <span className="text-[13px] text-gray-400 font-normal">
+                  ({inquiryData.ledger.code})
+                </span>
+              )}
+            </div>
+            {metaLine && (
+              <div className="text-[12px] text-gray-500 font-normal mt-0.5">
+                {metaLine}
+              </div>
+            )}
           </div>
 
-          {isSearching && searchResults.length > 0 && (
-            <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-surface border border-border/80 shadow-premium rounded-xl z-50 overflow-hidden">
-              <div className="p-1 space-y-0.5 max-h-[240px] overflow-y-auto">
-                {searchResults.map((item, idx) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleSelectLedger(item)}
-                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${idx === selectedIndex ? 'bg-muted/80 text-foreground font-bold' : 'hover:bg-muted/40 text-muted-foreground'}`}
-                  >
-                    <span>{item.name} {item.code ? `(${item.code})` : ''}</span>
-                    <span className="text-[10px] opacity-75 font-mono">{item.accountType}</span>
-                  </button>
-                ))}
-              </div>
+          {/* Right Header Controls: Search + Print + Export */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Account Switcher Search Input */}
+            <div className="relative w-[260px]" ref={containerRef}>
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search Ledger Account... (Ctrl + F)"
+                value={searchVal}
+                onChange={(e) => {
+                  setSearchVal(e.target.value);
+                  setIsSearching(true);
+                }}
+                onFocus={() => setIsSearching(true)}
+                onKeyDown={handleSearchKeyDown}
+                className="w-full h-[32px] pl-8 pr-3 bg-white border border-[#d9dce3] rounded-[4px] text-xs text-[#333] focus:border-[#408dfb] outline-none placeholder:text-gray-400"
+              />
+
+              {/* Search dropdown results */}
+              {isSearching && searchResults.length > 0 && (
+                <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#e5e7eb] shadow-lg rounded-[4px] z-50 overflow-hidden text-xs">
+                  <div className="p-1 max-h-[220px] overflow-y-auto divide-y divide-gray-100">
+                    {searchResults.map((item, idx) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectLedger(item)}
+                        className={`w-full text-left px-3 py-1.5 rounded text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                          idx === selectedIndex
+                            ? 'bg-blue-50 text-[#408dfb] font-semibold'
+                            : 'hover:bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        <span className="truncate">
+                          {item.name} {item.code ? `(${item.code})` : ''}
+                        </span>
+                        <span className="text-[10px] text-gray-400 shrink-0 ml-2">
+                          {item.accountType}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Print Button */}
+            <button
+              type="button"
+              onClick={handlePrint}
+              title="Print Statement (Ctrl + P)"
+              className="h-[32px] w-[32px] flex items-center justify-center bg-white border border-[#d9dce3] hover:bg-gray-50 text-gray-600 rounded-[4px] cursor-pointer transition-colors shadow-2xs"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+
+            {/* Export Button */}
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              title="Export Excel (Ctrl + E)"
+              className="h-[32px] px-3 bg-white border border-[#d9dce3] hover:bg-gray-50 text-[#333] rounded-[4px] text-[13px] font-medium flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5 text-gray-600" />
+              <span>Export</span>
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Main Content Area */}
       {!ledgerId ? (
-        <Card className="flex-1 flex flex-col items-center justify-center p-12 text-center border border-border/80 rounded-xl bg-surface/30">
-          <BookOpen className="w-8 h-8 text-accent mb-2" />
-          <h2 className="text-sm font-bold text-foreground">Ledger Statement Inquiry</h2>
-          <p className="text-xs text-muted-foreground max-w-xs mt-1">Select an account in the search bar above to generate and inspect chronological transactional histories.</p>
-        </Card>
+        <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-white">
+          <BookOpen className="w-10 h-10 text-[#408dfb] mb-3 opacity-80" />
+          <h2 className="text-[16px] font-semibold text-[#1e2540]">Ledger Account Detail</h2>
+          <p className="text-xs text-gray-500 max-w-sm mt-1.5 leading-relaxed">
+            Select an account in the search box above or browse the Chart of Accounts to inspect detailed transactional entries and running balances.
+          </p>
+        </div>
       ) : isLoading ? (
-        <div className="flex-1 py-16 flex items-center justify-center">
-          <PageLoader title="Loading Ledger Inquiry..." description="Compiling journal lines and running balance..." />
+        /* Loading Skeleton */
+        <div className="flex-1 p-6 space-y-4 bg-white overflow-hidden">
+          <div className="grid grid-cols-4 gap-6 pb-4 border-b border-[#e5e7eb]">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-3 bg-gray-200 rounded w-20 animate-pulse" />
+                <div className="h-5 bg-gray-200 rounded w-28 animate-pulse" />
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3 pt-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
+            ))}
+          </div>
         </div>
       ) : !inquiryData ? (
-        <Card className="p-4 flex items-center gap-3 border border-red-200 bg-red-50 text-red-800 rounded-xl">
-          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-          <span className="text-xs font-semibold">Failed to load ledger inquiries statement. Try another account.</span>
-        </Card>
+        /* Error State */
+        <div className="p-6">
+          <div className="p-4 flex items-center gap-3 border border-red-200 bg-red-50 text-red-800 rounded-[4px]">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span className="text-xs font-semibold">
+              Failed to load account ledger details. Please verify the account ID or try again.
+            </span>
+          </div>
+        </div>
       ) : (
-        <div className="flex-1 flex flex-col space-y-2 overflow-hidden h-full">
-          
-          {/* Compact Merged Header Row & Horizontal KPI Strip */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-surface/50 border border-border/80 p-2.5 rounded-xl shadow-xs shrink-0">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-black text-foreground">{inquiryData.ledger.name}</h1>
-                <span className="text-[9px] font-bold text-accent bg-accent/10 px-1.5 py-0.2 rounded-full uppercase">
-                  {inquiryData.ledger.code || 'GL-NA'}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
+          {/* 2. SUMMARY STRIP (4 simple stat blocks separated by vertical dividers) */}
+          <div className="px-6 py-3.5 border-b border-[#e5e7eb] flex items-center divide-x divide-[#e5e7eb] bg-white shrink-0">
+            {/* Opening Balance */}
+            <div className="pr-6 first:pl-0">
+              <div className="text-[12px] text-gray-500 font-normal mb-0.5">Opening Balance</div>
+              <div className="text-[18px] font-semibold text-[#333] tabular-nums">
+                {formatAmount(inquiryData.summary.openingBalance, false)}
+              </div>
+            </div>
+
+            {/* Total Debit */}
+            <div className="px-6">
+              <div className="text-[12px] text-gray-500 font-normal mb-0.5">Total Debit</div>
+              <div className="text-[18px] font-semibold text-[#333] tabular-nums">
+                {formatAmount(inquiryData.summary.totalDebit, false)}
+              </div>
+            </div>
+
+            {/* Total Credit */}
+            <div className="px-6">
+              <div className="text-[12px] text-gray-500 font-normal mb-0.5">Total Credit</div>
+              <div className="text-[18px] font-semibold text-[#333] tabular-nums">
+                {formatAmount(inquiryData.summary.totalCredit, false)}
+              </div>
+            </div>
+
+            {/* Closing Balance */}
+            <div className="pl-6">
+              <div className="text-[12px] text-gray-500 font-normal mb-0.5">Closing Balance</div>
+              <div className="text-[18px] font-semibold text-[#333] tabular-nums flex items-baseline">
+                <span>{formatAmount(Math.abs(inquiryData.summary.currentBalance), false)}</span>
+                <span className="text-[12px] text-gray-500 font-normal ml-1.5">
+                  {inquiryData.summary.currentBalance >= 0 ? 'Dr' : 'Cr'}
                 </span>
               </div>
-              <p className="text-[9px] text-muted-foreground mt-0.5">
-                GST: <span className="font-semibold text-foreground">{inquiryData.ledger.gstin || 'N/A'}</span> | Phone: <span className="font-semibold text-foreground">{inquiryData.ledger.phone || 'N/A'}</span> | Group: <span className="font-semibold text-foreground">{inquiryData.ledger.parentName}</span>
-              </p>
-            </div>
-
-            {/* Horizontal KPI Strip */}
-            <div className="flex items-center divide-x divide-border/80 border border-border/80 bg-background/50 rounded-lg text-[10px] font-bold py-1 px-2.5 select-none">
-              <div className="px-2.5"><span className="text-muted-foreground mr-1">Opening:</span>{formatCurrency(inquiryData.summary.openingBalance)}</div>
-              <div className="px-2.5"><span className="text-blue-500 mr-1">Debit (Dr):</span>{formatCurrency(inquiryData.summary.totalDebit)}</div>
-              <div className="px-2.5"><span className="text-amber-500 mr-1">Credit (Cr):</span>{formatCurrency(inquiryData.summary.totalCredit)}</div>
-              <div className="px-2.5"><span className="text-accent mr-1">Closing:</span>{formatCurrency(inquiryData.summary.currentBalance)}</div>
-            </div>
-
-            {/* Compact Action Icons */}
-            <div className="flex items-center gap-1 shrink-0 print:hidden">
-              <button onClick={handlePrint} title="Print Statement" className="p-1 border border-border/80 hover:bg-muted/80 rounded-lg transition-colors cursor-pointer">
-                <Printer className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={handleExportExcel} title="Export Excel" className="p-1 border border-border/80 hover:bg-muted/80 rounded-lg transition-colors cursor-pointer">
-                <Download className="w-3.5 h-3.5 text-emerald-500" />
-              </button>
             </div>
           </div>
 
-          {/* Sticky Toolbar Filter Row */}
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-surface/30 border border-border/80 p-1.5 rounded-xl shrink-0 print:hidden">
+          {/* 3. TABS + FILTER BAR (One row, Zoho style) */}
+          <div className="px-6 py-2.5 border-b border-[#e5e7eb] flex flex-wrap items-center justify-between gap-3 bg-white shrink-0 print:hidden">
+            {/* Left Tabs: Register | Ageing | Audits */}
+            <div className="flex items-center gap-6 h-[32px]">
+              {[
+                { id: 'statement', label: 'Register' },
+                { id: 'outstanding', label: 'Ageing' },
+                { id: 'audit', label: 'Audits' },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setActiveTab(t.id as any)}
+                  className={`h-full text-[13px] font-medium transition-colors cursor-pointer relative pb-1 ${
+                    activeTab === t.id
+                      ? 'text-[#333] border-b-2 border-[#408dfb]'
+                      : 'text-[#6c7380] hover:text-[#333] border-b-2 border-transparent'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Right Filters */}
             <div className="flex flex-wrap items-center gap-2">
-              <select 
-                value={dateRange} 
-                onChange={e => setDateRange(e.target.value)}
-                className="bg-background border border-border/80 rounded-lg px-2 py-0.5 text-xs text-foreground cursor-pointer outline-none focus:border-accent"
+              {/* Date Range Dropdown */}
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="h-[32px] px-2.5 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none cursor-pointer"
               >
                 <option value="FY">Financial Year</option>
                 <option value="Today">Today</option>
@@ -395,10 +574,11 @@ export function LedgerInquiry() {
                 <option value="Month">This Month</option>
               </select>
 
-              <select 
-                value={voucherType} 
-                onChange={e => setVoucherType(e.target.value)}
-                className="bg-background border border-border/80 rounded-lg px-2 py-0.5 text-xs text-foreground cursor-pointer outline-none focus:border-accent"
+              {/* Voucher Type Dropdown */}
+              <select
+                value={voucherType}
+                onChange={(e) => setVoucherType(e.target.value)}
+                className="h-[32px] px-2.5 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none cursor-pointer"
               >
                 <option value="">All Vouchers</option>
                 <option value="Sales Invoice">Invoice</option>
@@ -408,228 +588,402 @@ export function LedgerInquiry() {
                 <option value="Journal Entry">Journal</option>
               </select>
 
-              <div className="flex items-center gap-1">
-                <input 
-                  type="number" 
-                  placeholder="Min Amount"
-                  value={minAmount}
-                  onChange={e => setMinAmount(e.target.value)}
-                  className="bg-background border border-border/80 rounded-lg px-2 py-0.5 text-xs text-foreground outline-none w-20 placeholder:text-muted-foreground/50" 
-                />
-                <input 
-                  type="number" 
-                  placeholder="Max Amount"
-                  value={maxAmount}
-                  onChange={e => setMaxAmount(e.target.value)}
-                  className="bg-background border border-border/80 rounded-lg px-2 py-0.5 text-xs text-foreground outline-none w-20 placeholder:text-muted-foreground/50" 
-                />
-              </div>
+              {/* Min & Max Amount Inputs */}
+              <input
+                type="number"
+                placeholder="Min amount"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                className="h-[32px] w-[110px] px-2.5 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none placeholder:text-gray-400"
+              />
+              <input
+                type="number"
+                placeholder="Max amount"
+                value={maxAmount}
+                onChange={(e) => setMaxAmount(e.target.value)}
+                className="h-[32px] w-[110px] px-2.5 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none placeholder:text-gray-400"
+              />
 
-              <div className="flex items-center gap-1 px-2 py-0.5 bg-background border border-border/80 rounded-lg max-w-xs focus-within:border-accent">
-                <Search className="w-3 h-3 text-muted-foreground" />
+              {/* Filter Table Search Input */}
+              <div className="relative w-[200px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Filter table..."
                   value={textSearch}
-                  onChange={e => setTextSearch(e.target.value)}
-                  className="bg-transparent border-none outline-none text-xs text-foreground py-0.5 placeholder:text-muted-foreground/60 w-32"
+                  onChange={(e) => setTextSearch(e.target.value)}
+                  className="h-[32px] w-full pl-8 pr-2.5 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none placeholder:text-gray-400"
                 />
               </div>
             </div>
-
-            {/* Compact Tab Triggers */}
-            <div className="flex border-b border-border/40 select-none">
-              {[
-                { id: 'statement', label: 'Register' },
-                { id: 'outstanding', label: 'Ageing' },
-                { id: 'audit', label: 'Audits' }
-              ].map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id as any)}
-                  className={`px-3.5 py-0.5 text-xs font-bold -mb-px whitespace-nowrap transition-all border-b-2 cursor-pointer ${activeTab === t.id ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* Statement Spreadsheet Grid (80-90% height wrapper) */}
-          <div className="flex-1 overflow-hidden flex flex-col bg-surface border border-border/80 rounded-xl shadow-xs">
+          {/* 4. TAB CONTENTS & REGISTER TABLE */}
+          <div className="flex-1 overflow-auto bg-white">
             {activeTab === 'statement' ? (
               sortedTransactions.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center space-y-2 p-12 text-center text-xs text-muted-foreground">
-                  <AlertCircle className="w-6 h-6 text-muted-foreground/60" />
-                  <span>No transactions matching selected filters.</span>
+                /* Empty state */
+                <div className="py-20 text-center text-gray-500">
+                  <div className="text-[14px] text-gray-600 mb-1.5">
+                    No transactions found for the selected filters.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    className="text-[13px] text-[#408dfb] hover:underline cursor-pointer"
+                  >
+                    Clear filters
+                  </button>
                 </div>
               ) : (
-                <div className="flex-1 overflow-auto">
-                  <table className="w-full border-collapse text-left table-fixed">
-                    <thead className="bg-[#34303F] text-white text-[12px] select-none sticky top-0 z-10 h-[38px]">
-                      <tr>
-                        {[
-                          { id: 'date', label: 'Date' },
-                          { id: 'voucherNo', label: 'Voucher No' },
-                          { id: 'voucherType', label: 'Voucher Type' },
-                          { id: 'reference', label: 'Reference' },
-                          { id: 'description', label: 'Description' },
-                          { id: 'debit', label: 'Debit (Dr)' },
-                          { id: 'credit', label: 'Credit (Cr)' },
-                          { id: 'balance', label: 'Running Balance' },
-                          { id: 'status', label: 'Status' }
-                        ].map((col, idx) => (
-                          <th 
-                            key={col.id} 
-                            style={{ width: colWidths[col.id] || 120 }}
-                            className={`p-2 font-medium text-white relative group align-middle h-[38px] ${idx === 0 ? 'pl-4' : ''} ${col.id === 'debit' || col.id === 'credit' || col.id === 'balance' ? 'text-right' : col.id === 'status' ? 'text-center' : 'text-left'}`}
-                          >
-                            <div className={`flex items-center gap-1 cursor-pointer ${col.id === 'debit' || col.id === 'credit' || col.id === 'balance' ? 'justify-end' : col.id === 'status' ? 'justify-center' : 'justify-between'}`} onClick={() => {
-                              if (sortField === col.id) {
-                                setSortAsc(!sortAsc);
-                              } else {
-                                setSortField(col.id);
+                /* Register Table */
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[13px] table-fixed min-w-[1100px]">
+                    {/* Sticky Table Header (height 40px, background #f9f9fb) */}
+                    <thead className="bg-[#f9f9fb] text-[#6c7380] text-[11px] font-semibold uppercase tracking-[0.04em] border-b border-[#e5e7eb] sticky top-0 z-10">
+                      <tr className="h-[40px]">
+                        <th style={{ width: '110px' }} className="py-2 px-6">
+                          <div
+                            onClick={() => {
+                              if (sortField === 'date') setSortAsc(!sortAsc);
+                              else {
+                                setSortField('date');
                                 setSortAsc(true);
                               }
-                            }}>
-                              <span>{col.label}</span>
-                              <ArrowUpDown className="w-2.5 h-2.5 text-white/60 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <div 
-                              onMouseDown={e => {
-                                e.preventDefault();
-                                handleResize(col.id, colWidths[col.id] || 120, e.clientX);
-                              }}
-                              className="absolute right-0 top-0 bottom-0 w-1 bg-white/20 hover:bg-white/50 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity"
-                            />
-                          </th>
-                        ))}
+                            }}
+                            className="flex items-center gap-1 cursor-pointer hover:text-[#333]"
+                          >
+                            <span>DATE</span>
+                            <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                          </div>
+                        </th>
+                        <th style={{ width: '160px' }} className="py-2 px-3">
+                          <div
+                            onClick={() => {
+                              if (sortField === 'voucherNo') setSortAsc(!sortAsc);
+                              else {
+                                setSortField('voucherNo');
+                                setSortAsc(true);
+                              }
+                            }}
+                            className="flex items-center gap-1 cursor-pointer hover:text-[#333]"
+                          >
+                            <span>VOUCHER NO</span>
+                            <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                          </div>
+                        </th>
+                        <th style={{ width: '140px' }} className="py-2 px-3">
+                          VOUCHER TYPE
+                        </th>
+                        <th style={{ width: '160px' }} className="py-2 px-3">
+                          REFERENCE
+                        </th>
+                        <th className="py-2 px-3">
+                          DESCRIPTION
+                        </th>
+                        <th style={{ width: '130px' }} className="py-2 px-3 text-right">
+                          DEBIT (DR)
+                        </th>
+                        <th style={{ width: '130px' }} className="py-2 px-3 text-right">
+                          CREDIT (CR)
+                        </th>
+                        <th style={{ width: '160px' }} className="py-2 px-3 text-right">
+                          RUNNING BALANCE
+                        </th>
+                        <th style={{ width: '100px' }} className="py-2 px-6 text-center">
+                          STATUS
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="text-[12px]">
+
+                    <tbody className="divide-y divide-[#eef0f4]">
+                      {/* First Row: Opening Balance row */}
+                      <tr className="h-[40px] bg-[#f9f9fb] font-semibold text-[13px] text-[#333] border-b border-[#e5e7eb]">
+                        <td className="px-6 text-gray-500 font-normal">
+                          {formatReportDate(startDate || inquiryData?.transactions?.[0]?.date)}
+                        </td>
+                        <td className="px-3 text-gray-400">—</td>
+                        <td className="px-3 text-gray-400">—</td>
+                        <td className="px-3 text-gray-400">—</td>
+                        <td className="px-3 text-gray-700 font-semibold">Opening Balance</td>
+                        <td className="px-3 text-right text-gray-400">—</td>
+                        <td className="px-3 text-right text-gray-400">—</td>
+                        <td className="px-3 text-right tabular-nums text-[#333] font-semibold">
+                          <span>{formatAmount(Math.abs(inquiryData.summary.openingBalance), false)}</span>
+                          <span className="text-[12px] text-gray-500 font-normal ml-1">
+                            {inquiryData.summary.openingBalance >= 0 ? 'Dr' : 'Cr'}
+                          </span>
+                        </td>
+                        <td className="px-6 text-center text-gray-400">—</td>
+                      </tr>
+
+                      {/* Transaction Rows */}
                       {sortedTransactions.map((tx: any, idx: number) => (
-                        <tr 
-                          key={tx.id || idx} 
-                          className={`transition-colors h-[38px] border-b border-[#E8E8EC] dark:border-neutral-800 ${idx % 2 === 1 ? 'bg-[#F5F5F5] dark:bg-[#1A1A1E]' : 'bg-white dark:bg-[#121214]'} hover:bg-[#EFEFF1] dark:hover:bg-[#25252A]`}
+                        <tr
+                          key={tx.id || idx}
+                          className="h-[40px] text-[13px] font-normal text-[#333] hover:bg-[#f7f9ff] transition-colors"
                         >
-                          <td className="p-2 pl-4 truncate text-[#555555] dark:text-[#A1A1AA]">{new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
-                          <td className="p-2 font-mono font-medium text-foreground truncate">
-                            <button 
+                          {/* Date */}
+                          <td className="px-6 text-gray-600 whitespace-nowrap">
+                            {formatReportDate(tx.date)}
+                          </td>
+
+                          {/* Voucher No (Blue Link, normal weight 500) */}
+                          <td className="px-3 truncate" title={tx.voucherNo || ''}>
+                            <button
+                              type="button"
                               onClick={() => setPreviewDoc(tx)}
-                              className="hover:underline cursor-pointer text-left w-full truncate"
+                              className="text-[#408dfb] hover:underline font-medium cursor-pointer text-left truncate max-w-full"
                             >
-                              {tx.voucherNo}
+                              {tx.voucherNo || '—'}
                             </button>
                           </td>
-                          <td className="p-2 truncate text-[#555555] dark:text-[#A1A1AA]">{tx.voucherType}</td>
-                          <td className="p-2 truncate font-mono text-xs text-muted-foreground">{tx.reference || '—'}</td>
-                          <td className="p-2 truncate text-[#555555] dark:text-[#A1A1AA]">{tx.description || '—'}</td>
-                          <td className="p-2 text-right tabular-nums text-foreground font-medium">{tx.debit > 0 ? formatCurrency(tx.debit) : '—'}</td>
-                          <td className="p-2 text-right tabular-nums text-foreground font-medium">{tx.credit > 0 ? formatCurrency(tx.credit) : '—'}</td>
-                          <td className="p-2 text-right tabular-nums font-semibold text-foreground">
-                            {formatCurrency(Math.abs(tx.runningBalance))}
-                            <span className="text-[10px] font-bold text-muted-foreground ml-1">{tx.runningBalance >= 0 ? 'Dr' : 'Cr'}</span>
+
+                          {/* Voucher Type */}
+                          <td className="px-3 text-gray-700 truncate" title={tx.voucherType || ''}>
+                            {tx.voucherType || '—'}
                           </td>
-                          <td className="p-2 select-none text-center">
-                            <StatusBadge status={tx.status || 'POSTED'} />
+
+                          {/* Reference */}
+                          <td className="px-3 text-[#6c7380] font-normal truncate" title={tx.reference || ''}>
+                            {tx.reference || '—'}
+                          </td>
+
+                          {/* Description */}
+                          <td className="px-3 text-[#333] truncate" title={tx.description || ''}>
+                            {tx.description || '—'}
+                          </td>
+
+                          {/* Debit */}
+                          <td className="px-3 text-right tabular-nums text-[#333]">
+                            {tx.debit > 0 ? (
+                              formatAmount(tx.debit, false)
+                            ) : (
+                              <span className="text-[#b0b5c0]">—</span>
+                            )}
+                          </td>
+
+                          {/* Credit */}
+                          <td className="px-3 text-right tabular-nums text-[#333]">
+                            {tx.credit > 0 ? (
+                              formatAmount(tx.credit, false)
+                            ) : (
+                              <span className="text-[#b0b5c0]">—</span>
+                            )}
+                          </td>
+
+                          {/* Running Balance */}
+                          <td className="px-3 text-right tabular-nums font-semibold text-[#333]">
+                            <span>{formatAmount(Math.abs(tx.runningBalance), false)}</span>
+                            <span className="text-[12px] text-gray-500 font-normal ml-1">
+                              {tx.runningBalance >= 0 ? 'Dr' : 'Cr'}
+                            </span>
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-6 text-center select-none">
+                            {renderStatus(tx.status)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
+
+                    {/* Closing Balance Footer Row */}
+                    <tfoot className="bg-[#f9f9fb] border-t-2 border-[#e5e7eb] font-bold text-[13px] text-[#1e2540]">
+                      <tr className="h-[40px]">
+                        <td className="px-6 text-gray-500 font-normal">
+                          {formatReportDate(endDate || inquiryData?.transactions?.[inquiryData.transactions.length - 1]?.date)}
+                        </td>
+                        <td className="px-3 text-gray-400">—</td>
+                        <td className="px-3 text-gray-400">—</td>
+                        <td className="px-3 text-gray-400">—</td>
+                        <td className="px-3 text-[#1e2540] font-bold">Closing Balance</td>
+                        <td className="px-3 text-right tabular-nums text-[#1e2540]">
+                          {formatAmount(inquiryData.summary.totalDebit, false)}
+                        </td>
+                        <td className="px-3 text-right tabular-nums text-[#1e2540]">
+                          {formatAmount(inquiryData.summary.totalCredit, false)}
+                        </td>
+                        <td className="px-3 text-right tabular-nums text-[#1e2540] font-bold">
+                          <span>{formatAmount(Math.abs(inquiryData.summary.currentBalance), false)}</span>
+                          <span className="text-[12px] text-gray-500 font-normal ml-1">
+                            {inquiryData.summary.currentBalance >= 0 ? 'Dr' : 'Cr'}
+                          </span>
+                        </td>
+                        <td className="px-6 text-center text-gray-400">—</td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               )
             ) : activeTab === 'outstanding' ? (
-              <div className="p-3 space-y-3 text-xs">
-                <h3 className="font-bold text-foreground">Outstanding Ageing Analysis</h3>
-                <div className="grid grid-cols-5 gap-2 text-center pb-1.5 border-b border-border/60 font-bold text-muted-foreground">
-                  <div>0-30 Days</div>
-                  <div>31-60 Days</div>
-                  <div>61-90 Days</div>
-                  <div>90+ Days</div>
-                  <div>Total Overdue</div>
-                </div>
-                <div className="grid grid-cols-5 gap-2 text-center font-black">
-                  <div className="text-green-500">{formatCurrency(inquiryData.summary.currentBalance * 0.4)}</div>
-                  <div className="text-blue-500">{formatCurrency(inquiryData.summary.currentBalance * 0.3)}</div>
-                  <div className="text-amber-500">{formatCurrency(inquiryData.summary.currentBalance * 0.2)}</div>
-                  <div className="text-red-500">{formatCurrency(inquiryData.summary.currentBalance * 0.1)}</div>
-                  <div className="text-foreground">{formatCurrency(inquiryData.summary.currentBalance)}</div>
+              /* Ageing Tab (Consistent light styling) */
+              <div className="p-6 space-y-4 max-w-4xl">
+                <h3 className="text-[14px] font-semibold text-[#1e2540]">
+                  Outstanding Ageing Analysis
+                </h3>
+                <div className="border border-[#e5e7eb] rounded-[6px] overflow-hidden bg-white shadow-2xs">
+                  <table className="w-full text-left border-collapse text-[13px]">
+                    <thead className="bg-[#f9f9fb] text-[#6c7380] text-[11px] font-semibold uppercase tracking-[0.04em] border-b border-[#e5e7eb]">
+                      <tr className="h-[36px]">
+                        <th className="px-4 py-2 text-center">0 - 30 DAYS</th>
+                        <th className="px-4 py-2 text-center">31 - 60 DAYS</th>
+                        <th className="px-4 py-2 text-center">61 - 90 DAYS</th>
+                        <th className="px-4 py-2 text-center">90+ DAYS</th>
+                        <th className="px-4 py-2 text-right">TOTAL OUTSTANDING</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="h-[44px] text-[13px] font-semibold">
+                        <td className="px-4 text-center tabular-nums text-emerald-600">
+                          {formatAmount(inquiryData.summary.currentBalance * 0.4, false)}
+                        </td>
+                        <td className="px-4 text-center tabular-nums text-blue-600">
+                          {formatAmount(inquiryData.summary.currentBalance * 0.3, false)}
+                        </td>
+                        <td className="px-4 text-center tabular-nums text-amber-600">
+                          {formatAmount(inquiryData.summary.currentBalance * 0.2, false)}
+                        </td>
+                        <td className="px-4 text-center tabular-nums text-red-600">
+                          {formatAmount(inquiryData.summary.currentBalance * 0.1, false)}
+                        </td>
+                        <td className="px-4 text-right tabular-nums text-[#1e2540] font-bold">
+                          {formatAmount(inquiryData.summary.currentBalance, false)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             ) : (
-              <div className="p-3 space-y-3 text-xs overflow-y-auto">
-                <h3 className="font-bold text-foreground">Audit History Logs</h3>
-                <div className="border-l border-border pl-3 space-y-2 ml-1">
-                  {inquiryData.auditLogs?.map((log: any, idx: number) => (
-                    <div key={log.id || idx} className="relative text-[10px]">
-                      <div className="absolute -left-[17px] top-1 w-1.5 h-1.5 rounded-full bg-accent border border-background" />
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span className="font-bold text-foreground">{log.action}</span>
-                        <span>{new Date(log.createdAt).toLocaleString('en-IN')}</span>
-                      </div>
-                      <p className="text-[8px] text-muted-foreground/75 mt-0.5">IP: {log.ipAddress} | User: {log.userId}</p>
-                    </div>
-                  ))}
-                </div>
+              /* Audits Tab (Consistent light styling) */
+              <div className="p-6 space-y-4 max-w-4xl">
+                <h3 className="text-[14px] font-semibold text-[#1e2540]">
+                  Audit History Logs
+                </h3>
+                {!inquiryData.auditLogs || inquiryData.auditLogs.length === 0 ? (
+                  <div className="text-xs text-gray-500 py-6">No audit records found for this account.</div>
+                ) : (
+                  <div className="border border-[#e5e7eb] rounded-[6px] overflow-hidden bg-white shadow-2xs">
+                    <table className="w-full text-left border-collapse text-[13px]">
+                      <thead className="bg-[#f9f9fb] text-[#6c7380] text-[11px] font-semibold uppercase tracking-[0.04em] border-b border-[#e5e7eb]">
+                        <tr className="h-[36px]">
+                          <th className="px-4 py-2">TIMESTAMP</th>
+                          <th className="px-4 py-2">ACTION</th>
+                          <th className="px-4 py-2">USER</th>
+                          <th className="px-4 py-2">IP ADDRESS</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#eef0f4]">
+                        {inquiryData.auditLogs.map((log: any, idx: number) => (
+                          <tr key={log.id || idx} className="h-[38px] hover:bg-[#f7f9ff] transition-colors">
+                            <td className="px-4 text-gray-600 text-xs">
+                              {new Date(log.createdAt).toLocaleString('en-IN')}
+                            </td>
+                            <td className="px-4 font-medium text-[#333]">
+                              {log.action}
+                            </td>
+                            <td className="px-4 text-gray-600 text-xs">
+                              {log.userId || 'System'}
+                            </td>
+                            <td className="px-4 text-gray-500 text-xs">
+                              {log.ipAddress || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Right Drawer Slide Panel Preview */}
+      {/* 5. Slide Drawer Preview (Light Zoho styling) */}
       {previewDoc && (
-        <div className="fixed inset-y-0 right-0 w-full max-w-md bg-surface border-l border-border/80 shadow-premium z-50 flex flex-col animate-in slide-in-from-right duration-200">
-          <div className="flex items-center justify-between p-2.5 border-b border-border/60">
+        <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white border-l border-[#e5e7eb] shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-200 text-[#333]">
+          {/* Drawer Header */}
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#e5e7eb] bg-white">
             <div>
-              <span className="text-[8px] font-bold text-muted-foreground uppercase">{previewDoc.voucherType}</span>
-              <h2 className="text-xs font-bold text-foreground">{previewDoc.voucherNo}</h2>
+              <span className="text-[11px] font-semibold text-[#408dfb] uppercase tracking-wide">
+                {previewDoc.voucherType || 'VOUCHER'}
+              </span>
+              <h2 className="text-[16px] font-semibold text-[#1e2540]">
+                {previewDoc.voucherNo}
+              </h2>
             </div>
-            <button onClick={() => setPreviewDoc(null)} className="p-1 hover:bg-muted rounded-xl transition-all cursor-pointer">
-              <X className="w-4 h-4 text-muted-foreground" />
+            <button
+              type="button"
+              onClick={() => setPreviewDoc(null)}
+              className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-700 cursor-pointer transition-colors"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
             </button>
           </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="border border-border/60 rounded-xl p-3 bg-muted/10 space-y-3">
-              <div className="flex justify-between text-[10px]">
+
+          {/* Drawer Body */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            {/* Meta card */}
+            <div className="border border-[#e5e7eb] rounded-[6px] p-4 bg-[#f9f9fb] space-y-3 text-xs">
+              <div className="flex justify-between">
                 <div>
-                  <span className="text-muted-foreground block uppercase text-[8px]">Posting Date</span>
-                  <span className="font-bold text-foreground">{new Date(previewDoc.date).toLocaleDateString('en-IN')}</span>
+                  <span className="text-gray-500 block text-[11px]">Posting Date</span>
+                  <span className="font-semibold text-[#333]">
+                    {formatReportDate(previewDoc.date)}
+                  </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-muted-foreground block uppercase text-[8px]">Reference</span>
-                  <span className="font-mono font-bold text-foreground">{previewDoc.reference || 'N/A'}</span>
+                  <span className="text-gray-500 block text-[11px]">Reference</span>
+                  <span className="font-semibold text-[#333]">
+                    {previewDoc.reference || '—'}
+                  </span>
                 </div>
               </div>
-              <div className="border-t border-border/40 pt-2">
-                <span className="text-muted-foreground block uppercase text-[8px] mb-0.5">Description Narration</span>
-                <p className="text-xs text-foreground font-medium">{previewDoc.description}</p>
+              <div className="border-t border-[#e5e7eb] pt-2.5">
+                <span className="text-gray-500 block text-[11px] mb-0.5">Narration / Description</span>
+                <p className="text-[13px] text-[#333] font-normal leading-relaxed">
+                  {previewDoc.description || '—'}
+                </p>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <h3 className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Accounting Entries Affected</h3>
-              <div className="border border-border/80 rounded-xl overflow-hidden">
-                <table className="w-full text-[10px] text-left border-collapse">
-                  <thead className="bg-muted/10 border-b border-border/60">
-                    <tr className="font-bold text-muted-foreground">
-                      <th className="p-1.5">Account Name</th>
-                      <th className="p-1.5 text-right">Debit (Dr)</th>
-                      <th className="p-1.5 text-right">Credit (Cr)</th>
+            {/* Affected Entries */}
+            <div className="space-y-2">
+              <h3 className="text-[12px] font-semibold text-gray-600 uppercase tracking-wider">
+                Accounting Entries Affected
+              </h3>
+              <div className="border border-[#e5e7eb] rounded-[6px] overflow-hidden">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-[#f9f9fb] border-b border-[#e5e7eb] text-[#6c7380] font-semibold">
+                    <tr>
+                      <th className="p-2.5">Account Name</th>
+                      <th className="p-2.5 text-right">Debit (Dr)</th>
+                      <th className="p-2.5 text-right">Credit (Cr)</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    <tr className="border-b border-border/40 font-medium">
-                      <td className="p-1.5 text-foreground">{inquiryData?.ledger.name}</td>
-                      <td className="p-1.5 text-right text-blue-600 font-semibold">{previewDoc.debit > 0 ? formatCurrency(previewDoc.debit) : '-'}</td>
-                      <td className="p-1.5 text-right text-amber-600 font-semibold">{previewDoc.credit > 0 ? formatCurrency(previewDoc.credit) : '-'}</td>
+                  <tbody className="divide-y divide-[#eef0f4]">
+                    <tr>
+                      <td className="p-2.5 font-medium text-[#333]">
+                        {inquiryData?.ledger.name}
+                      </td>
+                      <td className="p-2.5 text-right tabular-nums text-[#333]">
+                        {previewDoc.debit > 0 ? formatAmount(previewDoc.debit, false) : '—'}
+                      </td>
+                      <td className="p-2.5 text-right tabular-nums text-[#333]">
+                        {previewDoc.credit > 0 ? formatAmount(previewDoc.credit, false) : '—'}
+                      </td>
                     </tr>
-                    <tr className="text-muted-foreground/80">
-                      <td className="p-1.5 italic">Contra Offset Account</td>
-                      <td className="p-1.5 text-right font-semibold">{previewDoc.credit > 0 ? formatCurrency(previewDoc.credit) : '-'}</td>
-                      <td className="p-1.5 text-right font-semibold">{previewDoc.debit > 0 ? formatCurrency(previewDoc.debit) : '-'}</td>
+                    <tr className="text-gray-500">
+                      <td className="p-2.5 italic">Contra Offset Account</td>
+                      <td className="p-2.5 text-right tabular-nums">
+                        {previewDoc.credit > 0 ? formatAmount(previewDoc.credit, false) : '—'}
+                      </td>
+                      <td className="p-2.5 text-right tabular-nums">
+                        {previewDoc.debit > 0 ? formatAmount(previewDoc.debit, false) : '—'}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -637,11 +991,22 @@ export function LedgerInquiry() {
             </div>
           </div>
 
-          <div className="p-3 border-t border-border/60 bg-muted/20 flex gap-2 justify-end">
-            <button onClick={() => navigate(previewDoc.path)} className="px-3 py-1.5 bg-accent text-white hover:bg-opacity-90 rounded-lg text-xs font-bold shadow-md shadow-accent/15 cursor-pointer">
-              Go to Details
-            </button>
-            <button onClick={() => setPreviewDoc(null)} className="px-3 py-1.5 border border-border/80 hover:bg-muted/50 rounded-lg text-xs font-bold cursor-pointer">
+          {/* Drawer Footer */}
+          <div className="p-4 border-t border-[#e5e7eb] bg-white flex gap-2 justify-end">
+            {previewDoc.path && (
+              <button
+                type="button"
+                onClick={() => navigate(previewDoc.path)}
+                className="px-4 py-2 bg-[#408dfb] hover:bg-blue-600 text-white rounded-[4px] text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
+              >
+                Go to Details
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setPreviewDoc(null)}
+              className="px-4 py-2 border border-[#d9dce3] hover:bg-gray-50 text-[#333] rounded-[4px] text-xs font-medium cursor-pointer transition-colors"
+            >
               Close
             </button>
           </div>
@@ -650,3 +1015,5 @@ export function LedgerInquiry() {
     </div>
   );
 }
+
+export default LedgerInquiry;

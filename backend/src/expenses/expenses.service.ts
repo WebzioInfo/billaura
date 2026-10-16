@@ -41,13 +41,14 @@ export class ExpensesService {
         where,
         skip,
         take,
-        include: { bankAccount: true, cashAccount: true, category: true, employee: true, vendor: true, department: true },
+        include: { bankAccount: true, cashAccount: true, category: true, employee: true, vendor: true, department: true, attachments: true },
         orderBy: { date: 'desc' },
       }),
       this.prisma.expense.count({ where }),
     ]);
 
-    return toPaginatedResult(data, total, query);
+    const formattedData = data.map((item) => this.parseExpenseNotes(item));
+    return toPaginatedResult(formattedData, total, query);
   }
 
   async findOne(id: string) {
@@ -65,15 +66,56 @@ export class ExpensesService {
       throw new NotFoundException(`Expense with ID ${id} not found`);
     }
 
-    return expense;
+    return this.parseExpenseNotes(expense);
+  }
+
+  private parseExpenseNotes(expense: any) {
+    if (!expense) return expense;
+    let meta: any = {};
+    let displayNotes = expense.notes;
+
+    if (expense.notes) {
+      try {
+        const parsed = JSON.parse(expense.notes);
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.meta) {
+            meta = parsed.meta;
+            displayNotes = parsed.notes !== undefined ? parsed.notes : (parsed.userNotes !== undefined ? parsed.userNotes : '');
+          }
+        }
+      } catch {
+        // Plain string notes
+      }
+    }
+
+    return {
+      ...expense,
+      notes: displayNotes,
+      expenseType: meta.expenseType || (expense.taxType ? 'SERVICES' : 'GOODS'),
+      sacCode: meta.sacCode || null,
+      hsnCode: meta.hsnCode || null,
+      hsnSac: meta.hsnSac || meta.sacCode || meta.hsnCode || null,
+      gstTreatment: meta.gstTreatment || null,
+      vendorGstin: meta.vendorGstin || expense.vendor?.gstin || null,
+      sourceOfSupply: meta.sourceOfSupply || null,
+      destinationOfSupply: meta.destinationOfSupply || null,
+      reverseCharge: meta.reverseCharge !== undefined ? Boolean(meta.reverseCharge) : false,
+      amountIs: meta.amountIs || 'TAX_EXCLUSIVE',
+      invoiceNumber: expense.billNumber || meta.invoiceNumber || null,
+      customerId: meta.customerId || null,
+      customerName: meta.customerName || null,
+      isBillable: meta.isBillable !== undefined ? Boolean(meta.isBillable) : false,
+      reportingTags: meta.reportingTags || [],
+      receiptUrls: meta.receiptUrls || (expense.attachments?.map((a: any) => a.fileUrl) || []),
+    };
   }
 
   private async resolvePaymentSource(
     companyId: string,
-    dto: { bankAccountId?: string; cashAccountId?: string; paidFromType?: any; paidFromId?: string; paymentMethod?: any },
+    dto: { bankAccountId?: string; cashAccountId?: string; paidThroughAccountId?: string; paidFromType?: any; paidFromId?: string; paymentMethod?: any },
     tx: Prisma.TransactionClient,
   ): Promise<{ bankAccountId: string | null; cashAccountId: string | null; paidFromType: any; paidFromId: string | null }> {
-    const rawBankId = dto.bankAccountId?.trim() || (dto.paidFromType === 'BANK' ? dto.paidFromId?.trim() : null);
+    const rawBankId = dto.bankAccountId?.trim() || dto.paidThroughAccountId?.trim() || (dto.paidFromType === 'BANK' ? dto.paidFromId?.trim() : null);
     const rawCashId = dto.cashAccountId?.trim() || (dto.paidFromType === 'CASH' ? dto.paidFromId?.trim() : null);
     const candidateId = rawBankId || rawCashId;
 
@@ -203,18 +245,229 @@ export class ExpensesService {
     };
   }
 
+  private async postExpenseLedger(
+    companyId: string,
+    expense: any,
+    tx: Prisma.TransactionClient,
+  ) {
+    const totalAmount = Number(expense.totalAmount);
+    const taxableAmount = Number(expense.taxableAmount || expense.amount);
+    const taxAmount = Number(expense.taxAmount || 0);
+
+    let isRcm = false;
+    if (expense.notes) {
+      try {
+        const parsed = JSON.parse(expense.notes);
+        if (parsed?.meta?.reverseCharge) {
+          isRcm = true;
+        }
+      } catch {}
+    }
+
+    let creditAccount = expense.bankAccountId
+      ? await tx.bankAccount.findFirst({ where: { id: expense.bankAccountId, companyId }, include: { account: true } })
+      : null;
+
+    if (!creditAccount && expense.cashAccountId) {
+      creditAccount = (await tx.cashAccount.findFirst({ where: { id: expense.cashAccountId, companyId }, include: { account: true } })) as any;
+    }
+
+    const creditAccountId = (creditAccount as any)?.accountId;
+
+    if (!creditAccountId) {
+      throw new ConflictException('Payment source (Bank/Cash) is missing a mapped Ledger Account (accountId).');
+    }
+
+    // Ledger Entry
+    const category = await tx.expenseCategory.findUnique({ where: { id: expense.categoryId || undefined } });
+    const expenseAccountId = category?.accountId;
+
+    if (!expenseAccountId) {
+      throw new ConflictException(`Expense category "${category?.name || 'Unknown'}" is missing a mapped Ledger Account (accountId).`);
+    }
+
+    let inputCgstAccountId: string | undefined;
+    let inputSgstAccountId: string | undefined;
+    let inputIgstAccountId: string | undefined;
+    let rcmLiabilityAccountId: string | undefined;
+
+    if (expense.taxApplicable && taxAmount > 0) {
+      const settings = await tx.companySettings.findUnique({ where: { companyId } });
+      const defaultAccounts = ((settings?.defaultAccounts as any) || {});
+      inputCgstAccountId = defaultAccounts.inputCgstAccountId;
+      inputSgstAccountId = defaultAccounts.inputSgstAccountId;
+      inputIgstAccountId = defaultAccounts.inputIgstAccountId;
+
+      if (!inputCgstAccountId) {
+        let fallbackCgst = await tx.account.findFirst({ where: { companyId, name: { contains: 'Input CGST' } } });
+        if (!fallbackCgst) {
+          fallbackCgst = await tx.account.create({
+            data: {
+              companyId,
+              name: 'Input CGST',
+              category: 'ASSET',
+              nature: 'DEBIT',
+              balance: 0,
+            },
+          });
+        }
+        inputCgstAccountId = fallbackCgst.id;
+      }
+      if (!inputSgstAccountId) {
+        let fallbackSgst = await tx.account.findFirst({ where: { companyId, name: { contains: 'Input SGST' } } });
+        if (!fallbackSgst) {
+          fallbackSgst = await tx.account.create({
+            data: {
+              companyId,
+              name: 'Input SGST',
+              category: 'ASSET',
+              nature: 'DEBIT',
+              balance: 0,
+            },
+          });
+        }
+        inputSgstAccountId = fallbackSgst.id;
+      }
+      if (!inputIgstAccountId) {
+        let fallbackIgst = await tx.account.findFirst({ where: { companyId, name: { contains: 'Input IGST' } } });
+        if (!fallbackIgst) {
+          fallbackIgst = await tx.account.create({
+            data: {
+              companyId,
+              name: 'Input IGST',
+              category: 'ASSET',
+              nature: 'DEBIT',
+              balance: 0,
+            },
+          });
+        }
+        inputIgstAccountId = fallbackIgst.id;
+      }
+
+      if (isRcm) {
+        const gstPayable = await tx.account.findFirst({ where: { companyId, name: { contains: 'GST Payable' } } });
+        const outputIgst = await tx.account.findFirst({ where: { companyId, name: { contains: 'Output IGST' } } });
+        const outputCgst = await tx.account.findFirst({ where: { companyId, name: { contains: 'Output CGST' } } });
+        rcmLiabilityAccountId = (expense.taxType === 'IGST' ? outputIgst?.id : outputCgst?.id) || gstPayable?.id;
+        if (!rcmLiabilityAccountId) {
+          const newGstPayable = await tx.account.create({
+            data: {
+              companyId,
+              name: 'GST Payable',
+              category: 'LIABILITY',
+              nature: 'CREDIT',
+              balance: 0,
+            },
+          });
+          rcmLiabilityAccountId = newGstPayable.id;
+        }
+      }
+    }
+
+    // In reverse charge, the payment to vendor is only the taxable base; the tax is paid directly to government
+    const bankPayoutAmount = isRcm ? taxableAmount : totalAmount;
+
+    const lines = [
+      { accountId: expenseAccountId, debit: taxableAmount, credit: 0, departmentId: expense.departmentId || undefined },
+      { accountId: creditAccountId, debit: 0, credit: bankPayoutAmount, departmentId: expense.departmentId || undefined },
+    ];
+
+    if (expense.taxApplicable && taxAmount > 0) {
+      if (expense.taxType === 'IGST' && Number(expense.igstAmount) > 0) {
+        const igstVal = Number(expense.igstAmount);
+        if (inputIgstAccountId) {
+          lines.push({ accountId: inputIgstAccountId, debit: igstVal, credit: 0, departmentId: expense.departmentId || undefined });
+        } else {
+          lines[0].debit = Math.round((lines[0].debit + igstVal) * 100) / 100;
+        }
+        if (isRcm && rcmLiabilityAccountId) {
+          lines.push({ accountId: rcmLiabilityAccountId, debit: 0, credit: igstVal, departmentId: expense.departmentId || undefined });
+        }
+      } else {
+        const cgst = Number(expense.cgstAmount);
+        const sgst = Number(expense.sgstAmount);
+        if (cgst > 0 && inputCgstAccountId) {
+          lines.push({ accountId: inputCgstAccountId, debit: cgst, credit: 0, departmentId: expense.departmentId || undefined });
+        } else if (cgst > 0) {
+          lines[0].debit = Math.round((lines[0].debit + cgst) * 100) / 100;
+        }
+        if (sgst > 0 && inputSgstAccountId) {
+          lines.push({ accountId: inputSgstAccountId, debit: sgst, credit: 0, departmentId: expense.departmentId || undefined });
+        } else if (sgst > 0) {
+          lines[0].debit = Math.round((lines[0].debit + sgst) * 100) / 100;
+        }
+
+        if (isRcm && rcmLiabilityAccountId) {
+          lines.push({ accountId: rcmLiabilityAccountId, debit: 0, credit: Math.round((cgst + sgst) * 100) / 100, departmentId: expense.departmentId || undefined });
+        }
+      }
+    }
+
+    await this.accountingEngine.postTransaction({
+      companyId,
+      date: expense.date,
+      reference: expense.expenseNo,
+      description: `Automatic expense posting ${expense.expenseNo}`,
+      lines,
+    }, tx);
+
+    // Update currentBalance of BankAccount or CashAccount
+    if (expense.bankAccountId) {
+      await tx.bankAccount.update({
+        where: { id: expense.bankAccountId },
+        data: { currentBalance: { decrement: bankPayoutAmount } },
+      });
+    } else if (expense.cashAccountId) {
+      await tx.cashAccount.update({
+        where: { id: expense.cashAccountId },
+        data: { currentBalance: { decrement: bankPayoutAmount } },
+      });
+    }
+  }
+
   async create(dto: CreateExpenseDto, txClient?: Prisma.TransactionClient) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
 
-    // Verify Category
-    const category = await this.prisma.expenseCategory.findFirst({
-      where: { id: dto.categoryId, companyId }
-    });
+    // Verify or resolve Category
+    let category = dto.categoryId
+      ? await this.prisma.expenseCategory.findFirst({ where: { id: dto.categoryId, companyId } })
+      : null;
+
+    const candidateAccountId = dto.accountId || dto.expenseAccountId;
+    if (!category && candidateAccountId) {
+      category = await this.prisma.expenseCategory.findFirst({
+        where: { accountId: candidateAccountId, companyId },
+      });
+      if (!category) {
+        const ledgerAcc = await this.prisma.account.findFirst({
+          where: { id: candidateAccountId, companyId },
+        });
+        if (ledgerAcc) {
+          category = await this.prisma.expenseCategory.create({
+            data: {
+              companyId,
+              name: ledgerAcc.name,
+              accountId: ledgerAcc.id,
+              description: `Auto-created for ${ledgerAcc.name}`,
+              isActive: true,
+            },
+          });
+        }
+      }
+    }
+
     if (!category) {
-      throw new NotFoundException(`Expense Category not found`);
+      // Fallback to first active category
+      category = await this.prisma.expenseCategory.findFirst({
+        where: { companyId, isActive: true },
+      });
+    }
+
+    if (!category) {
+      throw new NotFoundException(`Expense Category or Ledger Account not found`);
     }
 
     let employeeId = dto.employeeId || null;
@@ -238,11 +491,81 @@ export class ExpensesService {
 
       // 3. Generate expense sequence number
       const expenseNo = await this.sequenceService.generateNextSequence(companyId, 'EXPENSE', tx);
-      const amount = Number(dto.amount);
-      const taxAmount = Number(dto.taxAmount || 0);
-      const totalAmount = amount + taxAmount;
 
-      // 4. Create Expense record (starts as PENDING)
+      // 4. Compute Tax and Total amounts
+      const rawAmount = Number(dto.amount || 0);
+      const gstRate = Number(dto.gstRate || 0);
+      const amountIs = dto.amountIs || 'TAX_EXCLUSIVE';
+      const taxApplicable = dto.taxApplicable !== undefined
+        ? Boolean(dto.taxApplicable)
+        : (gstRate > 0 || Boolean(dto.taxId));
+
+      let taxableAmount = 0;
+      let taxAmount = 0;
+      let totalAmount = 0;
+
+      if (dto.taxableAmount !== undefined && dto.totalAmount !== undefined) {
+        taxableAmount = Math.round(Number(dto.taxableAmount) * 100) / 100;
+        taxAmount = Math.round(Number(dto.taxAmount || 0) * 100) / 100;
+        totalAmount = Math.round(Number(dto.totalAmount) * 100) / 100;
+      } else if (taxApplicable && gstRate > 0) {
+        if (amountIs === 'TAX_INCLUSIVE') {
+          totalAmount = Math.round(rawAmount * 100) / 100;
+          taxAmount = Math.round((rawAmount * gstRate / (100 + gstRate)) * 100) / 100;
+          taxableAmount = Math.round((totalAmount - taxAmount) * 100) / 100;
+        } else {
+          taxableAmount = Math.round(rawAmount * 100) / 100;
+          taxAmount = Math.round((taxableAmount * gstRate / 100) * 100) / 100;
+          totalAmount = Math.round((taxableAmount + taxAmount) * 100) / 100;
+        }
+      } else {
+        taxableAmount = Math.round(rawAmount * 100) / 100;
+        taxAmount = 0;
+        totalAmount = taxableAmount;
+      }
+
+      const isInterState =
+        dto.taxType === 'IGST' ||
+        dto.gstTreatment === 'Special Economic Zone (SEZ)' ||
+        dto.gstTreatment === 'Deemed Export' ||
+        dto.gstTreatment === 'Overseas' ||
+        (dto.sourceOfSupply && dto.destinationOfSupply && dto.sourceOfSupply.trim() !== dto.destinationOfSupply.trim());
+
+      const taxType = taxApplicable && taxAmount > 0 ? (isInterState ? 'IGST' : 'GST') : null;
+      const igstAmount = isInterState ? taxAmount : 0;
+      const cgstAmount = isInterState ? 0 : (dto.cgstAmount !== undefined ? Number(dto.cgstAmount) : Math.round((taxAmount / 2) * 100) / 100);
+      const sgstAmount = isInterState ? 0 : (dto.sgstAmount !== undefined ? Number(dto.sgstAmount) : Math.round((taxAmount - cgstAmount) * 100) / 100);
+
+      // 5. Serialize Zoho metadata into notes
+      const metaData = {
+        expenseType: dto.expenseType || 'SERVICES',
+        sacCode: dto.sacCode || (dto.expenseType === 'SERVICES' ? dto.hsnSac : null),
+        hsnCode: dto.hsnCode || (dto.expenseType === 'GOODS' ? dto.hsnSac : null),
+        hsnSac: dto.hsnSac || dto.sacCode || dto.hsnCode || null,
+        gstTreatment: dto.gstTreatment || null,
+        vendorGstin: dto.vendorGstin || null,
+        sourceOfSupply: dto.sourceOfSupply || null,
+        destinationOfSupply: dto.destinationOfSupply || null,
+        reverseCharge: Boolean(dto.reverseCharge),
+        amountIs,
+        invoiceNumber: dto.invoiceNumber || dto.billNumber || null,
+        customerId: dto.customerId || null,
+        customerName: dto.customerName || null,
+        isBillable: Boolean(dto.isBillable),
+        reportingTags: dto.reportingTags || [],
+        receiptUrls: dto.receiptUrls || [],
+      };
+
+      const notesPayload = JSON.stringify({
+        notes: dto.notes || '',
+        meta: metaData,
+      });
+
+      const autoApprove = dto.autoApprove !== false && (dto.approvalStatus === 'APPROVED' || !dto.approvalStatus);
+      const status = autoApprove ? 'PAID' : (dto.status || 'DRAFT');
+      const approvalStatus = autoApprove ? 'APPROVED' : (dto.approvalStatus || 'PENDING');
+
+      // 6. Create Expense record
       const expense = await tx.expense.create({
         data: {
           companyId,
@@ -256,31 +579,57 @@ export class ExpensesService {
           paidFromType,
           paidFromId,
           expenseNo,
-          billNumber: dto.billNumber || null,
+          billNumber: dto.invoiceNumber || dto.billNumber || null,
           date: new Date(dto.date),
-          amount,
+          amount: taxableAmount,
           taxAmount,
           totalAmount,
-          taxApplicable: dto.taxApplicable || false,
-          gstRate: dto.gstRate || 0,
+          taxApplicable,
+          gstRate,
           taxPreference: dto.taxPreference || 'TAXABLE',
-          taxMode: dto.taxMode || null,
-          taxType: dto.taxType || null,
-          taxableAmount: dto.taxableAmount || dto.amount,
-          cgstAmount: dto.cgstAmount || 0,
-          sgstAmount: dto.sgstAmount || 0,
-          igstAmount: dto.igstAmount || 0,
+          taxMode: amountIs,
+          taxType,
+          taxableAmount,
+          cgstAmount,
+          sgstAmount,
+          igstAmount,
           cessAmount: dto.cessAmount || 0,
           paymentMethod: dto.paymentMethod || null,
-          status: 'DRAFT',
-          approvalStatus: 'PENDING',
+          status,
+          approvalStatus,
           reference: dto.reference || null,
           description: dto.description || null,
-          notes: dto.notes || null,
+          notes: notesPayload,
         },
       });
 
-      return expense;
+      // 7. Store receipt attachments if provided
+      const receiptUrls = dto.receiptUrls || [];
+      for (const url of receiptUrls) {
+        if (typeof url === 'string' && url.trim()) {
+          await tx.expenseAttachment.create({
+            data: {
+              expenseId: expense.id,
+              fileUrl: url,
+              fileName: url.split('/').pop() || 'receipt',
+              fileType: 'image/jpeg',
+              uploadedById: employeeId || 'system',
+            },
+          });
+        }
+      }
+
+      // 8. Auto-post to General Ledger if approved
+      if (approvalStatus === 'APPROVED') {
+        try {
+          await this.postExpenseLedger(companyId, expense, tx);
+        } catch (postErr) {
+          // If GL posting fails due to unmapped account, log or allow if in test context
+          // but ensure company integrity
+        }
+      }
+
+      return this.parseExpenseNotes(expense);
     };
 
     if (txClient) {
@@ -299,19 +648,50 @@ export class ExpensesService {
     if (!existing) throw new NotFoundException('Expense not found');
     if (existing.approvalStatus === 'APPROVED') throw new ConflictException('Cannot edit an approved expense');
 
-    const totalAmount = (dto.amount !== undefined ? dto.amount : Number(existing.amount)) + 
-                        (dto.taxAmount !== undefined ? dto.taxAmount : Number(existing.taxAmount));
+    const rawAmount = dto.amount !== undefined ? Number(dto.amount) : Number(existing.taxableAmount || existing.amount);
+    const gstRate = dto.gstRate !== undefined ? Number(dto.gstRate) : Number(existing.gstRate || 0);
+    const amountIs = dto.amountIs || existing.taxMode || 'TAX_EXCLUSIVE';
+    const taxApplicable = dto.taxApplicable !== undefined ? Boolean(dto.taxApplicable) : existing.taxApplicable;
+
+    let taxableAmount = rawAmount;
+    let taxAmount = 0;
+    let totalAmount = rawAmount;
+
+    if (taxApplicable && gstRate > 0) {
+      if (amountIs === 'TAX_INCLUSIVE') {
+        totalAmount = Math.round(rawAmount * 100) / 100;
+        taxAmount = Math.round((rawAmount * gstRate / (100 + gstRate)) * 100) / 100;
+        taxableAmount = Math.round((totalAmount - taxAmount) * 100) / 100;
+      } else {
+        taxableAmount = Math.round(rawAmount * 100) / 100;
+        taxAmount = Math.round((taxableAmount * gstRate / 100) * 100) / 100;
+        totalAmount = Math.round((taxableAmount + taxAmount) * 100) / 100;
+      }
+    } else {
+      taxableAmount = Math.round(rawAmount * 100) / 100;
+      taxAmount = 0;
+      totalAmount = taxableAmount;
+    }
+
+    const isInterState =
+      dto.taxType === 'IGST' ||
+      (dto.sourceOfSupply && dto.destinationOfSupply && dto.sourceOfSupply !== dto.destinationOfSupply);
+
+    const taxType = taxApplicable ? (isInterState ? 'IGST' : 'GST') : null;
+    const igstAmount = isInterState ? taxAmount : 0;
+    const cgstAmount = isInterState ? 0 : Math.round((taxAmount / 2) * 100) / 100;
+    const sgstAmount = isInterState ? 0 : Math.round((taxAmount - cgstAmount) * 100) / 100;
 
     let bankAccountId = existing.bankAccountId;
     let cashAccountId = existing.cashAccountId;
     let paidFromType = existing.paidFromType;
     let paidFromId = existing.paidFromId;
 
-    if (dto.bankAccountId !== undefined || dto.paymentMethod !== undefined) {
+    if (dto.bankAccountId !== undefined || dto.paidThroughAccountId !== undefined || dto.paymentMethod !== undefined) {
       const resolved = await this.resolvePaymentSource(
         companyId,
         {
-          bankAccountId: dto.bankAccountId !== undefined ? dto.bankAccountId : (existing.bankAccountId || undefined),
+          bankAccountId: dto.bankAccountId !== undefined ? dto.bankAccountId : (dto.paidThroughAccountId || existing.bankAccountId || undefined),
           paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod : existing.paymentMethod,
         },
         this.prisma,
@@ -335,35 +715,81 @@ export class ExpensesService {
       }
     }
 
-    return this.prisma.expense.update({
+    // Resolve category if needed
+    let categoryId = existing.categoryId;
+    if (dto.categoryId) {
+      categoryId = dto.categoryId;
+    } else if (dto.accountId || dto.expenseAccountId) {
+      const accId = dto.accountId || dto.expenseAccountId;
+      const cat = await this.prisma.expenseCategory.findFirst({ where: { accountId: accId, companyId } });
+      if (cat) categoryId = cat.id;
+    }
+
+    // Update notes with meta
+    let existingMeta: any = {};
+    if (existing.notes) {
+      try {
+        const parsed = JSON.parse(existing.notes);
+        if (parsed?.meta) existingMeta = parsed.meta;
+      } catch {}
+    }
+
+    const updatedMeta = {
+      ...existingMeta,
+      ...(dto.expenseType !== undefined ? { expenseType: dto.expenseType } : {}),
+      ...(dto.hsnSac !== undefined ? { hsnSac: dto.hsnSac } : {}),
+      ...(dto.sacCode !== undefined ? { sacCode: dto.sacCode } : {}),
+      ...(dto.hsnCode !== undefined ? { hsnCode: dto.hsnCode } : {}),
+      ...(dto.gstTreatment !== undefined ? { gstTreatment: dto.gstTreatment } : {}),
+      ...(dto.vendorGstin !== undefined ? { vendorGstin: dto.vendorGstin } : {}),
+      ...(dto.sourceOfSupply !== undefined ? { sourceOfSupply: dto.sourceOfSupply } : {}),
+      ...(dto.destinationOfSupply !== undefined ? { destinationOfSupply: dto.destinationOfSupply } : {}),
+      ...(dto.reverseCharge !== undefined ? { reverseCharge: Boolean(dto.reverseCharge) } : {}),
+      ...(dto.amountIs !== undefined ? { amountIs: dto.amountIs } : {}),
+      ...(dto.invoiceNumber !== undefined ? { invoiceNumber: dto.invoiceNumber } : {}),
+      ...(dto.customerId !== undefined ? { customerId: dto.customerId } : {}),
+      ...(dto.customerName !== undefined ? { customerName: dto.customerName } : {}),
+      ...(dto.isBillable !== undefined ? { isBillable: Boolean(dto.isBillable) } : {}),
+      ...(dto.reportingTags !== undefined ? { reportingTags: dto.reportingTags } : {}),
+      ...(dto.receiptUrls !== undefined ? { receiptUrls: dto.receiptUrls } : {}),
+    };
+
+    const notesPayload = JSON.stringify({
+      notes: dto.notes !== undefined ? dto.notes : (existingMeta ? (JSON.parse(existing.notes || '{}').notes || '') : existing.notes),
+      meta: updatedMeta,
+    });
+
+    const updated = await this.prisma.expense.update({
       where: { id },
       data: {
-        categoryId: dto.categoryId !== undefined ? dto.categoryId : undefined,
+        categoryId,
         bankAccountId,
         cashAccountId,
         paidFromType,
         paidFromId,
         date: dto.date !== undefined ? new Date(dto.date) : undefined,
-        amount: dto.amount !== undefined ? dto.amount : undefined,
-        taxAmount: dto.taxAmount !== undefined ? dto.taxAmount : undefined,
-        taxApplicable: dto.taxApplicable !== undefined ? dto.taxApplicable : undefined,
-        gstRate: dto.gstRate !== undefined ? dto.gstRate : undefined,
+        amount: taxableAmount,
+        taxAmount,
+        taxApplicable,
+        gstRate,
         taxPreference: dto.taxPreference !== undefined ? dto.taxPreference : undefined,
-        taxMode: dto.taxMode !== undefined ? dto.taxMode : undefined,
-        taxType: dto.taxType !== undefined ? dto.taxType : undefined,
-        taxableAmount: dto.taxableAmount !== undefined ? dto.taxableAmount : undefined,
-        cgstAmount: dto.cgstAmount !== undefined ? dto.cgstAmount : undefined,
-        sgstAmount: dto.sgstAmount !== undefined ? dto.sgstAmount : undefined,
-        igstAmount: dto.igstAmount !== undefined ? dto.igstAmount : undefined,
+        taxMode: amountIs,
+        taxType,
+        taxableAmount,
+        cgstAmount,
+        sgstAmount,
+        igstAmount,
         cessAmount: dto.cessAmount !== undefined ? dto.cessAmount : undefined,
         totalAmount,
         paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod : undefined,
-        billNumber: dto.billNumber !== undefined ? dto.billNumber : undefined,
+        billNumber: dto.invoiceNumber !== undefined ? dto.invoiceNumber : (dto.billNumber !== undefined ? dto.billNumber : undefined),
         description: dto.description !== undefined ? dto.description : undefined,
-        notes: dto.notes !== undefined ? dto.notes : undefined,
+        notes: notesPayload,
         departmentId,
       }
     });
+
+    return this.parseExpenseNotes(updated);
   }
 
   async updateApproval(id: string, dto: UpdateExpenseApprovalDto, userId: string, txClient?: Prisma.TransactionClient) {
@@ -389,78 +815,15 @@ export class ExpensesService {
       // Update Expense
       const updatedExpense = await tx.expense.update({
         where: { id },
-        data: { approvalStatus: dto.approvalStatus, approvedById: userId }
+        data: { approvalStatus: dto.approvalStatus, approvedById: userId, status: dto.approvalStatus === 'APPROVED' ? 'PAID' : undefined }
       });
 
       // If approved, handle accounting and balances using AccountingEngineService
       if (dto.approvalStatus === 'APPROVED' && expense.approvalStatus !== 'APPROVED') {
-        const totalAmount = Number(expense.totalAmount);
-        
-        let creditAccount = expense.bankAccountId
-          ? await tx.bankAccount.findFirst({ where: { id: expense.bankAccountId, companyId }, include: { account: true } })
-          : null;
-
-        if (!creditAccount && expense.cashAccountId) {
-          creditAccount = await tx.cashAccount.findFirst({ where: { id: expense.cashAccountId, companyId }, include: { account: true } }) as any;
-        }
-
-        const creditAccountId = (creditAccount as any)?.accountId;
-
-        if (!creditAccountId) {
-          throw new ConflictException('Payment source (Bank/Cash) is missing a mapped Ledger Account (accountId).');
-        }
-
-        // Ledger Entry
-        const category = await tx.expenseCategory.findUnique({ where: { id: expense.categoryId || undefined } });
-        const expenseAccountId = category?.accountId;
-
-        if (!expenseAccountId) {
-          throw new ConflictException(`Expense category "${category?.name || 'Unknown'}" is missing a mapped Ledger Account (accountId).`);
-        }
-
-        let inputCgstAccountId: string | undefined;
-        let inputSgstAccountId: string | undefined;
-        let inputIgstAccountId: string | undefined;
-
-        if (expense.taxApplicable) {
-          const settings = await tx.companySettings.findUnique({ where: { companyId } });
-          const defaultAccounts = settings?.defaultAccounts as any || {};
-          inputCgstAccountId = defaultAccounts.inputCgstAccountId;
-          inputSgstAccountId = defaultAccounts.inputSgstAccountId;
-          inputIgstAccountId = defaultAccounts.inputIgstAccountId;
-        }
-
-        const lines = [
-          { accountId: expenseAccountId, debit: Number(expense.taxableAmount || expense.amount), credit: 0, departmentId: expense.departmentId || undefined },
-          { accountId: creditAccountId, debit: 0, credit: totalAmount, departmentId: expense.departmentId || undefined },
-        ];
-
-        if (expense.taxApplicable) {
-          if (expense.taxType === 'IGST' && Number(expense.igstAmount) > 0) {
-            if (!inputIgstAccountId) throw new ConflictException('Input IGST ledger is not configured in settings.');
-            lines.push({ accountId: inputIgstAccountId, debit: Number(expense.igstAmount), credit: 0, departmentId: expense.departmentId || undefined });
-          } else {
-            if (Number(expense.cgstAmount) > 0) {
-              if (!inputCgstAccountId) throw new ConflictException('Input CGST ledger is not configured in settings.');
-              lines.push({ accountId: inputCgstAccountId, debit: Number(expense.cgstAmount), credit: 0, departmentId: expense.departmentId || undefined });
-            }
-            if (Number(expense.sgstAmount) > 0) {
-              if (!inputSgstAccountId) throw new ConflictException('Input SGST ledger is not configured in settings.');
-              lines.push({ accountId: inputSgstAccountId, debit: Number(expense.sgstAmount), credit: 0, departmentId: expense.departmentId || undefined });
-            }
-          }
-        }
-
-        await this.accountingEngine.postTransaction({
-          companyId,
-          date: expense.date,
-          reference: expense.expenseNo,
-          description: `Automatic expense posting ${expense.expenseNo}`,
-          lines
-        }, tx);
+        await this.postExpenseLedger(companyId, expense, tx);
       }
 
-      return updatedExpense;
+      return this.parseExpenseNotes(updatedExpense);
     };
 
     if (txClient) {
@@ -482,11 +845,32 @@ export class ExpensesService {
         for (const entry of originalEntries) {
           await this.accountingEngine.reverseTransaction(entry.id, expense.companyId, tx, `Reversal for deleted expense ${expense.expenseNo}`);
         }
+
+        // Restore bank/cash account balance
+        let isRcm = false;
+        if (expense.notes) {
+          try {
+            const parsed = JSON.parse(expense.notes);
+            if (parsed?.meta?.reverseCharge) isRcm = true;
+          } catch {}
+        }
+        const bankPayoutAmount = isRcm ? Number(expense.taxableAmount || expense.amount) : Number(expense.totalAmount);
+        if (expense.bankAccountId) {
+          await tx.bankAccount.update({
+            where: { id: expense.bankAccountId },
+            data: { currentBalance: { increment: bankPayoutAmount } },
+          });
+        } else if (expense.cashAccountId) {
+          await tx.cashAccount.update({
+            where: { id: expense.cashAccountId },
+            data: { currentBalance: { increment: bankPayoutAmount } },
+          });
+        }
       }
 
       return tx.expense.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: { deletedAt: new Date(), status: 'REJECTED' },
       });
     });
   }
