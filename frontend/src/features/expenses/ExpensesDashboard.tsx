@@ -106,13 +106,10 @@ export const ExpensesDashboard: React.FC = () => {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<any>(null);
 
-  // Receipts Inbox Mock state
+  // Receipts Inbox state
   const [receiptFiles, setReceiptFiles] = useState<
     Array<{ id: string; name: string; size: string; date: string; status: string }>
-  >([
-    { id: '1', name: 'Cab_Receipt_14Apr.pdf', size: '1.2 MB', date: '14/04/2026', status: 'READY' },
-    { id: '2', name: 'Stationery_Invoice_07Apr.pdf', size: '850 KB', date: '07/04/2026', status: 'READY' },
-  ]);
+  >([]);
 
   // Click outside listener for view menu
   useEffect(() => {
@@ -598,41 +595,47 @@ export const ExpensesDashboard: React.FC = () => {
                   </h4>
                 </div>
                 <div className="divide-y divide-[#E5E7EB]">
-                  {receiptFiles.map((file) => (
-                    <div
-                      key={file.id}
-                      className="px-4 py-3 flex items-center justify-between hover:bg-[#F9FAFB] transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-[#408DFB]" />
-                        <div>
-                          <p className="text-xs font-medium text-[#1E2540]">{file.name}</p>
-                          <p className="text-[11px] text-[#6B7280]">
-                            {file.size} • Uploaded on {file.date}
-                          </p>
+                  {receiptFiles.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-xs text-gray-400">
+                      No scanned receipts waiting in inbox. Upload a receipt or bill above.
+                    </div>
+                  ) : (
+                    receiptFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className="px-4 py-3 flex items-center justify-between hover:bg-[#F9FAFB] transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-[#408DFB]" />
+                          <div>
+                            <p className="text-xs font-medium text-[#1E2540]">{file.name}</p>
+                            <p className="text-[11px] text-[#6B7280]">
+                              {file.size} • Uploaded on {file.date}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              handleOpenNewExpense();
+                              expenseForm.setValue('notes', `Auto-scanned from ${file.name}`);
+                            }}
+                            className="px-3 py-1 bg-white border border-[#408DFB] text-[#408DFB] hover:bg-[#F0F7FF] text-xs font-medium rounded transition-colors cursor-pointer"
+                          >
+                            Convert to Expense
+                          </button>
+                          <button
+                            onClick={() =>
+                              setReceiptFiles((prev) => prev.filter((f) => f.id !== file.id))
+                            }
+                            className="p-1 text-[#9CA3AF] hover:text-[#DC2626] transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            handleOpenNewExpense();
-                            expenseForm.setValue('notes', `Auto-scanned from ${file.name}`);
-                          }}
-                          className="px-3 py-1 bg-white border border-[#408DFB] text-[#408DFB] hover:bg-[#F0F7FF] text-xs font-medium rounded transition-colors cursor-pointer"
-                        >
-                          Convert to Expense
-                        </button>
-                        <button
-                          onClick={() =>
-                            setReceiptFiles((prev) => prev.filter((f) => f.id !== file.id))
-                          }
-                          className="p-1 text-[#9CA3AF] hover:text-[#DC2626] transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>

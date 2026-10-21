@@ -1,0 +1,39 @@
+1
+00:00:01,000 --> 00:00:04,200
+Welcome to Bill Aura ERP and Billing SaaS platform.
+
+2
+00:00:04,500 --> 00:00:08,800
+In this session, you will learn how to navigate your workspace with maximum speed.
+
+3
+00:00:09,200 --> 00:00:13,600
+At the very top of your screen is the Global Header Bar.
+
+4
+00:00:14,000 --> 00:00:18,500
+Use the central Search Bar to find invoices, customers, and items instantly.
+
+5
+00:00:19,000 --> 00:00:23,800
+The gold Quick Create button gives you 1-click access to all core business vouchers.
+
+6
+00:00:24,200 --> 00:00:28,400
+The Organization Switcher allows seamless switching between companies and branches.
+
+7
+00:00:28,900 --> 00:00:33,500
+Notice the Workspace Tab Bar directly beneath the header.
+
+8
+00:00:34,000 --> 00:00:38,200
+You can open multiple documents in tabs without losing your active form state.
+
+9
+00:00:38,800 --> 00:00:43,500
+Use the collapse button on the sidebar to maximize space for wide accounting tables.
+
+10
+00:00:44,000 --> 00:00:48,500
+Press Control plus Slash at any time to open the Command Palette.

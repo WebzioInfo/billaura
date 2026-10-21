@@ -29,7 +29,7 @@ export const AttendanceAnalytics: React.FC<AttendanceAnalyticsProps> = ({ attend
     { name: 'Leave', value: leave, color: '#8b5cf6' }
   ];
 
-  // Bar Chart Data (mocked department breakdown since we don't have all historic data in this view)
+  // Bar Chart Data: Real department breakdown aggregated from active employee attendance records
   // We aggregate based on current sheet
   const deptMap: Record<string, { name: string, present: number, absent: number }> = {};
   attendances.forEach(a => {

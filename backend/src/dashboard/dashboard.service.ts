@@ -162,23 +162,25 @@ export class DashboardService {
       ...(dateFilter && { date: dateFilter }),
     };
 
-    // Prepare 6-month historical chart intervals
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const chartMonths: Array<{ start: Date; end: Date; label: string }> = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+    // Prepare 12-month fiscal year chart intervals (Apr to Mar)
+    const monthNames = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+    const chartMonths: Array<{ start: Date; end: Date; label: string; month: string }> = [];
+    for (let monthOffset = 0; monthOffset < 12; monthOffset++) {
+      const calMonth = (3 + monthOffset) % 12;
+      const calYear = monthOffset < 9 ? currentFyStart.getFullYear() : currentFyEnd.getFullYear();
+      const start = new Date(calYear, calMonth, 1);
+      const end = new Date(calYear, calMonth + 1, 0, 23, 59, 59, 999);
       chartMonths.push({
         start,
         end,
-        label: monthNames[d.getMonth()] + (d.getFullYear() !== now.getFullYear() ? ` '${String(d.getFullYear()).slice(-2)}` : ''),
+        label: monthNames[monthOffset],
+        month: monthNames[monthOffset],
       });
     }
 
-    // Run chart queries separately for clean typing
+    // Run chart queries with genuine sales, receipts, expenses, and payments
     const chartPromises = chartMonths.map(async (m) => {
-      const [inv, rec, exp] = await Promise.all([
+      const [inv, rec, exp, pmt] = await Promise.all([
         this.prisma.invoice.aggregate({
           where: { ...liveInvoiceWhere, date: { gte: m.start, lte: m.end } },
           _sum: { grandTotal: true },
@@ -191,13 +193,26 @@ export class DashboardService {
           where: { ...liveExpenseWhere, date: { gte: m.start, lte: m.end } },
           _sum: { totalAmount: true },
         }),
+        this.prisma.transactionPayment.aggregate({
+          where: { ...completedPaymentWhere, date: { gte: m.start, lte: m.end } },
+          _sum: { amount: true },
+        }),
       ]);
+
+      const sales = this.number(inv._sum.grandTotal);
+      const received = this.number(rec._sum.amount);
+      const totalExpense = this.number(exp._sum.totalAmount) + this.number(pmt._sum.amount);
 
       return {
         label: m.label,
-        sales: this.number(inv._sum.grandTotal),
-        received: this.number(rec._sum.amount),
-        expenses: this.number(exp._sum.totalAmount),
+        month: m.month,
+        sales,
+        received,
+        expenses: totalExpense,
+        income: sales,
+        expense: totalExpense,
+        incoming: received,
+        outgoing: totalExpense,
       };
     });
 
@@ -243,6 +258,11 @@ export class DashboardService {
       topVendors,
       expenseCategories,
       chartData,
+      receivablesAgg,
+      payablesAgg,
+      allUnpaidInvoices,
+      allUnpaidPurchases,
+      rawWatchlist,
     ] = await Promise.all([
       this.prisma.company.findFirst({ where: { id: companyId }, select: { companyName: true } }),
       this.prisma.invoice.aggregate({ where: periodInvoiceWhere, _sum: { grandTotal: true } }),
@@ -300,6 +320,28 @@ export class DashboardService {
       this.prisma.purchase.groupBy({ by: ['businessPartnerId'], where: livePurchaseWhere, _sum: { grandTotal: true }, orderBy: { _sum: { grandTotal: 'desc' } }, take: 5 }),
       this.prisma.expense.groupBy({ by: ['categoryId'], where: liveExpenseWhere, _sum: { totalAmount: true }, orderBy: { _sum: { totalAmount: 'desc' } }, take: 5 }),
       Promise.all(chartPromises),
+      this.prisma.businessPartner.aggregate({
+        where: { companyId, deletedAt: null, bpType: { in: ['CUSTOMER', 'CUSTOMER_VENDOR'] }, receivableBalance: { gt: 0 } },
+        _sum: { receivableBalance: true },
+      }),
+      this.prisma.businessPartner.aggregate({
+        where: { companyId, deletedAt: null, bpType: { in: ['VENDOR', 'CUSTOMER_VENDOR'] }, payableBalance: { gt: 0 } },
+        _sum: { payableBalance: true },
+      }),
+      this.prisma.invoice.findMany({
+        where: { ...liveInvoiceWhere, status: { in: ['SENT', 'PARTIAL', 'OVERDUE'] } },
+        select: { id: true, invoiceNo: true, grandTotal: true, amountPaid: true, dueDate: true, date: true },
+      }),
+      this.prisma.purchase.findMany({
+        where: { ...livePurchaseWhere, status: { in: ['SENT', 'PARTIAL', 'OVERDUE'] } },
+        select: { id: true, purchaseNo: true, grandTotal: true, amountPaid: true, date: true },
+      }),
+      this.prisma.account.findMany({
+        where: { companyId, deletedAt: null, isGroup: false },
+        select: { id: true, name: true, code: true, category: true, balance: true, balanceType: true },
+        take: 6,
+        orderBy: { balance: 'desc' },
+      }),
     ]);
 
     const todaySalesValue = this.number(todaySales._sum.grandTotal);
@@ -310,8 +352,73 @@ export class DashboardService {
     const monthlyExpenses = this.number(monthExpenses._sum.totalAmount);
     const profitToday = todaySalesValue - todayExpensesValue;
     const monthlyProfit = monthlyRevenue - monthlyExpenses;
-    const receivablesTotal = receivablePartners.reduce((sum, partner) => sum + this.number(partner.receivableBalance), 0);
-    const payablesTotal = payablePartners.reduce((sum, partner) => sum + this.number(partner.payableBalance), 0);
+
+    // Accurate aggregate-based receivables & aging buckets
+    const partnerReceivableTotal = this.number(receivablesAgg._sum.receivableBalance);
+    let recOverdue = 0;
+    let recCurrent = 0;
+    let recBucket1_15 = 0;
+    let recBucket16_30 = 0;
+    let recBucket31_45 = 0;
+    let recBucketOver45 = 0;
+
+    for (const inv of allUnpaidInvoices) {
+      const unpaid = Math.max(this.number(inv.grandTotal) - this.number(inv.amountPaid), 0);
+      if (unpaid <= 0) continue;
+      const due = inv.dueDate || inv.date;
+      if (due && due < todayStart) {
+        recOverdue += unpaid;
+        const days = Math.floor((todayStart.getTime() - due.getTime()) / 86400000);
+        if (days <= 15) recBucket1_15 += unpaid;
+        else if (days <= 30) recBucket16_30 += unpaid;
+        else if (days <= 45) recBucket31_45 += unpaid;
+        else recBucketOver45 += unpaid;
+      } else {
+        recCurrent += unpaid;
+      }
+    }
+
+    const computedRecTotal = recOverdue + recCurrent;
+    const receivablesTotal = Math.max(partnerReceivableTotal, computedRecTotal);
+    if (receivablesTotal > computedRecTotal) {
+      recCurrent += (receivablesTotal - computedRecTotal);
+    }
+    const recCurrentPct = receivablesTotal > 0 ? Math.round((recCurrent / receivablesTotal) * 100) : 0;
+    const recOverduePct = receivablesTotal > 0 ? 100 - recCurrentPct : 0;
+
+    // Accurate aggregate-based payables & aging buckets
+    const partnerPayableTotal = this.number(payablesAgg._sum.payableBalance);
+    let payOverdue = 0;
+    let payCurrent = 0;
+    let payBucket1_15 = 0;
+    let payBucket16_30 = 0;
+    let payBucket31_45 = 0;
+    let payBucketOver45 = 0;
+
+    for (const pur of allUnpaidPurchases) {
+      const unpaid = Math.max(this.number(pur.grandTotal) - this.number(pur.amountPaid), 0);
+      if (unpaid <= 0) continue;
+      const billDate = pur.date;
+      const daysSinceBill = Math.floor((todayStart.getTime() - billDate.getTime()) / 86400000);
+      if (daysSinceBill > 30) {
+        payOverdue += unpaid;
+        const overdueDays = daysSinceBill - 30;
+        if (overdueDays <= 15) payBucket1_15 += unpaid;
+        else if (overdueDays <= 30) payBucket16_30 += unpaid;
+        else if (overdueDays <= 45) payBucket31_45 += unpaid;
+        else payBucketOver45 += unpaid;
+      } else {
+        payCurrent += unpaid;
+      }
+    }
+
+    const computedPayTotal = payOverdue + payCurrent;
+    const payablesTotal = Math.max(partnerPayableTotal, computedPayTotal);
+    if (payablesTotal > computedPayTotal) {
+      payCurrent += (payablesTotal - computedPayTotal);
+    }
+    const payCurrentPct = payablesTotal > 0 ? Math.round((payCurrent / payablesTotal) * 100) : 0;
+    const payOverduePct = payablesTotal > 0 ? 100 - payCurrentPct : 0;
     const gstLiability = Math.max(this.number(invoiceGst._sum.totalTaxAmount) - this.number(purchaseGst._sum.totalTaxAmount), 0);
 
     const partnerIds = Array.from(new Set([
@@ -416,6 +523,49 @@ export class DashboardService {
     const selectedExpenses = this.number(periodExpenses._sum.totalAmount);
     const selectedPayments = this.number(periodPayments._sum.amount);
 
+    const totalIncoming = chartData.reduce((sum, item) => sum + item.incoming, 0);
+    const totalOutgoing = chartData.reduce((sum, item) => sum + item.outgoing, 0);
+    const closingBalance = cashBalance + bankBalance;
+    const openingBalance = Math.max(closingBalance - totalIncoming + totalOutgoing, 0);
+    const cashFlowSummary = {
+      opening: openingBalance,
+      incoming: totalIncoming,
+      outgoing: totalOutgoing,
+      closing: closingBalance,
+    };
+
+    let runningCash = openingBalance;
+    const finalChartData = chartData.map((m) => {
+      runningCash = Math.max(0, runningCash + m.incoming - m.outgoing);
+      return {
+        ...m,
+        balance: runningCash,
+      };
+    });
+
+    const watchlist = rawWatchlist.map((acc) => ({
+      name: acc.name,
+      code: acc.code || '',
+      category: acc.category,
+      balance: this.number(acc.balance),
+      normalBalance: acc.balanceType === 'CREDIT' ? 'Cr' : 'Dr',
+    }));
+
+    const expenseColors = ['#408DFB', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6B7280'];
+    const totalExpensesSum = expenseCategories.reduce((sum, row) => sum + this.number(row._sum.totalAmount), 0);
+    const topExpensesList = expenseCategories.map((row, idx) => {
+      const amount = this.number(row._sum.totalAmount);
+      const name = row.categoryId ? categoryName.get(row.categoryId) || 'Expense Category' : 'Uncategorized';
+      const pct = totalExpensesSum > 0 ? Math.round((amount / totalExpensesSum) * 100) : 0;
+      return {
+        id: row.categoryId || `exp-${idx}`,
+        name,
+        amount,
+        pct,
+        color: expenseColors[idx % expenseColors.length],
+      };
+    });
+
     return {
       company: {
         name: company?.companyName || 'Bill Aura Workspace',
@@ -434,7 +584,10 @@ export class DashboardService {
         totalBalance: cashBalance + bankBalance,
       },
       // Real historical chart data
-      chartData,
+      chartData: finalChartData,
+      cashFlowSummary,
+      watchlist,
+      topExpenses: topExpensesList,
       metrics: {
         todaySales: todaySalesValue,
         todayReceipts: todayReceiptsValue,
@@ -461,6 +614,16 @@ export class DashboardService {
       paymentAccounts: paymentAccountRows,
       receivables: {
         total: receivablesTotal,
+        current: recCurrent,
+        overdue: recOverdue,
+        currentPct: recCurrentPct,
+        overduePct: recOverduePct,
+        buckets: [
+          { label: '1 - 15 days', amount: recBucket1_15 },
+          { label: '16 - 30 days', amount: recBucket16_30 },
+          { label: '31 - 45 days', amount: recBucket31_45 },
+          { label: '> 45 days', amount: recBucketOver45 },
+        ],
         customers: receivablePartners.map((partner) => ({ id: partner.id, name: partner.name, amount: this.number(partner.receivableBalance) })),
         overdueInvoices: overdueInvoices.map((invoice) => ({
           id: invoice.id,
@@ -472,9 +635,19 @@ export class DashboardService {
       },
       payables: {
         total: payablesTotal,
+        current: payCurrent,
+        overdue: payOverdue,
+        currentPct: payCurrentPct,
+        overduePct: payOverduePct,
+        buckets: [
+          { label: '1 - 15 days', amount: payBucket1_15 },
+          { label: '16 - 30 days', amount: payBucket16_30 },
+          { label: '31 - 45 days', amount: payBucket31_45 },
+          { label: '> 45 days', amount: payBucketOver45 },
+        ],
         vendors: payablePartners.map((partner) => ({ id: partner.id, name: partner.name, amount: this.number(partner.payableBalance) })),
         upcoming: (upcomingPurchases as any[]).map((purchase) => ({ id: purchase.id, reference: purchase.purchaseNo, vendor: purchase.businessPartner?.name || 'Vendor', amount: Math.max(this.number(purchase.grandTotal) - this.number(purchase.amountPaid), 0), date: purchase.date })),
-        overdue: (overduePurchases as any[]).map((purchase) => ({ id: purchase.id, reference: purchase.purchaseNo, vendor: purchase.businessPartner?.name || 'Vendor', amount: Math.max(this.number(purchase.grandTotal) - this.number(purchase.amountPaid), 0), date: purchase.date })),
+        overduePurchases: (overduePurchases as any[]).map((purchase) => ({ id: purchase.id, reference: purchase.purchaseNo, vendor: purchase.businessPartner?.name || 'Vendor', amount: Math.max(this.number(purchase.grandTotal) - this.number(purchase.amountPaid), 0), date: purchase.date })),
       },
       recentActivity,
       businessInsights: {

@@ -88,18 +88,31 @@ export const ExecutiveDashboard: React.FC = () => {
     staleTime: 60_000,
   });
 
-  // Extract Company Name
+  // Extract Company Name & Financial Year
   const companyName = useMemo(() => {
-    return data?.company?.name || user?.companyName || 'BillAura Technologies';
+    return data?.company?.name || user?.companyName || 'BillAura Workspace';
   }, [data, user]);
 
-  // Total Receivables metrics
+  const financialYearLabel = useMemo(() => {
+    return data?.company?.financialYear ? `FY ${data.company.financialYear}` : 'FY 2025-2026';
+  }, [data]);
+
+  // Total Receivables metrics directly from authenticated tenant API records
   const receivables = useMemo(() => {
-    const total = Number(data?.receivables?.total || data?.summary?.pending || 384500);
-    const overdue = Math.round(total * 0.42);
-    const current = total - overdue;
-    const currentPct = total > 0 ? (current / total) * 100 : 50;
-    const overduePct = total > 0 ? (overdue / total) * 100 : 50;
+    const r = data?.receivables;
+    const total = Number(r?.total ?? data?.summary?.pending ?? 0);
+    const current = Number(r?.current ?? (total > 0 ? total : 0));
+    const overdue = Number(r?.overdue ?? 0);
+    const currentPct = Number(r?.currentPct ?? (total > 0 ? Math.round((current / total) * 100) : 0));
+    const overduePct = Number(r?.overduePct ?? (total > 0 ? 100 - currentPct : 0));
+    const buckets = Array.isArray(r?.buckets) && r.buckets.length > 0
+      ? r.buckets
+      : [
+          { label: '1 - 15 days', amount: 0 },
+          { label: '16 - 30 days', amount: 0 },
+          { label: '31 - 45 days', amount: 0 },
+          { label: '> 45 days', amount: 0 },
+        ];
 
     return {
       total,
@@ -107,22 +120,26 @@ export const ExecutiveDashboard: React.FC = () => {
       overdue,
       currentPct,
       overduePct,
-      buckets: [
-        { label: '1 - 15 days', amount: overdue * 0.45 },
-        { label: '16 - 30 days', amount: overdue * 0.3 },
-        { label: '31 - 45 days', amount: overdue * 0.15 },
-        { label: '> 45 days', amount: overdue * 0.1 },
-      ],
+      buckets,
     };
   }, [data]);
 
-  // Total Payables metrics
+  // Total Payables metrics directly from authenticated tenant API records
   const payables = useMemo(() => {
-    const total = Number(data?.payables?.total || 215400);
-    const overdue = Math.round(total * 0.28);
-    const current = total - overdue;
-    const currentPct = total > 0 ? (current / total) * 100 : 70;
-    const overduePct = total > 0 ? (overdue / total) * 100 : 30;
+    const p = data?.payables;
+    const total = Number(p?.total ?? 0);
+    const current = Number(p?.current ?? (total > 0 ? total : 0));
+    const overdue = Number(p?.overdue ?? 0);
+    const currentPct = Number(p?.currentPct ?? (total > 0 ? Math.round((current / total) * 100) : 0));
+    const overduePct = Number(p?.overduePct ?? (total > 0 ? 100 - currentPct : 0));
+    const buckets = Array.isArray(p?.buckets) && p.buckets.length > 0
+      ? p.buckets
+      : [
+          { label: '1 - 15 days', amount: 0 },
+          { label: '16 - 30 days', amount: 0 },
+          { label: '31 - 45 days', amount: 0 },
+          { label: '> 45 days', amount: 0 },
+        ];
 
     return {
       total,
@@ -130,89 +147,81 @@ export const ExecutiveDashboard: React.FC = () => {
       overdue,
       currentPct,
       overduePct,
-      buckets: [
-        { label: '1 - 15 days', amount: overdue * 0.5 },
-        { label: '16 - 30 days', amount: overdue * 0.3 },
-        { label: '31 - 45 days', amount: overdue * 0.12 },
-        { label: '> 45 days', amount: overdue * 0.08 },
-      ],
+      buckets,
     };
   }, [data]);
 
-  // Cash Flow Monthly Data
+  // Cash Flow Monthly Data from real ledger chartData
   const cashFlowChartData = useMemo(() => {
-    return [
-      { month: 'Apr', balance: 250000, incoming: 120000, outgoing: 80000 },
-      { month: 'May', balance: 290000, incoming: 140000, outgoing: 95000 },
-      { month: 'Jun', balance: 335000, incoming: 130000, outgoing: 85000 },
-      { month: 'Jul', balance: 380000, incoming: 165000, outgoing: 110000 },
-      { month: 'Aug', balance: 435000, incoming: 180000, outgoing: 125000 },
-      { month: 'Sep', balance: 490000, incoming: 195000, outgoing: 140000 },
-      { month: 'Oct', balance: 545000, incoming: 210000, outgoing: 155000 },
-      { month: 'Nov', balance: 600000, incoming: 220000, outgoing: 160000 },
-      { month: 'Dec', balance: 660000, incoming: 240000, outgoing: 175000 },
-      { month: 'Jan', balance: 725000, incoming: 250000, outgoing: 185000 },
-      { month: 'Feb', balance: 790000, incoming: 260000, outgoing: 195000 },
-      { month: 'Mar', balance: 855000, incoming: 275000, outgoing: 210000 },
-    ];
-  }, []);
+    if (!data?.chartData || !Array.isArray(data.chartData)) return [];
+    return data.chartData.map((item: any) => ({
+      month: item.month || item.label,
+      balance: Number(item.balance || 0),
+      incoming: Number(item.incoming ?? item.received ?? 0),
+      outgoing: Number(item.outgoing ?? item.expenses ?? 0),
+    }));
+  }, [data]);
 
-  // Cash Flow Summary figures
+  // Cash Flow Summary figures from genuine ledger balances
   const cashFlowSummary = useMemo(() => {
-    const opening = 250000;
-    const incoming = 2445000;
-    const outgoing = 1715000;
-    const closing = opening + incoming - outgoing;
+    if (data?.cashFlowSummary) {
+      return {
+        opening: Number(data.cashFlowSummary.opening || 0),
+        incoming: Number(data.cashFlowSummary.incoming || 0),
+        outgoing: Number(data.cashFlowSummary.outgoing || 0),
+        closing: Number(data.cashFlowSummary.closing || 0),
+      };
+    }
+    const incoming = Number(data?.summary?.received || 0);
+    const outgoing = Number(data?.summary?.expenses || 0);
+    const closing = Number(data?.summary?.totalBalance || 0);
+    const opening = Math.max(closing - incoming + outgoing, 0);
     return { opening, incoming, outgoing, closing };
-  }, []);
+  }, [data]);
 
-  // Income & Expense Monthly Chart Data
+  // Income & Expense Monthly Chart Data from real revenue & expense records
   const incomeExpenseData = useMemo(() => {
-    return [
-      { month: 'Apr', income: 145000, expense: 95000 },
-      { month: 'May', income: 162000, expense: 110000 },
-      { month: 'Jun', income: 158000, expense: 102000 },
-      { month: 'Jul', income: 184000, expense: 128000 },
-      { month: 'Aug', income: 210000, expense: 135000 },
-      { month: 'Sep', income: 225000, expense: 142000 },
-      { month: 'Oct', income: 240000, expense: 160000 },
-      { month: 'Nov', income: 255000, expense: 168000 },
-      { month: 'Dec', income: 280000, expense: 185000 },
-      { month: 'Jan', income: 295000, expense: 190000 },
-      { month: 'Feb', income: 310000, expense: 205000 },
-      { month: 'Mar', income: 340000, expense: 220000 },
-    ];
-  }, []);
+    if (!data?.chartData || !Array.isArray(data.chartData)) return [];
+    return data.chartData.map((item: any) => ({
+      month: item.month || item.label,
+      income: Number(item.income ?? item.sales ?? 0),
+      expense: Number(item.expense ?? item.expenses ?? 0),
+    }));
+  }, [data]);
 
   const totalIncome = useMemo(() => {
-    return incomeExpenseData.reduce((acc, c) => acc + c.income, 0);
+    return incomeExpenseData.reduce((acc: number, c: any) => acc + c.income, 0);
   }, [incomeExpenseData]);
 
   const totalExpense = useMemo(() => {
-    return incomeExpenseData.reduce((acc, c) => acc + c.expense, 0);
+    return incomeExpenseData.reduce((acc: number, c: any) => acc + c.expense, 0);
   }, [incomeExpenseData]);
 
-  // Top Expenses List
+  // Top Expenses List from genuine database expense categories
   const topExpenses = useMemo(() => {
-    return [
-      { name: 'Employee Salaries & Wages', amount: 980000, pct: 45, color: '#408DFB' },
-      { name: 'Office Rent & Maintenance', amount: 360000, pct: 19, color: '#10B981' },
-      { name: 'Advertising & Marketing', amount: 240000, pct: 14, color: '#F59E0B' },
-      { name: 'Software Subscriptions & Cloud', amount: 180000, pct: 11, color: '#8B5CF6' },
-      { name: 'Utilities & Internet', amount: 85000, pct: 6, color: '#EC4899' },
-      { name: 'Travel & Conveyance', amount: 65000, pct: 5, color: '#6B7280' },
-    ];
-  }, []);
+    if (Array.isArray(data?.topExpenses) && data.topExpenses.length > 0) {
+      return data.topExpenses;
+    }
+    if (Array.isArray(data?.businessInsights?.highestExpenseCategories) && data.businessInsights.highestExpenseCategories.length > 0) {
+      const colors = ['#408DFB', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6B7280'];
+      const totalAmount = data.businessInsights.highestExpenseCategories.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
+      return data.businessInsights.highestExpenseCategories.map((c: any, i: number) => ({
+        name: c.name,
+        amount: Number(c.amount || 0),
+        pct: totalAmount > 0 ? Math.round((Number(c.amount || 0) / totalAmount) * 100) : 0,
+        color: colors[i % colors.length],
+      }));
+    }
+    return [];
+  }, [data]);
 
-  // Account Watchlist
+  // Account Watchlist from genuine Chart of Accounts
   const watchlist = useMemo(() => {
-    return [
-      { name: 'Petty Cash', code: '1001', category: 'Asset', balance: 14500, normalBalance: 'Dr' },
-      { name: 'Advertising & Marketing', code: '6010', category: 'Expense', balance: 240000, normalBalance: 'Dr' },
-      { name: 'Office Stationery', code: '6025', category: 'Expense', balance: 34200, normalBalance: 'Dr' },
-      { name: 'Consulting Revenue', code: '4010', category: 'Income', balance: 1850000, normalBalance: 'Cr' },
-    ];
-  }, []);
+    if (Array.isArray(data?.watchlist) && data.watchlist.length > 0) {
+      return data.watchlist;
+    }
+    return [];
+  }, [data]);
 
   return (
     <div className="flex flex-col h-full bg-[#F8F9FB] text-[#1E2540] overflow-y-auto font-sans select-none">
@@ -228,7 +237,7 @@ export const ExecutiveDashboard: React.FC = () => {
                 Hello, {companyName}
               </h1>
               <p className="text-xs text-gray-500 mt-0.5">
-                {companyName} &nbsp;·&nbsp; FY 2025-2026
+                {companyName} &nbsp;·&nbsp; {financialYearLabel}
               </p>
             </div>
           </div>
@@ -388,7 +397,7 @@ export const ExecutiveDashboard: React.FC = () => {
                       <div className="font-semibold text-[11px] text-gray-400 uppercase tracking-wider pb-1 border-b border-gray-100">
                         Overdue Aging Buckets
                       </div>
-                      {receivables.buckets.map((b, idx) => (
+                      {receivables.buckets.map((b: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center text-[11px]">
                           <span className="text-gray-600">{b.label}</span>
                           <span className="font-mono text-gray-800 font-medium">
@@ -467,7 +476,7 @@ export const ExecutiveDashboard: React.FC = () => {
                       <div className="font-semibold text-[11px] text-gray-400 uppercase tracking-wider pb-1 border-b border-gray-100">
                         Overdue Aging Buckets
                       </div>
-                      {payables.buckets.map((b, idx) => (
+                      {payables.buckets.map((b: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center text-[11px]">
                           <span className="text-gray-600">{b.label}</span>
                           <span className="font-mono text-gray-800 font-medium">
@@ -530,7 +539,7 @@ export const ExecutiveDashboard: React.FC = () => {
                 {/* Right Cash Flow Summary */}
                 <div className="space-y-3.5 text-xs border-l border-gray-100 pl-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Cash as on 01 Apr 2025</span>
+                    <span className="text-gray-500">Opening Balance</span>
                     <span className="font-mono font-medium text-gray-800">
                       {formatINR(cashFlowSummary.opening)}
                     </span>
@@ -552,7 +561,7 @@ export const ExecutiveDashboard: React.FC = () => {
                     </span>
                   </div>
                   <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-[#408DFB]">
-                    <span className="font-bold">(=) Cash as on 31 Mar 2026</span>
+                    <span className="font-bold">(=) Closing Balance</span>
                     <span className="font-mono font-bold text-sm">
                       {formatINR(cashFlowSummary.closing)}
                     </span>
@@ -649,22 +658,28 @@ export const ExecutiveDashboard: React.FC = () => {
               </div>
 
               <div className="space-y-3 pt-1">
-                {topExpenses.map((exp, idx) => (
-                  <div key={idx} className="space-y-1 text-xs">
-                    <div className="flex justify-between items-center text-gray-800">
-                      <span className="truncate pr-2 font-medium">{exp.name}</span>
-                      <span className="font-mono font-semibold shrink-0">
-                        {formatINR(exp.amount)}
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                      <div
-                        style={{ width: `${exp.pct}%`, backgroundColor: exp.color }}
-                        className="h-full rounded-full"
-                      />
-                    </div>
+                {topExpenses.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 text-xs border border-dashed border-gray-200 rounded">
+                    No expense records found for this period.
                   </div>
-                ))}
+                ) : (
+                  topExpenses.map((exp: any, idx: number) => (
+                    <div key={idx} className="space-y-1 text-xs">
+                      <div className="flex justify-between items-center text-gray-800">
+                        <span className="truncate pr-2 font-medium">{exp.name}</span>
+                        <span className="font-mono font-semibold shrink-0">
+                          {formatINR(exp.amount)}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          style={{ width: `${exp.pct}%`, backgroundColor: exp.color }}
+                          className="h-full rounded-full"
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -735,23 +750,29 @@ export const ExecutiveDashboard: React.FC = () => {
               </div>
 
               <div className="divide-y divide-gray-100 text-xs">
-                {watchlist.map((item, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => navigate('/chart-of-accounts')}
-                    className="py-2.5 flex items-center justify-between hover:bg-gray-50 cursor-pointer px-1 transition-colors"
-                  >
-                    <div>
-                      <span className="font-semibold text-gray-900 block">{item.name}</span>
-                      <span className="text-[10px] text-gray-400 font-mono">
-                        Code: {item.code} · {item.category}
+                {watchlist.length === 0 ? (
+                  <div className="text-center py-6 text-gray-400 text-xs border border-dashed border-gray-200 rounded">
+                    No accounts tracked in watchlist.
+                  </div>
+                ) : (
+                  watchlist.map((item: any, idx: number) => (
+                    <div
+                      key={idx}
+                      onClick={() => navigate('/chart-of-accounts')}
+                      className="py-2.5 flex items-center justify-between hover:bg-gray-50 cursor-pointer px-1 transition-colors"
+                    >
+                      <div>
+                        <span className="font-semibold text-gray-900 block">{item.name}</span>
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          Code: {item.code || 'N/A'} · {item.category}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-gray-900">
+                        {formatINR(item.balance)} ({item.normalBalance})
                       </span>
                     </div>
-                    <span className="font-mono font-bold text-gray-900">
-                      {formatINR(item.balance)} ({item.normalBalance})
-                    </span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>

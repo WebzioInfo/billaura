@@ -71,26 +71,32 @@ export default function ProfitLossDashboard() {
     },
   });
 
-  // Extract revenue, expenses, and totals
+  // Extract revenue, expenses, and totals from real double-entry records
   const revenueItems = useMemo(() => {
-    return data?.revenue || data?.statement?.revenue?.items || [
-      { name: 'Sales Revenue', balance: data?.statement?.revenue?.grossRevenue || 1250000 },
-      { name: 'Discount Received', balance: 14200 },
-    ];
+    if (Array.isArray(data?.revenue)) return data.revenue;
+    if (data?.revenue && typeof data.revenue === 'object') {
+      const sales = Array.isArray(data.revenue.salesRevenue) ? data.revenue.salesRevenue : [];
+      const service = Array.isArray(data.revenue.serviceRevenue) ? data.revenue.serviceRevenue : [];
+      const other = Array.isArray(data.revenue.otherIncome) ? data.revenue.otherIncome : [];
+      const unclassified = Array.isArray(data.revenue.unclassified) ? data.revenue.unclassified : [];
+      return [...sales, ...service, ...other, ...unclassified];
+    }
+    if (Array.isArray(data?.statement?.revenue?.items)) return data.statement.revenue.items;
+    return [];
   }, [data]);
 
   const totalRevenue = useMemo(() => {
-    return data?.totalRevenue || data?.statement?.revenue?.grossRevenue || 1264200;
+    return Number(data?.totalRevenue ?? data?.statement?.revenue?.grossRevenue ?? 0);
   }, [data]);
 
   const cogsItems = useMemo(() => {
-    return data?.cogs || [
-      { name: 'Cost of Goods Sold', balance: data?.statement?.cogs?.total || 480000 },
-    ];
+    if (Array.isArray(data?.cogs)) return data.cogs;
+    if (Array.isArray(data?.statement?.cogs?.items)) return data.statement.cogs.items;
+    return [];
   }, [data]);
 
   const totalCogs = useMemo(() => {
-    return data?.totalCogs || data?.statement?.cogs?.total || 480000;
+    return Number(data?.totalCogs ?? data?.statement?.cogs?.total ?? 0);
   }, [data]);
 
   const grossProfit = useMemo(() => {
@@ -98,21 +104,18 @@ export default function ProfitLossDashboard() {
   }, [totalRevenue, totalCogs]);
 
   const expenseItems = useMemo(() => {
-    return data?.expense || data?.statement?.operatingExpenses?.items || [
-      { name: 'Advertising & Marketing', balance: 35000 },
-      { name: 'Office Rent & Maintenance', balance: 120000 },
-      { name: 'Salaries & Wages', balance: 280000 },
-      { name: 'Utilities & Internet', balance: 18500 },
-    ];
+    if (Array.isArray(data?.expense)) return data.expense;
+    if (Array.isArray(data?.statement?.operatingExpenses?.items)) return data.statement.operatingExpenses.items;
+    return [];
   }, [data]);
 
   const totalExpense = useMemo(() => {
-    return data?.totalExpense || data?.statement?.operatingExpenses?.total || 453500;
+    return Number(data?.totalExpense ?? data?.statement?.operatingExpenses?.total ?? 0);
   }, [data]);
 
   const netProfit = useMemo(() => {
-    return grossProfit - totalExpense;
-  }, [grossProfit, totalExpense]);
+    return Number(data?.netProfit ?? (grossProfit - totalExpense));
+  }, [data, grossProfit, totalExpense]);
 
   // Export handlers
   const handleExportPDF = async () => {

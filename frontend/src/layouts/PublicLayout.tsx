@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Sun, Moon, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 export default function PublicLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -10,6 +10,10 @@ export default function PublicLayout() {
     // Force light mode on public landing pages
     document.documentElement.classList.remove('dark');
   }, []);
+
+  if (location.pathname === '/') {
+    return <Outlet />;
+  }
 
   const navLinks = [
     { name: 'Features', path: '/features' },
@@ -161,7 +165,7 @@ export default function PublicLayout() {
             <div className="space-y-3">
               <h3 className="text-[9px] font-bold uppercase tracking-widest text-[#111111] dark:text-white mb-4">Webzio</h3>
               <p className="text-xs text-slate-550 dark:text-slate-400 leading-relaxed">
-                Bill Aura is designed and developed by <a href="https://webzio.info" target="_blank" rel="noreferrer" className="text-black dark:text-white font-bold hover:underline">Webzio</a>.
+                Bill Aura is designed and developed by <a href="https://www.webziotech.in/" target="_blank" rel="noreferrer" className="text-black dark:text-white font-bold hover:underline">Webzio Technology</a>.
               </p>
               <div className="inline-block px-2 py-0.5 rounded bg-slate-200/50 dark:bg-slate-900 border border-slate-350/20 dark:border-slate-800 text-[9px] text-slate-450 dark:text-slate-500 font-mono">
                 Version: 4.0.0-enterprise

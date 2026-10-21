@@ -1,0 +1,39 @@
+1
+00:00:01,000 --> 00:00:04,500
+Sales Invoicing is the primary revenue engine of your business.
+
+2
+00:00:05,000 --> 00:00:09,800
+In this session, you will learn how to create and issue statutory GST tax invoices.
+
+3
+00:00:10,200 --> 00:00:13,800
+Click the gold New Invoice button to open the billing form.
+
+4
+00:00:14,200 --> 00:00:18,500
+Select your customer. Their billing address and GSTIN populate automatically.
+
+5
+00:00:19,000 --> 00:00:23,600
+The Place of Supply determines Central and State GST versus Integrated GST.
+
+6
+00:00:24,000 --> 00:00:28,200
+Add line items, review HSN codes, and configure custom discount percentages.
+
+7
+00:00:28,800 --> 00:00:33,000
+Notice the Auto Round-Off calculation to the nearest whole rupee.
+
+8
+00:00:33,500 --> 00:00:37,800
+Toggle on the dynamic UPI QR code to print instant payment links.
+
+9
+00:00:38,200 --> 00:00:43,000
+Click Save and Issue to update inventory, post receivables, and book tax liability.
+
+10
+00:00:43,500 --> 00:00:48,000
+Click Print to view your branded PDF invoice ready for dispatch.
