@@ -1,0 +1,35 @@
+1
+00:00:01,000 --> 00:00:04,500
+Collecting payments converts accounts receivable into real bank liquidity.
+
+2
+00:00:05,000 --> 00:00:09,200
+In this session, you will learn how to record customer payment receipts.
+
+3
+00:00:09,800 --> 00:00:14,200
+Click New Payment Received and select your customer account.
+
+4
+00:00:14,600 --> 00:00:19,200
+Bill Aura automatically lists all unpaid and partially paid invoices.
+
+5
+00:00:19,600 --> 00:00:23,800
+Select your deposit bank account and enter the transaction UTR number.
+
+6
+00:00:24,200 --> 00:00:28,500
+Click Auto-Allocate to clear invoices sequentially against the payment.
+
+7
+00:00:29,000 --> 00:00:33,400
+The invoice status immediately transitions to Paid in bright green.
+
+8
+00:00:33,800 --> 00:00:38,000
+Your bank ledger is debited, and the customer balance clears to zero.
+
+9
+00:00:38,500 --> 00:00:43,200
+Any excess payment is automatically held as an unallocated customer advance.

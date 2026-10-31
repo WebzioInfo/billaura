@@ -1,0 +1,35 @@
+1
+00:00:01,000 --> 00:00:04,500
+Accurate financial reporting turns transaction data into business intelligence.
+
+2
+00:00:05,000 --> 00:00:09,800
+In this session, we explore the centralized Reports Center in Bill Aura.
+
+3
+00:00:10,200 --> 00:00:14,600
+Browse over thirty enterprise reports categorized by business function.
+
+4
+00:00:15,000 --> 00:00:19,200
+Click the gold star icon on any card to pin it to your favorites.
+
+5
+00:00:19,600 --> 00:00:24,200
+Open the Profit and Loss statement to review revenue, margins, and net profit.
+
+6
+00:00:24,600 --> 00:00:28,800
+Toggle dynamically between Accrual basis and Cash basis accounting.
+
+7
+00:00:29,200 --> 00:00:33,800
+Open the Balance Sheet to verify that Assets equal Liabilities plus Equity.
+
+8
+00:00:34,200 --> 00:00:38,500
+Use the Aging Summary reports to manage customer collections and vendor payables.
+
+9
+00:00:39,000 --> 00:00:44,200
+Export formatted, audit-ready statements to Excel and PDF with a single click.
