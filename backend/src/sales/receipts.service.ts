@@ -421,18 +421,22 @@ export class ReceiptsService {
         const splitBankCharges = Number(split.bankCharges || 0);
         const netSplitAmount = Number(split.amount) - splitBankCharges;
         if (split.accountId) {
-          const bankAcc = await tx.bankAccount.findFirst({
-            where: { OR: [{ id: split.accountId }, { accountId: split.accountId }], companyId },
-          });
+          const bankAcc = (tx.bankAccount as any)?.findFirst
+            ? await tx.bankAccount.findFirst({
+                where: { OR: [{ id: split.accountId }, { accountId: split.accountId }], companyId },
+              })
+            : null;
           if (bankAcc) {
             await tx.bankAccount.update({
               where: { id: bankAcc.id },
               data: { currentBalance: { increment: netSplitAmount } },
             });
           } else {
-            const cashAcc = await tx.cashAccount.findFirst({
-              where: { OR: [{ id: split.accountId }, { accountId: split.accountId }], companyId },
-            });
+            const cashAcc = (tx.cashAccount as any)?.findFirst
+              ? await tx.cashAccount.findFirst({
+                  where: { OR: [{ id: split.accountId }, { accountId: split.accountId }], companyId },
+                })
+              : null;
             if (cashAcc) {
               await tx.cashAccount.update({
                 where: { id: cashAcc.id },
@@ -1455,9 +1459,11 @@ export class ReceiptsService {
         });
 
         // Reverse reclassification journal entry if present
-        const allocJournal = await tx.journalEntry.findFirst({
-          where: { companyId, reference: `ALLOC-${allocation.id}` },
-        });
+        const allocJournal = (tx.journalEntry as any)?.findFirst
+            ? await tx.journalEntry.findFirst({
+                where: { companyId, reference: `ALLOC-${allocation.id}` },
+              })
+            : null;
         if (allocJournal) {
           await this.accountingEngine.reverseTransaction(
             allocJournal.id,

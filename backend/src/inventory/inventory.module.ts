@@ -20,9 +20,10 @@ import { BomService } from "./bom.service";
 import { BomController } from "./bom.controller";
 
 import { SharedModule } from "../shared/shared.module";
+import { AccountingModule } from "../accounting/accounting.module";
 
 @Module({
-  imports: [DatabaseModule, SharedModule],
+  imports: [DatabaseModule, SharedModule, AccountingModule],
   controllers: [
     WarehousesController,
     ProductsController,

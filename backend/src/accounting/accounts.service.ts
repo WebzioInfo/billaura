@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateAccountDto, UpdateAccountDto, AccountLookupQueryDto } from './dto/account.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
-import { AccountCategory, AccountSubCategory } from '@prisma/client';
+import { AccountCategory, AccountSubCategory, AccountNature, AccountBalanceType } from '@prisma/client';
+import { getAccountTypeMetadata, mapLegacyAccountToDetailedType, ACCOUNT_TYPES_METADATA } from './constants/account-types.constant';
 import type { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -105,6 +106,104 @@ export class AccountsService {
         update: {}
       });
     }
+
+    // Record seeded account IDs in company settings defaultAccounts.protectedAccountIds
+    try {
+      const settings = await this.prisma.companySettings.findUnique({
+        where: { companyId },
+        select: { defaultAccounts: true },
+      });
+      if (settings) {
+        const currentDefaults = (settings.defaultAccounts as any) || {};
+        const allSeededIds = seededAccounts.map((a) => a.id);
+        const existingProtected: string[] = currentDefaults.protectedAccountIds || [];
+        const mergedProtected = Array.from(new Set([...existingProtected, ...allSeededIds]));
+        await this.prisma.companySettings.update({
+          where: { companyId },
+          data: {
+            defaultAccounts: {
+              ...currentDefaults,
+              protectedAccountIds: mergedProtected,
+            },
+          },
+        });
+      }
+    } catch (e: any) {
+      this.logger.warn(`Could not sync protected accounts to settings: ${e.message}`);
+    }
+  }
+
+  /**
+   * Resolves protected account IDs for a tenant.
+   * Root groups, core system baseline accounts, and configured default accounts are protected.
+   */
+  async getProtectedAccountIds(companyId: string, tx?: any): Promise<Set<string>> {
+    const client = tx || this.prisma;
+    const protectedIds = new Set<string>();
+
+    try {
+      const settings = await client.companySettings.findUnique({
+        where: { companyId },
+        select: { defaultAccounts: true },
+      });
+
+      const defaultAccounts = (settings?.defaultAccounts as any) || {};
+
+      if (Array.isArray(defaultAccounts.protectedAccountIds)) {
+        for (const id of defaultAccounts.protectedAccountIds) {
+          if (id) protectedIds.add(id);
+        }
+      }
+
+      for (const [key, val] of Object.entries(defaultAccounts)) {
+        if (typeof val === 'string' && val.length > 0 && key !== 'protectedAccountIds') {
+          protectedIds.add(val);
+        }
+      }
+
+      if (protectedIds.size === 0) {
+        // Fallback: register root groups and default system accounts
+        const rootGroups = await client.account.findMany({
+          where: { companyId, isGroup: true, parentId: null },
+          select: { id: true },
+        });
+        rootGroups.forEach((g: any) => protectedIds.add(g.id));
+
+        const systemExpenseCategories = await client.expenseCategory.findMany({
+          where: { companyId, type: 'SYSTEM', accountId: { not: null } },
+          select: { accountId: true },
+        });
+        systemExpenseCategories.forEach((cat: any) => {
+          if (cat.accountId) protectedIds.add(cat.accountId);
+        });
+
+        const equityAccounts = await client.account.findMany({
+          where: {
+            companyId,
+            category: AccountCategory.EQUITY,
+            subCategory: AccountSubCategory.EQUITY,
+          },
+          select: { id: true },
+        });
+        equityAccounts.forEach((acc: any) => protectedIds.add(acc.id));
+
+        if (settings && protectedIds.size > 0) {
+          await client.companySettings.update({
+            where: { companyId },
+            data: {
+              defaultAccounts: {
+                ...defaultAccounts,
+                protectedAccountIds: Array.from(protectedIds),
+              },
+            },
+          });
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Could not load protected accounts from settings: ${err?.message}`);
+    }
+
+    return protectedIds;
   }
 
   async findAll(query: PaginationQueryDto) {
@@ -539,21 +638,90 @@ export class AccountsService {
     };
   }
 
+    /**
+   * Persists detailed account type and description metadata into tenant settings.
+   */
+  async saveAccountTypeMetadata(
+    companyId: string,
+    accountId: string,
+    accountType?: string,
+    description?: string,
+    tx?: any
+  ) {
+    const client = tx || this.prisma;
+    try {
+      const settings = await client.companySettings.findUnique({
+        where: { companyId },
+        select: { defaultAccounts: true },
+      });
+      if (!settings) return;
+
+      const currentDefaults = (settings.defaultAccounts as any) || {};
+      const currentTypes = currentDefaults.accountTypes || {};
+      const currentDescs = currentDefaults.accountDescriptions || {};
+
+      if (accountType) {
+        currentTypes[accountId] = accountType;
+      }
+      if (description !== undefined) {
+        currentDescs[accountId] = description;
+      }
+
+      await client.companySettings.update({
+        where: { companyId },
+        data: {
+          defaultAccounts: {
+            ...currentDefaults,
+            accountTypes: currentTypes,
+            accountDescriptions: currentDescs,
+          },
+        },
+      });
+    } catch (e: any) {
+      this.logger.warn(`Could not persist account type metadata to settings: ${e?.message}`);
+    }
+  }
+
   async findOne(id: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
 
-    const account = await this.prisma.account.findFirst({
-      where: { id },
-    });
+    const [account, settings] = await Promise.all([
+      this.prisma.account.findFirst({
+        where: { id, companyId },
+        include: {
+          parent: { select: { id: true, name: true, code: true } },
+        },
+      }),
+      this.prisma.companySettings.findUnique({
+        where: { companyId },
+        select: { defaultAccounts: true },
+      }),
+    ]);
 
     if (!account) {
       throw new NotFoundException(`Account with ID ${id} not found`);
     }
 
-    return account;
+    const defaultAccounts = (settings?.defaultAccounts as any) || {};
+    const accountTypesMap: Record<string, string> = defaultAccounts.accountTypes || {};
+    const accountDescsMap: Record<string, string> = defaultAccounts.accountDescriptions || {};
+
+    const explicitType = accountTypesMap[account.id];
+    const meta = explicitType
+      ? getAccountTypeMetadata(explicitType)
+      : mapLegacyAccountToDetailedType(account.category, account.subCategory, account.name);
+
+    return {
+      ...account,
+      accountType: meta?.id || account.subCategory || account.category,
+      accountTypeName: meta?.displayName || account.name,
+      mainGroupLabel: meta?.mainGroupLabel || account.category,
+      normalBalance: meta?.normalBalance || (account.category === 'ASSET' || account.category === 'EXPENSE' ? 'DEBIT' : 'CREDIT'),
+      description: accountDescsMap[account.id] || '',
+    };
   }
 
   async create(dto: CreateAccountDto) {
@@ -570,18 +738,49 @@ export class AccountsService {
       throw new ConflictException(`Account with name '${dto.name}' already exists`);
     }
 
-    return this.prisma.account.create({
+    let meta = getAccountTypeMetadata(dto.accountType);
+    let category = dto.category;
+    let subCategory = dto.subCategory;
+
+    if (meta) {
+      category = meta.mainGroup as AccountCategory;
+      subCategory = dto.subCategory || meta.defaultSubCategory;
+    } else if (category) {
+      meta = getAccountTypeMetadata(category);
+    }
+
+    if (!category) {
+      throw new ConflictException('Account Category or Account Type is required');
+    }
+
+    const nature = meta && meta.normalBalance === 'DEBIT' ? AccountNature.DEBIT : AccountNature.CREDIT;
+    const balanceType = nature === AccountNature.DEBIT ? AccountBalanceType.DEBIT : AccountBalanceType.CREDIT;
+
+    const created = await this.prisma.account.create({
       data: {
         companyId,
         name: dto.name,
         code: dto.code,
-        category: dto.category,
-        subCategory: dto.subCategory,
+        category,
+        subCategory,
+        nature,
+        balanceType,
         balance: dto.balance ?? 0,
         isGroup: dto.isGroup ?? false,
         parentId: dto.parentId,
       },
     });
+
+    const accountTypeKey = meta ? meta.id : (dto.accountType || subCategory || category);
+    await this.saveAccountTypeMetadata(companyId, created.id, accountTypeKey, dto.description);
+
+    return {
+      ...created,
+      accountType: accountTypeKey,
+      accountTypeName: meta?.displayName || accountTypeKey,
+      description: dto.description || '',
+      normalBalance: meta ? meta.normalBalance : (category === AccountCategory.ASSET || category === AccountCategory.EXPENSE ? 'DEBIT' : 'CREDIT'),
+    };
   }
 
   async update(id: string, dto: UpdateAccountDto) {
@@ -590,9 +789,9 @@ export class AccountsService {
       throw new ConflictException('Company context is required');
     }
 
-    const account = await this.findOne(id);
+    const currentAccount = await this.findOne(id);
 
-    if (dto.name && dto.name !== account.name) {
+    if (dto.name && dto.name !== currentAccount.name) {
       const existing = await this.prisma.account.findFirst({
         where: { companyId, name: dto.name, NOT: { id } },
       });
@@ -601,34 +800,235 @@ export class AccountsService {
       }
     }
 
-    return this.prisma.account.update({
+    let meta = dto.accountType ? getAccountTypeMetadata(dto.accountType) : null;
+    let targetCategory = dto.category;
+    if (meta) {
+      targetCategory = meta.mainGroup as AccountCategory;
+    }
+
+    // Validate that main classification cannot change if transactions exist
+    if (targetCategory && targetCategory !== currentAccount.category) {
+      const journalLineCount = await this.prisma.journalLine.count({
+        where: { accountId: id },
+      });
+      if (journalLineCount > 0) {
+        throw new ConflictException(
+          `Cannot change main account classification from ${currentAccount.category} to ${targetCategory} for account '${currentAccount.name}' because it has ${journalLineCount} recorded journal ledger transaction(s). Modifying the account group would compromise double-entry accounting integrity.`
+        );
+      }
+    }
+
+    const nature = meta ? (meta.normalBalance === 'DEBIT' ? AccountNature.DEBIT : AccountNature.CREDIT) : undefined;
+    const balanceType = nature !== undefined ? (nature === AccountNature.DEBIT ? AccountBalanceType.DEBIT : AccountBalanceType.CREDIT) : undefined;
+
+    const updated = await this.prisma.account.update({
       where: { id },
       data: {
         name: dto.name,
         code: dto.code,
-        category: dto.category,
-        subCategory: dto.subCategory,
+        category: targetCategory || undefined,
+        subCategory: dto.subCategory || meta?.defaultSubCategory || undefined,
+        nature,
+        balanceType,
         balance: dto.balance,
         isGroup: dto.isGroup,
         parentId: dto.parentId,
       },
     });
+
+    if (dto.accountType || dto.description !== undefined) {
+      const accountTypeKey = meta ? meta.id : dto.accountType;
+      await this.saveAccountTypeMetadata(companyId, id, accountTypeKey, dto.description);
+    }
+
+    const resolvedMeta = meta || getAccountTypeMetadata(dto.accountType || updated.subCategory || updated.category) || mapLegacyAccountToDetailedType(updated.category, updated.subCategory, updated.name);
+
+    return {
+      ...updated,
+      accountType: resolvedMeta?.id || updated.subCategory || updated.category,
+      accountTypeName: resolvedMeta?.displayName || updated.name,
+      description: dto.description || '',
+      normalBalance: resolvedMeta?.normalBalance || (updated.category === 'ASSET' || updated.category === 'EXPENSE' ? 'DEBIT' : 'CREDIT'),
+    };
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-
-    // Check if account has journal ledger entries
-    const inUse = await this.prisma.journalLine.findFirst({
-      where: { accountId: id },
-    });
-
-    if (inUse) {
-      throw new ConflictException('Cannot delete account with existing transactions');
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
     }
 
-    return this.prisma.account.delete({
-      where: { id },
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Verify existence and tenant isolation
+      const account = await tx.account.findFirst({
+        where: { id, companyId },
+      });
+
+      if (!account) {
+        // Enforce strict tenant boundary check
+        const existsInOtherTenant = await tx.account.findUnique({
+          where: { id },
+          select: { id: true },
+        });
+        if (existsInOtherTenant) {
+          throw new ForbiddenException('Access denied: Account belongs to another tenant');
+        }
+        throw new NotFoundException(`Account with ID '${id}' not found`);
+      }
+
+      // 2. Protected system account validation: Root group check
+      if (account.isGroup && !account.parentId) {
+        throw new ConflictException(
+          `Cannot delete root system group account '${account.name}'. Primary chart heads are protected.`
+        );
+      }
+
+      // Protected system account validation: System defaults metadata check
+      const protectedIds = await this.getProtectedAccountIds(companyId, tx);
+      if (protectedIds.has(account.id)) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is a protected system account required for core accounting operations.`
+        );
+      }
+
+      // 3. Child accounts validation
+      const childCount = await tx.account.count({
+        where: { parentId: id },
+      });
+      if (childCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it contains ${childCount} sub-account(s). Please delete or reassign child accounts first.`
+        );
+      }
+
+      // 4. Posted journal entries / ledger transactions validation
+      const journalLineCount = await tx.journalLine.count({
+        where: { accountId: id },
+      });
+      if (journalLineCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it has ${journalLineCount} recorded journal ledger transaction(s). Accounts with financial history cannot be deleted to maintain general ledger integrity. You may mark this account as inactive instead.`
+        );
+      }
+
+      // 5. Balance check
+      if (Number(account.balance) !== 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it has a non-zero balance (${account.balance}). Accounts must have a zero balance before deletion.`
+        );
+      }
+
+      // 6. Linked bank accounts validation
+      const bankAccountCount = await tx.bankAccount.count({
+        where: { accountId: id },
+      });
+      if (bankAccountCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is linked to ${bankAccountCount} bank account master record(s).`
+        );
+      }
+
+      // 7. Linked cash accounts validation
+      const cashAccountCount = await tx.cashAccount.count({
+        where: { accountId: id },
+      });
+      if (cashAccountCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is linked to ${cashAccountCount} cash register master record(s).`
+        );
+      }
+
+      // 8. Linked expense categories validation (direct account or default tax account)
+      const expenseCategoryCount = await tx.expenseCategory.count({
+        where: {
+          OR: [
+            { accountId: id },
+            { defaultInputTaxAccountId: id },
+          ],
+        },
+      });
+      if (expenseCategoryCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is linked to ${expenseCategoryCount} expense category configuration(s).`
+        );
+      }
+
+      // 9. Linked income categories validation
+      const incomeCategoryCount = await tx.incomeCategory.count({
+        where: { accountId: id },
+      });
+      if (incomeCategoryCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is linked to ${incomeCategoryCount} income category configuration(s).`
+        );
+      }
+
+      // 10. Linked receipts validation
+      const receiptCount = await tx.receipt.count({
+        where: { accountId: id },
+      });
+      if (receiptCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is linked to ${receiptCount} receipt record(s).`
+        );
+      }
+
+      // 11. Linked receipt payments validation
+      const receiptPaymentCount = await tx.receiptPayment.count({
+        where: { accountId: id },
+      });
+      if (receiptPaymentCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is linked to ${receiptPaymentCount} receipt payment transaction(s).`
+        );
+      }
+
+      // 12. Linked items (products / services) validation
+      const itemCount = await tx.product.count({
+        where: {
+          OR: [
+            { salesAccountId: id },
+            { purchaseAccountId: id },
+            { inventoryAccountId: id },
+          ],
+        },
+      });
+      if (itemCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is referenced on ${itemCount} product or service item(s).`
+        );
+      }
+
+      // 13. Linked invoice categories validation
+      const invoiceCategoryCount = await tx.invoiceCategory.count({
+        where: { defaultSalesAccountId: id },
+      });
+      if (invoiceCategoryCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is configured as the default sales account for ${invoiceCategoryCount} invoice category(ies).`
+        );
+      }
+
+      // 14. Linked commission rules validation
+      const commissionRuleCount = await tx.commissionRule.count({
+        where: {
+          OR: [
+            { expenseAccountId: id },
+            { payableAccountId: id },
+            { tdsAccountId: id },
+          ],
+        },
+      });
+      if (commissionRuleCount > 0) {
+        throw new ConflictException(
+          `Cannot delete account '${account.name}' because it is configured in ${commissionRuleCount} commission rule(s).`
+        );
+      }
+
+      // 15. Finally, execute deletion safely
+      return tx.account.delete({
+        where: { id },
+      });
     });
   }
 
@@ -883,14 +1283,40 @@ export class AccountsService {
     }
     await this.ensureDefaultChartOfAccounts(companyId);
 
-    const accounts = await this.prisma.account.findMany({
-      where: { companyId },
-      orderBy: { name: 'asc' },
-    });
+    const [accounts, protectedIds, settings] = await Promise.all([
+      this.prisma.account.findMany({
+        where: { companyId },
+        orderBy: { name: 'asc' },
+      }),
+      this.getProtectedAccountIds(companyId),
+      this.prisma.companySettings.findUnique({
+        where: { companyId },
+        select: { defaultAccounts: true },
+      }),
+    ]);
+
+    const defaultAccounts = (settings?.defaultAccounts as any) || {};
+    const accountTypesMap: Record<string, string> = defaultAccounts.accountTypes || {};
+    const accountDescsMap: Record<string, string> = defaultAccounts.accountDescriptions || {};
 
     const accountMap = new Map<string, any>();
     accounts.forEach(acc => {
-      accountMap.set(acc.id, { ...acc, children: [] });
+      const isSystem = Boolean((acc.isGroup && !acc.parentId) || protectedIds.has(acc.id));
+      const explicitType = accountTypesMap[acc.id];
+      const meta = explicitType
+        ? getAccountTypeMetadata(explicitType)
+        : mapLegacyAccountToDetailedType(acc.category, acc.subCategory, acc.name);
+
+      accountMap.set(acc.id, {
+        ...acc,
+        isSystem,
+        accountType: meta?.id || acc.subCategory || acc.category,
+        accountTypeName: meta?.displayName || acc.name,
+        mainGroupLabel: meta?.mainGroupLabel || acc.category,
+        normalBalance: meta?.normalBalance || (acc.category === 'ASSET' || acc.category === 'EXPENSE' ? 'DEBIT' : 'CREDIT'),
+        description: accountDescsMap[acc.id] || '',
+        children: [],
+      });
     });
 
     const tree: any[] = [];

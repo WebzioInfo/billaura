@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from '../shared/sequence/sequence.service';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto } from './dto/product.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
@@ -11,7 +12,8 @@ import type { Prisma } from '@prisma/client';
 export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sequenceService: SequenceService
+    private readonly sequenceService: SequenceService,
+    @Optional() private readonly accountingEngine?: AccountingEngineService
   ) { }
 
   private async validateAccountEligibility(
@@ -269,6 +271,30 @@ export class ProductsService {
                 date: new Date(),
               },
             });
+
+            // Post General Ledger journal entry for opening inventory asset
+            if (this.accountingEngine && openingRate > 0) {
+              const openingVal = Number((openingQty * openingRate).toFixed(2));
+              if (openingVal > 0) {
+                const invAcc = validatedInventoryAccountId
+                  ? await tx.account.findUnique({ where: { id: validatedInventoryAccountId } })
+                  : await this.accountingEngine.resolveAccount(companyId, 'INVENTORY_ASSET', tx);
+                const eqAcc = await this.accountingEngine.resolveAccount(companyId, 'OPENING_BALANCE_EQUITY', tx);
+
+                if (invAcc && eqAcc) {
+                  await this.accountingEngine.postTransaction({
+                    companyId,
+                    date: new Date(),
+                    reference: `OP-STK-${product.sku}`,
+                    description: `Opening Stock for ${product.name} (${openingQty} @ INR ${openingRate})`,
+                    lines: [
+                      { accountId: invAcc.id, debit: openingVal, credit: 0 },
+                      { accountId: eqAcc.id, debit: 0, credit: openingVal },
+                    ],
+                  }, tx);
+                }
+              }
+            }
           }
         }
       }

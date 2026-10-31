@@ -30,6 +30,10 @@ export class AccountLookupQueryDto extends PaginationQueryDto {
   subCategory?: AccountSubCategory;
 
   @IsOptional()
+  @IsString()
+  accountType?: string;
+
+  @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)
   isGroup?: boolean;
@@ -53,8 +57,12 @@ export class CreateAccountDto {
   code?: string;
 
   @IsEnum(AccountCategory)
-  @IsNotEmpty()
-  category: AccountCategory;
+  @IsOptional()
+  category?: AccountCategory;
+
+  @IsString()
+  @IsOptional()
+  accountType?: string;
 
   @IsEnum(AccountSubCategory)
   @IsOptional()
@@ -71,6 +79,10 @@ export class CreateAccountDto {
   @IsString()
   @IsOptional()
   parentId?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
 }
 
 export class UpdateAccountDto {
@@ -86,6 +98,10 @@ export class UpdateAccountDto {
   @IsOptional()
   category?: AccountCategory;
 
+  @IsString()
+  @IsOptional()
+  accountType?: string;
+
   @IsEnum(AccountSubCategory)
   @IsOptional()
   subCategory?: AccountSubCategory;
@@ -101,4 +117,8 @@ export class UpdateAccountDto {
   @IsString()
   @IsOptional()
   parentId?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
 }

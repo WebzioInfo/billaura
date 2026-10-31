@@ -4,9 +4,10 @@ import { HrController } from "./hr.controller";
 import { HrMastersService } from "./hr-masters.service";
 import { HrMastersController } from "./hr-masters.controller";
 import { DatabaseModule } from "../database/database.module";
+import { AccountingModule } from "../accounting/accounting.module";
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, AccountingModule],
   controllers: [HrController, HrMastersController],
   providers: [HrService, HrMastersService],
   exports: [HrService, HrMastersService],

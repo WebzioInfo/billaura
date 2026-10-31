@@ -13,8 +13,8 @@ describe('PurchaseOrdersService - Zoho Purchase Order Functionality', () => {
   const mockCompanyId = 'comp-zoho-test-123';
   const mockUserId = 'user-admin-456';
 
-  const mockPrisma = {
-    $transaction: jest.fn(async (cb) => {
+  const mockPrisma: any = {
+    $transaction: jest.fn(async (cb: any) => {
       if (typeof cb === 'function') {
         return cb(mockPrisma);
       }
@@ -86,7 +86,7 @@ describe('PurchaseOrdersService - Zoho Purchase Order Functionality', () => {
   describe('Item Calculations & Financial Totals', () => {
     it('3. should create a PO with valid items and accurately compute gross, tax, and grand total', async () => {
       mockPrisma.purchaseOrder.findFirst.mockResolvedValueOnce(null);
-      mockPrisma.purchaseOrder.create.mockImplementationOnce((args) => Promise.resolve({ id: 'po-new-1', ...args.data }));
+      mockPrisma.purchaseOrder.create.mockImplementationOnce((args: any) => Promise.resolve({ id: 'po-new-1', ...args.data }));
 
       const res = await service.create({
         businessPartnerId: 'vendor-1',
@@ -131,7 +131,7 @@ describe('PurchaseOrdersService - Zoho Purchase Order Functionality', () => {
   describe('TDS and TCS Accounting Handling', () => {
     it('5. should accurately calculate TDS deduction (subtracted from grand total)', async () => {
       mockPrisma.purchaseOrder.findFirst.mockResolvedValueOnce(null);
-      mockPrisma.purchaseOrder.create.mockImplementationOnce((args) => Promise.resolve({ id: 'po-tds', ...args.data }));
+      mockPrisma.purchaseOrder.create.mockImplementationOnce((args: any) => Promise.resolve({ id: 'po-tds', ...args.data }));
 
       // 10 qty * 1000 rate = 10,000 taxable. Tax (18%) = 1,800.
       // TDS 2% (Sec 194I) on 10,000 = 200 deduction
@@ -163,7 +163,7 @@ describe('PurchaseOrdersService - Zoho Purchase Order Functionality', () => {
 
     it('6. should accurately calculate TCS addition (added to grand total)', async () => {
       mockPrisma.purchaseOrder.findFirst.mockResolvedValueOnce(null);
-      mockPrisma.purchaseOrder.create.mockImplementationOnce((args) => Promise.resolve({ id: 'po-tcs', ...args.data }));
+      mockPrisma.purchaseOrder.create.mockImplementationOnce((args: any) => Promise.resolve({ id: 'po-tcs', ...args.data }));
 
       // 10 qty * 1000 rate = 10,000 taxable. Tax (18%) = 1,800.
       // TCS 1% (Sec 206C) on 10,000 = 100 addition
@@ -197,7 +197,7 @@ describe('PurchaseOrdersService - Zoho Purchase Order Functionality', () => {
   describe('Delivery Address Persistence (Organization vs Customer)', () => {
     it('7. should persist customer delivery address destination and helper metadata', async () => {
       mockPrisma.purchaseOrder.findFirst.mockResolvedValueOnce(null);
-      mockPrisma.purchaseOrder.create.mockImplementationOnce((args) => Promise.resolve({ id: 'po-cust', ...args.data }));
+      mockPrisma.purchaseOrder.create.mockImplementationOnce((args: any) => Promise.resolve({ id: 'po-cust', ...args.data }));
 
       await service.create({
         businessPartnerId: 'vendor-1',

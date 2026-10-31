@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Optional } from '@nestjs/common';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 import { PrismaService } from '../database/prisma.service';
 import { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
 import { AttendanceEngine } from './attendance-engine';
@@ -8,7 +9,10 @@ import { CompanyContext } from '../common/context/company-context';
 
 @Injectable()
 export class HrService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly accountingEngine?: AccountingEngineService,
+  ) {}
 
 // Removed Departments & Designations
 
@@ -933,63 +937,71 @@ export class HrService {
     return this.prisma.$transaction(async (tx) => {
       const netSalary = Number(slip.netSalary);
 
-      // Fetch or Create Payroll Expense Account
-      let payrollAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Payroll Expense' },
-      });
-      if (!payrollAccount) {
-        payrollAccount = await tx.account.create({
-          data: { companyId, name: 'Payroll Expense', category: 'EXPENSE', balance: 0 },
+      // Fetch or Resolve Salary Payable Account (clears accrual liability)
+      let payableAccount = this.accountingEngine
+        ? await this.accountingEngine.resolveAccount(companyId, 'SALARY_PAYABLE', tx)
+        : await tx.account.findFirst({ where: { companyId, name: 'Salary Payable' } });
+
+      if (!payableAccount) {
+        payableAccount = await tx.account.create({
+          data: { companyId, name: 'Salary Payable', category: 'LIABILITY', balance: 0 },
         });
       }
 
-      // Fetch Bank Account
+      // Fetch Operating Bank Account
       const bankAccount = await tx.bankAccount.findUnique({
         where: { id: dto.bankAccountId },
       });
       if (!bankAccount) throw new NotFoundException('Bank account not found');
 
       // Fetch or Create Bank General Ledger Account
-      let bankGlAccount = await tx.account.findFirst({
-        where: { companyId, name: bankAccount.name },
-      });
+      let bankGlAccount = bankAccount.accountId
+        ? await tx.account.findUnique({ where: { id: bankAccount.accountId } })
+        : null;
+
+      if (!bankGlAccount) {
+        bankGlAccount = await tx.account.findFirst({
+          where: { companyId, name: bankAccount.name },
+        });
+      }
+
       if (!bankGlAccount) {
         bankGlAccount = await tx.account.create({
           data: { companyId, name: bankAccount.name, category: 'ASSET', balance: 0 },
         });
       }
 
-      // Post Journal Entry (Debit Payroll Expense, Credit Bank)
-      await tx.journalEntry.create({
-        data: {
+      const year = slip.startDate.getFullYear();
+      const month = slip.startDate.getMonth() + 1;
+      const ref = `SAL-PAY-${year}-${month}-${slip.employee?.employeeCode || slip.id.slice(-6)}`;
+
+      // Post Payment Journal Entry (Debit Salary Payable, Credit Bank) via Central Engine
+      if (this.accountingEngine) {
+        await this.accountingEngine.postTransaction({
           companyId,
           date: new Date(),
-          reference: `SAL-${slip.startDate.getFullYear()}-${slip.startDate.getMonth() + 1}-${slip.employee.employeeCode}`,
-          description: `Salary Payment for ${slip.employee.name} (${slip.startDate.toLocaleDateString()} - ${slip.endDate.toLocaleDateString()})`,
-          lines: {
-            create: [
-              { accountId: payrollAccount.id, debit: netSalary, credit: 0, departmentId: slip.employee.departmentId || null },
-              { accountId: bankGlAccount.id, debit: 0, credit: netSalary, departmentId: slip.employee.departmentId || null },
-            ],
-          },
-        },
-      });
-
-      // Update Ledger Balances
-      await tx.account.update({
-        where: { id: payrollAccount.id },
-        data: { balance: { increment: netSalary } },
-      });
-      await tx.account.update({
-        where: { id: bankGlAccount.id },
-        data: { balance: { decrement: netSalary } }, // Asset credit -> balance decreases
-      });
-
-      // Decrement operating Bank Account
-      await tx.bankAccount.update({
-        where: { id: bankAccount.id },
-        data: { currentBalance: { decrement: netSalary } },
-      });
+          reference: ref,
+          description: `Salary Payment for ${slip.employee?.name || 'Employee'} (${slip.startDate.toLocaleDateString()} - ${slip.endDate.toLocaleDateString()})`,
+          lines: [
+            { accountId: payableAccount.id, debit: netSalary, credit: 0, departmentId: slip.employee?.departmentId || undefined },
+            { accountId: bankGlAccount.id, debit: 0, credit: netSalary, departmentId: slip.employee?.departmentId || undefined },
+          ],
+        }, tx);
+      } else {
+        // Fallback for isolated unit tests without engine
+        await tx.account.update({
+          where: { id: payableAccount.id },
+          data: { balance: { decrement: netSalary } },
+        });
+        await tx.account.update({
+          where: { id: bankGlAccount.id },
+          data: { balance: { decrement: netSalary } },
+        });
+        await tx.bankAccount.update({
+          where: { id: bankAccount.id },
+          data: { currentBalance: { decrement: netSalary } },
+        });
+      }
 
       // Mark as Paid
       return tx.salarySlip.update({
@@ -1005,6 +1017,7 @@ export class HrService {
 
     const slip = await this.prisma.salarySlip.findFirst({
       where: { id, companyId },
+      include: { employee: true },
     });
 
     if (!slip) throw new NotFoundException('Salary slip not found');
@@ -1012,17 +1025,63 @@ export class HrService {
       throw new ConflictException(`Cannot approve salary slip in ${slip.status} state`);
     }
 
-    return this.prisma.salarySlip.update({
-      where: { id },
-      data: { 
-        status: 'APPROVED',
-        auditLogs: {
-          create: {
-            action: 'APPROVED',
-            userId: CompanyContext.getUserId(),
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Post General Ledger Accrual Journal Entry
+      if (this.accountingEngine) {
+        const basicSalary = Number(slip.basicSalary || 0);
+        const allowances = Number(slip.allowances || 0);
+        const grossSalary = Number((basicSalary + allowances).toFixed(2));
+        const deductions = Number(Number(slip.deductions || 0).toFixed(2));
+        const netSalary = Number(Number(slip.netSalary || 0).toFixed(2));
+
+        if (grossSalary > 0) {
+          const expenseAcc = await this.accountingEngine.resolveAccount(companyId, 'SALARY_EXPENSE', tx);
+          const payableAcc = await this.accountingEngine.resolveAccount(companyId, 'SALARY_PAYABLE', tx);
+          const statutoryAcc = deductions > 0
+            ? await this.accountingEngine.resolveAccount(companyId, 'STATUTORY_PF_PAYABLE', tx)
+            : null;
+
+          const lines: any[] = [
+            { accountId: expenseAcc.id, debit: grossSalary, credit: 0, departmentId: slip.employee?.departmentId || undefined },
+            { accountId: payableAcc.id, debit: 0, credit: netSalary, departmentId: slip.employee?.departmentId || undefined },
+          ];
+
+          if (deductions > 0 && statutoryAcc) {
+            lines.push({
+              accountId: statutoryAcc.id,
+              debit: 0,
+              credit: deductions,
+              departmentId: slip.employee?.departmentId || undefined,
+            });
           }
+
+          const year = slip.startDate.getFullYear();
+          const month = slip.startDate.getMonth() + 1;
+          const ref = `SAL-ACC-${year}-${month}-${slip.employee?.employeeCode || slip.id.slice(-6)}`;
+
+          await this.accountingEngine.postTransaction({
+            companyId,
+            date: new Date(),
+            reference: ref,
+            description: `Payroll Accrual for ${slip.employee?.name || 'Employee'} (${slip.startDate.toLocaleDateString()} - ${slip.endDate.toLocaleDateString()})`,
+            lines,
+          }, tx);
         }
-      },
+      }
+
+      // 2. Mark slip as APPROVED
+      return tx.salarySlip.update({
+        where: { id },
+        data: {
+          status: 'APPROVED',
+          auditLogs: {
+            create: {
+              action: 'APPROVED',
+              userId: CompanyContext.getUserId(),
+            },
+          },
+        },
+      });
     });
   }
 

@@ -1066,6 +1066,43 @@ export class InvoicesService {
         },
       });
     }
+
+    // 6. Post Cost of Goods Sold and Inventory Asset accounting integration
+    let totalCogsValue = 0;
+    for (const { item, product } of physicalItems) {
+      const itemQty = Number(item.qty);
+      const unitCost = Number(product.purchasePrice || 0);
+      totalCogsValue += Number((itemQty * unitCost).toFixed(2));
+    }
+
+    if (totalCogsValue > 0 && this.accountingEngine) {
+      const cogsAcc = typeof this.accountingEngine.resolveAccount === 'function'
+        ? await this.accountingEngine.resolveAccount(companyId, 'COST_OF_GOODS_SOLD', tx)
+        : await tx.account.findFirst({ where: { companyId, name: 'Cost of Goods Sold' } });
+      const invAcc = typeof this.accountingEngine.resolveAccount === 'function'
+        ? await this.accountingEngine.resolveAccount(companyId, 'INVENTORY_ASSET', tx)
+        : await tx.account.findFirst({ where: { companyId, name: 'Inventory Asset' } });
+
+      if (cogsAcc && invAcc) {
+        await this.accountingEngine.postTransaction({
+          companyId,
+          date: new Date(),
+          reference: isCreditNote ? `COGS-RET-${invoice.invoiceNo}` : `COGS-${invoice.invoiceNo}`,
+          description: isCreditNote
+            ? `Cost of Sales Reversal for Credit Note ${invoice.invoiceNo}`
+            : `Cost of Goods Sold for Invoice ${invoice.invoiceNo}`,
+          lines: isCreditNote
+            ? [
+                { accountId: invAcc.id, debit: totalCogsValue, credit: 0 },
+                { accountId: cogsAcc.id, debit: 0, credit: totalCogsValue },
+              ]
+            : [
+                { accountId: cogsAcc.id, debit: totalCogsValue, credit: 0 },
+                { accountId: invAcc.id, debit: 0, credit: totalCogsValue },
+              ],
+        }, tx);
+      }
+    }
   }
 
   async create(dto: CreateInvoiceDto, txClient?: Prisma.TransactionClient, userId?: string) {

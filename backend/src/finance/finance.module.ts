@@ -7,8 +7,11 @@ import { ReconciliationController } from "./reconciliation.controller";
 import { ReconciliationService } from "./reconciliation.service";
 import { AdvancesController } from "./advances.controller";
 import { AdvancesService } from "./advances.service";
+import { DatabaseModule } from "../database/database.module";
+import { AccountingModule } from "../accounting/accounting.module";
 
 @Module({
+  imports: [DatabaseModule, AccountingModule],
   controllers: [
     AdvancesController,
     CashController,
@@ -16,5 +19,6 @@ import { AdvancesService } from "./advances.service";
     ReconciliationController,
   ],
   providers: [AdvancesService, CashService, BankService, ReconciliationService],
+  exports: [BankService, CashService],
 })
 export class FinanceModule {}

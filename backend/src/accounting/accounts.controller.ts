@@ -8,8 +8,6 @@ import {
   Param,
   Query,
   UseGuards,
-  HttpStatus,
-  HttpCode,
 } from "@nestjs/common";
 import { AccountsService } from "./accounts.service";
 import { CreateAccountDto, UpdateAccountDto, AccountLookupQueryDto } from "./dto/account.dto";
@@ -78,8 +76,12 @@ export class AccountsController {
   }
 
   @Delete(":id")
-  @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param("id") id: string) {
-    await this.accountsService.remove(id);
+    const data = await this.accountsService.remove(id);
+    return {
+      success: true,
+      message: "Account deleted successfully",
+      data,
+    };
   }
 }

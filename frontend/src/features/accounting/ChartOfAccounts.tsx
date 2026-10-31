@@ -32,6 +32,9 @@ import {
   ZohoSplitDetail,
   ZohoFormFooter,
 } from '@/shared/components/zoho';
+import { DeleteDialog } from '@/shared/components/ui';
+import { AccountTypeSelect } from './components/AccountTypeSelect';
+import { getAccountTypeMetadata, MainAccountGroup, AccountTypeMetadata } from './constants/account-types.constant';
 
 // Indian Currency Formatter
 const formatINR = (val: number, forceDecimals = true) => {
@@ -50,8 +53,10 @@ export interface AccountNode {
   id: string;
   name: string;
   code?: string;
-  category: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+  category: MainAccountGroup;
   accountType?: string;
+  accountTypeName?: string;
+  normalBalance?: string;
   balance?: number;
   isGroup?: boolean;
   parentId?: string | null;
@@ -110,7 +115,9 @@ export const ChartOfAccounts: React.FC = () => {
   // Create / Edit Account Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingAccount, setEditingAccount] = useState<AccountNode | null>(null);
-  const [modalCategory, setModalCategory] = useState<string>('EXPENSE');
+  const [accountToDelete, setAccountToDelete] = useState<AccountNode | null>(null);
+  const [modalCategory, setModalCategory] = useState<MainAccountGroup>('EXPENSE');
+  const [modalAccountType, setModalAccountType] = useState<string>('EXPENSE');
   const [modalName, setModalName] = useState<string>('');
   const [modalCode, setModalCode] = useState<string>('');
   const [modalParentId, setModalParentId] = useState<string>('');
@@ -226,7 +233,13 @@ export const ChartOfAccounts: React.FC = () => {
   // Handle open create account modal
   const handleOpenCreate = (parentAcc?: AccountNode) => {
     setEditingAccount(null);
-    setModalCategory(parentAcc ? parentAcc.category : 'EXPENSE');
+    const initialCategory: MainAccountGroup = parentAcc ? parentAcc.category : 'EXPENSE';
+    const initialMeta = parentAcc?.accountType
+      ? getAccountTypeMetadata(parentAcc.accountType)
+      : getAccountTypeMetadata(initialCategory);
+
+    setModalCategory(initialMeta ? initialMeta.mainGroup : initialCategory);
+    setModalAccountType(initialMeta ? initialMeta.id : 'EXPENSE');
     setModalName('');
     setModalCode('');
     setModalParentId(parentAcc ? parentAcc.id : '');
@@ -238,7 +251,9 @@ export const ChartOfAccounts: React.FC = () => {
   // Handle open edit account modal
   const handleOpenEdit = (acc: AccountNode) => {
     setEditingAccount(acc);
-    setModalCategory(acc.category);
+    const meta = getAccountTypeMetadata(acc.accountType || acc.category);
+    setModalCategory(meta ? meta.mainGroup : acc.category);
+    setModalAccountType(meta ? meta.id : (acc.accountType || acc.category));
     setModalName(acc.name);
     setModalCode(acc.code || '');
     setModalParentId(acc.parentId || '');
@@ -247,6 +262,10 @@ export const ChartOfAccounts: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const selectedTypeMeta = useMemo(() => {
+    return getAccountTypeMetadata(modalAccountType) || getAccountTypeMetadata(modalCategory);
+  }, [modalAccountType, modalCategory]);
+
   // Create / Update Account Mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -254,6 +273,7 @@ export const ChartOfAccounts: React.FC = () => {
         name: modalName.trim(),
         code: modalCode.trim() || undefined,
         category: modalCategory,
+        accountType: modalAccountType,
         parentId: modalParentId || undefined,
         description: modalDescription.trim() || undefined,
       };
@@ -284,14 +304,29 @@ export const ChartOfAccounts: React.FC = () => {
     },
     onSuccess: () => {
       notification.success('Account deleted successfully');
+      setAccountToDelete(null);
       setSelectedAccount(null);
       queryClient.invalidateQueries({ queryKey: ['accounts-tree'] });
       queryClient.invalidateQueries({ queryKey: ['accounts-lookup-full'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to delete account');
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to delete account';
+      notification.error(errMsg);
     },
   });
+
+  const handleDeleteConfirm = async () => {
+    if (!accountToDelete || deleteMutation.isPending) return;
+    try {
+      await deleteMutation.mutateAsync(accountToDelete.id);
+    } catch {
+      // Error handled by onError callback in deleteMutation
+    }
+  };
 
   // Export to Excel
   const handleExport = () => {
@@ -478,6 +513,15 @@ export const ChartOfAccounts: React.FC = () => {
             >
               <ExternalLink className="w-3.5 h-3.5" /> Full Ledger
             </button>
+            {!selectedAccount.isSystem && selectedAccount.depth !== 0 && (
+              <button
+                type="button"
+                onClick={() => setAccountToDelete(selectedAccount)}
+                className="px-3 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-600 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-500" /> Delete
+              </button>
+            )}
           </div>
         }
       >
@@ -603,6 +647,21 @@ export const ChartOfAccounts: React.FC = () => {
             </div>
           </div>
         </div>
+        {accountToDelete && (
+          <DeleteDialog
+            isOpen={!!accountToDelete}
+            onClose={() => {
+              if (!deleteMutation.isPending) {
+                setAccountToDelete(null);
+              }
+            }}
+            onConfirm={handleDeleteConfirm}
+            entityName={`Account "${accountToDelete.name}"${accountToDelete.code ? ` (${accountToDelete.code})` : ''}`}
+            warningText="Deleting an account may affect accounting references and historical transactions. Accounts with existing transactions, child accounts, or active system configurations cannot be deleted. This action cannot be undone."
+            isLoading={deleteMutation.isPending}
+            loadingText="Deleting account..."
+          />
+        )}
       </ZohoSplitDetail>
     );
   }
@@ -691,11 +750,19 @@ export const ChartOfAccounts: React.FC = () => {
       key: 'category',
       label: 'ACCOUNT TYPE',
       width: '18%',
-      render: (row: AccountNode) => (
-        <span className="text-xs text-gray-700 font-medium">
-          {ACCOUNT_TYPE_TOOLTIPS[row.category]?.label || row.category}
-        </span>
-      ),
+      render: (row: AccountNode) => {
+        const meta = getAccountTypeMetadata(row.accountType || row.category);
+        return (
+          <div className="flex flex-col py-0.5">
+            <span className="text-xs text-gray-800 font-medium truncate">
+              {meta?.displayName || row.accountType || row.category}
+            </span>
+            <span className="text-[10px] text-gray-400 font-normal">
+              {meta?.mainGroupLabel || row.category}
+            </span>
+          </div>
+        );
+      },
     },
     {
       key: 'documents',
@@ -719,17 +786,17 @@ export const ChartOfAccounts: React.FC = () => {
     {
       key: 'actions',
       label: '',
-      width: '50px',
+      width: '76px',
       align: 'right' as const,
       render: (row: AccountNode) => {
-        if (row.isSystem) return null;
+        const isProtected = Boolean(row.isSystem || row.depth === 0);
         return (
           <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => handleOpenCreate(row)}
               title="Add sub-account"
-              className="p-1 text-gray-400 hover:text-[#408DFB] rounded"
+              className="p-1 text-gray-400 hover:text-[#408DFB] hover:bg-gray-100 rounded transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -737,10 +804,20 @@ export const ChartOfAccounts: React.FC = () => {
               type="button"
               onClick={() => handleOpenEdit(row)}
               title="Edit Account"
-              className="p-1 text-gray-400 hover:text-gray-700 rounded"
+              className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors cursor-pointer"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
+            {!isProtected && (
+              <button
+                type="button"
+                onClick={() => setAccountToDelete(row)}
+                title="Delete Account"
+                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         );
       },
@@ -808,22 +885,31 @@ export const ChartOfAccounts: React.FC = () => {
             {/* Modal Body: Left Inputs + Right Dark Card */}
             <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div className="md:col-span-2 space-y-4">
-                {/* Account Type */}
+                {/* Account Type (Zoho Searchable Dropdown) */}
                 <div>
                   <label className="block text-gray-700 font-medium mb-1">
                     Account Type <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={modalCategory}
-                    onChange={(e) => setModalCategory(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] bg-white"
-                  >
-                    <option value="ASSET">Asset</option>
-                    <option value="LIABILITY">Liability</option>
-                    <option value="EQUITY">Equity</option>
-                    <option value="REVENUE">Income / Revenue</option>
-                    <option value="EXPENSE">Expense</option>
-                  </select>
+                  <AccountTypeSelect
+                    value={modalAccountType}
+                    category={modalCategory}
+                    lockMainGroup={Boolean(editingAccount && editingAccount.balance !== 0)}
+                    lockReason={
+                      editingAccount && editingAccount.balance !== 0
+                        ? `Main group locked (${modalCategory}) due to recorded transaction history.`
+                        : undefined
+                    }
+                    onChange={(selectedType) => {
+                      setModalAccountType(selectedType.id);
+                      setModalCategory(selectedType.mainGroup);
+                      if (modalParentId) {
+                        const parent = flatAccounts.find((a) => a.id === modalParentId);
+                        if (parent && parent.category !== selectedType.mainGroup) {
+                          setModalParentId('');
+                        }
+                      }
+                    }}
+                  />
                 </div>
 
                 {/* Account Name */}
@@ -906,18 +992,41 @@ export const ChartOfAccounts: React.FC = () => {
 
               {/* Right Side Dark Tooltip Card */}
               <div className="bg-[#1E2540] text-white p-4 rounded-md shadow-md text-xs space-y-3">
-                <div className="flex items-center gap-1.5 text-blue-300 font-semibold uppercase text-[11px]">
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  <span>{ACCOUNT_TYPE_TOOLTIPS[modalCategory]?.label}</span>
+                <div className="flex items-center justify-between text-blue-300 font-semibold text-[11px]">
+                  <div className="flex items-center gap-1.5 uppercase">
+                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{selectedTypeMeta?.displayName || modalCategory}</span>
+                  </div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-200 border border-blue-700/50">
+                    {selectedTypeMeta?.mainGroupLabel || modalCategory}
+                  </span>
                 </div>
                 <p className="text-gray-200 leading-relaxed text-[11px]">
-                  {ACCOUNT_TYPE_TOOLTIPS[modalCategory]?.desc}
+                  {selectedTypeMeta?.description || ACCOUNT_TYPE_TOOLTIPS[modalCategory]?.desc}
                 </p>
-                <div className="pt-2 border-t border-gray-700/60 text-[11px] text-gray-400">
-                  Normal Balance:{' '}
-                  <span className="text-white font-semibold">
-                    {ACCOUNT_TYPE_TOOLTIPS[modalCategory]?.normalBalance}
-                  </span>
+                <div className="pt-2 border-t border-gray-700/60 space-y-1.5 text-[11px] text-gray-400">
+                  <div className="flex items-center justify-between">
+                    <span>Normal Balance:</span>
+                    <span className="text-white font-semibold">
+                      {selectedTypeMeta?.normalBalanceLabel || (modalCategory === 'ASSET' || modalCategory === 'EXPENSE' ? 'Debit (Dr)' : 'Credit (Cr)')}
+                    </span>
+                  </div>
+                  {selectedTypeMeta?.classification && (
+                    <div className="flex items-center justify-between">
+                      <span>Classification:</span>
+                      <span className="text-blue-200 font-medium capitalize">
+                        {selectedTypeMeta.classification.toLowerCase().replace('_', ' ')}
+                      </span>
+                    </div>
+                  )}
+                  {selectedTypeMeta?.statement && (
+                    <div className="flex items-center justify-between">
+                      <span>Financial Statement:</span>
+                      <span className="text-gray-300 font-medium">
+                        {selectedTypeMeta.statement === 'BALANCE_SHEET' ? 'Balance Sheet' : 'Profit & Loss'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -943,6 +1052,23 @@ export const ChartOfAccounts: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete Account Confirmation Dialog */}
+      {accountToDelete && (
+        <DeleteDialog
+          isOpen={!!accountToDelete}
+          onClose={() => {
+            if (!deleteMutation.isPending) {
+              setAccountToDelete(null);
+            }
+          }}
+          onConfirm={handleDeleteConfirm}
+          entityName={`Account "${accountToDelete.name}"${accountToDelete.code ? ` (${accountToDelete.code})` : ''}`}
+          warningText="Deleting an account may affect accounting references and historical transactions. Accounts with existing transactions, child accounts, or active system configurations cannot be deleted. This action cannot be undone."
+          isLoading={deleteMutation.isPending}
+          loadingText="Deleting account..."
+        />
       )}
     </div>
   );

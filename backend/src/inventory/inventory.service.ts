@@ -1,14 +1,18 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { StockAdjustDto, StockAdjustmentType, StockQueryDto } from './dto/stock-adjust.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
+import { AccountingEngineService } from '../accounting/accounting-engine.service';
 import type { Prisma } from '@prisma/client';
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly accountingEngine?: AccountingEngineService,
+  ) {}
 
   async adjustStock(dto: StockAdjustDto) {
     const companyId = CompanyContext.getCompanyId();
@@ -125,6 +129,38 @@ export class InventoryService {
           date: new Date(),
         },
       });
+
+      // Synchronize with General Ledger if adjustment value > 0
+      if (this.accountingEngine && qtyChange !== 0) {
+        const costRate = Number(existingStock?.averageCost ?? product.purchasePrice ?? 0);
+        const adjustmentValue = Number((Math.abs(qtyChange) * costRate).toFixed(2));
+
+        if (adjustmentValue > 0) {
+          const invAcc = product.inventoryAccountId
+            ? await tx.account.findUnique({ where: { id: product.inventoryAccountId } })
+            : await this.accountingEngine.resolveAccount(companyId, 'INVENTORY_ASSET', tx);
+          const adjAcc = await this.accountingEngine.resolveAccount(companyId, 'STOCK_ADJUSTMENT', tx);
+
+          if (invAcc && adjAcc) {
+            const isGain = qtyChange > 0;
+            await this.accountingEngine.postTransaction({
+              companyId,
+              date: new Date(),
+              reference: `STK-ADJ-${dto.productId.slice(0, 8)}-${Date.now()}`,
+              description: formattedNotes,
+              lines: isGain
+                ? [
+                    { accountId: invAcc.id, debit: adjustmentValue, credit: 0 },
+                    { accountId: adjAcc.id, debit: 0, credit: adjustmentValue },
+                  ]
+                : [
+                    { accountId: adjAcc.id, debit: adjustmentValue, credit: 0 },
+                    { accountId: invAcc.id, debit: 0, credit: adjustmentValue },
+                  ],
+            }, tx);
+          }
+        }
+      }
 
       return stock;
     });

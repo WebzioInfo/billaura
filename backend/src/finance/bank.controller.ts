@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from "@nestjs/common";
-import { BankService } from "./bank.service";
+import { BankService, CreateBankTransferDto } from "./bank.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 
 @Controller("finance/bank")
@@ -15,6 +15,16 @@ export class BankController {
   @Get("transactions")
   findAllTransactions() {
     return this.bankService.findAllTransactions();
+  }
+
+  @Get("transfers")
+  findAllTransfers() {
+    return this.bankService.findAllTransfers();
+  }
+
+  @Post("transfers")
+  createTransfer(@Body() dto: CreateBankTransferDto) {
+    return this.bankService.createTransfer(dto);
   }
 
   @Get("stats")
