@@ -227,19 +227,87 @@ export class BankService {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
 
-    const cash = await this.prisma.cashAccount.findFirst({
-      where: { id, companyId, deletedAt: null },
-    });
-    if (cash) {
-      return this.prisma.cashAccount.update({
-        where: { id },
-        data: { deletedAt: new Date() },
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Locate account (Cash or Bank)
+      const cash = await tx.cashAccount.findFirst({
+        where: { id, companyId, deletedAt: null },
       });
-    }
+      const bank = !cash
+        ? await tx.bankAccount.findFirst({
+            where: { id, companyId, deletedAt: null },
+          })
+        : null;
 
-    return this.prisma.bankAccount.update({
-      where: { id, companyId },
-      data: { deletedAt: new Date() },
+      const target = cash || bank;
+      if (!target) {
+        throw new NotFoundException('Account not found or already deleted');
+      }
+
+      // Rule 4: Cannot delete the last active account of the company
+      const [activeBanks, activeCash] = await Promise.all([
+        tx.bankAccount.count({ where: { companyId, deletedAt: null } }),
+        tx.cashAccount.count({ where: { companyId, deletedAt: null } }),
+      ]);
+      if (activeBanks + activeCash <= 1) {
+        throw new BadRequestException(
+          'Cannot delete the last active account. A company must maintain at least one active bank or cash account for business operations.'
+        );
+      }
+
+      // Rule 1: Non-zero balance check
+      const currentBalance = Number(target.currentBalance || 0);
+      if (Math.abs(currentBalance) > 0.001) {
+        const formatted = new Intl.NumberFormat('en-IN', {
+          style: 'currency',
+          currency: 'INR',
+        }).format(currentBalance);
+        throw new BadRequestException(
+          `Cannot delete '${target.name}' because it has an active balance of ${formatted}. Please transfer or withdraw the balance to ₹0.00 before deleting.`
+        );
+      }
+
+      // Rule 3: Soft delete by setting deletedAt and unset isDefault
+      if (cash) {
+        await tx.cashAccount.update({
+          where: { id },
+          data: { deletedAt: new Date(), isDefault: false },
+        });
+      } else {
+        await tx.bankAccount.update({
+          where: { id, companyId },
+          data: { deletedAt: new Date(), isDefault: false },
+        });
+      }
+
+      // Rule 2: If this was the default account, promote another remaining active account
+      if (target.isDefault) {
+        const nextBank = await tx.bankAccount.findFirst({
+          where: { companyId, id: { not: id }, deletedAt: null },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (nextBank) {
+          await tx.bankAccount.update({
+            where: { id: nextBank.id },
+            data: { isDefault: true },
+          });
+        } else {
+          const nextCash = await tx.cashAccount.findFirst({
+            where: { companyId, id: { not: id }, deletedAt: null },
+            orderBy: { createdAt: 'asc' },
+          });
+          if (nextCash) {
+            await tx.cashAccount.update({
+              where: { id: nextCash.id },
+              data: { isDefault: true },
+            });
+          }
+        }
+      }
+
+      return {
+        success: true,
+        message: `Account '${target.name}' successfully deleted.`,
+      };
     });
   }
 
