@@ -121,6 +121,7 @@ export class CapitalService {
       let bank = await tx.bankAccount.findFirst({
         where: { id: dto.bankAccountId, companyId, deletedAt: null },
       });
+      let cash: any = null;
 
       let bankLedger: any = null;
       if (bank) {
@@ -136,7 +137,7 @@ export class CapitalService {
         }
       } else {
         // Check if cash account
-        const cash = await tx.cashAccount.findFirst({
+        cash = await tx.cashAccount.findFirst({
           where: { id: dto.bankAccountId, companyId, deletedAt: null },
         });
         if (cash) {
@@ -260,7 +261,7 @@ export class CapitalService {
         data: { balance: { decrement: dto.amount } },
       });
 
-      // 5. Update Bank Account Balance & Record BankTransaction (A1)
+      // 5. Update Bank / Cash Account Balance & Record Transaction Statement (A1)
       if (bank) {
         const bankChange = isIntroduced ? dto.amount : -dto.amount;
         const newBalance = Number(bank.currentBalance) + bankChange;
@@ -274,6 +275,27 @@ export class CapitalService {
           data: {
             companyId,
             bankAccountId: bank.id,
+            date: new Date(dto.date),
+            type: isIntroduced ? 'DEPOSIT' : 'WITHDRAWAL',
+            amount: dto.amount,
+            balanceAfter: newBalance,
+            reference: ref,
+            description: narration,
+          },
+        });
+      } else if (cash) {
+        const cashChange = isIntroduced ? dto.amount : -dto.amount;
+        const newBalance = Number(cash.currentBalance) + cashChange;
+
+        await tx.cashAccount.update({
+          where: { id: cash.id },
+          data: { currentBalance: { increment: cashChange } },
+        });
+
+        await tx.cashTransaction.create({
+          data: {
+            companyId,
+            cashAccountId: cash.id,
             date: new Date(dto.date),
             type: isIntroduced ? 'DEPOSIT' : 'WITHDRAWAL',
             amount: dto.amount,

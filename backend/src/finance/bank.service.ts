@@ -24,20 +24,70 @@ export class BankService {
   async findAllAccounts() {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
-    return this.prisma.bankAccount.findMany({
-      where: { companyId, deletedAt: null },
-      orderBy: { name: 'asc' },
-    });
+
+    const [bankAccounts, cashAccounts] = await Promise.all([
+      this.prisma.bankAccount.findMany({
+        where: { companyId, deletedAt: null },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.cashAccount.findMany({
+        where: { companyId, deletedAt: null },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    const mappedCashAccounts = cashAccounts.map((c) => ({
+      ...c,
+      accountType: 'CASH' as const,
+      bankName: 'Cash in Hand',
+      accountNumber: '',
+      ifsc: '',
+    }));
+
+    return [...bankAccounts, ...mappedCashAccounts];
   }
 
   async findAllTransactions() {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
-    return this.prisma.bankTransaction.findMany({
-      where: { companyId },
-      include: { bankAccount: true },
-      orderBy: { date: 'desc' },
-    });
+
+    const [bankTxns, cashTxns] = await Promise.all([
+      this.prisma.bankTransaction.findMany({
+        where: { companyId },
+        include: { bankAccount: true },
+        orderBy: { date: 'desc' },
+      }),
+      this.prisma.cashTransaction.findMany({
+        where: { companyId, deletedAt: null },
+        include: { cashAccount: true },
+        orderBy: { date: 'desc' },
+      }),
+    ]);
+
+    const mappedCashTxns = cashTxns.map((c) => ({
+      id: c.id,
+      date: c.date,
+      type: c.type,
+      amount: c.amount,
+      credit: c.type === 'DEPOSIT' || c.type === 'INFLOW' ? c.amount : 0,
+      debit: c.type === 'WITHDRAWAL' || c.type === 'OUTFLOW' ? c.amount : 0,
+      balanceAfter: c.balanceAfter,
+      reference: c.reference,
+      description: c.description || 'Cash Transaction',
+      bankAccountId: c.cashAccountId,
+      bankAccount: {
+        id: c.cashAccountId,
+        name: c.cashAccount.name,
+        accountType: 'CASH',
+        bankName: 'Cash',
+      },
+      status: 'RECONCILED',
+      createdAt: c.createdAt,
+    }));
+
+    return [...bankTxns, ...mappedCashTxns].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
   }
 
   async getDashboardStats() {
@@ -45,7 +95,7 @@ export class BankService {
     if (!companyId) throw new NotFoundException('Company context required');
 
     const accounts = await this.findAllAccounts();
-    const totalBalance = accounts.reduce((acc, account) => acc + Number(account.currentBalance), 0);
+    const totalBalance = accounts.reduce((acc, account) => acc + Number(account.currentBalance || 0), 0);
 
     return {
       totalBalance,
@@ -56,16 +106,72 @@ export class BankService {
   async createAccount(data: any) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
+
+    if (data.accountType === 'CASH') {
+      if (data.isDefault) {
+        await this.prisma.cashAccount.updateMany({
+          where: { companyId },
+          data: { isDefault: false },
+        });
+      }
+
+      // Auto-resolve or find Chart of Accounts ledger for this Cash account
+      let accountId = data.accountId;
+      if (!accountId) {
+        const glAccount = await this.prisma.account.findFirst({
+          where: {
+            companyId,
+            deletedAt: null,
+            OR: [
+              { name: { equals: data.name, mode: 'insensitive' } },
+              { name: { equals: 'Cash', mode: 'insensitive' } },
+              { name: { contains: 'Petty Cash', mode: 'insensitive' } },
+            ],
+          },
+        });
+        if (glAccount) {
+          accountId = glAccount.id;
+        }
+      }
+
+      return this.prisma.cashAccount.create({
+        data: {
+          companyId,
+          name: data.name,
+          openingBalance: data.openingBalance || 0,
+          currentBalance: data.currentBalance ?? data.openingBalance ?? 0,
+          isDefault: Boolean(data.isDefault),
+          accountId: accountId || null,
+          branchId: data.branchId || null,
+        },
+      });
+    }
+
     if (data.isDefault) {
       await this.prisma.bankAccount.updateMany({
         where: { companyId },
         data: { isDefault: false },
       });
     }
+
+    const validBankTypes = ['CURRENT', 'SAVINGS', 'CASH_CREDIT', 'OD'];
+    const bankType = validBankTypes.includes(data.accountType) ? data.accountType : 'CURRENT';
+
     return this.prisma.bankAccount.create({
       data: {
-        ...data,
         companyId,
+        name: data.name,
+        accountName: data.accountName || data.name,
+        accountNumber: data.accountNumber || null,
+        ifsc: data.ifsc || null,
+        bankName: data.bankName || null,
+        upiId: data.upiId || null,
+        accountType: bankType,
+        openingBalance: data.openingBalance || 0,
+        currentBalance: data.currentBalance ?? data.openingBalance ?? 0,
+        isDefault: Boolean(data.isDefault),
+        accountId: data.accountId || null,
+        branchId: data.branchId || null,
       },
     });
   }
@@ -73,21 +179,64 @@ export class BankService {
   async updateAccount(id: string, data: any) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
+
+    const cash = await this.prisma.cashAccount.findFirst({
+      where: { id, companyId, deletedAt: null },
+    });
+
+    if (cash) {
+      if (data.isDefault) {
+        await this.prisma.cashAccount.updateMany({
+          where: { companyId },
+          data: { isDefault: false },
+        });
+      }
+      return this.prisma.cashAccount.update({
+        where: { id },
+        data: {
+          name: data.name ?? cash.name,
+          openingBalance: data.openingBalance !== undefined ? data.openingBalance : cash.openingBalance,
+          currentBalance: data.currentBalance !== undefined ? data.currentBalance : cash.currentBalance,
+          isDefault: data.isDefault !== undefined ? data.isDefault : cash.isDefault,
+          branchId: data.branchId !== undefined ? data.branchId : cash.branchId,
+        },
+      });
+    }
+
     if (data.isDefault) {
       await this.prisma.bankAccount.updateMany({
         where: { companyId },
         data: { isDefault: false },
       });
     }
+
+    const { accountType, ...rest } = data;
+    const validBankTypes = ['CURRENT', 'SAVINGS', 'CASH_CREDIT', 'OD'];
+    const updateData: any = { ...rest };
+    if (accountType && validBankTypes.includes(accountType)) {
+      updateData.accountType = accountType;
+    }
+
     return this.prisma.bankAccount.update({
       where: { id, companyId },
-      data,
+      data: updateData,
     });
   }
 
   async deleteAccount(id: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new NotFoundException('Company context required');
+
+    const cash = await this.prisma.cashAccount.findFirst({
+      where: { id, companyId, deletedAt: null },
+    });
+    if (cash) {
+      return this.prisma.cashAccount.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+    }
+
     return this.prisma.bankAccount.update({
       where: { id, companyId },
       data: { deletedAt: new Date() },

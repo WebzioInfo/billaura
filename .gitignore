@@ -16,3 +16,7 @@ dist
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Database dumps & local maintenance scripts
+backups/
+backend/scripts/

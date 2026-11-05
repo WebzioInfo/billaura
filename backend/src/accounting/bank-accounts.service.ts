@@ -78,7 +78,7 @@ export class BankAccountsService {
     });
 
     // Fetch the actual default cash and bank accounts for this company
-    const [defaultCashAccount, defaultBankAccount] = await Promise.all([
+    const [defaultCashAccount, defaultBankAccount, cashRegisters, directBanks] = await Promise.all([
       this.prisma.cashAccount.findFirst({
         where: { companyId, isDefault: true, deletedAt: null },
         select: { id: true, accountId: true, name: true },
@@ -88,6 +88,12 @@ export class BankAccountsService {
         where: { companyId, isDefault: true, deletedAt: null, status: 'ACTIVE' },
         select: { id: true, accountId: true, name: true, bankName: true },
         orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.cashAccount.findMany({
+        where: { companyId, deletedAt: null },
+      }),
+      this.prisma.bankAccount.findMany({
+        where: { companyId, deletedAt: null, status: 'ACTIVE' },
       }),
     ]);
 
@@ -124,6 +130,45 @@ export class BankAccountsService {
           parent: account.parent,
         };
       });
+
+    // Merge dedicated cashRegisters if not already mapped
+    const existingIds = new Set(items.map((i) => i.id));
+    for (const c of cashRegisters) {
+      if (!existingIds.has(c.id) && (!c.accountId || !existingIds.has(c.accountId))) {
+        items.push({
+          id: c.id,
+          ledgerId: c.accountId || c.id,
+          source: "CASH_ACCOUNT",
+          name: c.name,
+          accountName: c.name,
+          bankName: "Cash in Hand",
+          accountNumber: "",
+          accountType: "CASH",
+          currentBalance: c.currentBalance,
+          isDefault: Boolean(c.isDefault),
+          parent: null as any,
+        });
+      }
+    }
+
+    // Merge dedicated directBanks if not already mapped
+    for (const b of directBanks) {
+      if (!existingIds.has(b.id) && (!b.accountId || !existingIds.has(b.accountId))) {
+        items.push({
+          id: b.id,
+          ledgerId: b.accountId || b.id,
+          source: "BANK_ACCOUNT",
+          name: b.name,
+          accountName: b.accountName || b.name,
+          bankName: b.bankName || b.name,
+          accountNumber: b.accountNumber || "",
+          accountType: b.accountType || "CURRENT",
+          currentBalance: b.currentBalance,
+          isDefault: Boolean(b.isDefault),
+          parent: null as any,
+        });
+      }
+    }
 
     if (type === "CASH") {
       items = items.filter(item => item.accountType === "CASH");

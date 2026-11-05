@@ -17,6 +17,7 @@ import {
   FileText,
   Search,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import { apiClient as api } from '@/core/api/apiClient';
 import {
@@ -141,7 +142,7 @@ export const BankingDashboard: React.FC = () => {
       return await api.post('/finance/bank/accounts', payload);
     },
     onSuccess: (newAcc: any) => {
-      notification.success('Bank account created successfully');
+      notification.success(accountType === 'CASH' ? 'Cash account created successfully' : 'Bank account created successfully');
       setIsAddModalOpen(false);
       setAccountName('');
       setBankName('');
@@ -150,10 +151,28 @@ export const BankingDashboard: React.FC = () => {
       setOpeningBalance('0');
       queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['banking-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
       if (newAcc?.id) setSelectedAccountId(newAcc.id);
     },
     onError: (err: any) => {
       notification.error(err.response?.data?.message || 'Failed to create bank account');
+    },
+  });
+
+  // Delete Bank or Cash Account Mutation
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await api.delete(`/finance/bank/accounts/${id}`);
+    },
+    onSuccess: () => {
+      notification.success('Account removed successfully');
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['banking-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
+      setSelectedAccountId(null);
+    },
+    onError: (err: any) => {
+      notification.error(err.response?.data?.message || 'Failed to remove account');
     },
   });
 
@@ -278,7 +297,7 @@ export const BankingDashboard: React.FC = () => {
               <div
                 key={acc.id}
                 onClick={() => setSelectedAccountId(acc.id)}
-                className={`w-64 p-3.5 rounded-lg border cursor-pointer transition-all ${
+                className={`group w-64 p-3.5 rounded-lg border cursor-pointer transition-all ${
                   isSelected
                     ? 'bg-white border-[#408DFB] shadow-sm ring-1 ring-[#408DFB]'
                     : 'bg-white border-[#E5E7EB] hover:border-gray-300 shadow-xs'
@@ -299,11 +318,26 @@ export const BankingDashboard: React.FC = () => {
                       {acc.name}
                     </span>
                   </div>
-                  {acc.accountType && (
-                    <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
-                      {acc.accountType}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {acc.accountType && (
+                      <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
+                        {acc.accountType}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      title="Delete account"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Are you sure you want to delete "${acc.name}"?`)) {
+                          deleteAccountMutation.mutate(acc.id);
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="text-base font-bold text-gray-900 font-mono mb-1">
@@ -338,9 +372,23 @@ export const BankingDashboard: React.FC = () => {
       <div className="px-6 py-3 border-b border-[#E5E7EB] bg-white flex flex-wrap items-center justify-between gap-4">
         {/* Left Filter Tabs */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-gray-700 mr-2">
+          <span className="text-xs font-semibold text-gray-700 mr-1">
             {selectedAccount ? selectedAccount.name : 'All Accounts'}
           </span>
+          {selectedAccount && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to delete "${selectedAccount.name}"?`)) {
+                  deleteAccountMutation.mutate(selectedAccount.id);
+                }
+              }}
+              className="mr-2 p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors cursor-pointer"
+              title="Delete this account"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
           <div className="inline-flex rounded border border-[#E5E7EB] bg-gray-50 p-0.5 text-xs">
             {(['ALL', 'UNCATEGORISED', 'CATEGORISED', 'RECONCILED'] as const).map((tab) => (
               <button
@@ -424,32 +472,90 @@ export const BankingDashboard: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">Account Type</label>
-                <select
-                  value={accountType}
-                  onChange={(e: any) => setAccountType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] bg-white"
+              {/* Account Category Selector: Bank vs Cash */}
+              <div className="flex rounded-lg border border-gray-200 p-1 bg-gray-100 gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountType('CURRENT');
+                    setAccountName('');
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    accountType !== 'CASH'
+                      ? 'bg-white text-[#408DFB] shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
                 >
-                  <option value="CURRENT">Current Account</option>
-                  <option value="SAVINGS">Savings Account</option>
-                  <option value="CREDIT_CARD">Credit Card</option>
-                  <option value="CASH">Petty Cash Account</option>
-                </select>
+                  <Landmark className="w-4 h-4" />
+                  <span>Bank Account</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountType('CASH');
+                    setAccountName('Cash in Hand');
+                    setBankName('');
+                    setAccountNumber('');
+                    setIfsc('');
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    accountType === 'CASH'
+                      ? 'bg-white text-emerald-600 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Wallet className="w-4 h-4 text-emerald-600" />
+                  <span>Cash Account</span>
+                </button>
               </div>
+
+              {accountType !== 'CASH' ? (
+                <div>
+                  <label className="block text-gray-700 font-medium mb-1">Account Type</label>
+                  <select
+                    value={accountType}
+                    onChange={(e: any) => setAccountType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] bg-white"
+                  >
+                    <option value="CURRENT">Current Account</option>
+                    <option value="SAVINGS">Savings Account</option>
+                    <option value="CREDIT_CARD">Credit Card</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg p-2.5 text-[11px] flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Cash accounts track physical cash in hand. It will immediately show up in <strong>Owner's Capital</strong>, <strong>Receipts</strong>, and <strong>Expenses</strong>.</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-gray-700 font-medium mb-1">
-                  Account Name <span className="text-red-500">*</span>
+                  {accountType === 'CASH' ? 'Cash Account Name' : 'Account Name'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="e.g. HDFC Operations Current A/c"
+                  placeholder={accountType === 'CASH' ? 'e.g. Cash in Hand, Petty Cash Drawer' : 'e.g. HDFC Operations Current A/c'}
                   className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
                 />
+                {accountType === 'CASH' && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className="text-[10px] text-gray-400">Suggestions:</span>
+                    {['Cash in Hand', 'Petty Cash', 'Shop Cash Counter'].map((suggest) => (
+                      <button
+                        key={suggest}
+                        type="button"
+                        onClick={() => setAccountName(suggest)}
+                        className="text-[10px] px-2 py-0.5 rounded bg-gray-100 hover:bg-emerald-100 text-gray-700 hover:text-emerald-700 transition-colors cursor-pointer"
+                      >
+                        +{suggest}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {accountType !== 'CASH' && (

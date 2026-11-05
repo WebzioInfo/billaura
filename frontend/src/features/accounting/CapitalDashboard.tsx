@@ -74,18 +74,19 @@ export const CapitalDashboard: React.FC = () => {
     date?: string;
   }>({});
 
-  // 1. Fetch Bank Accounts
+  // 1. Fetch Bank & Cash Accounts
   const { data: bankAccountsData, isLoading: bankLoading } = useQuery({
     queryKey: ['bank-accounts'],
     queryFn: async () => {
-      const res = await api.get('/bank-accounts');
-      return res.data;
+      const res = await api.get('/finance/bank/accounts');
+      return res;
     },
   });
 
   const bankAccounts = useMemo(() => {
     if (Array.isArray(bankAccountsData?.data?.items)) return bankAccountsData.data.items;
     if (Array.isArray(bankAccountsData?.data)) return bankAccountsData.data;
+    if (Array.isArray(bankAccountsData?.items)) return bankAccountsData.items;
     if (Array.isArray(bankAccountsData)) return bankAccountsData;
     return [];
   }, [bankAccountsData]);
@@ -408,14 +409,17 @@ export const CapitalDashboard: React.FC = () => {
                     if (errors.bankAccountId) setErrors(prev => ({ ...prev, bankAccountId: undefined }));
                   }}
                   options={bankAccounts}
-                  mapOption={(b: any) => ({
-                    value: b.id,
-                    label: b.name,
-                    subLabel: b.currentBalance !== undefined ? `Bal: ${formatCurrency(b.currentBalance)}` : undefined,
-                    searchKeywords: [b.accountNumber, b.bankName].filter(Boolean),
-                  })}
+                  mapOption={(b: any) => {
+                    const isCash = b.accountType === 'CASH' || b.name?.toLowerCase().includes('cash');
+                    return {
+                      value: b.id,
+                      label: `${isCash ? '💵 [Cash]' : '🏦 [Bank]'} ${b.name}`,
+                      subLabel: b.currentBalance !== undefined ? `Bal: ${formatCurrency(b.currentBalance)}` : undefined,
+                      searchKeywords: [b.accountNumber, b.bankName, isCash ? 'cash' : 'bank'].filter(Boolean),
+                    };
+                  }}
                   placeholder="Select Bank / Cash Account"
-                  searchPlaceholder="Search bank accounts..."
+                  searchPlaceholder="Search bank or cash accounts..."
                   clearable
                 />
                 {errors.bankAccountId && (

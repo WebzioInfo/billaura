@@ -34,7 +34,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix(config.getOrThrow<string>("API_PREFIX"));
   
-  const rawOrigins = config.get<string>("ALLOWED_ORIGINS") || "http://localhost:5173,http://localhost:3000,https://billaura.webziotech.in,https://billaura.webziointernational.in,https://billaura-sage.vercel.app";
+  const rawOrigins = config.get<string>("ALLOWED_ORIGINS") || "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://billaura.webziotech.in,https://billaura.webziointernational.in,https://billaura-sage.vercel.app";
   const allowedOrigins = rawOrigins
     .split(',')
     .map((origin) => origin.trim())
