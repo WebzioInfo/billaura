@@ -123,6 +123,7 @@ export const ChartOfAccounts: React.FC = () => {
   const [modalParentId, setModalParentId] = useState<string>('');
   const [modalDescription, setModalDescription] = useState<string>('');
   const [modalWatchlist, setModalWatchlist] = useState<boolean>(false);
+  const [modalNameError, setModalNameError] = useState<string>('');
 
   // Transaction Locking State
   const [lockDate, setLockDate] = useState<string>('2026-03-31');
@@ -241,6 +242,7 @@ export const ChartOfAccounts: React.FC = () => {
     setModalCategory(initialMeta ? initialMeta.mainGroup : initialCategory);
     setModalAccountType(initialMeta ? initialMeta.id : 'EXPENSE');
     setModalName('');
+    setModalNameError('');
     setModalCode('');
     setModalParentId(parentAcc ? parentAcc.id : '');
     setModalDescription('');
@@ -255,6 +257,7 @@ export const ChartOfAccounts: React.FC = () => {
     setModalCategory(meta ? meta.mainGroup : acc.category);
     setModalAccountType(meta ? meta.id : (acc.accountType || acc.category));
     setModalName(acc.name);
+    setModalNameError('');
     setModalCode(acc.code || '');
     setModalParentId(acc.parentId || '');
     setModalDescription(acc.description || '');
@@ -288,14 +291,27 @@ export const ChartOfAccounts: React.FC = () => {
         editingAccount ? 'Account updated successfully!' : 'New account created successfully!'
       );
       setIsModalOpen(false);
+      setModalNameError('');
       queryClient.invalidateQueries({ queryKey: ['accounts-tree'] });
       queryClient.invalidateQueries({ queryKey: ['accounts-lookup-full'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to save account');
+      const msg = err.response?.data?.message;
+      const displayMsg = Array.isArray(msg) ? msg.join(', ') : (msg || 'Failed to save account');
+      notification.error(displayMsg);
     },
   });
+
+  const handleModalSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!modalName.trim()) {
+      setModalNameError('Please enter an account name.');
+      return;
+    }
+    setModalNameError('');
+    saveMutation.mutate();
+  };
 
   // Delete Account Mutation
   const deleteMutation = useMutation({
@@ -869,7 +885,10 @@ export const ChartOfAccounts: React.FC = () => {
       {/* Create / Edit Account Modal (Side-by-side with dark tooltip explanation card) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full border border-gray-200 overflow-hidden text-xs">
+          <form
+            onSubmit={handleModalSubmit}
+            className="bg-white rounded-lg shadow-2xl max-w-2xl w-full border border-gray-200 overflow-hidden text-xs"
+          >
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <h3 className="font-semibold text-gray-900 text-sm">
@@ -923,10 +942,20 @@ export const ChartOfAccounts: React.FC = () => {
                     type="text"
                     required
                     value={modalName}
-                    onChange={(e) => setModalName(e.target.value)}
+                    onChange={(e) => {
+                      setModalName(e.target.value);
+                      if (e.target.value.trim()) setModalNameError('');
+                    }}
                     placeholder="e.g. Traveling Expenses"
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
+                    className={`w-full px-3 py-2 border rounded text-xs focus:outline-none focus:ring-1 transition-colors ${
+                      modalNameError
+                        ? 'border-red-400 focus:ring-red-500 bg-red-50/20'
+                        : 'border-gray-300 focus:ring-[#408DFB]'
+                    }`}
                   />
+                  {modalNameError && (
+                    <p className="mt-1 text-[11px] text-red-600 font-medium">{modalNameError}</p>
+                  )}
                 </div>
 
                 {/* Account Code with dashed-underline label */}
@@ -1038,21 +1067,20 @@ export const ChartOfAccounts: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-4 py-1.5 text-xs bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-100 font-medium"
+                className="px-4 py-1.5 text-xs bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-100 font-medium cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || !modalName.trim()}
-                className="px-5 py-1.5 text-xs bg-[#408DFB] text-white rounded font-semibold hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1"
+                type="submit"
+                disabled={saveMutation.isPending}
+                className="px-5 py-1.5 text-xs bg-[#408DFB] text-white rounded font-semibold hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1 cursor-pointer transition-colors"
               >
                 {saveMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Save
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
