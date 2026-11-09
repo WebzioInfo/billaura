@@ -920,21 +920,21 @@ export class AccountsService {
 
       // 6. Linked bank accounts validation
       const bankAccountCount = await tx.bankAccount.count({
-        where: { accountId: id },
+        where: { accountId: id, deletedAt: null },
       });
       if (bankAccountCount > 0) {
         throw new ConflictException(
-          `Cannot delete account '${account.name}' because it is linked to ${bankAccountCount} bank account master record(s).`
+          `Cannot delete account '${account.name}' because it is linked to ${bankAccountCount} active bank account master record(s).`
         );
       }
 
       // 7. Linked cash accounts validation
       const cashAccountCount = await tx.cashAccount.count({
-        where: { accountId: id },
+        where: { accountId: id, deletedAt: null },
       });
       if (cashAccountCount > 0) {
         throw new ConflictException(
-          `Cannot delete account '${account.name}' because it is linked to ${cashAccountCount} cash register master record(s).`
+          `Cannot delete account '${account.name}' because it is linked to ${cashAccountCount} active cash register master record(s).`
         );
       }
 
@@ -1025,7 +1025,17 @@ export class AccountsService {
         );
       }
 
-      // 15. Finally, execute deletion safely
+      // 15. Unlink references in soft-deleted bank/cash accounts so foreign keys don't block deletion
+      await tx.bankAccount.updateMany({
+        where: { accountId: id },
+        data: { accountId: null },
+      });
+      await tx.cashAccount.updateMany({
+        where: { accountId: id },
+        data: { accountId: null },
+      });
+
+      // Finally, execute deletion safely
       return tx.account.delete({
         where: { id },
       });

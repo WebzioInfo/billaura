@@ -513,7 +513,7 @@ export const ChartOfAccounts: React.FC = () => {
             >
               <ExternalLink className="w-3.5 h-3.5" /> Full Ledger
             </button>
-            {!selectedAccount.isSystem && selectedAccount.depth !== 0 && (
+            {!selectedAccount.isSystem && (!selectedAccount.isGroup || (selectedAccount.parentId && selectedAccount.depth !== 0)) && (
               <button
                 type="button"
                 onClick={() => setAccountToDelete(selectedAccount)}
@@ -674,7 +674,8 @@ export const ChartOfAccounts: React.FC = () => {
       width: '40px',
       align: 'center' as const,
       render: (row: AccountNode) => {
-        if (row.isSystem || row.depth === 0) {
+        const isRootGroup = Boolean(row.isGroup && (!row.parentId || row.depth === 0));
+        if (row.isSystem || isRootGroup) {
           return (
             <span title="System Account">
               <Lock className="w-3.5 h-3.5 text-gray-400 mx-auto" />
@@ -789,7 +790,8 @@ export const ChartOfAccounts: React.FC = () => {
       width: '76px',
       align: 'right' as const,
       render: (row: AccountNode) => {
-        const isProtected = Boolean(row.isSystem || row.depth === 0);
+        const isRootGroup = Boolean(row.isGroup && (!row.parentId || row.depth === 0));
+        const isProtected = Boolean(row.isSystem || isRootGroup);
         return (
           <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
             <button
