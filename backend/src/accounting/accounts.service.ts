@@ -883,149 +883,137 @@ export class AccountsService {
         );
       }
 
-      // Protected system account validation: System defaults metadata check
-      const protectedIds = await this.getProtectedAccountIds(companyId, tx);
+      // 3. Concurrently run all dependency validation checks in parallel for maximum performance
+      const [
+        protectedIds,
+        childCount,
+        journalLineCount,
+        bankAccountCount,
+        cashAccountCount,
+        expenseCategoryCount,
+        incomeCategoryCount,
+        receiptCount,
+        receiptPaymentCount,
+        itemCount,
+        invoiceCategoryCount,
+        commissionRuleCount,
+      ] = await Promise.all([
+        this.getProtectedAccountIds(companyId, tx),
+        tx.account.count({ where: { parentId: id } }),
+        tx.journalLine.count({ where: { accountId: id } }),
+        tx.bankAccount.count({ where: { accountId: id, deletedAt: null } }),
+        tx.cashAccount.count({ where: { accountId: id, deletedAt: null } }),
+        tx.expenseCategory.count({
+          where: { OR: [{ accountId: id }, { defaultInputTaxAccountId: id }] },
+        }),
+        tx.incomeCategory.count({ where: { accountId: id } }),
+        tx.receipt.count({ where: { accountId: id } }),
+        tx.receiptPayment.count({
+          where: {
+            accountId: id,
+            receipt: { companyId },
+          },
+        }),
+        tx.product.count({
+          where: {
+            OR: [
+              { salesAccountId: id },
+              { purchaseAccountId: id },
+              { inventoryAccountId: id },
+            ],
+          },
+        }),
+        tx.invoiceCategory.count({ where: { defaultSalesAccountId: id } }),
+        tx.commissionRule.count({
+          where: {
+            OR: [
+              { expenseAccountId: id },
+              { payableAccountId: id },
+              { tdsAccountId: id },
+            ],
+          },
+        }),
+      ]);
+
       if (protectedIds.has(account.id)) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is a protected system account required for core accounting operations.`
         );
       }
 
-      // 3. Child accounts validation
-      const childCount = await tx.account.count({
-        where: { parentId: id },
-      });
       if (childCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it contains ${childCount} sub-account(s). Please delete or reassign child accounts first.`
         );
       }
 
-      // 4. Posted journal entries / ledger transactions validation
-      const journalLineCount = await tx.journalLine.count({
-        where: { accountId: id },
-      });
       if (journalLineCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it has ${journalLineCount} recorded journal ledger transaction(s). Accounts with financial history cannot be deleted to maintain general ledger integrity. You may mark this account as inactive instead.`
         );
       }
 
-      // 5. Balance check
       if (Number(account.balance) !== 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it has a non-zero balance (${account.balance}). Accounts must have a zero balance before deletion.`
         );
       }
 
-      // 6. Linked bank accounts validation
-      const bankAccountCount = await tx.bankAccount.count({
-        where: { accountId: id, deletedAt: null },
-      });
       if (bankAccountCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is linked to ${bankAccountCount} active bank account master record(s).`
         );
       }
 
-      // 7. Linked cash accounts validation
-      const cashAccountCount = await tx.cashAccount.count({
-        where: { accountId: id, deletedAt: null },
-      });
       if (cashAccountCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is linked to ${cashAccountCount} active cash register master record(s).`
         );
       }
 
-      // 8. Linked expense categories validation (direct account or default tax account)
-      const expenseCategoryCount = await tx.expenseCategory.count({
-        where: {
-          OR: [
-            { accountId: id },
-            { defaultInputTaxAccountId: id },
-          ],
-        },
-      });
       if (expenseCategoryCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is linked to ${expenseCategoryCount} expense category configuration(s).`
         );
       }
 
-      // 9. Linked income categories validation
-      const incomeCategoryCount = await tx.incomeCategory.count({
-        where: { accountId: id },
-      });
       if (incomeCategoryCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is linked to ${incomeCategoryCount} income category configuration(s).`
         );
       }
 
-      // 10. Linked receipts validation
-      const receiptCount = await tx.receipt.count({
-        where: { accountId: id },
-      });
       if (receiptCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is linked to ${receiptCount} receipt record(s).`
         );
       }
 
-      // 11. Linked receipt payments validation
-      const receiptPaymentCount = await tx.receiptPayment.count({
-        where: { accountId: id },
-      });
       if (receiptPaymentCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is linked to ${receiptPaymentCount} receipt payment transaction(s).`
         );
       }
 
-      // 12. Linked items (products / services) validation
-      const itemCount = await tx.product.count({
-        where: {
-          OR: [
-            { salesAccountId: id },
-            { purchaseAccountId: id },
-            { inventoryAccountId: id },
-          ],
-        },
-      });
       if (itemCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is referenced on ${itemCount} product or service item(s).`
         );
       }
 
-      // 13. Linked invoice categories validation
-      const invoiceCategoryCount = await tx.invoiceCategory.count({
-        where: { defaultSalesAccountId: id },
-      });
       if (invoiceCategoryCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is configured as the default sales account for ${invoiceCategoryCount} invoice category(ies).`
         );
       }
 
-      // 14. Linked commission rules validation
-      const commissionRuleCount = await tx.commissionRule.count({
-        where: {
-          OR: [
-            { expenseAccountId: id },
-            { payableAccountId: id },
-            { tdsAccountId: id },
-          ],
-        },
-      });
       if (commissionRuleCount > 0) {
         throw new ConflictException(
           `Cannot delete account '${account.name}' because it is configured in ${commissionRuleCount} commission rule(s).`
         );
       }
 
-      // 15. Unlink references in soft-deleted bank/cash accounts so foreign keys don't block deletion
+      // 5. Unlink references in soft-deleted bank/cash accounts so foreign keys don't block deletion
       await tx.bankAccount.updateMany({
         where: { accountId: id },
         data: { accountId: null },
@@ -1039,6 +1027,9 @@ export class AccountsService {
       return tx.account.delete({
         where: { id },
       });
+    }, {
+      maxWait: 5000,
+      timeout: 15000,
     });
   }
 

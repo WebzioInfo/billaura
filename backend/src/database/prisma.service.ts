@@ -18,7 +18,42 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
           : ["error", "warn"],
     });
 
-    const globalModels = ['User', 'SystemSetting', 'SubscriptionPlan', 'Company', 'PaymentAllocation', 'PurchasePaymentAllocation', 'JournalLine', 'InvoiceItem', 'PurchaseItem', 'RolePermission', 'LoginHistory', 'QuotationItem', 'SalesOrderItem', 'DeliveryNoteItem', 'DeliveryChallanItem', 'PurchaseOrderItem', 'GoodsReceiptItem', 'RecurringInvoiceItem', 'SalesReturnItem', 'PurchaseReturnItem', 'ExpenseHistory', 'ExpenseComment', 'ExpenseAttachment', 'BOMItem', 'ReceiptAllocation', 'ReceiptAttachment', 'ReceiptAudit'];
+    const globalModels = [
+      'User',
+      'SystemSetting',
+      'SubscriptionPlan',
+      'Company',
+      'PaymentAllocation',
+      'PurchasePaymentAllocation',
+      'JournalLine',
+      'InvoiceItem',
+      'PurchaseItem',
+      'RolePermission',
+      'LoginHistory',
+      'QuotationItem',
+      'SalesOrderItem',
+      'DeliveryNoteItem',
+      'DeliveryChallanItem',
+      'PurchaseOrderItem',
+      'GoodsReceiptItem',
+      'RecurringInvoiceItem',
+      'SalesReturnItem',
+      'PurchaseReturnItem',
+      'ExpenseHistory',
+      'ExpenseComment',
+      'ExpenseAttachment',
+      'BOMItem',
+      'ReceiptAllocation',
+      'ReceiptAttachment',
+      'ReceiptAudit',
+      'ReceiptPayment',
+      'FeatureLimit',
+      'AttendanceAuditLog',
+      'AttendanceCorrection',
+      'PayrollAuditLog',
+      'BankStatementLine',
+      'EmployeeSalaryComponent',
+    ];
 
     this.extendedClient = this.$extends({
       query: {

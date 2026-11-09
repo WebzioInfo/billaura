@@ -199,11 +199,13 @@ describe('AccountsService - Delete Account & Zoho Account Types Suite', () => {
         count: jest.fn().mockImplementation(({ where }) => {
           return Promise.resolve(bankAccountsStore.filter((b) => b.accountId === where.accountId).length);
         }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       cashAccount: {
         count: jest.fn().mockImplementation(({ where }) => {
           return Promise.resolve(cashAccountsStore.filter((c) => c.accountId === where.accountId).length);
         }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       expenseCategory: {
         count: jest.fn().mockImplementation(({ where }) => {
@@ -415,13 +417,13 @@ describe('AccountsService - Delete Account & Zoho Account Types Suite', () => {
     it('should block deletion if linked to a BankAccount master record', async () => {
       bankAccountsStore.push({ id: 'bank-1', accountId: 'acc-custom-unused' });
       await expect(service.remove('acc-custom-unused')).rejects.toThrow(ConflictException);
-      await expect(service.remove('acc-custom-unused')).rejects.toThrow(/linked to 1 bank account master record/);
+      await expect(service.remove('acc-custom-unused')).rejects.toThrow(/linked to 1 (active )?bank account master record/i);
     });
 
     it('should block deletion if linked to a CashAccount master record', async () => {
       cashAccountsStore.push({ id: 'cash-1', accountId: 'acc-custom-unused' });
       await expect(service.remove('acc-custom-unused')).rejects.toThrow(ConflictException);
-      await expect(service.remove('acc-custom-unused')).rejects.toThrow(/linked to 1 cash register master record/);
+      await expect(service.remove('acc-custom-unused')).rejects.toThrow(/linked to 1 (active )?cash register master record/i);
     });
 
     it('should block deletion if linked to an ExpenseCategory', async () => {
