@@ -74,7 +74,7 @@ export const PurchaseOrdersList: React.FC = () => {
   const { data: poResponse, isLoading } = useQuery<any>({
     queryKey: ['purchase-orders'],
     queryFn: async () => {
-      const res = await apiClient.get('/purchase-orders', { params: { limit: 200 } });
+      const res = await apiClient.get('/purchase-orders', { params: { limit: 100 } });
       return res.data?.data || res.data || { items: [] };
     },
   });

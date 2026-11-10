@@ -99,7 +99,7 @@ export const PaymentsMadeList: React.FC = () => {
   } = useQuery<any>({
     queryKey: ['purchases', 'payments'],
     queryFn: async () => {
-      const res = await apiClient.get('/purchases/payments', { params: { limit: 200 } });
+      const res = await apiClient.get('/purchases/payments', { params: { limit: 100 } });
       return ensureArray<VendorPayment>(res);
     },
   });
