@@ -22,9 +22,9 @@ import { BillMatcherService } from "./ocr/bill-matcher.service";
 @Module({
   imports: [DatabaseModule, AccountingModule, SharedModule],
   controllers: [
-    PurchasesController,
-    PurchasesDocumentController,
     PurchasePaymentsController,
+    PurchasesDocumentController,
+    PurchasesController,
     VendorsController,
     PurchaseOrdersController,
     GoodsReceiptsController,

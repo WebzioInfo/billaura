@@ -18,7 +18,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
 
 @UseGuards(JwtAuthGuard, TenantGuard)
-@Controller('purchases/payments')
+@Controller(['purchases/payments', 'payments-made'])
 export class PurchasePaymentsController {
   constructor(
     private readonly purchasePaymentsService: PurchasePaymentsService,
