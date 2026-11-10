@@ -1,23 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
   Receipt,
-  FileText,
-  X,
   Search,
   Plus,
-  Building2,
-  Calendar,
-  AlertCircle,
-  HelpCircle,
-  Clock,
-  Sparkles,
-  ChevronDown,
-  Check,
 } from 'lucide-react';
 import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
@@ -192,18 +182,6 @@ export const BillForm: React.FC = () => {
     },
   });
 
-  const { data: taxRatesData = [] } = useQuery<any[]>({
-    queryKey: ['tax-rates'],
-    queryFn: async () => {
-      try {
-        const res = await apiClient.get('/accounting/tax-rates');
-        const data = res?.data?.data || res?.data || [];
-        return Array.isArray(data) ? data : [];
-      } catch (_) {
-        return [];
-      }
-    },
-  });
 
   // Edit Data Query
   const { data: existingBill, isLoading: loadingExisting } = useQuery<any>({
@@ -537,6 +515,30 @@ export const BillForm: React.FC = () => {
       };
     });
   }, [items, products]);
+
+  // Filtered vendors for modal (declared before any early returns to strictly obey Rules of Hooks)
+  const filteredVendors = useMemo(() => {
+    if (!vendorSearchQuery.trim()) return vendors;
+    const q = vendorSearchQuery.toLowerCase();
+    return vendors.filter((v: any) => {
+      const name = (v.name || v.companyName || '').toLowerCase();
+      const email = (v.email || '').toLowerCase();
+      const phone = (v.phone || '').toLowerCase();
+      const gstin = (v.gstin || v.gstNumber || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || phone.includes(q) || gstin.includes(q);
+    });
+  }, [vendors, vendorSearchQuery]);
+
+  // Filtered products for bulk modal (declared before any early returns to strictly obey Rules of Hooks)
+  const filteredProducts = useMemo(() => {
+    if (!bulkSearchQuery.trim()) return products;
+    const q = bulkSearchQuery.toLowerCase();
+    return products.filter((p: any) => {
+      const name = (p.name || '').toLowerCase();
+      const sku = (p.sku || '').toLowerCase();
+      return name.includes(q) || sku.includes(q);
+    });
+  }, [products, bulkSearchQuery]);
 
   const handleZohoItemsChange = (newRows: ZohoItemRow[]) => {
     const mapped = newRows.map((row) => {
@@ -1013,30 +1015,6 @@ export const BillForm: React.FC = () => {
       }}
     />
   );
-
-  // Filtered vendors for modal
-  const filteredVendors = useMemo(() => {
-    if (!vendorSearchQuery.trim()) return vendors;
-    const q = vendorSearchQuery.toLowerCase();
-    return vendors.filter((v: any) => {
-      const name = (v.name || v.companyName || '').toLowerCase();
-      const email = (v.email || '').toLowerCase();
-      const phone = (v.phone || '').toLowerCase();
-      const gstin = (v.gstin || v.gstNumber || '').toLowerCase();
-      return name.includes(q) || email.includes(q) || phone.includes(q) || gstin.includes(q);
-    });
-  }, [vendors, vendorSearchQuery]);
-
-  // Filtered products for bulk modal
-  const filteredProducts = useMemo(() => {
-    if (!bulkSearchQuery.trim()) return products;
-    const q = bulkSearchQuery.toLowerCase();
-    return products.filter((p: any) => {
-      const name = (p.name || '').toLowerCase();
-      const sku = (p.sku || '').toLowerCase();
-      return name.includes(q) || sku.includes(q);
-    });
-  }, [products, bulkSearchQuery]);
 
   return (
     <>
