@@ -1,6 +1,7 @@
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { numberToWordsIndian } from '@/shared/utils/numberToWords';
+import { formatAddress } from '@/shared/utils/addressFormatter';
 
 export interface SpreadsheetInvoiceDocumentProps {
   invoice: any;
@@ -357,7 +358,7 @@ export const SpreadsheetInvoiceDocument: React.FC<SpreadsheetInvoiceDocumentProp
                   <div className="whitespace-pre-line text-black">{inv.billingAddress}</div>
                 ) : (
                   <>
-                    {bp.address && <div>{bp.address}</div>}
+                    {bp.address && <div>{formatAddress(bp.address)}</div>}
                     {bp.city && (
                       <div>
                         {bp.city}
@@ -391,7 +392,7 @@ export const SpreadsheetInvoiceDocument: React.FC<SpreadsheetInvoiceDocumentProp
                 ) : (
                   <>
                     {bp.shippingAddress || bp.address ? (
-                      <div>{bp.shippingAddress || bp.address}</div>
+                      <div>{formatAddress(bp.shippingAddress || bp.address)}</div>
                     ) : null}
                     {bp.city && (
                       <div>

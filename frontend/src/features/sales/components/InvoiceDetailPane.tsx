@@ -32,6 +32,7 @@ import apiClient from '@/core/api';
 import notification from '@/core/services/NotificationService';
 import { erpInvalidate } from '@/core/query/erpConsistency';
 import { downloadInvoicePdf, printInvoicePdf } from '@/shared/utils/invoicePdf';
+import { formatAddress } from '@/shared/utils/addressFormatter';
 import { SpreadsheetInvoiceDocument, formatPlaceOfSupply } from '@/shared/components/documents/SpreadsheetInvoiceDocument';
 import { ConfirmDialog } from '@/shared/components/ui';
 
@@ -611,7 +612,7 @@ export const InvoiceDetailPane: React.FC<InvoiceDetailPaneProps> = ({
                     Billing Address
                   </h4>
                   <p className="leading-relaxed text-[#4B5563] whitespace-pre-line">
-                    {invoice.billingAddress || customer?.address || 'No address specified'}
+                    {formatAddress(invoice.billingAddress || customer?.address) || 'No address specified'}
                   </p>
                 </div>
               </div>

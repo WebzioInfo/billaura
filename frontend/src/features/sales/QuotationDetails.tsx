@@ -31,6 +31,7 @@ import { useDynamicTitle } from '@/shared/hooks/useDynamicTitle';
 import { SpreadsheetQuoteDocument } from '@/shared/components/documents/SpreadsheetQuoteDocument';
 import { downloadQuotationPdf } from '@/shared/utils/quotationPdf';
 import { formatPlaceOfSupply } from '@/shared/components/documents/SpreadsheetQuoteDocument';
+import { formatAddress } from '@/shared/utils/addressFormatter';
 
 const fmt = (num: any): string => {
   const n = Number(num);
@@ -750,7 +751,7 @@ export const QuotationDetails: React.FC = () => {
                       <div className="flex items-start">
                         <span className="w-36 text-[#6c7380] pt-0.5">Billing Address</span>
                         <div className="text-[#333333] leading-relaxed whitespace-pre-line">
-                          {quotation?.billingAddress || bp.address || (
+                          {formatAddress(quotation?.billingAddress || bp.address) || (
                             <>
                               DOOR NO 54/26<br />
                               KAYALAM,PERUVAYAL PO<br />
@@ -768,7 +769,7 @@ export const QuotationDetails: React.FC = () => {
                       <div className="flex items-start">
                         <span className="w-36 text-[#6c7380] pt-0.5">Shipping Address</span>
                         <div className="text-[#333333] leading-relaxed whitespace-pre-line">
-                          {quotation?.shippingAddress || quotation?.billingAddress || bp.shippingAddress || bp.address || (
+                          {formatAddress(quotation?.shippingAddress || quotation?.billingAddress || bp.shippingAddress || bp.address) || (
                             <>
                               DOOR NO 54/26<br />
                               KAYALAM,PERUVAYAL PO<br />

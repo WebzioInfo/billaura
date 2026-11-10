@@ -33,6 +33,7 @@ import {
   ZohoModal,
 } from '@/shared/components/zoho';
 import { PageLoader } from '@/shared/components/ui';
+import { formatAddress } from '@/shared/utils/addressFormatter';
 
 const billItemSchema = z.object({
   productId: z.string().optional(),
@@ -740,9 +741,9 @@ export const BillForm: React.FC = () => {
               {[selectedVendor.phone, selectedVendor.email].filter(Boolean).join(' • ')}
             </p>
           )}
-          {(selectedVendor.billingAddress || selectedVendor.address) && (
+          {Boolean(formatAddress(selectedVendor.billingAddress || selectedVendor.address)) && (
             <p className="text-[11px] text-[#4B5563] line-clamp-2">
-              {selectedVendor.billingAddress || selectedVendor.address}
+              {formatAddress(selectedVendor.billingAddress || selectedVendor.address)}
             </p>
           )}
           {selectedVendor.paymentTerms && (

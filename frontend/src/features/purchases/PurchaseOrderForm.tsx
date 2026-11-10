@@ -42,6 +42,7 @@ import {
 } from '@/shared/components/zoho';
 import { ZohoModal } from '@/shared/components/zoho/ZohoModal';
 import { PageLoader } from '@/shared/components/ui';
+import { formatAddress } from '@/shared/utils/addressFormatter';
 
 const PAYMENT_TERMS_LIST = [
   { value: 'Due on Receipt', days: 0 },
@@ -652,11 +653,9 @@ export const PurchaseOrderForm: React.FC = () => {
               </span>
             )}
           </div>
-          {(selectedVendor.address || selectedVendor.billingAddress) && (
+          {Boolean(formatAddress(selectedVendor.billingAddress || selectedVendor.address)) && (
             <p className="text-[11px] text-[#64748B] leading-relaxed">
-              {typeof selectedVendor.billingAddress === 'object'
-                ? [selectedVendor.billingAddress.street1, selectedVendor.billingAddress.city, selectedVendor.billingAddress.state].filter(Boolean).join(', ')
-                : selectedVendor.address}
+              {formatAddress(selectedVendor.billingAddress || selectedVendor.address)}
             </p>
           )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#64748B]">
@@ -785,7 +784,7 @@ export const PurchaseOrderForm: React.FC = () => {
                     )}
                   </div>
                   <p className="text-[11px] text-[#6B7280] leading-relaxed whitespace-pre-wrap">
-                    {selectedCustomer.address || selectedCustomer.shippingAddress || selectedCustomer.billingAddress || 'No primary street address registered'}
+                    {formatAddress(selectedCustomer.address || selectedCustomer.shippingAddress || selectedCustomer.billingAddress) || 'No primary street address registered'}
                   </p>
                   {selectedCustomer.phone && (
                     <p className="text-[11px] text-[#6B7280]">Phone: {selectedCustomer.phone}</p>

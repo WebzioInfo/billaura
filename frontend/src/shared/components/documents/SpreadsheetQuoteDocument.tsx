@@ -1,5 +1,6 @@
 import React from 'react';
 import { numberToWordsIndian } from '@/shared/utils/numberToWords';
+import { formatAddress } from '@/shared/utils/addressFormatter';
 
 export interface SpreadsheetQuoteDocumentProps {
   quote: any;
@@ -328,7 +329,7 @@ export const SpreadsheetQuoteDocument: React.FC<SpreadsheetQuoteDocumentProps> =
                   <div className="whitespace-pre-line text-black">{q.billingAddress}</div>
                 ) : (
                   <>
-                    {bp.address && <div>{bp.address}</div>}
+                    {bp.address && <div>{formatAddress(bp.address)}</div>}
                     {bp.city && (
                       <div>
                         {bp.city}
@@ -361,7 +362,7 @@ export const SpreadsheetQuoteDocument: React.FC<SpreadsheetQuoteDocumentProps> =
                 ) : (
                   <>
                     {bp.shippingAddress || bp.address ? (
-                      <div>{bp.shippingAddress || bp.address}</div>
+                      <div>{formatAddress(bp.shippingAddress || bp.address)}</div>
                     ) : null}
                     {bp.city && (
                       <div>
