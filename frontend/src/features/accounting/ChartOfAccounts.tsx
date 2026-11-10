@@ -120,6 +120,7 @@ export const ChartOfAccounts: React.FC = () => {
   const [modalAccountType, setModalAccountType] = useState<string>('EXPENSE');
   const [modalName, setModalName] = useState<string>('');
   const [modalCode, setModalCode] = useState<string>('');
+  const [isSubAccount, setIsSubAccount] = useState<boolean>(false);
   const [modalParentId, setModalParentId] = useState<string>('');
   const [modalDescription, setModalDescription] = useState<string>('');
   const [modalWatchlist, setModalWatchlist] = useState<boolean>(false);
@@ -231,6 +232,64 @@ export const ChartOfAccounts: React.FC = () => {
     return result;
   }, [treeData, searchQuery, activeView, expandedIds]);
 
+  // Collect descendants of editingAccount to prevent circular hierarchy
+  const editingDescendantIds = useMemo(() => {
+    if (!editingAccount) return new Set<string>();
+    const ids = new Set<string>([editingAccount.id]);
+    const collect = (nodes: AccountNode[]) => {
+      nodes.forEach((n) => {
+        if (n.parentId && ids.has(n.parentId)) {
+          ids.add(n.id);
+        }
+        if (n.children && n.children.length > 0) {
+          collect(n.children);
+        }
+      });
+    };
+    for (let i = 0; i < 4; i++) {
+      collect(treeData);
+    }
+    return ids;
+  }, [editingAccount, treeData]);
+
+  // Flatten tree to get all potential parent/group accounts (including Fixed Assets, Current Assets, etc.)
+  const parentAccountOptions = useMemo(() => {
+    const list: {
+      id: string;
+      name: string;
+      code?: string;
+      category: MainAccountGroup;
+      isGroup?: boolean;
+      depth: number;
+    }[] = [];
+
+    const walk = (nodes: AccountNode[], depth = 0) => {
+      nodes.forEach((node) => {
+        if (!editingDescendantIds.has(node.id)) {
+          list.push({
+            id: node.id,
+            name: node.name,
+            code: node.code,
+            category: node.category,
+            isGroup: Boolean(node.isGroup),
+            depth,
+          });
+        }
+        if (node.children && node.children.length > 0) {
+          walk(node.children, depth + 1);
+        }
+      });
+    };
+
+    walk(treeData);
+    return list;
+  }, [treeData, editingDescendantIds]);
+
+  // Parents matching current category
+  const filteredParents = useMemo(() => {
+    return parentAccountOptions.filter((a) => a.category === modalCategory);
+  }, [parentAccountOptions, modalCategory]);
+
   // Handle open create account modal
   const handleOpenCreate = (parentAcc?: AccountNode) => {
     setEditingAccount(null);
@@ -244,6 +303,7 @@ export const ChartOfAccounts: React.FC = () => {
     setModalName('');
     setModalNameError('');
     setModalCode('');
+    setIsSubAccount(Boolean(parentAcc?.id));
     setModalParentId(parentAcc ? parentAcc.id : '');
     setModalDescription('');
     setModalWatchlist(false);
@@ -259,6 +319,7 @@ export const ChartOfAccounts: React.FC = () => {
     setModalName(acc.name);
     setModalNameError('');
     setModalCode(acc.code || '');
+    setIsSubAccount(Boolean(acc.parentId));
     setModalParentId(acc.parentId || '');
     setModalDescription(acc.description || '');
     setModalWatchlist(false);
@@ -272,12 +333,13 @@ export const ChartOfAccounts: React.FC = () => {
   // Create / Update Account Mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const resolvedParentId = isSubAccount && modalParentId ? modalParentId : (editingAccount ? null : undefined);
       const payload = {
         name: modalName.trim(),
         code: modalCode.trim() || undefined,
         category: modalCategory,
         accountType: modalAccountType,
-        parentId: modalParentId || undefined,
+        parentId: resolvedParentId,
         description: modalDescription.trim() || undefined,
       };
 
@@ -924,7 +986,7 @@ export const ChartOfAccounts: React.FC = () => {
                       setModalAccountType(selectedType.id);
                       setModalCategory(selectedType.mainGroup);
                       if (modalParentId) {
-                        const parent = flatAccounts.find((a) => a.id === modalParentId);
+                        const parent = parentAccountOptions.find((a) => a.id === modalParentId);
                         if (parent && parent.category !== selectedType.mainGroup) {
                           setModalParentId('');
                         }
@@ -972,25 +1034,54 @@ export const ChartOfAccounts: React.FC = () => {
                   />
                 </div>
 
-                {/* Parent Account (when sub-account is allowed) */}
-                <div>
-                  <label className="block text-gray-700 font-medium mb-1">
-                    Parent Account
+                {/* Sub-account checkbox & Parent Account selector */}
+                <div className="space-y-2 pt-1 border-t border-gray-100">
+                  <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isSubAccount}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsSubAccount(checked);
+                        if (!checked) {
+                          setModalParentId('');
+                        } else if (!modalParentId && filteredParents.length > 0) {
+                          const defaultParent = filteredParents.find((p) => p.isGroup) || filteredParents[0];
+                          if (defaultParent) setModalParentId(defaultParent.id);
+                        }
+                      }}
+                      className="rounded text-[#408DFB] focus:ring-[#408DFB]"
+                    />
+                    <span className="font-medium text-gray-800">
+                      Make this a sub-account (place under Fixed Assets or another parent)
+                    </span>
                   </label>
-                  <select
-                    value={modalParentId}
-                    onChange={(e) => setModalParentId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] bg-white"
-                  >
-                    <option value="">None (Top-Level Account)</option>
-                    {flatAccounts
-                      .filter((a) => a.category === modalCategory && a.id !== editingAccount?.id)
-                      .map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name} {a.code ? `(${a.code})` : ''}
-                        </option>
-                      ))}
-                  </select>
+
+                  {isSubAccount && (
+                    <div className="pl-6 pt-1 space-y-1.5">
+                      <label className="block text-gray-700 font-medium text-[11px]">
+                        Parent Account <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={modalParentId}
+                        onChange={(e) => setModalParentId(e.target.value)}
+                        required={isSubAccount}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB] bg-white"
+                      >
+                        <option value="">Select Parent Account...</option>
+                        {filteredParents.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {'\u00A0'.repeat(a.depth * 3)}
+                            {a.isGroup ? '📁 ' : '↳ '}
+                            {a.name} {a.code ? `(${a.code})` : ''} {a.isGroup ? '(Group)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-gray-500 leading-normal">
+                        This account will be nested under the selected parent in your Chart of Accounts dropdown view.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Description (max 500) */}

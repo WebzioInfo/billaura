@@ -39,6 +39,11 @@ export class AccountLookupQueryDto extends PaginationQueryDto {
   isGroup?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  includeGroups?: boolean;
+
+  @IsOptional()
   @IsString()
   allowedAccountTypes?: string;
 

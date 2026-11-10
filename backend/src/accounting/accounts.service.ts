@@ -265,7 +265,11 @@ export class AccountsService {
     const where: Prisma.AccountWhereInput = {
       companyId,
       deletedAt: null,
-      ...(query.isGroup !== undefined ? { isGroup: query.isGroup } : { isGroup: false }),
+      ...(query.includeGroups
+        ? {}
+        : query.isGroup !== undefined
+        ? { isGroup: query.isGroup }
+        : { isGroup: false }),
       ...(search ? {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
