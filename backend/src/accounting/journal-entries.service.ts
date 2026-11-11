@@ -25,6 +25,7 @@ export class JournalEntriesService {
 
     const where: Prisma.JournalEntryWhereInput = {
       companyId,
+      deletedAt: null,
       ...(query.search
         ? {
             OR: [
@@ -56,7 +57,7 @@ export class JournalEntriesService {
     }
 
     const entry = await this.prisma.journalEntry.findFirst({
-      where: { id },
+      where: { id, companyId, deletedAt: null },
       include: { lines: { include: { account: true } } },
     });
 

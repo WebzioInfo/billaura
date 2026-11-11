@@ -181,6 +181,9 @@ export const BillForm: React.FC = () => {
       }
     },
     staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    enabled: !isEditMode,
   });
 
   const { data: paymentTermsData = [] } = useQuery<Array<{ name: string; days: number }>>({
@@ -256,8 +259,11 @@ export const BillForm: React.FC = () => {
 
   // Next bill sequence assignment
   useEffect(() => {
-    if (!isEditMode && nextNoData?.nextNumber && !watch('billNumber')) {
-      setValue('billNumber', nextNoData.nextNumber);
+    if (!isEditMode && nextNoData?.nextNumber) {
+      const currentVal = watch('billNumber');
+      if (!currentVal || currentVal === 'BIL-00001') {
+        setValue('billNumber', nextNoData.nextNumber);
+      }
     }
   }, [nextNoData, isEditMode, setValue, watch]);
 

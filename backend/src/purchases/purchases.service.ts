@@ -71,7 +71,29 @@ export class PurchasesService {
       throw new ConflictException('Company context is required');
     }
 
-    const nextNumber = await this.sequenceService.previewNextSequence(companyId, 'BILL');
+    const seq = await this.prisma.documentSequence.findUnique({
+      where: { companyId_documentType: { companyId, documentType: 'BILL' } },
+    });
+    const prefix = seq?.prefix || 'BIL-';
+    const padding = seq?.padding || 5;
+
+    // Scan existing purchases to guarantee we never collide with existing bill numbers
+    const purchases = await this.prisma.purchase.findMany({
+      where: { companyId, deletedAt: null },
+      select: { purchaseNo: true },
+    });
+
+    let maxNum = seq?.currentNumber || 0;
+    for (const p of purchases) {
+      if (p.purchaseNo && p.purchaseNo.startsWith(prefix)) {
+        const numPart = parseInt(p.purchaseNo.slice(prefix.length), 10);
+        if (!isNaN(numPart) && numPart > maxNum) {
+          maxNum = numPart;
+        }
+      }
+    }
+
+    const nextNumber = `${prefix}${(maxNum + 1).toString().padStart(padding, '0')}`;
     return { nextNumber };
   }
 
@@ -246,6 +268,28 @@ export class PurchasesService {
         purchaseNo = candidateNo;
       } else {
         purchaseNo = await this.sequenceService.generateNextSequence(companyId, 'BILL', tx);
+      }
+
+      // Synchronize documentSequence currentNumber so next bills auto-increment without collisions
+      const seqRec = await tx.documentSequence.findUnique({
+        where: { companyId_documentType: { companyId, documentType: 'BILL' } },
+      });
+      const seqPrefix = seqRec?.prefix || 'BIL-';
+      if (purchaseNo.startsWith(seqPrefix)) {
+        const numPart = parseInt(purchaseNo.slice(seqPrefix.length), 10);
+        if (!isNaN(numPart) && numPart > (seqRec?.currentNumber || 0)) {
+          await tx.documentSequence.upsert({
+            where: { companyId_documentType: { companyId, documentType: 'BILL' } },
+            update: { currentNumber: numPart },
+            create: {
+              companyId,
+              documentType: 'BILL',
+              prefix: seqPrefix,
+              padding: seqRec?.padding || 5,
+              currentNumber: numPart,
+            },
+          });
+        }
       }
 
       const docStatus = dto.status === 'DRAFT' ? 'DRAFT' : 'SENT';
