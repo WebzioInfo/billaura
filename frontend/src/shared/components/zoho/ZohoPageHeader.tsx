@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Plus, MoreVertical, RefreshCw, Download, Upload, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, Plus, MoreVertical, RefreshCw, Download, Upload, SlidersHorizontal, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface ZohoViewFilter {
@@ -26,6 +26,10 @@ export interface ZohoPageHeaderProps {
   onPreferences?: () => void;
   moreActions?: Array<{ label: string; onClick: () => void }>;
   className?: string;
+  searchValue?: string;
+  onSearchChange?: (val: string) => void;
+  searchPlaceholder?: string;
+  children?: React.ReactNode;
 }
 
 export const ZohoPageHeader: React.FC<ZohoPageHeaderProps> = ({
@@ -40,6 +44,10 @@ export const ZohoPageHeader: React.FC<ZohoPageHeaderProps> = ({
   onPreferences,
   moreActions = [],
   className,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
+  children,
 }) => {
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false);
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
@@ -118,8 +126,33 @@ export const ZohoPageHeader: React.FC<ZohoPageHeaderProps> = ({
         )}
       </div>
 
-      {/* RIGHT: Blue "+ New" Button and "..." Menu */}
+      {/* RIGHT: Search + Blue "+ New" Button and "..." Menu */}
       <div className="flex items-center gap-2">
+        {onSearchChange && (
+          <div className="relative w-56 sm:w-64">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
+            <input
+              type="text"
+              value={searchValue || ''}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder={searchPlaceholder || 'Search...'}
+              className="w-full h-8 pl-8 pr-7 text-xs border border-[#CBD5E1] rounded-[4px] focus:outline-none focus:border-[#408DFB] bg-white text-[#2B2F36] placeholder-[#9CA3AF] transition-colors"
+            />
+            {searchValue && (
+              <button
+                type="button"
+                onClick={() => onSearchChange('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#4B5563] p-0.5"
+                title="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {children}
+
         {newAction && (
           <div className="relative inline-flex items-center" ref={splitRef}>
             <button

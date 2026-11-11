@@ -6,6 +6,7 @@ import {
   Paperclip,
   MessageSquare,
   X,
+  Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ZohoStatusText } from './ZohoStatusText';
@@ -34,6 +35,9 @@ export interface ZohoSplitDetailProps {
   onCommentClick?: () => void;
   children: React.ReactNode;
   className?: string;
+  searchValue?: string;
+  onSearchChange?: (val: string) => void;
+  searchPlaceholder?: string;
 }
 
 export const ZohoSplitDetail: React.FC<ZohoSplitDetailProps> = ({
@@ -51,6 +55,9 @@ export const ZohoSplitDetail: React.FC<ZohoSplitDetailProps> = ({
   onCommentClick,
   children,
   className,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
 }) => {
   return (
     <div className={cn('w-full h-full flex overflow-hidden bg-white select-none', className)}>
@@ -87,6 +94,32 @@ export const ZohoSplitDetail: React.FC<ZohoSplitDetailProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Optional Search in Left Pane */}
+        {onSearchChange && (
+          <div className="p-2 border-b border-[#E5E7EB] bg-[#F8F9FB]">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchValue || ''}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder={searchPlaceholder || 'Search accounts...'}
+                className="w-full h-7 pl-8 pr-7 text-xs border border-[#CBD5E1] rounded-[4px] focus:outline-none focus:border-[#408DFB] bg-white text-[#2B2F36] placeholder-[#9CA3AF]"
+              />
+              {searchValue && (
+                <button
+                  type="button"
+                  onClick={() => onSearchChange('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                  title="Clear search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Left Scrollable Items List */}
         <div className="flex-1 overflow-y-auto divide-y divide-[#E5E7EB]">

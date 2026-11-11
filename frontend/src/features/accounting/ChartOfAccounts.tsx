@@ -190,6 +190,24 @@ export const ChartOfAccounts: React.FC = () => {
     });
   };
 
+  // Helper to determine if a node matches search or has any descendant that matches
+  const nodeMatches = (node: AccountNode, q: string): boolean => {
+    if (!q) return true;
+    return (
+      node.name.toLowerCase().includes(q) ||
+      Boolean(node.code && node.code.toLowerCase().includes(q)) ||
+      node.category.toLowerCase().includes(q) ||
+      Boolean(node.accountType && node.accountType.toLowerCase().includes(q))
+    );
+  };
+
+  const hasMatchingDescendant = (node: AccountNode, q: string): boolean => {
+    if (!node.children || node.children.length === 0) return false;
+    return node.children.some(
+      (child) => nodeMatches(child, q) || hasMatchingDescendant(child, q)
+    );
+  };
+
   // Flatten tree based on active view, search, and expansion state
   const flattenedAccounts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -197,12 +215,6 @@ export const ChartOfAccounts: React.FC = () => {
 
     const walk = (nodes: AccountNode[], depth = 0, parentName = '') => {
       nodes.forEach((node) => {
-        const matchesSearch =
-          !q ||
-          node.name.toLowerCase().includes(q) ||
-          (node.code && node.code.toLowerCase().includes(q)) ||
-          node.category.toLowerCase().includes(q);
-
         const isActive = (node as any).isActive !== false;
         const matchesView =
           activeView === 'All Accounts'
@@ -211,16 +223,24 @@ export const ChartOfAccounts: React.FC = () => {
             ? !isActive
             : isActive;
 
+        if (!matchesView) return;
+
+        const selfMatches = nodeMatches(node, q);
+        const childMatches = q ? hasMatchingDescendant(node, q) : false;
+
+        // If searching and neither this node nor any descendant matches, omit
+        if (q && !selfMatches && !childMatches) {
+          return;
+        }
+
         const hasChildren = Boolean(node.children && node.children.length > 0);
         const isExpanded = q ? true : expandedIds.has(node.id);
 
-        if (matchesSearch && matchesView) {
-          result.push({
-            ...node,
-            depth,
-            parent: parentName ? ({ name: parentName } as any) : node.parent,
-          });
-        }
+        result.push({
+          ...node,
+          depth,
+          parent: parentName ? ({ name: parentName } as any) : node.parent,
+        });
 
         if (hasChildren && (isExpanded || q)) {
           walk(node.children!, depth + 1, node.name);
@@ -568,6 +588,9 @@ export const ChartOfAccounts: React.FC = () => {
         moduleTitle="Active Accounts"
         items={splitItems}
         selectedId={selectedAccount.id}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search accounts..."
         onSelect={(id) => {
           const acc = flattenedAccounts.find((a) => a.id === id);
           if (acc) setSelectedAccount(acc);
@@ -912,6 +935,9 @@ export const ChartOfAccounts: React.FC = () => {
         views={ACCOUNT_VIEWS}
         activeViewId={activeView}
         onViewChange={(view) => setActiveView(view)}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search accounts by name, code, type..."
         newAction={{
           label: '+ New Account',
           onClick: () => handleOpenCreate(),
