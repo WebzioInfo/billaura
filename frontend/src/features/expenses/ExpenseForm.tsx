@@ -187,38 +187,73 @@ export const ExpenseForm: React.FC = () => {
 
   // Filter accounts for Expense Account and Paid Through
   const expenseAccounts = useMemo(() => {
-    if (categories.length > 0) {
-      return categories.map((cat: any) => ({
-        id: cat.accountId || cat.id,
-        categoryId: cat.id,
-        name: cat.name,
-        code: cat.account?.code || '',
-      }));
-    }
-    return allAccounts
-      .filter((a: any) => a.category === 'EXPENSE' || a.accountType === 'EXPENSE' || a.name?.toLowerCase().includes('expense'))
-      .map((a: any) => ({ id: a.id, name: a.name, code: a.code || '' }));
+    const list: Array<{ id: string; categoryId?: string; name: string; code?: string }> = [];
+    const seenIds = new Set<string>();
+
+    // 1. All expense categories
+    categories.forEach((cat: any) => {
+      const accId = cat.accountId || cat.id;
+      if (accId && !seenIds.has(accId)) {
+        seenIds.add(accId);
+        list.push({
+          id: accId,
+          categoryId: cat.id,
+          name: cat.name,
+          code: cat.account?.code || '',
+        });
+      }
+    });
+
+    // 2. All active GL expense accounts from Chart of Accounts
+    allAccounts
+      .filter((a: any) => 
+        !a.isGroup && 
+        !a.deletedAt && 
+        (a.category === 'EXPENSE' || a.accountType === 'EXPENSE' || a.subCategory?.includes('EXPENSE') || a.name?.toLowerCase().includes('expense'))
+      )
+      .forEach((a: any) => {
+        if (!seenIds.has(a.id)) {
+          seenIds.add(a.id);
+          list.push({
+            id: a.id,
+            name: a.name,
+            code: a.code || '',
+          });
+        }
+      });
+
+    return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [categories, allAccounts]);
 
   const paidThroughAccounts = useMemo(() => {
     const list: Array<{ id: string; name: string; group: string }> = [];
+    const seenKeys = new Set<string>();
 
-    // Bank accounts
-    bankAccounts.forEach((b: any) => {
-      list.push({ id: b.id, name: `${b.name || b.bankName} (${b.accountNumber || 'Bank'})`, group: 'Bank Accounts' });
-    });
+    // Real active accounts from banking module
+    bankAccounts
+      .filter((b: any) => !b.deletedAt && (b.status === 'ACTIVE' || !b.status))
+      .forEach((b: any) => {
+        const rawName = b.name || b.bankName || 'Account';
+        const isCash = rawName.toLowerCase().includes('cash');
+        const displayName = isCash
+          ? rawName
+          : b.accountNumber
+          ? `${rawName} (${b.accountNumber})`
+          : rawName;
 
-    // Cash and asset accounts from Chart of Accounts
-    allAccounts
-      .filter((a: any) => a.category === 'ASSET' && (a.name?.toLowerCase().includes('cash') || a.name?.toLowerCase().includes('bank') || a.name?.toLowerCase().includes('petty')))
-      .forEach((a: any) => {
-        if (!list.some((existing) => existing.id === a.id)) {
-          list.push({ id: a.id, name: `${a.name} ${a.code ? `(${a.code})` : ''}`, group: 'Cash & Asset Accounts' });
+        const normalizedKey = rawName.toLowerCase().trim();
+        if (!seenKeys.has(normalizedKey)) {
+          seenKeys.add(normalizedKey);
+          list.push({
+            id: b.id,
+            name: displayName,
+            group: isCash ? 'Cash Accounts' : 'Bank Accounts',
+          });
         }
       });
 
     return list;
-  }, [bankAccounts, allAccounts]);
+  }, [bankAccounts]);
 
   // Set default Destination of Supply based on company state
   useEffect(() => {

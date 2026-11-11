@@ -32,6 +32,7 @@ export class BankAccountsService {
 
     const paymentLedgerFilter: Prisma.AccountWhereInput = {
       companyId,
+      deletedAt: null,
       isGroup: false,
       category: AccountCategory.ASSET,
       OR: [
