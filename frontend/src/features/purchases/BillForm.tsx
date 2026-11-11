@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,7 +22,7 @@ import {
   AttachmentFile,
   ZohoModal,
 } from '@/shared/components/zoho';
-import { PageLoader } from '@/shared/components/ui';
+import { PageLoader, DeleteDialog } from '@/shared/components/ui';
 import { formatAddress } from '@/shared/utils/addressFormatter';
 
 const billItemSchema = z.object({
@@ -63,14 +63,36 @@ type BillFormValues = z.infer<typeof billSchema>;
 export const BillForm: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { id: paramId } = useParams();
   const queryClient = useQueryClient();
 
-  const editId = searchParams.get('edit');
+  const editId = searchParams.get('edit') || paramId;
   const isEditMode = !!editId;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'DRAFT' | 'OPEN'>('OPEN');
   const [attachedFiles, setAttachedFiles] = useState<AttachmentFile[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteBill = async () => {
+    if (!editId) return;
+    setIsDeleting(true);
+    try {
+      await apiClient.delete(`/purchases/${editId}`);
+      notification.success('Bill deleted successfully');
+      await erpInvalidate.purchaseBill(queryClient, { billId: editId });
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      queryClient.invalidateQueries({ queryKey: ['purchases'] });
+      setShowDeleteConfirm(false);
+      navigate('/bills');
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Failed to delete bill';
+      notification.error(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Modals state
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
@@ -665,13 +687,19 @@ export const BillForm: React.FC = () => {
       if (isEditMode) {
         await apiClient.put(`/purchases/${editId}`, payload);
         notification.success('Bill updated successfully');
+        await erpInvalidate.purchaseBill(queryClient, { billId: editId, vendorId: data.vendorId });
+        navigate(`/bills?id=${editId}`);
       } else {
-        await apiClient.post('/purchases', payload);
+        const createdRes = await apiClient.post('/purchases', payload);
+        const createdId = createdRes?.id || createdRes?.data?.id;
         notification.success(submitStatus === 'DRAFT' ? 'Bill draft saved' : 'Bill created and posted successfully');
+        await erpInvalidate.purchaseBill(queryClient, { billId: createdId, vendorId: data.vendorId });
+        if (createdId) {
+          navigate(`/bills?id=${createdId}`);
+        } else {
+          navigate('/bills');
+        }
       }
-
-      await erpInvalidate.purchaseBill(queryClient, { vendorId: data.vendorId });
-      navigate('/bills');
     } catch (err: any) {
       notification.error(err.response?.data?.message || 'Failed to save bill');
     } finally {
@@ -1002,6 +1030,11 @@ export const BillForm: React.FC = () => {
           },
           disabled: isSubmitting,
         },
+        ...(isEditMode ? [{
+          label: 'Delete Bill',
+          onClick: () => setShowDeleteConfirm(true),
+          disabled: isSubmitting,
+        }] : []),
         {
           label: 'Cancel',
           onClick: () => navigate('/bills'),
@@ -1283,6 +1316,17 @@ export const BillForm: React.FC = () => {
           </div>
         </div>
       </ZohoModal>
+
+      {showDeleteConfirm && (
+        <DeleteDialog
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleDeleteBill}
+          isLoading={isDeleting}
+          entityName="Bill"
+          warningText="Are you sure you want to delete this bill? This action cannot be undone."
+        />
+      )}
     </>
   );
 };

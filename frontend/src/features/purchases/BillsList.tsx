@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText,
@@ -79,16 +79,25 @@ interface Purchase {
 
 export const BillsList: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
   const [activeView, setActiveView] = useState('ALL');
-  const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
+  const [selectedBillId, setSelectedBillId] = useState<string | null>(searchParams.get('id') || null);
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [isKpiVisible, setIsKpiVisible] = useState(true);
   const [isPaymentsCollapsed, setIsPaymentsCollapsed] = useState(false);
   const [journalEntries, setJournalEntries] = useState<any[]>([]);
   const [isLoadingJournals, setIsLoadingJournals] = useState(false);
   const [billToDelete, setBillToDelete] = useState<Purchase | null>(null);
+
+  // Sync selectedBillId with ?id= query param
+  const queryBillId = searchParams.get('id');
+  useEffect(() => {
+    if (queryBillId && queryBillId !== selectedBillId) {
+      setSelectedBillId(queryBillId);
+    }
+  }, [queryBillId]);
 
   // Queries
   const { data: bills = [], isLoading, isError, error, refetch } = useQuery<Purchase[]>({
@@ -139,19 +148,25 @@ export const BillsList: React.FC = () => {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiClient.delete(`/purchases/${id}`);
+      return id;
     },
-    onSuccess: async () => {
+    onSuccess: async (deletedId) => {
       notification.success('Bill deleted successfully');
       await erpInvalidate.purchaseBill(queryClient, {
+        billId: deletedId,
         vendorId: billToDelete?.vendorId || undefined,
       });
-      setBillToDelete(null);
-      if (selectedBillId === billToDelete?.id) {
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      queryClient.invalidateQueries({ queryKey: ['purchases'] });
+      if (selectedBillId === deletedId) {
         setSelectedBillId(null);
+        setSearchParams({});
       }
+      setBillToDelete(null);
     },
     onError: (err: any) => {
-      notification.error(err.response?.data?.message || 'Failed to delete bill');
+      const msg = err.response?.data?.message || err.message || 'Failed to delete bill';
+      notification.error(Array.isArray(msg) ? msg.join(', ') : msg);
     },
   });
 
@@ -338,6 +353,32 @@ export const BillsList: React.FC = () => {
         );
       },
     },
+    {
+      key: 'actions',
+      label: 'Actions',
+      align: 'right',
+      width: '90px',
+      render: (b) => (
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => navigate(`/bills/new?edit=${b.id}`)}
+            className="p-1 hover:bg-[#F3F4F6] text-[#408DFB] hover:text-[#2563EB] rounded transition-colors cursor-pointer"
+            title="Edit Bill"
+          >
+            <Edit className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setBillToDelete(b)}
+            className="p-1 hover:bg-[#FEF2F2] text-[#6B7280] hover:text-[#DC2626] rounded transition-colors cursor-pointer"
+            title="Delete Bill"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -447,18 +488,25 @@ export const BillsList: React.FC = () => {
             moduleTitle="All Bills"
             items={splitItems}
             selectedId={selectedBill.id}
-            onSelect={(id) => setSelectedBillId(id)}
+            onSelect={(id) => {
+              setSelectedBillId(id);
+              setSearchParams({ id });
+            }}
             onNew={() => navigate('/bills/new')}
-            onClose={() => setSelectedBillId(null)}
+            onClose={() => {
+              setSelectedBillId(null);
+              setSearchParams({});
+            }}
             detailTitle={selectedBill.purchaseNo}
             detailActions={
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => navigate(`/bills/new?edit=${selectedBill.id}`)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] rounded-[4px] text-xs font-medium text-[#2B2F36] cursor-pointer"
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-[#408DFB] text-[#408DFB] hover:bg-[#EFF6FF] rounded-[4px] text-xs font-semibold cursor-pointer shadow-xs transition-colors"
+                  title="Edit this Bill"
                 >
-                  <Edit className="w-3.5 h-3.5 text-[#6B7280]" />
+                  <Edit className="w-3.5 h-3.5" />
                   <span>Edit</span>
                 </button>
                 <button
@@ -683,7 +731,12 @@ export const BillsList: React.FC = () => {
         <DeleteDialog
           isOpen={!!billToDelete}
           onClose={() => setBillToDelete(null)}
-          onConfirm={() => deleteMutation.mutate(billToDelete.id)}
+          onConfirm={async () => {
+            if (billToDelete) {
+              await deleteMutation.mutateAsync(billToDelete.id);
+            }
+          }}
+          isLoading={deleteMutation.isPending}
           entityName={`Bill ${billToDelete.purchaseNo}`}
           warningText={`Are you sure you want to delete bill "${billToDelete.purchaseNo}"? This action cannot be undone.`}
         />

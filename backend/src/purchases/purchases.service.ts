@@ -1077,7 +1077,19 @@ export class PurchasesService {
   async remove(id: string) {
     const purchase = await this.findOne(id);
     if (purchase.status === 'PAID') {
-      throw new BadRequestException('Cannot delete a fully paid purchase');
+      throw new BadRequestException('Cannot delete a fully paid purchase. Please delete or unallocate associated payments first.');
+    }
+
+    // Check if any active payment allocations exist against this bill
+    const activeAllocations = await this.prisma.paymentAllocation.findMany({
+      where: { purchaseId: id, deletedAt: null },
+      include: { transactionPayment: true },
+    });
+    if (activeAllocations.length > 0) {
+      const paymentNos = activeAllocations.map(a => a.transactionPayment?.paymentNo).filter(Boolean).join(', ');
+      throw new BadRequestException(
+        `Cannot delete bill ${purchase.purchaseNo} because payment(s) [${paymentNos || 'linked'}] are allocated to it. Please delete or unallocate payments first.`
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -1096,7 +1108,7 @@ export class PurchasesService {
 
         // Find original journal entries and create reversals using AccountingEngineService
         const originalEntries = await tx.journalEntry.findMany({
-          where: { reference: purchase.purchaseNo, companyId: purchase.companyId },
+          where: { reference: purchase.purchaseNo, companyId: purchase.companyId, deletedAt: null },
         });
 
         for (const entry of originalEntries) {
@@ -1141,11 +1153,20 @@ export class PurchasesService {
         }
       }
 
+      // Soft delete purchase items
+      await tx.purchaseItem.updateMany({
+        where: { purchaseId: id, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+
       // Soft delete purchase
       return tx.purchase.update({
         where: { id },
         data: { deletedAt: new Date() },
       });
+    }, {
+      maxWait: 10000,
+      timeout: 30000,
     });
   }
 }
