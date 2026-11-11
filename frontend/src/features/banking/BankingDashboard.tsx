@@ -75,6 +75,9 @@ export const BankingDashboard: React.FC = () => {
       const items = res.data || res || [];
       return Array.isArray(items) ? items : [];
     },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: allTransactions = [], isLoading: loadingTransactions } = useQuery<any[]>({
