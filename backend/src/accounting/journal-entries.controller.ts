@@ -2,10 +2,13 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from "@nestjs/common";
 import { JournalEntriesService } from "./journal-entries.service";
 import { CreateJournalEntryDto } from "./dto/journal-entry.dto";
@@ -45,6 +48,16 @@ export class JournalEntriesController {
       success: true,
       message: "Journal voucher posted successfully",
       data,
+    };
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param("id") id: string) {
+    await this.journalEntriesService.remove(id);
+    return {
+      success: true,
+      message: "Journal entry deleted successfully",
     };
   }
 }

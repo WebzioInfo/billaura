@@ -104,6 +104,8 @@ export const JournalVouchersList: React.FC = () => {
     onSuccess: () => {
       notification.success('Journal entry deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
       setSelectedJournalId(null);
       setJournalToDelete(null);
     },
@@ -112,7 +114,7 @@ export const JournalVouchersList: React.FC = () => {
     },
   });
 
-  const handleDeleteConfirm = (journal: JournalEntry) => {
+  const handleDeleteConfirm = async (journal: JournalEntry) => {
     if (journal.status === 'DRAFT') {
       if (companyId) {
         try {
@@ -131,7 +133,7 @@ export const JournalVouchersList: React.FC = () => {
       return;
     }
 
-    deleteMutation.mutate(journal.id);
+    await deleteMutation.mutateAsync(journal.id);
   };
 
   const views: ZohoViewOption[] = [
@@ -415,6 +417,7 @@ export const JournalVouchersList: React.FC = () => {
       {journalToDelete && (
         <DeleteDialog
           isOpen={!!journalToDelete}
+          isLoading={deleteMutation.isPending}
           onClose={() => setJournalToDelete(null)}
           onConfirm={() => handleDeleteConfirm(journalToDelete)}
           entityName={`Journal #${journalToDelete.journalNo || journalToDelete.id.slice(-5)}`}

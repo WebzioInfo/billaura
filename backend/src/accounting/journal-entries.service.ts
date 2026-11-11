@@ -83,4 +83,68 @@ export class JournalEntriesService {
       });
     }, { timeout: 20000 });
   }
+
+  async remove(id: string) {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const entry = await this.findOne(id);
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Unwind financial impact on Account, BankAccount, and CashAccount balances
+        for (const line of entry.lines) {
+          const debitNum = Number(line.debit || 0);
+          const creditNum = Number(line.credit || 0);
+          const netChange = debitNum - creditNum;
+
+          if (netChange !== 0) {
+            // Revert GL account balance
+            await tx.account.update({
+              where: { id: line.accountId },
+              data: { balance: { decrement: netChange } },
+            });
+
+            // Revert linked BankAccount balance if mapped
+            const linkedBank = await tx.bankAccount.findFirst({
+              where: { accountId: line.accountId, companyId },
+            });
+            if (linkedBank) {
+              await tx.bankAccount.update({
+                where: { id: linkedBank.id },
+                data: { currentBalance: { decrement: netChange } },
+              });
+            }
+
+            // Revert linked CashAccount balance if mapped
+            const linkedCash = await tx.cashAccount.findFirst({
+              where: { accountId: line.accountId, companyId },
+            });
+            if (linkedCash) {
+              await tx.cashAccount.update({
+                where: { id: linkedCash.id },
+                data: { currentBalance: { decrement: netChange } },
+              });
+            }
+          }
+        }
+
+        // Soft delete the journal lines and the entry
+        await tx.journalLine.updateMany({
+          where: { journalEntryId: entry.id },
+          data: { deletedAt: new Date() },
+        });
+
+        const deleted = await tx.journalEntry.update({
+          where: { id: entry.id },
+          data: { deletedAt: new Date() },
+        });
+
+        return deleted;
+      },
+      { timeout: 30000, maxWait: 10000 }
+    );
+  }
 }
