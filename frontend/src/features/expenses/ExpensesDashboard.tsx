@@ -874,8 +874,9 @@ export const ExpensesDashboard: React.FC = () => {
                           <span className="text-[#6B7280] block mb-0.5">Paid Through</span>
                           <span className="font-medium text-[#1E2540]">
                             {selectedExpense.bankAccount?.name ||
-                              (selectedExpense.paymentMethod === 'CASH'
-                                ? 'Petty Cash'
+                              selectedExpense.cashAccount?.name ||
+                              (selectedExpense.paidFromType === 'CASH' || selectedExpense.paymentMethod === 'CASH'
+                                ? 'Cash'
                                 : 'Bank Account')}
                           </span>
                         </div>
@@ -938,22 +939,57 @@ export const ExpensesDashboard: React.FC = () => {
                                   {selectedExpense.category?.name || 'Expense Account'}
                                 </td>
                                 <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
-                                  {formatCurrency(selectedExpense.amount)}
+                                  {formatCurrency(selectedExpense.taxableAmount || selectedExpense.amount)}
                                 </td>
                                 <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
                               </tr>
-                              {Boolean(selectedExpense.taxAmount && selectedExpense.taxAmount > 0) && (
-                                <tr>
-                                  <td className="py-2 px-3 text-[#1E2540]">Input GST Tax Ledger</td>
-                                  <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
-                                    {formatCurrency(selectedExpense.taxAmount)}
-                                  </td>
-                                  <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
-                                </tr>
+                              {Boolean(selectedExpense.taxApplicable && (selectedExpense.taxAmount > 0 || selectedExpense.cgstAmount > 0)) && (
+                                <>
+                                  {Number(selectedExpense.cgstAmount) > 0 && (
+                                    <tr>
+                                      <td className="py-2 px-3 text-[#1E2540]">Input CGST</td>
+                                      <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                        {formatCurrency(selectedExpense.cgstAmount)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
+                                    </tr>
+                                  )}
+                                  {Number(selectedExpense.sgstAmount) > 0 && (
+                                    <tr>
+                                      <td className="py-2 px-3 text-[#1E2540]">Input SGST</td>
+                                      <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                        {formatCurrency(selectedExpense.sgstAmount)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
+                                    </tr>
+                                  )}
+                                  {Number(selectedExpense.igstAmount) > 0 && (
+                                    <tr>
+                                      <td className="py-2 px-3 text-[#1E2540]">Input IGST</td>
+                                      <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                        {formatCurrency(selectedExpense.igstAmount)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
+                                    </tr>
+                                  )}
+                                  {!selectedExpense.cgstAmount && !selectedExpense.sgstAmount && !selectedExpense.igstAmount && Number(selectedExpense.taxAmount) > 0 && (
+                                    <tr>
+                                      <td className="py-2 px-3 text-[#1E2540]">Input GST Tax Ledger</td>
+                                      <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
+                                        {formatCurrency(selectedExpense.taxAmount)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
+                                    </tr>
+                                  )}
+                                </>
                               )}
                               <tr>
                                 <td className="py-2 px-3 text-[#1E2540]">
-                                  {selectedExpense.bankAccount?.name || 'Petty Cash Ledger'}
+                                  {selectedExpense.bankAccount?.name ||
+                                    selectedExpense.cashAccount?.name ||
+                                    (selectedExpense.paidFromType === 'CASH' || selectedExpense.paymentMethod === 'CASH'
+                                      ? 'Cash'
+                                      : 'Bank Account')}
                                 </td>
                                 <td className="py-2 px-3 text-right text-[#9CA3AF]">—</td>
                                 <td className="py-2 px-3 text-right tabular-nums text-[#1E2540]">
@@ -1111,18 +1147,28 @@ export const ExpensesDashboard: React.FC = () => {
       {/* Delete Confirmation Dialog */}
       <DeleteDialog
         isOpen={Boolean(expenseToDelete)}
+        isLoading={deleteExpense.isPending}
         entityName={`Expense ${expenseToDelete?.expenseNo || ''}`}
         warningText={`Are you sure you want to delete this expense record (${expenseToDelete?.expenseNo || 'this item'})? This action cannot be undone.`}
-        onConfirm={() => expenseToDelete && deleteExpense.mutate(expenseToDelete.id)}
+        onConfirm={async () => {
+          if (expenseToDelete) {
+            await deleteExpense.mutateAsync(expenseToDelete.id);
+          }
+        }}
         onClose={() => setExpenseToDelete(null)}
       />
 
       {/* Delete Category Dialog */}
       <DeleteDialog
         isOpen={Boolean(categoryToDelete)}
+        isLoading={deleteCategory.isPending}
         entityName={`Category ${categoryToDelete?.name || ''}`}
         warningText={`Are you sure you want to remove the "${categoryToDelete?.name}" category?`}
-        onConfirm={() => categoryToDelete && deleteCategory.mutate(categoryToDelete.id)}
+        onConfirm={async () => {
+          if (categoryToDelete) {
+            await deleteCategory.mutateAsync(categoryToDelete.id);
+          }
+        }}
         onClose={() => setCategoryToDelete(null)}
       />
     </div>

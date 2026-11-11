@@ -28,6 +28,18 @@ export const MAIN_ACCOUNT_GROUPS: { id: MainAccountGroup; label: string; normalB
 
 export const ACCOUNT_TYPES_METADATA: Record<string, AccountTypeMetadata> = {
   // --- ASSETS ---
+  CURRENT_ASSET: {
+    id: 'CURRENT_ASSET',
+    displayName: 'Current Asset',
+    mainGroup: 'ASSET',
+    mainGroupLabel: 'Asset',
+    normalBalance: 'DEBIT',
+    normalBalanceLabel: 'Debit (Dr)',
+    statement: 'BALANCE_SHEET',
+    classification: 'CURRENT',
+    description: 'Any short-term asset expected to be converted into cash, consumed, or liquidated within twelve months, such as prepaid expenses, advances, and liquid holdings.',
+    defaultSubCategory: AccountSubCategory.CURRENT_ASSET,
+  },
   OTHER_ASSET: {
     id: 'OTHER_ASSET',
     displayName: 'Other Asset',
@@ -364,7 +376,8 @@ export function getAccountTypeMetadata(typeOrCategory?: string): AccountTypeMeta
   // Aliases and backward-compatible mapping
   switch (normalized) {
     case 'CURRENT_ASSET':
-      return ACCOUNT_TYPES_METADATA.OTHER_CURRENT_ASSET;
+    case 'CURRENT_ASSETS':
+      return ACCOUNT_TYPES_METADATA.CURRENT_ASSET;
     case 'CURRENT_LIABILITY':
       return ACCOUNT_TYPES_METADATA.OTHER_CURRENT_LIABILITY;
     case 'LONG_TERM_LIABILITY':
@@ -379,7 +392,7 @@ export function getAccountTypeMetadata(typeOrCategory?: string): AccountTypeMeta
     case 'OPERATING_EXPENSE':
       return ACCOUNT_TYPES_METADATA.EXPENSE;
     case 'ASSET':
-      return ACCOUNT_TYPES_METADATA.OTHER_CURRENT_ASSET;
+      return ACCOUNT_TYPES_METADATA.CURRENT_ASSET;
     case 'LIABILITY':
       return ACCOUNT_TYPES_METADATA.OTHER_CURRENT_LIABILITY;
     case 'REVENUE':
@@ -412,7 +425,7 @@ export function mapLegacyAccountToDetailedType(
     if (subCategory === AccountSubCategory.FIXED_ASSET || name.includes('machinery') || name.includes('furniture') || name.includes('equipment') || name.includes('building')) {
       return ACCOUNT_TYPES_METADATA.FIXED_ASSET;
     }
-    if (subCategory === AccountSubCategory.CURRENT_ASSET) return ACCOUNT_TYPES_METADATA.OTHER_CURRENT_ASSET;
+    if (subCategory === AccountSubCategory.CURRENT_ASSET) return ACCOUNT_TYPES_METADATA.CURRENT_ASSET;
     return ACCOUNT_TYPES_METADATA.OTHER_ASSET;
   }
 
