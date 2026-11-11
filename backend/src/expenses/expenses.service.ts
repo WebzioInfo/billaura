@@ -852,39 +852,6 @@ export class ExpensesService {
               `Reversal for deleted expense ${expense.expenseNo}`
             );
           }
-
-          // Restore bank/cash account balance
-          let isRcm = false;
-          if (expense.notes) {
-            try {
-              const parsed = JSON.parse(expense.notes);
-              if (parsed?.meta?.reverseCharge) isRcm = true;
-            } catch {}
-          }
-          const bankPayoutAmount = isRcm ? Number(expense.taxableAmount || expense.amount) : Number(expense.totalAmount);
-          if (expense.bankAccountId) {
-            await tx.bankAccount.update({
-              where: { id: expense.bankAccountId },
-              data: { currentBalance: { increment: bankPayoutAmount } },
-            });
-          } else if (expense.cashAccountId || expense.paidFromType === 'CASH') {
-            if (expense.cashAccountId) {
-              await tx.cashAccount.update({
-                where: { id: expense.cashAccountId },
-                data: { currentBalance: { increment: bankPayoutAmount } },
-              });
-            }
-            // Also restore active BankAccount for Cash if present in banking module
-            const activeCashBank = await tx.bankAccount.findFirst({
-              where: { companyId: expense.companyId, deletedAt: null, name: { equals: 'Cash', mode: 'insensitive' } },
-            });
-            if (activeCashBank && activeCashBank.id !== expense.bankAccountId) {
-              await tx.bankAccount.update({
-                where: { id: activeCashBank.id },
-                data: { currentBalance: { increment: bankPayoutAmount } },
-              });
-            }
-          }
         }
 
         return tx.expense.update({
