@@ -410,20 +410,8 @@ export class ExpensesService {
       reference: expense.expenseNo,
       description: `Automatic expense posting ${expense.expenseNo}`,
       lines,
+      allowDuplicateReference: true,
     }, tx);
-
-    // Update currentBalance of BankAccount or CashAccount
-    if (expense.bankAccountId) {
-      await tx.bankAccount.update({
-        where: { id: expense.bankAccountId },
-        data: { currentBalance: { decrement: bankPayoutAmount } },
-      });
-    } else if (expense.cashAccountId) {
-      await tx.cashAccount.update({
-        where: { id: expense.cashAccountId },
-        data: { currentBalance: { decrement: bankPayoutAmount } },
-      });
-    }
   }
 
   async create(dto: CreateExpenseDto, txClient?: Prisma.TransactionClient) {
@@ -644,153 +632,196 @@ export class ExpensesService {
     if (!companyId) throw new ConflictException('Company context is required');
 
     const existing = await this.prisma.expense.findFirst({
-      where: { id }
+      where: { id, companyId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Expense not found');
-    if (existing.approvalStatus === 'APPROVED') throw new ConflictException('Cannot edit an approved expense');
 
-    const rawAmount = dto.amount !== undefined ? Number(dto.amount) : Number(existing.taxableAmount || existing.amount);
-    const gstRate = dto.gstRate !== undefined ? Number(dto.gstRate) : Number(existing.gstRate || 0);
-    const amountIs = dto.amountIs || existing.taxMode || 'TAX_EXCLUSIVE';
-    const taxApplicable = dto.taxApplicable !== undefined ? Boolean(dto.taxApplicable) : existing.taxApplicable;
+    return this.prisma.$transaction(
+      async (tx) => {
+        // 1. If previously approved, reverse original journal postings to unwind accounting and bank balances
+        if (existing.approvalStatus === 'APPROVED') {
+          const originalEntries = await tx.journalEntry.findMany({
+            where: { reference: existing.expenseNo, companyId },
+          });
 
-    let taxableAmount = rawAmount;
-    let taxAmount = 0;
-    let totalAmount = rawAmount;
+          for (const entry of originalEntries) {
+            await this.accountingEngine.reverseTransaction(
+              entry.id,
+              companyId,
+              tx,
+              `Reversal for edit of expense ${existing.expenseNo}`,
+            );
+          }
+        }
 
-    if (taxApplicable && gstRate > 0) {
-      if (amountIs === 'TAX_INCLUSIVE') {
-        totalAmount = Math.round(rawAmount * 100) / 100;
-        taxAmount = Math.round((rawAmount * gstRate / (100 + gstRate)) * 100) / 100;
-        taxableAmount = Math.round((totalAmount - taxAmount) * 100) / 100;
-      } else {
-        taxableAmount = Math.round(rawAmount * 100) / 100;
-        taxAmount = Math.round((taxableAmount * gstRate / 100) * 100) / 100;
-        totalAmount = Math.round((taxableAmount + taxAmount) * 100) / 100;
-      }
-    } else {
-      taxableAmount = Math.round(rawAmount * 100) / 100;
-      taxAmount = 0;
-      totalAmount = taxableAmount;
-    }
+        const rawAmount = dto.amount !== undefined ? Number(dto.amount) : Number(existing.taxableAmount || existing.amount);
+        const gstRate = dto.gstRate !== undefined ? Number(dto.gstRate) : Number(existing.gstRate || 0);
+        const amountIs = dto.amountIs || existing.taxMode || 'TAX_EXCLUSIVE';
+        const taxApplicable = dto.taxApplicable !== undefined ? Boolean(dto.taxApplicable) : existing.taxApplicable;
 
-    const isInterState =
-      dto.taxType === 'IGST' ||
-      (dto.sourceOfSupply && dto.destinationOfSupply && dto.sourceOfSupply !== dto.destinationOfSupply);
+        let taxableAmount = rawAmount;
+        let taxAmount = 0;
+        let totalAmount = rawAmount;
 
-    const taxType = taxApplicable ? (isInterState ? 'IGST' : 'GST') : null;
-    const igstAmount = isInterState ? taxAmount : 0;
-    const cgstAmount = isInterState ? 0 : Math.round((taxAmount / 2) * 100) / 100;
-    const sgstAmount = isInterState ? 0 : Math.round((taxAmount - cgstAmount) * 100) / 100;
+        if (taxApplicable && gstRate > 0) {
+          if (amountIs === 'TAX_INCLUSIVE') {
+            totalAmount = Math.round(rawAmount * 100) / 100;
+            taxAmount = Math.round(((rawAmount * gstRate) / (100 + gstRate)) * 100) / 100;
+            taxableAmount = Math.round((totalAmount - taxAmount) * 100) / 100;
+          } else {
+            taxableAmount = Math.round(rawAmount * 100) / 100;
+            taxAmount = Math.round(((taxableAmount * gstRate) / 100) * 100) / 100;
+            totalAmount = Math.round((taxableAmount + taxAmount) * 100) / 100;
+          }
+        } else {
+          taxableAmount = Math.round(rawAmount * 100) / 100;
+          taxAmount = 0;
+          totalAmount = taxableAmount;
+        }
 
-    let bankAccountId = existing.bankAccountId;
-    let cashAccountId = existing.cashAccountId;
-    let paidFromType = existing.paidFromType;
-    let paidFromId = existing.paidFromId;
+        const isInterState =
+          dto.taxType === 'IGST' ||
+          (dto.sourceOfSupply && dto.destinationOfSupply && dto.sourceOfSupply !== dto.destinationOfSupply);
 
-    if (dto.bankAccountId !== undefined || dto.paidThroughAccountId !== undefined || dto.paymentMethod !== undefined) {
-      const resolved = await this.resolvePaymentSource(
-        companyId,
-        {
-          bankAccountId: dto.bankAccountId !== undefined ? dto.bankAccountId : (dto.paidThroughAccountId || existing.bankAccountId || undefined),
-          paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod : existing.paymentMethod,
-        },
-        this.prisma,
-      );
-      bankAccountId = resolved.bankAccountId;
-      cashAccountId = resolved.cashAccountId;
-      paidFromType = resolved.paidFromType;
-      paidFromId = resolved.paidFromId;
-    }
+        const taxType = taxApplicable ? (isInterState ? 'IGST' : 'GST') : null;
+        const igstAmount = isInterState ? taxAmount : 0;
+        const cgstAmount = isInterState ? 0 : Math.round((taxAmount / 2) * 100) / 100;
+        const sgstAmount = isInterState ? 0 : Math.round((taxAmount - cgstAmount) * 100) / 100;
 
-    let departmentId = existing.departmentId;
-    if (dto.departmentId !== undefined) {
-      const dId = dto.departmentId?.trim() || null;
-      if (dId) {
-        const dept = await this.prisma.department.findFirst({
-          where: { id: dId, companyId },
+        let bankAccountId = existing.bankAccountId;
+        let cashAccountId = existing.cashAccountId;
+        let paidFromType = existing.paidFromType;
+        let paidFromId = existing.paidFromId;
+
+        if (dto.bankAccountId !== undefined || dto.paidThroughAccountId !== undefined || dto.paymentMethod !== undefined) {
+          const resolved = await this.resolvePaymentSource(
+            companyId,
+            {
+              bankAccountId: dto.bankAccountId !== undefined ? dto.bankAccountId : (dto.paidThroughAccountId || existing.bankAccountId || undefined),
+              paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod : existing.paymentMethod,
+            },
+            tx,
+          );
+          bankAccountId = resolved.bankAccountId;
+          cashAccountId = resolved.cashAccountId;
+          paidFromType = resolved.paidFromType;
+          paidFromId = resolved.paidFromId;
+        }
+
+        let departmentId = existing.departmentId;
+        if (dto.departmentId !== undefined) {
+          const dId = dto.departmentId?.trim() || null;
+          if (dId) {
+            const dept = await tx.department.findFirst({
+              where: { id: dId, companyId },
+            });
+            departmentId = dept ? dept.id : null;
+          } else {
+            departmentId = null;
+          }
+        }
+
+        // Resolve category if needed
+        let categoryId = existing.categoryId;
+        if (dto.categoryId) {
+          categoryId = dto.categoryId;
+        } else if (dto.accountId || dto.expenseAccountId) {
+          const accId = dto.accountId || dto.expenseAccountId;
+          let cat = await tx.expenseCategory.findFirst({ where: { accountId: accId, companyId } });
+          if (!cat) {
+            const ledgerAcc = await tx.account.findFirst({ where: { id: accId, companyId } });
+            if (ledgerAcc) {
+              cat = await tx.expenseCategory.create({
+                data: {
+                  companyId,
+                  name: ledgerAcc.name,
+                  accountId: ledgerAcc.id,
+                  description: `Auto-created for ${ledgerAcc.name}`,
+                  isActive: true,
+                },
+              });
+            }
+          }
+          if (cat) categoryId = cat.id;
+        }
+
+        // Update notes with meta
+        let existingMeta: any = {};
+        if (existing.notes) {
+          try {
+            const parsed = JSON.parse(existing.notes);
+            if (parsed?.meta) existingMeta = parsed.meta;
+          } catch {}
+        }
+
+        const updatedMeta = {
+          ...existingMeta,
+          ...(dto.expenseType !== undefined ? { expenseType: dto.expenseType } : {}),
+          ...(dto.hsnSac !== undefined ? { hsnSac: dto.hsnSac } : {}),
+          ...(dto.sacCode !== undefined ? { sacCode: dto.sacCode } : {}),
+          ...(dto.hsnCode !== undefined ? { hsnCode: dto.hsnCode } : {}),
+          ...(dto.gstTreatment !== undefined ? { gstTreatment: dto.gstTreatment } : {}),
+          ...(dto.vendorGstin !== undefined ? { vendorGstin: dto.vendorGstin } : {}),
+          ...(dto.sourceOfSupply !== undefined ? { sourceOfSupply: dto.sourceOfSupply } : {}),
+          ...(dto.destinationOfSupply !== undefined ? { destinationOfSupply: dto.destinationOfSupply } : {}),
+          ...(dto.reverseCharge !== undefined ? { reverseCharge: Boolean(dto.reverseCharge) } : {}),
+          ...(dto.amountIs !== undefined ? { amountIs: dto.amountIs } : {}),
+          ...(dto.invoiceNumber !== undefined ? { invoiceNumber: dto.invoiceNumber } : {}),
+          ...(dto.customerId !== undefined ? { customerId: dto.customerId } : {}),
+          ...(dto.customerName !== undefined ? { customerName: dto.customerName } : {}),
+          ...(dto.isBillable !== undefined ? { isBillable: Boolean(dto.isBillable) } : {}),
+          ...(dto.reportingTags !== undefined ? { reportingTags: dto.reportingTags } : {}),
+          ...(dto.receiptUrls !== undefined ? { receiptUrls: dto.receiptUrls } : {}),
+        };
+
+        const notesPayload = JSON.stringify({
+          notes: dto.notes !== undefined ? dto.notes : (existingMeta ? (JSON.parse(existing.notes || '{}').notes || '') : existing.notes),
+          meta: updatedMeta,
         });
-        departmentId = dept ? dept.id : null;
-      } else {
-        departmentId = null;
-      }
-    }
 
-    // Resolve category if needed
-    let categoryId = existing.categoryId;
-    if (dto.categoryId) {
-      categoryId = dto.categoryId;
-    } else if (dto.accountId || dto.expenseAccountId) {
-      const accId = dto.accountId || dto.expenseAccountId;
-      const cat = await this.prisma.expenseCategory.findFirst({ where: { accountId: accId, companyId } });
-      if (cat) categoryId = cat.id;
-    }
+        const updated = await tx.expense.update({
+          where: { id },
+          data: {
+            categoryId,
+            vendorId: dto.vendorId !== undefined ? (dto.vendorId || null) : undefined,
+            bankAccountId,
+            cashAccountId,
+            paidFromType,
+            paidFromId,
+            date: dto.date !== undefined ? new Date(dto.date) : undefined,
+            amount: taxableAmount,
+            taxAmount,
+            taxApplicable,
+            gstRate,
+            taxPreference: dto.taxPreference !== undefined ? dto.taxPreference : undefined,
+            taxMode: amountIs,
+            taxType,
+            taxableAmount,
+            cgstAmount,
+            sgstAmount,
+            igstAmount,
+            cessAmount: dto.cessAmount !== undefined ? dto.cessAmount : undefined,
+            totalAmount,
+            paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod : undefined,
+            billNumber: dto.invoiceNumber !== undefined ? dto.invoiceNumber : (dto.billNumber !== undefined ? dto.billNumber : undefined),
+            description: dto.description !== undefined ? dto.description : undefined,
+            notes: notesPayload,
+            departmentId,
+            approvalStatus: dto.approvalStatus !== undefined ? dto.approvalStatus : undefined,
+            status: dto.status !== undefined ? dto.status : undefined,
+          },
+        });
 
-    // Update notes with meta
-    let existingMeta: any = {};
-    if (existing.notes) {
-      try {
-        const parsed = JSON.parse(existing.notes);
-        if (parsed?.meta) existingMeta = parsed.meta;
-      } catch {}
-    }
+        // 2. Post updated accounting ledger entries if approved
+        const isApproved = (dto.approvalStatus || existing.approvalStatus) === 'APPROVED';
+        if (isApproved) {
+          await this.postExpenseLedger(companyId, updated, tx);
+        }
 
-    const updatedMeta = {
-      ...existingMeta,
-      ...(dto.expenseType !== undefined ? { expenseType: dto.expenseType } : {}),
-      ...(dto.hsnSac !== undefined ? { hsnSac: dto.hsnSac } : {}),
-      ...(dto.sacCode !== undefined ? { sacCode: dto.sacCode } : {}),
-      ...(dto.hsnCode !== undefined ? { hsnCode: dto.hsnCode } : {}),
-      ...(dto.gstTreatment !== undefined ? { gstTreatment: dto.gstTreatment } : {}),
-      ...(dto.vendorGstin !== undefined ? { vendorGstin: dto.vendorGstin } : {}),
-      ...(dto.sourceOfSupply !== undefined ? { sourceOfSupply: dto.sourceOfSupply } : {}),
-      ...(dto.destinationOfSupply !== undefined ? { destinationOfSupply: dto.destinationOfSupply } : {}),
-      ...(dto.reverseCharge !== undefined ? { reverseCharge: Boolean(dto.reverseCharge) } : {}),
-      ...(dto.amountIs !== undefined ? { amountIs: dto.amountIs } : {}),
-      ...(dto.invoiceNumber !== undefined ? { invoiceNumber: dto.invoiceNumber } : {}),
-      ...(dto.customerId !== undefined ? { customerId: dto.customerId } : {}),
-      ...(dto.customerName !== undefined ? { customerName: dto.customerName } : {}),
-      ...(dto.isBillable !== undefined ? { isBillable: Boolean(dto.isBillable) } : {}),
-      ...(dto.reportingTags !== undefined ? { reportingTags: dto.reportingTags } : {}),
-      ...(dto.receiptUrls !== undefined ? { receiptUrls: dto.receiptUrls } : {}),
-    };
-
-    const notesPayload = JSON.stringify({
-      notes: dto.notes !== undefined ? dto.notes : (existingMeta ? (JSON.parse(existing.notes || '{}').notes || '') : existing.notes),
-      meta: updatedMeta,
-    });
-
-    const updated = await this.prisma.expense.update({
-      where: { id },
-      data: {
-        categoryId,
-        bankAccountId,
-        cashAccountId,
-        paidFromType,
-        paidFromId,
-        date: dto.date !== undefined ? new Date(dto.date) : undefined,
-        amount: taxableAmount,
-        taxAmount,
-        taxApplicable,
-        gstRate,
-        taxPreference: dto.taxPreference !== undefined ? dto.taxPreference : undefined,
-        taxMode: amountIs,
-        taxType,
-        taxableAmount,
-        cgstAmount,
-        sgstAmount,
-        igstAmount,
-        cessAmount: dto.cessAmount !== undefined ? dto.cessAmount : undefined,
-        totalAmount,
-        paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod : undefined,
-        billNumber: dto.invoiceNumber !== undefined ? dto.invoiceNumber : (dto.billNumber !== undefined ? dto.billNumber : undefined),
-        description: dto.description !== undefined ? dto.description : undefined,
-        notes: notesPayload,
-        departmentId,
-      }
-    });
-
-    return this.parseExpenseNotes(updated);
+        return this.parseExpenseNotes(updated);
+      },
+      { timeout: 30000, maxWait: 10000 },
+    );
   }
 
   async updateApproval(id: string, dto: UpdateExpenseApprovalDto, userId: string, txClient?: Prisma.TransactionClient) {

@@ -286,18 +286,18 @@ export const ExpenseForm: React.FC = () => {
     }
   }, [company, destinationOfSupply, sourceOfSupply]);
 
-  // Set default Paid Through and Expense Account if empty
+  // Set default Paid Through and Expense Account if empty (only in Create mode)
   useEffect(() => {
-    if (!paidThroughId && paidThroughAccounts.length > 0) {
+    if (!isEditMode && !paidThroughId && paidThroughAccounts.length > 0) {
       setPaidThroughId(paidThroughAccounts[0].id);
     }
-  }, [paidThroughAccounts, paidThroughId]);
+  }, [isEditMode, paidThroughAccounts, paidThroughId]);
 
   useEffect(() => {
-    if (!accountId && expenseAccounts.length > 0) {
+    if (!isEditMode && !accountId && expenseAccounts.length > 0) {
       setAccountId(expenseAccounts[0].id);
     }
-  }, [expenseAccounts, accountId]);
+  }, [isEditMode, expenseAccounts, accountId]);
 
   // Fetch expense if editing
   const { data: existingExpense, isLoading: isLoadingExpense } = useQuery({
@@ -314,7 +314,13 @@ export const ExpenseForm: React.FC = () => {
   useEffect(() => {
     if (existingExpense) {
       setDate(existingExpense.date ? new Date(existingExpense.date).toISOString().split('T')[0] : '');
-      setAccountId(existingExpense.categoryId || existingExpense.category?.accountId || '');
+      const matchedAccount = expenseAccounts.find(
+        (a: any) =>
+          a.id === existingExpense.category?.accountId ||
+          a.id === existingExpense.categoryId ||
+          a.categoryId === existingExpense.categoryId
+      );
+      setAccountId(matchedAccount?.id || existingExpense.category?.accountId || existingExpense.categoryId || '');
       setAmount(existingExpense.amount ? String(existingExpense.amount) : '');
       setPaidThroughId(existingExpense.bankAccountId || existingExpense.cashAccountId || '');
       setExpenseType(existingExpense.expenseType === 'GOODS' ? 'GOODS' : 'SERVICES');
@@ -633,9 +639,13 @@ export const ExpenseForm: React.FC = () => {
       return;
     }
 
+    const matchedCategory = categories.find((c: any) => c.accountId === accountId || c.id === accountId);
+    const resolvedCategoryId = matchedCategory?.id || existingExpense?.categoryId || undefined;
+
     const payload = {
       date,
       accountId,
+      categoryId: resolvedCategoryId,
       amount: numAmount,
       taxAmount: calculations.totalTax,
       totalAmount: calculations.finalTotal,

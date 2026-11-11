@@ -237,6 +237,17 @@ export class UpdateExpenseApprovalDto {
 export class UpdateExpenseDto {
   @IsString()
   @IsOptional()
+  vendorId?: string;
+
+  @IsEnum(ApprovalStatus)
+  @IsOptional()
+  approvalStatus?: ApprovalStatus;
+
+  @IsOptional()
+  status?: any;
+
+  @IsString()
+  @IsOptional()
   categoryId?: string;
 
   @IsString()
