@@ -868,6 +868,39 @@ export class ExpensesService {
   async findCategories() {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) throw new ConflictException('Company context is required');
+
+    // Automatically sync any GL expense accounts that don't have an ExpenseCategory yet
+    const expenseAccounts = await this.prisma.account.findMany({
+      where: {
+        companyId,
+        category: 'EXPENSE',
+        isGroup: false,
+        deletedAt: null,
+      },
+    });
+
+    for (const acc of expenseAccounts) {
+      await this.prisma.expenseCategory.upsert({
+        where: {
+          companyId_name: {
+            companyId,
+            name: acc.name,
+          },
+        },
+        create: {
+          companyId,
+          name: acc.name,
+          type: 'USER',
+          accountId: acc.id,
+          isActive: true,
+        },
+        update: {
+          accountId: acc.id,
+          isActive: true,
+        },
+      }).catch(() => {});
+    }
+
     return this.prisma.expenseCategory.findMany({
       where: { companyId, isActive: true },
       include: { account: true },

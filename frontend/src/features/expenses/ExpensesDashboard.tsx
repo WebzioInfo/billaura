@@ -178,6 +178,9 @@ export const ExpensesDashboard: React.FC = () => {
       const res = await apiClient.get('/expenses/categories');
       return ensureArray(res);
     },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
   const categories = Array.isArray(categoriesData) ? categoriesData : [];
 
@@ -187,6 +190,9 @@ export const ExpensesDashboard: React.FC = () => {
       const res = await apiClient.get('/bank-accounts');
       return ensureArray(res);
     },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
   const bankAccounts = Array.isArray(bankAccountsData) ? bankAccountsData : [];
 
@@ -202,9 +208,12 @@ export const ExpensesDashboard: React.FC = () => {
   const { data: accountsData } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => {
-      const res = await apiClient.get('/accounts');
+      const res = await apiClient.get('/accounts', { params: { limit: 1000 } });
       return res.data?.data || res.data || [];
     },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
   const accounts = Array.isArray(accountsData) ? accountsData : [];
 

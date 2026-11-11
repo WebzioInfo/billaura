@@ -778,6 +778,29 @@ export class AccountsService {
     const accountTypeKey = meta ? meta.id : (dto.accountType || subCategory || category);
     await this.saveAccountTypeMetadata(companyId, created.id, accountTypeKey, dto.description);
 
+    // If this is an Expense account, auto-sync an ExpenseCategory so it immediately appears in Record Expense
+    if (category === AccountCategory.EXPENSE && !created.isGroup) {
+      await this.prisma.expenseCategory.upsert({
+        where: {
+          companyId_name: {
+            companyId,
+            name: created.name,
+          },
+        },
+        create: {
+          companyId,
+          name: created.name,
+          type: 'USER',
+          accountId: created.id,
+          isActive: true,
+        },
+        update: {
+          accountId: created.id,
+          isActive: true,
+        },
+      }).catch(() => {});
+    }
+
     return {
       ...created,
       accountType: accountTypeKey,
