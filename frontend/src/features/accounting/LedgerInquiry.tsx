@@ -63,7 +63,7 @@ export function LedgerInquiry() {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Filter states
-  const [dateRange, setDateRange] = useState('FY');
+  const [dateRange, setDateRange] = useState('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [voucherType, setVoucherType] = useState('');
@@ -163,7 +163,28 @@ export function LedgerInquiry() {
   // Calculate Date Ranges
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
-    if (dateRange === 'Today') {
+    if (dateRange === 'ALL') {
+      setStartDate('');
+      setEndDate('');
+    } else if (dateRange === 'FY_2026') {
+      setStartDate('2026-04-01');
+      setEndDate('2027-03-31');
+    } else if (dateRange === 'FY_2025') {
+      setStartDate('2025-04-01');
+      setEndDate('2026-03-31');
+    } else if (dateRange === 'FY_2024') {
+      setStartDate('2024-04-01');
+      setEndDate('2025-03-31');
+    } else if (dateRange === 'YEAR_2026') {
+      setStartDate('2026-01-01');
+      setEndDate('2026-12-31');
+    } else if (dateRange === 'YEAR_2025') {
+      setStartDate('2025-01-01');
+      setEndDate('2025-12-31');
+    } else if (dateRange === 'YEAR_2024') {
+      setStartDate('2024-01-01');
+      setEndDate('2024-12-31');
+    } else if (dateRange === 'Today') {
       setStartDate(today);
       setEndDate(today);
     } else if (dateRange === 'Yesterday') {
@@ -567,12 +588,37 @@ export function LedgerInquiry() {
                 onChange={(e) => setDateRange(e.target.value)}
                 className="h-[32px] px-2.5 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none cursor-pointer"
               >
-                <option value="FY">Financial Year</option>
-                <option value="Today">Today</option>
-                <option value="Yesterday">Yesterday</option>
-                <option value="Week">This Week</option>
+                <option value="ALL">All Time (All Years)</option>
+                <option value="FY_2026">FY 2026-27 (Current FY)</option>
+                <option value="FY_2025">FY 2025-26</option>
+                <option value="FY_2024">FY 2024-25</option>
+                <option value="YEAR_2026">Year 2026</option>
+                <option value="YEAR_2025">Year 2025</option>
+                <option value="YEAR_2024">Year 2024</option>
                 <option value="Month">This Month</option>
+                <option value="Week">This Week</option>
+                <option value="Yesterday">Yesterday</option>
+                <option value="Today">Today</option>
+                <option value="CUSTOM">Custom Date Range</option>
               </select>
+
+              {dateRange === 'CUSTOM' && (
+                <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="h-[32px] px-2 bg-white border border-[#d9dce3] rounded-[4px] text-xs text-[#333] focus:border-[#408dfb] outline-none cursor-pointer"
+                  />
+                  <span>to</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="h-[32px] px-2 bg-white border border-[#d9dce3] rounded-[4px] text-xs text-[#333] focus:border-[#408dfb] outline-none cursor-pointer"
+                  />
+                </div>
+              )}
 
               {/* Voucher Type Dropdown */}
               <select
