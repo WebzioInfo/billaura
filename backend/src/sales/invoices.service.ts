@@ -606,7 +606,12 @@ export class InvoicesService {
       where: { companyId, name: { in: [defaultRevenueName, 'Sales Revenue'] } },
     });
 
-    if (categorySnapshot?.defaultSalesAccountId) {
+    if (categorySnapshot?.salesAccountId) {
+      const specificAcc = await tx.account.findFirst({
+        where: { id: categorySnapshot.salesAccountId, companyId },
+      });
+      if (specificAcc) defaultRevenueAccount = specificAcc;
+    } else if (categorySnapshot?.defaultSalesAccountId) {
       const catAccount = await tx.account.findFirst({
         where: { id: categorySnapshot.defaultSalesAccountId, companyId },
       });
@@ -1533,6 +1538,10 @@ export class InvoicesService {
         );
 
         // D. Post Balanced Journal Entry to General Ledger with product-level revenue accounts
+        const effectiveCategorySnapshot = {
+          ...categorySnapshot,
+          salesAccountId: dto.salesAccountId,
+        };
         await this.postInvoiceJournal(
           tx,
           companyId,
@@ -1546,7 +1555,7 @@ export class InvoicesService {
           totalCess,
           isInterState,
           isCreditNote,
-          categorySnapshot,
+          effectiveCategorySnapshot,
           invoiceDate,
           `Automatic ${docType} posting ${invoiceNo}`,
           amountPaid,

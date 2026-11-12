@@ -76,6 +76,10 @@ export class InvoiceItemDto {
 export class CreateInvoiceDto {
   @IsString()
   @IsOptional()
+  salesAccountId?: string;
+
+  @IsString()
+  @IsOptional()
   customerId?: string;
 
   @IsString()

@@ -477,13 +477,14 @@ export const ChartOfAccounts: React.FC = () => {
   const splitItems = useMemo(() => {
     return flattenedAccounts.map((acc) => {
       const bal = Number(acc.balance || 0);
-      const isDr = acc.category === 'ASSET' || acc.category === 'EXPENSE' ? bal >= 0 : bal < 0;
+      const isDebitNormal = acc.category === 'ASSET' || acc.category === 'EXPENSE';
+      const isDr = isDebitNormal ? bal >= 0 : bal > 0;
       return {
         id: acc.id,
         name: acc.name,
         number: acc.code || acc.category,
         date: acc.category,
-        amount: `${formatINR(bal)} (${isDr ? 'Dr' : 'Cr'})`,
+        amount: `${formatINR(Math.abs(bal))} (${isDr ? 'Dr' : 'Cr'})`,
         status: acc.category,
       };
     });
@@ -493,11 +494,9 @@ export const ChartOfAccounts: React.FC = () => {
   const selectedBalanceString = useMemo(() => {
     if (!selectedAccount) return '';
     const bal = Number(selectedAccount.balance || 0);
-    const isDr =
-      selectedAccount.category === 'ASSET' || selectedAccount.category === 'EXPENSE'
-        ? bal >= 0
-        : bal < 0;
-    return `${formatINR(bal)} (${isDr ? 'Dr' : 'Cr'})`;
+    const isDebitNormal = selectedAccount.category === 'ASSET' || selectedAccount.category === 'EXPENSE';
+    const isDr = isDebitNormal ? bal >= 0 : bal > 0;
+    return `${formatINR(Math.abs(bal))} (${isDr ? 'Dr' : 'Cr'})`;
   }, [selectedAccount]);
 
   // Recent transactions list from inquiryData

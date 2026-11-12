@@ -75,6 +75,7 @@ const invoiceSchema = z.object({
   invoiceType: z.enum(['B2B', 'B2C', 'NO_TAX']).default('B2B'),
   customerId: z.string().min(1, 'Select a customer'),
   invoiceNo: z.string().optional(),
+  salesAccountId: z.string().optional(),
   orderNumber: z.string().optional(),
   referenceNo: z.string().optional(),
   invoiceCategoryId: z.string().optional(),
@@ -173,6 +174,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
       invoiceType: 'B2B',
       customerId: '',
       invoiceNo: '',
+      salesAccountId: '',
       orderNumber: '',
       referenceNo: '',
       date: new Date().toISOString().split('T')[0],
@@ -251,6 +253,16 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: revenueAccountsData = [] } = useQuery<any[]>({
+    queryKey: ['revenue-accounts-lookup'],
+    queryFn: async () => {
+      const res = await apiClient.get<any>('/accounts', { params: { limit: 200 } });
+      const list = res?.data?.data || res?.data || res || [];
+      return Array.isArray(list) ? list.filter((a: any) => a.category === 'REVENUE' || a.categoryName === 'REVENUE') : [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data: nextNoData, error: nextNoError, isLoading: nextNoLoading, refetch: refetchNextNo } = useQuery<any>({
     queryKey: ['sales-documents', 'next-number', docType],
     queryFn: async () => {
@@ -271,6 +283,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
   const products = useMemo(() => ensureArray(productsData), [productsData]);
   const employees = useMemo(() => ensureArray(employeesData), [employeesData]);
   const categories = useMemo(() => ensureArray(categoriesData), [categoriesData]);
+  const revenueAccounts = useMemo(() => ensureArray(revenueAccountsData), [revenueAccountsData]);
 
   const companyProfile = useMemo(() => {
     return meData?.company || meData?.data?.company || null;
@@ -307,6 +320,19 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
       }
     }
   }, [nextNoData, setValue, isEditMode, watch]);
+
+  // Set default Revenue Account (e.g. Course Fees Income or Sales Revenue)
+  useEffect(() => {
+    if (!isEditMode && !watch('salesAccountId') && revenueAccounts.length > 0) {
+      const preferred =
+        revenueAccounts.find((a: any) => a.name.toLowerCase().includes('course')) ||
+        revenueAccounts.find((a: any) => a.name.toLowerCase().includes('sales revenue')) ||
+        revenueAccounts[0];
+      if (preferred) {
+        setValue('salesAccountId', preferred.id);
+      }
+    }
+  }, [revenueAccounts, isEditMode, watch, setValue]);
 
   // Pre-populate if editing an existing draft
   useEffect(() => {
@@ -767,6 +793,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
           ? new Date(data.dueDate).toISOString()
           : undefined,
         invoiceType: backendType,
+        salesAccountId: data.salesAccountId || undefined,
         placeOfSupply: data.placeOfSupply,
         status: submitStatus,
         invoiceCategoryId: data.invoiceCategoryId,
@@ -1422,6 +1449,26 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
+                <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] absolute right-2 top-2.5 pointer-events-none" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#2B2F36] mb-1.5">
+                Revenue Account
+              </label>
+              <div className="relative">
+                <select
+                  {...register('salesAccountId')}
+                  className="w-full h-8 px-2.5 pr-8 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] appearance-none cursor-pointer"
+                >
+                  <option value="">Default (Sales Revenue)</option>
+                  {revenueAccounts.map((acc: any) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name}
+                    </option>
+                  ))}
+                </select>
                 <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] absolute right-2 top-2.5 pointer-events-none" />
               </div>
             </div>

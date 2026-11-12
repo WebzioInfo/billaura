@@ -69,9 +69,13 @@ export const JournalVouchersList: React.FC = () => {
   const { data: journalEntriesData, isLoading } = useQuery({
     queryKey: ['journal-entries'],
     queryFn: async () => {
-      const res = await api.get('/journal-entries');
-      return res.data?.data || res.data || [];
+      const res = await api.get<any>('/journal-entries', { params: { limit: 500 } });
+      const raw = res.data?.data || res.data || res || [];
+      return Array.isArray(raw) ? raw : Array.isArray((res as any)?.items) ? (res as any).items : [];
     },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Local drafts stored per tenant
