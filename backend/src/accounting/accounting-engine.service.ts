@@ -486,7 +486,7 @@ export class AccountingEngineService {
 
       // Synchronize linked BankAccount
       const linkedBank = await tx.bankAccount.findFirst({
-        where: { accountId: line.accountId, companyId: params.companyId },
+        where: { accountId: line.accountId, companyId: params.companyId, deletedAt: null },
       });
       if (linkedBank) {
         const newBankBal = Number(linkedBank.currentBalance) + netChange;
@@ -519,7 +519,7 @@ export class AccountingEngineService {
 
       // Synchronize linked CashAccount
       const linkedCash = await tx.cashAccount.findFirst({
-        where: { accountId: line.accountId, companyId: params.companyId },
+        where: { accountId: line.accountId, companyId: params.companyId, deletedAt: null },
       });
       if (linkedCash) {
         const newCashBal = Number(linkedCash.currentBalance) + netChange;

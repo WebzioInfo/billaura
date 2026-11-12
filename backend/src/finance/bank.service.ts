@@ -39,7 +39,7 @@ export class BankService {
     const mappedCashAccounts = cashAccounts.map((c) => ({
       ...c,
       accountType: 'CASH' as const,
-      bankName: 'Cash in Hand',
+      bankName: c.name || 'Cash',
       accountNumber: '',
       ifsc: '',
     }));
