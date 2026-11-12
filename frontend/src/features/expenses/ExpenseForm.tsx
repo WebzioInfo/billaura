@@ -56,6 +56,7 @@ export const ExpenseForm: React.FC = () => {
   const [hsnSac, setHsnSac] = useState<string>('');
   const [vendorId, setVendorId] = useState<string>('');
   const [vendorGstin, setVendorGstin] = useState<string>('');
+  const [isGstApplicable, setIsGstApplicable] = useState<boolean>(true);
   const [gstTreatment, setGstTreatment] = useState<string>('Registered Business - Regular');
   const [sourceOfSupply, setSourceOfSupply] = useState<string>('');
   const [destinationOfSupply, setDestinationOfSupply] = useState<string>('');
@@ -332,6 +333,9 @@ export const ExpenseForm: React.FC = () => {
       if (existingExpense.destinationOfSupply) setDestinationOfSupply(existingExpense.destinationOfSupply);
       setReverseCharge(Boolean(existingExpense.reverseCharge));
 
+      const hasGst = Number(existingExpense.gstRate || 0) > 0 || Boolean(existingExpense.taxApplicable);
+      setIsGstApplicable(hasGst);
+
       const matchedTax = TAX_RATES.find((t) => Number(t.rate) === Number(existingExpense.gstRate));
       if (matchedTax) setSelectedTaxId(matchedTax.id);
 
@@ -441,6 +445,21 @@ export const ExpenseForm: React.FC = () => {
   // Dynamic GST calculation
   const calculations = useMemo(() => {
     const rawAmount = parseFloat(amount) || 0;
+
+    if (!isGstApplicable) {
+      return {
+        taxableBase: Math.round(rawAmount * 100) / 100,
+        totalTax: 0,
+        finalTotal: Math.round(rawAmount * 100) / 100,
+        rate: 0,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        isInterState: false,
+        vendorPayout: Math.round(rawAmount * 100) / 100,
+      };
+    }
+
     const taxOption = TAX_RATES.find((t) => t.id === selectedTaxId) || TAX_RATES[0];
     let rate = taxOption.rate || 0;
 
@@ -580,6 +599,7 @@ export const ExpenseForm: React.FC = () => {
     setHsnSac('');
     setVendorId('');
     setVendorGstin('');
+    setIsGstApplicable(true);
     setGstTreatment('Registered Business - Regular');
     setReverseCharge(false);
     setSelectedTaxId('GST18');
@@ -651,17 +671,17 @@ export const ExpenseForm: React.FC = () => {
       totalAmount: calculations.finalTotal,
       paidThroughAccountId: paidThroughId,
       expenseType,
-      hsnSac: hsnSac.trim() || undefined,
+      hsnSac: isGstApplicable ? (hsnSac.trim() || undefined) : undefined,
       vendorId: vendorId || undefined,
-      vendorGstin: vendorGstin.trim() || undefined,
-      gstTreatment,
-      sourceOfSupply: sourceOfSupply || undefined,
-      destinationOfSupply: destinationOfSupply || undefined,
-      reverseCharge,
-      taxId: selectedTaxId || undefined,
-      gstRate: calculations.rate,
-      taxApplicable: calculations.rate > 0,
-      taxType: calculations.rate > 0 ? (calculations.isInterState ? 'IGST' : 'GST') : undefined,
+      vendorGstin: isGstApplicable ? (vendorGstin.trim() || undefined) : undefined,
+      gstTreatment: isGstApplicable ? gstTreatment : 'Unregistered Business',
+      sourceOfSupply: isGstApplicable ? (sourceOfSupply || undefined) : undefined,
+      destinationOfSupply: isGstApplicable ? (destinationOfSupply || undefined) : undefined,
+      reverseCharge: isGstApplicable ? reverseCharge : false,
+      taxId: isGstApplicable ? (selectedTaxId || undefined) : undefined,
+      gstRate: isGstApplicable ? calculations.rate : 0,
+      taxApplicable: isGstApplicable && calculations.rate > 0,
+      taxType: isGstApplicable && calculations.rate > 0 ? (calculations.isInterState ? 'IGST' : 'GST') : undefined,
       taxMode: amountIs,
       taxableAmount: calculations.taxableBase,
       cgstAmount: calculations.cgst,
@@ -1008,7 +1028,51 @@ export const ExpenseForm: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 8. GST Treatment */}
+                {/* 7b. GST Option: GST vs Non-GST */}
+                <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                  <label className="text-xs text-gray-700 font-medium">GST Option</label>
+                  <div className="flex items-center gap-6 text-xs text-[#2B2F36]">
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="isGstApplicableOption"
+                        checked={isGstApplicable}
+                        onChange={() => {
+                          setIsGstApplicable(true);
+                          if (!selectedTaxId || selectedTaxId === 'GST0') {
+                            setSelectedTaxId('GST18');
+                          }
+                          markDirty();
+                        }}
+                        className="text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                      />
+                      <span className={isGstApplicable ? 'font-semibold text-gray-900' : 'text-gray-600'}>
+                        GST
+                      </span>
+                    </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="isGstApplicableOption"
+                        checked={!isGstApplicable}
+                        onChange={() => {
+                          setIsGstApplicable(false);
+                          setSelectedTaxId('GST0');
+                          setReverseCharge(false);
+                          markDirty();
+                        }}
+                        className="text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                      />
+                      <span className={!isGstApplicable ? 'font-semibold text-gray-900' : 'text-gray-600'}>
+                        Non-GST
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {isGstApplicable && (
+                  <>
+                    {/* 8. GST Treatment */}
                 <div className="grid grid-cols-[160px_1fr] items-start gap-3">
                   <label className="text-xs text-[#DC2626] font-medium pt-1.5">
                     GST Treatment<span className="text-[#DC2626]">*</span>
@@ -1301,6 +1365,8 @@ export const ExpenseForm: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </>
+            )}
 
                 {/* 14. Invoice Number */}
                 <div className="grid grid-cols-[160px_1fr] items-center gap-3">

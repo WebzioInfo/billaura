@@ -58,17 +58,22 @@ export const ReceiptsList: React.FC = () => {
       if (search.trim()) params.search = search.trim();
       if (activeView !== 'ALL') params.status = activeView;
 
-      const res = await apiClient.get('/receipts/unified', { params });
-      return res.data || {};
+      const res = await apiClient.get<any>('/receipts/unified', { params });
+      return res || {};
     },
     staleTime: 0,
   });
 
-  const receipts: any[] =
-    receiptsResponse?.data?.items ||
-    receiptsResponse?.items ||
-    (Array.isArray(receiptsResponse?.data) ? receiptsResponse.data : []);
+  const receipts: any[] = useMemo(() => {
+    if (Array.isArray(receiptsResponse)) return receiptsResponse;
+    if (Array.isArray(receiptsResponse?.items)) return receiptsResponse.items;
+    if (Array.isArray(receiptsResponse?.data?.items)) return receiptsResponse.data.items;
+    if (Array.isArray(receiptsResponse?.data)) return receiptsResponse.data;
+    return [];
+  }, [receiptsResponse]);
+
   const totalCount =
+    receiptsResponse?.total ||
     receiptsResponse?.data?.total ||
     receiptsResponse?.data?.totalItems ||
     receiptsResponse?.meta?.totalItems ||
@@ -82,7 +87,7 @@ export const ReceiptsList: React.FC = () => {
 
   const splitItems: ZohoSplitListItem[] = useMemo(() => {
     return receipts.map((r: any) => {
-      const custName = r.businessPartnerName || r.customerName || 'Customer';
+      const custName = r.businessPartnerName || r.customerName || r.partyName || 'Customer';
       const rcpNo = r.receiptNo || 'RCP-DRAFT';
       const dateStr = r.date ? new Date(r.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '';
       const amountVal = Number(r.amount || 0);

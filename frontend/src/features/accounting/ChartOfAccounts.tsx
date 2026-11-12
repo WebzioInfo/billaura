@@ -54,6 +54,7 @@ export interface AccountNode {
   name: string;
   code?: string;
   category: MainAccountGroup;
+  subCategory?: string;
   accountType?: string;
   accountTypeName?: string;
   normalBalance?: string;
@@ -105,7 +106,15 @@ export const ChartOfAccounts: React.FC = () => {
 
   // Active View Switcher: Active Accounts, All Accounts, Inactive Accounts, Transaction Locking
   const [activeView, setActiveView] = useState<string>('Active Accounts');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const urlSearch = searchParams.get('search') || searchParams.get('q') || '';
+  const [searchQuery, setSearchQuery] = useState<string>(urlSearch);
+
+  useEffect(() => {
+    const param = searchParams.get('search') || searchParams.get('q');
+    if (param !== null && param !== searchQuery) {
+      setSearchQuery(param);
+    }
+  }, [searchParams]);
   const [selectedAccount, setSelectedAccount] = useState<AccountNode | null>(null);
   const [currencyMode, setCurrencyMode] = useState<'BCY' | 'FCY'>('BCY');
 
@@ -190,14 +199,32 @@ export const ChartOfAccounts: React.FC = () => {
     });
   };
 
+  const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const textMatchesQuery = (text: string | null | undefined, q: string): boolean => {
+    if (!text || !q) return false;
+    const lowerText = text.toLowerCase();
+    if (!lowerText.includes(q)) return false;
+
+    // For short words (<= 4 chars like 'rent', 'tax'), match word boundaries
+    // so 'rent' matches 'Rent Expense', 'Office Rent', but NOT 'Current Assets'
+    if (q.length <= 4) {
+      const regex = new RegExp(`(^|\\b|\\s|_|-)${escapeRegExp(q)}`, 'i');
+      return regex.test(text);
+    }
+    return true;
+  };
+
   // Helper to determine if a node matches search or has any descendant that matches
   const nodeMatches = (node: AccountNode, q: string): boolean => {
     if (!q) return true;
     return (
-      node.name.toLowerCase().includes(q) ||
-      Boolean(node.code && node.code.toLowerCase().includes(q)) ||
-      node.category.toLowerCase().includes(q) ||
-      Boolean(node.accountType && node.accountType.toLowerCase().includes(q))
+      textMatchesQuery(node.name, q) ||
+      textMatchesQuery(node.code, q) ||
+      textMatchesQuery(node.accountType, q) ||
+      textMatchesQuery((node as any).accountTypeName, q) ||
+      textMatchesQuery(node.subCategory, q) ||
+      (q.length >= 4 && textMatchesQuery(node.category, q))
     );
   };
 
@@ -958,8 +985,15 @@ export const ChartOfAccounts: React.FC = () => {
           data={flattenedAccounts}
           keyField={(row: AccountNode) => row.id}
           isLoading={isLoading}
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search accounts by name, code, type..."
           onRowClick={(row) => setSelectedAccount(row)}
-          emptyState={<div className="p-12 text-center text-xs text-gray-400">No accounts found in this view.</div>}
+          emptyState={
+            <div className="p-12 text-center text-xs text-gray-400">
+              {searchQuery ? `No accounts found matching "${searchQuery}".` : 'No accounts found in this view.'}
+            </div>
+          }
           pagination={{
             currentPage: 1,
             totalCount: flattenedAccounts.length,

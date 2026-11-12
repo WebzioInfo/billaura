@@ -1180,6 +1180,32 @@ export class InvoicesService {
         }
       }
 
+      // Synchronize documentSequence currentNumber for next invoice auto-increment
+      const seqMatch = invoiceNo.match(/^(.*?)(\d+)$/);
+      if (seqMatch) {
+        const numPart = parseInt(seqMatch[2], 10);
+        if (!isNaN(numPart)) {
+          await tx.documentSequence.upsert({
+            where: { companyId_documentType: { companyId, documentType: docType as any } },
+            update: {
+              currentNumber: numPart,
+              prefix: seqMatch[1],
+              padding: seqMatch[2].length,
+              lastGeneratedAt: new Date(),
+            },
+            create: {
+              companyId,
+              documentType: docType as any,
+              prefix: seqMatch[1],
+              padding: seqMatch[2].length,
+              currentNumber: numPart,
+              sequenceType: 'SEQUENTIAL',
+              lastGeneratedAt: new Date(),
+            },
+          });
+        }
+      }
+
       // 2. Fetch category & tax treatment configurations
       let categorySnapshot = null;
       let taxSnapshot = null;
@@ -2593,28 +2619,50 @@ export class InvoicesService {
       OTHER_RECEIPT: 'OREC',
     };
 
-    const prefix = typePrefixes[docType] || docType.substring(0, 3);
+    const defaultPrefix = typePrefixes[docType] || docType.substring(0, 3);
 
+    // 1. Fetch document sequence if present
     const sequence = await this.prisma.documentSequence.findFirst({
       where: { companyId, documentType: docType as any },
     });
 
-    if (!sequence) {
-      let candidate = `${prefix}-00001`;
-      let count = 1;
-      while (await this.prisma.invoice.findFirst({ where: { companyId, invoiceNo: candidate } })) {
-        count++;
-        candidate = `${prefix}-${String(count).padStart(5, '0')}`;
+    // 2. Scan recent invoices for this company to identify active prefix format and highest sequence
+    const existingInvoices = await this.prisma.invoice.findMany({
+      where: { companyId, deletedAt: null },
+      select: { invoiceNo: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    let detectedPrefix = sequence?.prefix || `${defaultPrefix}-`;
+    let padding = sequence?.padding || 5;
+    let maxNum = sequence?.currentNumber || 0;
+
+    if (existingInvoices.length > 0) {
+      const latestInvoiceNo = existingInvoices[0]?.invoiceNo?.trim();
+      const match = latestInvoiceNo?.match(/^(.*?)(\d+)$/);
+      if (match) {
+        detectedPrefix = match[1];
+        padding = Math.max(match[2].length, padding);
       }
-      return { nextNumber: candidate };
+
+      for (const inv of existingInvoices) {
+        if (inv.invoiceNo && inv.invoiceNo.startsWith(detectedPrefix)) {
+          const numPart = parseInt(inv.invoiceNo.slice(detectedPrefix.length), 10);
+          if (!isNaN(numPart) && numPart > maxNum) {
+            maxNum = numPart;
+          }
+        }
+      }
     }
 
-    let nextNum = sequence.currentNumber + 1;
-    let candidate = `${prefix}-${String(nextNum).padStart(sequence.padding || 5, '0')}`;
+    let nextNum = maxNum + 1;
+    let candidate = `${detectedPrefix}${String(nextNum).padStart(padding, '0')}`;
     while (await this.prisma.invoice.findFirst({ where: { companyId, invoiceNo: candidate } })) {
       nextNum++;
-      candidate = `${prefix}-${String(nextNum).padStart(sequence.padding || 5, '0')}`;
+      candidate = `${detectedPrefix}${String(nextNum).padStart(padding, '0')}`;
     }
+
     return { nextNumber: candidate };
   }
 

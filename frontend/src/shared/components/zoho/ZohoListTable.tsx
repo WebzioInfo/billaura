@@ -49,6 +49,7 @@ export interface ZohoListTableProps<T> {
   isLoading?: boolean;
   emptyState?: React.ReactNode;
   onColumnChooserClick?: () => void;
+  searchValue?: string;
   searchPlaceholder?: string;
   onSearchChange?: (val: string) => void;
   className?: string;
@@ -66,12 +67,27 @@ export function ZohoListTable<T>({
   isLoading = false,
   emptyState,
   onColumnChooserClick,
+  searchValue: externalSearchValue,
   searchPlaceholder = 'Search in list...',
   onSearchChange,
   className,
 }: ZohoListTableProps<T>) {
-  const [isSearchActive, setIsSearchActive] = useState(false);
-  const [searchValue, setSearchValue] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(Boolean(externalSearchValue));
+  const [internalSearch, setInternalSearch] = useState(externalSearchValue || '');
+
+  React.useEffect(() => {
+    if (externalSearchValue !== undefined) {
+      setInternalSearch(externalSearchValue);
+      if (externalSearchValue) {
+        setIsSearchActive(true);
+      }
+    }
+  }, [externalSearchValue]);
+
+  const handleSearchSubmit = (val: string) => {
+    setInternalSearch(val);
+    if (onSearchChange) onSearchChange(val);
+  };
 
   const getRowKey = (row: T, index: number): string => {
     if (typeof keyField === 'function') {
@@ -104,11 +120,6 @@ export function ZohoListTable<T>({
     } else {
       onSelectChange([...selectedIds, id]);
     }
-  };
-
-  const handleSearchSubmit = (val: string) => {
-    setSearchValue(val);
-    if (onSearchChange) onSearchChange(val);
   };
 
   return (
@@ -235,12 +246,12 @@ export function ZohoListTable<T>({
             <input
               type="text"
               autoFocus
-              value={searchValue}
+              value={internalSearch}
               onChange={(e) => handleSearchSubmit(e.target.value)}
               placeholder={searchPlaceholder}
               className="w-full text-xs text-[#2B2F36] placeholder-[#9CA3AF] bg-transparent outline-none"
             />
-            {searchValue && (
+            {internalSearch && (
               <button
                 type="button"
                 onClick={() => handleSearchSubmit('')}

@@ -1084,20 +1084,29 @@ export class ReceiptsService {
           businessPartner: true,
           account: true,
           payments: { include: { account: true } },
+          allocations: { include: { invoice: true } },
         }
       });
 
       sales.forEach((s: any) => {
+        const invNos = s.allocations?.map((a: any) => a.invoice?.invoiceNo).filter(Boolean).join(', ');
+        const mode = s.payments?.[0]?.paymentMethod || 'CASH';
         unified.push({
           id: `SALES-${s.id}`,
           rawId: s.id,
           type: 'SALES',
           receiptNo: s.receiptNo,
           date: s.date,
+          customerName: s.businessPartner?.name || 'N/A',
           partyName: s.businessPartner?.name || 'N/A',
+          businessPartnerName: s.businessPartner?.name || 'N/A',
+          invoiceNo: invNos || '—',
+          allocatedInvoiceNos: invNos || '—',
+          paymentMethod: mode,
           paymentLedgerName: s.account?.name || s.payments?.[0]?.account?.name || 'Cash/Bank',
           expenseLedgerName: '—',
           amount: Number(s.amount),
+          unusedAmount: 0,
           status: s.status,
           notes: s.notes || s.description || '—',
           createdBy: 'System'

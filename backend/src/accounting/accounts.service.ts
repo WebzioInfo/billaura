@@ -483,16 +483,23 @@ export class AccountsService {
       
       let vType = 'Journal Entry';
       let path = '/accounting';
-      if (ref.startsWith('INV-') || desc.includes('invoice')) {
+      const refUpper = ref.toUpperCase();
+      const descLower = desc.toLowerCase();
+
+      if (refUpper.startsWith('INV-') || descLower.includes('invoice')) {
         vType = 'Sales Invoice';
         path = '/invoices';
-      } else if (ref.startsWith('REC-') || desc.includes('receipt')) {
-        vType = 'Receipt';
+      } else if (
+        refUpper.startsWith('RCP-') ||
+        refUpper.startsWith('REC-') ||
+        descLower.includes('receipt')
+      ) {
+        vType = 'Payment Received';
         path = '/receipts';
-      } else if (ref.startsWith('PAY-') || desc.includes('payment') || desc.includes('payout')) {
+      } else if (refUpper.startsWith('PAY-') || descLower.includes('payout') || (descLower.includes('payment') && !descLower.includes('receipt'))) {
         vType = 'Vendor Payment';
         path = '/vendor-payments';
-      } else if (ref.startsWith('BIL-') || ref.startsWith('PUR-') || desc.includes('purchase')) {
+      } else if (refUpper.startsWith('BIL-') || refUpper.startsWith('PUR-') || descLower.includes('purchase')) {
         vType = 'Purchase Bill';
         path = '/bills';
       }
@@ -999,9 +1006,25 @@ export class AccountsService {
       }
 
       if (expenseCategoryCount > 0) {
-        throw new ConflictException(
-          `Cannot delete account '${account.name}' because it is linked to ${expenseCategoryCount} expense category configuration(s).`
-        );
+        const linkedExpensesCount = await tx.expense.count({
+          where: {
+            category: {
+              OR: [{ accountId: id }, { defaultInputTaxAccountId: id }],
+            },
+            deletedAt: null,
+          },
+        });
+        if (linkedExpensesCount > 0) {
+          throw new ConflictException(
+            `Cannot delete account '${account.name}' because it is linked to expense category configuration(s) with ${linkedExpensesCount} recorded expense(s).`
+          );
+        }
+        await tx.expenseCategory.deleteMany({
+          where: {
+            OR: [{ accountId: id }, { defaultInputTaxAccountId: id }],
+            expenses: { none: {} },
+          },
+        });
       }
 
       if (incomeCategoryCount > 0) {

@@ -253,14 +253,18 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
 
   const { data: nextNoData, error: nextNoError, isLoading: nextNoLoading, refetch: refetchNextNo } = useQuery<any>({
     queryKey: ['sales-documents', 'next-number', docType],
-    queryFn: () => {
+    queryFn: async () => {
       let endpoint = '/sales/invoices/next-number';
       if (docType === 'QUOTATION') endpoint = '/sales/quotations/next-number';
       if (docType === 'SALES_ORDER') endpoint = '/sales-orders/next-number';
       if (docType === 'PROFORMA') endpoint = '/sales/invoices/next-number?type=PROFORMA';
-      return apiClient.get(endpoint);
+      const res = await apiClient.get<any>(endpoint);
+      return res?.data?.data || res?.data || res;
     },
     staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    enabled: !isEditMode,
   });
 
   const customers = useMemo(() => ensureArray(customersData), [customersData]);
@@ -295,8 +299,12 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
 
   // Assign next sequence number if not set
   useEffect(() => {
-    if (!isEditMode && nextNoData?.nextNumber && !watch('invoiceNo')) {
-      setValue('invoiceNo', nextNoData.nextNumber);
+    const nextNum = nextNoData?.nextNumber;
+    if (!isEditMode && nextNum) {
+      const currentVal = watch('invoiceNo');
+      if (!currentVal) {
+        setValue('invoiceNo', nextNum);
+      }
     }
   }, [nextNoData, setValue, isEditMode, watch]);
 
