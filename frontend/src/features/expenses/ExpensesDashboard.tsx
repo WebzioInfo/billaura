@@ -883,8 +883,10 @@ export const ExpensesDashboard: React.FC = () => {
                           <span className="text-[#6B7280] block mb-0.5">Paid Through</span>
                           <span className="font-medium text-[#1E2540]">
                             {selectedExpense.bankAccount?.name ||
-                              selectedExpense.cashAccount?.name ||
-                              (selectedExpense.paidFromType === 'CASH' || selectedExpense.paymentMethod === 'CASH'
+                              (selectedExpense.paidFromType === 'CASH' ||
+                              selectedExpense.paymentMethod === 'CASH' ||
+                              selectedExpense.cashAccount ||
+                              (selectedExpense.cashAccountId && !selectedExpense.bankAccountId)
                                 ? 'Cash'
                                 : 'Bank Account')}
                           </span>
@@ -995,8 +997,10 @@ export const ExpensesDashboard: React.FC = () => {
                               <tr>
                                 <td className="py-2 px-3 text-[#1E2540]">
                                   {selectedExpense.bankAccount?.name ||
-                                    selectedExpense.cashAccount?.name ||
-                                    (selectedExpense.paidFromType === 'CASH' || selectedExpense.paymentMethod === 'CASH'
+                                    (selectedExpense.paidFromType === 'CASH' ||
+                                    selectedExpense.paymentMethod === 'CASH' ||
+                                    selectedExpense.cashAccount ||
+                                    (selectedExpense.cashAccountId && !selectedExpense.bankAccountId)
                                       ? 'Cash'
                                       : 'Bank Account')}
                                 </td>
