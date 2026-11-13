@@ -588,18 +588,24 @@ export function LedgerInquiry() {
                 onChange={(e) => setDateRange(e.target.value)}
                 className="h-[32px] px-2.5 bg-white border border-[#d9dce3] rounded-[4px] text-[13px] text-[#333] focus:border-[#408dfb] outline-none cursor-pointer"
               >
-                <option value="ALL">All Time (All Years)</option>
-                <option value="FY_2026">FY 2026-27 (Current FY)</option>
-                <option value="FY_2025">FY 2025-26</option>
-                <option value="FY_2024">FY 2024-25</option>
-                <option value="YEAR_2026">Year 2026</option>
-                <option value="YEAR_2025">Year 2025</option>
-                <option value="YEAR_2024">Year 2024</option>
-                <option value="Month">This Month</option>
-                <option value="Week">This Week</option>
-                <option value="Yesterday">Yesterday</option>
-                <option value="Today">Today</option>
-                <option value="CUSTOM">Custom Date Range</option>
+                <option value="ALL">All Time (All History)</option>
+                <optgroup label="Financial Years (Apr 1 - Mar 31)">
+                  <option value="FY_2026">FY 2026-27 (Current FY)</option>
+                  <option value="FY_2025">FY 2025-26</option>
+                  <option value="FY_2024">FY 2024-25</option>
+                </optgroup>
+                <optgroup label="Calendar Years (Jan 1 - Dec 31)">
+                  <option value="YEAR_2026">Year 2026</option>
+                  <option value="YEAR_2025">Year 2025</option>
+                  <option value="YEAR_2024">Year 2024</option>
+                </optgroup>
+                <optgroup label="Period Presets">
+                  <option value="Month">This Month</option>
+                  <option value="Week">This Week</option>
+                  <option value="Yesterday">Yesterday</option>
+                  <option value="Today">Today</option>
+                </optgroup>
+                <option value="CUSTOM">Custom Date Range...</option>
               </select>
 
               {dateRange === 'CUSTOM' && (

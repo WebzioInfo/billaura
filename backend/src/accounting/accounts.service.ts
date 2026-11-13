@@ -455,8 +455,10 @@ export class AccountsService {
     const allLines = await this.prisma.journalLine.findMany({
       where: {
         accountId: id,
+        deletedAt: null,
         journalEntry: {
           companyId,
+          deletedAt: null,
         },
       },
       include: {
@@ -1262,6 +1264,11 @@ export class AccountsService {
     const journalLines = await this.prisma.journalLine.findMany({
       where: {
         accountId: { in: cashAccountIds },
+        deletedAt: null,
+        journalEntry: {
+          companyId,
+          deletedAt: null,
+        },
       },
       include: {
         journalEntry: {
