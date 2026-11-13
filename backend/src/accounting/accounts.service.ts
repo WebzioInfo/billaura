@@ -485,7 +485,7 @@ export class AccountsService {
       const desc = line.journalEntry.description || '';
       
       let vType = 'Journal Entry';
-      let path = '/accounting';
+      let path = `/journal-entries/${line.journalEntryId}`;
       const refUpper = ref.toUpperCase();
       const descLower = desc.toLowerCase();
 
@@ -505,6 +505,12 @@ export class AccountsService {
       } else if (refUpper.startsWith('BIL-') || refUpper.startsWith('PUR-') || descLower.includes('purchase')) {
         vType = 'Purchase Bill';
         path = '/bills';
+      } else if (refUpper.startsWith('EXP-') || descLower.includes('expense')) {
+        vType = 'Expense';
+        path = `/journal-entries/${line.journalEntryId}`;
+      } else if (refUpper.startsWith('CAP-') || descLower.includes('capital')) {
+        vType = 'Capital / Equity';
+        path = `/journal-entries/${line.journalEntryId}`;
       }
 
       return {
