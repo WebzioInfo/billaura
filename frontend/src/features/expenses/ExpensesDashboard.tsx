@@ -166,9 +166,12 @@ export const ExpensesDashboard: React.FC = () => {
   const { data: expensesData, isLoading: loadingExpenses } = useQuery({
     queryKey: ['expenses'],
     queryFn: async () => {
-      const res = await apiClient.get('/expenses');
+      const res = await apiClient.get('/expenses', { params: { limit: 500 } });
       return ensureArray(res);
     },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
   const expenses = Array.isArray(expensesData) ? expensesData : [];
 

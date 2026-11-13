@@ -138,7 +138,7 @@ export class DashboardService {
     const livePurchaseWhere: Prisma.PurchaseWhereInput = { companyId, deletedAt: null };
     const liveExpenseWhere: Prisma.ExpenseWhereInput = { companyId, deletedAt: null };
     const liveReceiptWhere: Prisma.ReceiptWhereInput = { companyId, deletedAt: null };
-    const completedPaymentWhere: Prisma.TransactionPaymentWhereInput = { companyId, paymentType: 'OUTBOUND' };
+    const completedPaymentWhere: Prisma.TransactionPaymentWhereInput = { companyId, paymentType: 'OUTBOUND', deletedAt: null };
 
     const dateFilter: Prisma.DateTimeFilter | undefined = (filterStart || filterEnd)
       ? { ...(filterStart && { gte: filterStart }), ...(filterEnd && { lte: filterEnd }) }

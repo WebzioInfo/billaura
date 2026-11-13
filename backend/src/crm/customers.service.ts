@@ -76,7 +76,7 @@ export class CustomersService {
     });
 
     const payments = await this.prisma.transactionPayment.findMany({
-      where: { businessPartnerId: id, companyId },
+      where: { businessPartnerId: id, companyId, deletedAt: null },
       orderBy: { date: 'desc' },
     });
 

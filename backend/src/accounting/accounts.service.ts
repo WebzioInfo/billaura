@@ -218,6 +218,7 @@ export class AccountsService {
 
     const where: Prisma.AccountWhereInput = {
       companyId,
+      deletedAt: null,
       ...(query.search
         ? {
             name: { contains: query.search },

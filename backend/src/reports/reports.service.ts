@@ -10,24 +10,49 @@ export class ReportsService {
     if (!companyId) throw new BadRequestException('Company ID is required');
 
     // 1. Fetch aggregated ledger balances for the date range
-    // We strictly use double-entry records from JournalLines
-    const rawBalances: any[] = await this.prisma.$queryRaw`
-      SELECT 
-        a.id as accountId,
-        a.name as accountName,
-        a.category as category,
-        a.subCategory as subCategory,
-        SUM(l.debit) as totalDebit,
-        SUM(l.credit) as totalCredit
-      FROM journal_lines l
-      JOIN journal_entries je ON l.journalEntryId = je.id
-      JOIN accounts a ON l.accountId = a.id
-      WHERE je.companyId = ${companyId}
-        AND je.date >= ${startDate}
-        AND je.date <= ${endDate}
-        AND a.category IN ('REVENUE', 'EXPENSE')
-      GROUP BY a.id, a.name, a.category, a.subCategory
-    `;
+    // We strictly use double-entry records from JournalLines and filter soft-deletes
+    const aggregates = await this.prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where: {
+        journalEntry: {
+          companyId,
+          date: { gte: startDate, lte: endDate },
+          deletedAt: null,
+        },
+        account: {
+          companyId,
+          category: { in: ['REVENUE', 'EXPENSE'] },
+          deletedAt: null,
+        },
+        deletedAt: null,
+      },
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    const accountIds = aggregates.map((a) => a.accountId);
+    const accounts = accountIds.length > 0
+      ? await this.prisma.account.findMany({
+          where: { id: { in: accountIds }, companyId, deletedAt: null },
+          select: { id: true, name: true, category: true, subCategory: true },
+        })
+      : [];
+
+    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+    const rawBalances = aggregates.map((a) => {
+      const acc = accountMap.get(a.accountId);
+      return {
+        accountId: a.accountId,
+        accountName: acc?.name || 'Unknown Account',
+        category: acc?.category || 'EXPENSE',
+        subCategory: acc?.subCategory || null,
+        totalDebit: Number(a._sum.debit || 0),
+        totalCredit: Number(a._sum.credit || 0),
+      };
+    });
 
     // 2. Initialize the P&L structure
     const pnl = {
@@ -856,12 +881,34 @@ export class ReportsService {
     });
 
     const invoices = await this.prisma.invoice.findMany({
-      where: { companyId, businessPartnerId: customerId, date: { gte: startDate, lte: endDate }, status: { not: 'DRAFT' } },
+      where: {
+        companyId,
+        businessPartnerId: customerId,
+        date: { gte: startDate, lte: endDate },
+        status: { notIn: ['DRAFT', 'CANCELLED'] },
+        deletedAt: null,
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const receipts = await this.prisma.receipt.findMany({
+      where: {
+        companyId,
+        businessPartnerId: customerId,
+        date: { gte: startDate, lte: endDate },
+        deletedAt: null,
+        NOT: { status: 'VOID' },
+      },
       orderBy: { date: 'asc' },
     });
 
     const payments = await this.prisma.transactionPayment.findMany({
-      where: { companyId, businessPartnerId: customerId, date: { gte: startDate, lte: endDate } },
+      where: {
+        companyId,
+        businessPartnerId: customerId,
+        date: { gte: startDate, lte: endDate },
+        deletedAt: null,
+      },
       orderBy: { date: 'asc' },
     });
 
@@ -872,7 +919,8 @@ export class ReportsService {
     const allTransactions = [
       ...historicalInvoices.map(inv => ({ date: inv.date, type: 'Historical Invoice', reference: inv.invoiceNo, debit: Number(inv.totalAmount), credit: 0 })),
       ...invoices.map(inv => ({ date: inv.date, type: 'Invoice', reference: inv.invoiceNo, debit: Number(inv.grandTotal), credit: 0 })),
-      ...payments.map(pay => ({ date: pay.date, type: 'Payment Receipt', reference: pay.paymentNo, debit: 0, credit: Number(pay.amount) })),
+      ...receipts.map(rec => ({ date: rec.date, type: 'Payment Receipt', reference: rec.receiptNo, debit: 0, credit: Number(rec.amount) })),
+      ...payments.map(pay => ({ date: pay.date, type: 'Payment Refund', reference: pay.paymentNo, debit: 0, credit: Number(pay.amount) })),
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     for (const t of allTransactions) {
@@ -896,7 +944,12 @@ export class ReportsService {
     });
 
     const invoices = await this.prisma.invoice.findMany({
-      where: { companyId, status: { notIn: ['PAID', 'DRAFT', 'CANCELLED'] }, date: { lte: asOfDate } },
+      where: {
+        companyId,
+        status: { notIn: ['PAID', 'DRAFT', 'CANCELLED'] },
+        date: { lte: asOfDate },
+        deletedAt: null,
+      },
       include: { businessPartner: true },
     });
 

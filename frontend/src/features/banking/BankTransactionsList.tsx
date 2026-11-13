@@ -159,6 +159,9 @@ export const BankTransactionsList: React.FC = () => {
         views={TXN_VIEWS}
         activeViewId={activeView}
         onViewChange={(v) => setActiveView(v)}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search transactions (details, reference, account)..."
         newAction={{
           label: 'Record Transfer',
           onClick: () => navigate('/journal-entries/new'),
