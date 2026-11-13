@@ -397,6 +397,22 @@ export const ExpensesDashboard: React.FC = () => {
       ),
     },
     {
+      key: 'expenseNo',
+      label: 'EXPENSE#',
+      width: '125px',
+      render: (exp) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedExpense(exp);
+          }}
+          className="text-[13px] font-semibold text-[#408DFB] hover:underline text-left cursor-pointer font-mono"
+        >
+          {exp.expenseNo || `EXP-${exp.id?.slice(-5) || '0000'}`}
+        </button>
+      ),
+    },
+    {
       key: 'category',
       label: 'EXPENSE ACCOUNT',
       render: (exp) => (

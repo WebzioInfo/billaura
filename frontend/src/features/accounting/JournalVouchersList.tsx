@@ -80,6 +80,7 @@ export const JournalVouchersList: React.FC = () => {
   const companyId = useSessionStore((state) => state.user?.companyId);
 
   const [activeView, setActiveView] = useState<string>('MANUAL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedJournalId, setSelectedJournalId] = useState<string | null>(null);
   const [journalToDelete, setJournalToDelete] = useState<JournalEntry | null>(null);
   const [localDraftRevision, setLocalDraftRevision] = useState<number>(0);
@@ -175,29 +176,68 @@ export const JournalVouchersList: React.FC = () => {
     { id: 'PUBLISHED', label: 'Published Manual Journals' },
   ];
 
+  const getEntryTotal = (j: JournalEntry) => {
+    return j.lines?.reduce((sum, l) => sum + Number(l.debit || 0), 0) || 0;
+  };
+
   const filteredJournals = useMemo(() => {
     return journalEntries.filter((j) => {
       const isAuto = isAutomaticJournal(j);
       const st = (j.status || 'PUBLISHED').toUpperCase();
 
+      let matchesView = true;
       if (activeView === 'MANUAL') {
-        return !isAuto;
+        matchesView = !isAuto;
+      } else if (activeView === 'SYSTEM') {
+        matchesView = isAuto;
+      } else if (activeView === 'DRAFT') {
+        matchesView = st === 'DRAFT' && !isAuto;
+      } else if (activeView === 'PUBLISHED') {
+        matchesView = st === 'PUBLISHED' && !isAuto;
+      } else if (activeView === 'ALL') {
+        matchesView = true;
+      } else {
+        matchesView = !isAuto;
       }
-      if (activeView === 'SYSTEM') {
-        return isAuto;
-      }
-      if (activeView === 'DRAFT') {
-        return st === 'DRAFT' && !isAuto;
-      }
-      if (activeView === 'PUBLISHED') {
-        return st === 'PUBLISHED' && !isAuto;
-      }
-      if (activeView === 'ALL') {
-        return true;
-      }
-      return !isAuto;
+
+      if (!matchesView) return false;
+
+      if (!searchQuery.trim()) return true;
+
+      const q = searchQuery.trim().toLowerCase();
+      const jNo = (j.journalNo || `JN-${j.id.slice(-5)}`).toLowerCase();
+      const ref = (j.reference || '').toLowerCase();
+      const desc = (j.description || j.notes || '').toLowerCase();
+      const method = (j.reportingMethod || '').toLowerCase();
+      const totalStr = String(getEntryTotal(j));
+
+      const matchesLines = (j.lines || []).some((l) => {
+        const accName = (l.account?.name || '').toLowerCase();
+        const accCode = (l.account?.code || '').toLowerCase();
+        const lDesc = (l.description || '').toLowerCase();
+        const contact = (l.contactName || '').toLowerCase();
+        const debitStr = l.debit ? String(l.debit) : '';
+        const creditStr = l.credit ? String(l.credit) : '';
+        return (
+          accName.includes(q) ||
+          accCode.includes(q) ||
+          lDesc.includes(q) ||
+          contact.includes(q) ||
+          debitStr.includes(q) ||
+          creditStr.includes(q)
+        );
+      });
+
+      return (
+        jNo.includes(q) ||
+        ref.includes(q) ||
+        desc.includes(q) ||
+        method.includes(q) ||
+        totalStr.includes(q) ||
+        matchesLines
+      );
     });
-  }, [journalEntries, activeView]);
+  }, [journalEntries, activeView, searchQuery]);
 
   const selectedJournal = useMemo(() => {
     if (!selectedJournalId) return null;
@@ -220,10 +260,6 @@ export const JournalVouchersList: React.FC = () => {
     } catch {
       return dateStr;
     }
-  };
-
-  const getEntryTotal = (j: JournalEntry) => {
-    return j.lines?.reduce((sum, l) => sum + Number(l.debit || 0), 0) || 0;
   };
 
   const splitItems = useMemo<ZohoSplitListItem[]>(() => {
@@ -300,6 +336,9 @@ export const JournalVouchersList: React.FC = () => {
         views={views}
         activeViewId={activeView}
         onViewChange={(vId) => setActiveView(vId)}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search journals (Journal#, Reference, Notes, Account)..."
         newAction={{
           label: '+ New Journal',
           onClick: () => navigate('/journal-entries/new'),
@@ -317,6 +356,9 @@ export const JournalVouchersList: React.FC = () => {
             onNew={() => navigate('/journal-entries/new')}
             onClose={() => setSelectedJournalId(null)}
             detailTitle={selectedJournal.journalNo || `Journal #${selectedJournal.id.slice(-5)}`}
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search journals..."
             detailActions={
               <div className="flex items-center gap-1.5">
                 {selectedJournal.status === 'DRAFT' && (
@@ -454,10 +496,14 @@ export const JournalVouchersList: React.FC = () => {
             onRowClick={(j) => setSelectedJournalId(j.id)}
             emptyState={
               <ZohoEmptyState
-                title="Post double-entry manual journal vouchers."
-                description="Record adjusting entries, depreciation, compound entries, and direct ledger balances."
-                createLabel="Create New Journal"
-                onCreate={() => navigate('/journal-entries/new')}
+                title={searchQuery ? 'No matching journal entries found.' : 'Post double-entry manual journal vouchers.'}
+                description={
+                  searchQuery
+                    ? `No journals match "${searchQuery}". Try searching by another reference, account name, or note.`
+                    : 'Record adjusting entries, depreciation, compound entries, and direct ledger balances.'
+                }
+                createLabel={searchQuery ? undefined : 'Create New Journal'}
+                onCreate={searchQuery ? undefined : () => navigate('/journal-entries/new')}
               />
             }
           />
