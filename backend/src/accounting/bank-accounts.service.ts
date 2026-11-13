@@ -142,7 +142,7 @@ export class BankAccountsService {
           source: "CASH_ACCOUNT",
           name: c.name,
           accountName: c.name,
-          bankName: "Cash in Hand",
+          bankName: c.name,
           accountNumber: "",
           accountType: "CASH",
           currentBalance: c.currentBalance,

@@ -616,7 +616,7 @@ export const PaymentReceivedForm: React.FC = () => {
                   >
                     {accounts.map((acc: any) => (
                       <option key={acc.id} value={acc.id}>
-                        {acc.bankName || acc.name} {acc.accountNumber ? `(..${acc.accountNumber.slice(-4)})` : ''}
+                        {acc.name || acc.bankName} {acc.accountNumber ? `(..${acc.accountNumber.slice(-4)})` : ''}
                       </option>
                     ))}
                   </select>
@@ -1110,7 +1110,7 @@ export const PaymentReceivedForm: React.FC = () => {
                   >
                     {accounts.map((acc: any) => (
                       <option key={acc.id} value={acc.id}>
-                        {acc.bankName || acc.name} {acc.accountNumber ? `(..${acc.accountNumber.slice(-4)})` : ''}
+                        {acc.name || acc.bankName} {acc.accountNumber ? `(..${acc.accountNumber.slice(-4)})` : ''}
                       </option>
                     ))}
                   </select>
