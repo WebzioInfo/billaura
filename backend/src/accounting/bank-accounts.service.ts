@@ -137,7 +137,7 @@ export class BankAccountsService {
     for (const c of cashRegisters) {
       if (!existingIds.has(c.id) && (!c.accountId || !existingIds.has(c.accountId))) {
         items.push({
-          id: c.id,
+          id: c.accountId || c.id,
           ledgerId: c.accountId || c.id,
           source: "CASH_ACCOUNT",
           name: c.name,

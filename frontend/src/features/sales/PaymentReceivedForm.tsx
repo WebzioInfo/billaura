@@ -217,7 +217,8 @@ export const PaymentReceivedForm: React.FC = () => {
         a.name?.toLowerCase().includes('petty') ||
         a.name?.toLowerCase().includes('cash')
       );
-      setDepositToId(petty ? petty.id : accounts[0].id);
+      const chosen = petty || accounts[0];
+      setDepositToId(chosen.ledgerId || chosen.accountId || chosen.id);
     }
   }, [accounts, depositToId]);
 
@@ -615,7 +616,7 @@ export const PaymentReceivedForm: React.FC = () => {
                     className="w-full h-8 px-2.5 border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] bg-white focus:border-[#408DFB] focus:outline-none"
                   >
                     {accounts.map((acc: any) => (
-                      <option key={acc.id} value={acc.id}>
+                      <option key={acc.id} value={acc.ledgerId || acc.accountId || acc.id}>
                         {acc.name || acc.bankName} {acc.accountNumber ? `(..${acc.accountNumber.slice(-4)})` : ''}
                       </option>
                     ))}
@@ -1109,7 +1110,7 @@ export const PaymentReceivedForm: React.FC = () => {
                     className="w-full h-8 px-2.5 border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] bg-white focus:border-[#408DFB] focus:outline-none"
                   >
                     {accounts.map((acc: any) => (
-                      <option key={acc.id} value={acc.id}>
+                      <option key={acc.id} value={acc.ledgerId || acc.accountId || acc.id}>
                         {acc.name || acc.bankName} {acc.accountNumber ? `(..${acc.accountNumber.slice(-4)})` : ''}
                       </option>
                     ))}

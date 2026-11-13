@@ -269,6 +269,41 @@ export class ReceiptsService {
           }
         }
         if (!account) {
+          const cashAccount = await this.prisma.cashAccount.findFirst({
+            where: { id: split.accountId, companyId },
+          });
+          if (cashAccount) {
+            if (cashAccount.accountId) {
+              account = await this.prisma.account.findFirst({
+                where: { id: cashAccount.accountId, companyId },
+              });
+            }
+            if (!account) {
+              const ledgerName = cashAccount.name || 'Cash';
+              let resolved = await this.prisma.account.findFirst({
+                where: { companyId, name: ledgerName },
+              });
+              if (!resolved) {
+                resolved = await this.prisma.account.create({
+                  data: {
+                    companyId,
+                    name: ledgerName,
+                    category: 'ASSET',
+                    subCategory: 'CURRENT_ASSET',
+                    balance: 0,
+                  },
+                });
+              }
+              await this.prisma.cashAccount.update({
+                where: { id: cashAccount.id },
+                data: { accountId: resolved.id },
+              });
+              account = resolved;
+            }
+            split.accountId = account.id;
+          }
+        }
+        if (!account) {
           throw new NotFoundException(`Account with ID ${split.accountId} not found`);
         }
       }
