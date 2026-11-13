@@ -2110,8 +2110,8 @@ export class InvoicesService {
       throw new BadRequestException('Cannot edit an archived invoice. Please restore it first.');
     }
 
-    if (invoice.status !== 'DRAFT') {
-      throw new BadRequestException('Only draft invoices can be edited. Issued invoices are legally locked.');
+    if (invoice.status === 'CANCELLED') {
+      throw new BadRequestException('Cannot edit a cancelled invoice.');
     }
 
     const partnerId = (dto.businessPartnerId || dto.customerId || invoice.businessPartnerId)?.trim();
@@ -2256,13 +2256,21 @@ export class InvoicesService {
         : Number((totalCgst + totalSgst + totalCess).toFixed(2));
       const grandTotal = Number((subTotal + taxTotal).toFixed(2));
 
+      if (Number(invoice.amountPaid) > 0 && grandTotal < Number(invoice.amountPaid)) {
+        throw new BadRequestException(
+          `Cannot reduce invoice grand total (₹${grandTotal}) below the amount already paid (₹${Number(invoice.amountPaid)}). Please adjust or refund payments first.`
+        );
+      }
+
       let targetStatus = dto.status || invoice.status;
       let amountPaid = Number(dto.amountPaid !== undefined ? dto.amountPaid : invoice.amountPaid);
-      if (targetStatus === 'SENT') {
+      if (targetStatus === 'SENT' || targetStatus === 'PAID' || targetStatus === 'PARTIAL') {
         if (amountPaid >= grandTotal && grandTotal > 0) {
           targetStatus = 'PAID';
         } else if (amountPaid > 0) {
           targetStatus = 'PARTIAL';
+        } else {
+          targetStatus = 'SENT';
         }
       }
 
@@ -2411,7 +2419,7 @@ export class InvoicesService {
         if (financialChanged) {
           // Reversal of existing journal entries before re-posting updated entry
           const existingJournals = await tx.journalEntry.findMany({
-            where: { companyId, reference: invoice.invoiceNo },
+            where: { companyId, reference: invoice.invoiceNo, deletedAt: null },
             include: { lines: true },
           });
 
@@ -2427,6 +2435,14 @@ export class InvoicesService {
                 `Adjustment reversal for updated invoice ${invoice.invoiceNo}`
               );
             }
+            await tx.journalEntry.update({
+              where: { id: entry.id },
+              data: { deletedAt: new Date() },
+            });
+            await tx.journalLine.updateMany({
+              where: { journalEntryId: entry.id },
+              data: { deletedAt: new Date() },
+            });
           }
 
           // Post updated balanced journal entry
