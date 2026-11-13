@@ -392,6 +392,17 @@ export const ExpensesDashboard: React.FC = () => {
   // Table Columns matching Screenshot 2
   const expenseColumns: ZohoColumn<any>[] = [
     {
+      key: 'slNo',
+      label: '#',
+      width: '50px',
+      align: 'center',
+      render: (_exp, index) => (
+        <span className="text-[12px] font-medium text-[#6B7280] tabular-nums">
+          {index + 1}
+        </span>
+      ),
+    },
+    {
       key: 'date',
       label: 'DATE',
       width: '110px',
