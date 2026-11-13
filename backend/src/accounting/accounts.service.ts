@@ -560,9 +560,11 @@ export class AccountsService {
     }
 
     const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 20;
+    const limit = query.limit ? Number(query.limit) : 2000;
     const total = filtered.length;
-    const paginated = filtered.slice((page - 1) * limit, page * limit);
+    const paginated = query.page
+      ? filtered.slice((page - 1) * limit, page * limit)
+      : filtered.slice(0, limit);
 
     const totalDebit = filtered.reduce((acc, curr) => acc + curr.debit, 0);
     const totalCredit = filtered.reduce((acc, curr) => acc + curr.credit, 0);

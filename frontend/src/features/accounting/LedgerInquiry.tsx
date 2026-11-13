@@ -151,6 +151,7 @@ export function LedgerInquiry() {
           maxAmount: maxAmount || undefined,
           voucherType: voucherType || undefined,
           search: textSearch || undefined,
+          limit: 2000,
         },
       });
       return res.data?.data || null;
@@ -308,7 +309,7 @@ export function LedgerInquiry() {
 
   // Sort transactions
   const sortedTransactions = useMemo(() => {
-    const items = [...(inquiryData?.transactions || [])];
+    const items = [...(inquiryData?.transactions || inquiryData?.allTransactions || [])];
     return items.sort((a: any, b: any) => {
       let valA = a[sortField];
       let valB = b[sortField];
@@ -561,7 +562,7 @@ export function LedgerInquiry() {
             {/* Left Tabs: Register | Ageing | Audits */}
             <div className="flex items-center gap-6 h-[32px]">
               {[
-                { id: 'statement', label: 'Register' },
+                { id: 'statement', label: `Register${sortedTransactions.length ? ` (${sortedTransactions.length})` : ''}` },
                 { id: 'outstanding', label: 'Ageing' },
                 { id: 'audit', label: 'Audits' },
               ].map((t) => (
