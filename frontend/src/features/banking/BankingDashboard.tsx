@@ -496,7 +496,7 @@ export const BankingDashboard: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setAccountType('CASH');
-                    setAccountName('Cash in Hand');
+                    setAccountName('Cash');
                     setBankName('');
                     setAccountNumber('');
                     setIfsc('');
@@ -541,13 +541,13 @@ export const BankingDashboard: React.FC = () => {
                   required
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
-                  placeholder={accountType === 'CASH' ? 'e.g. Cash in Hand, Petty Cash Drawer' : 'e.g. HDFC Operations Current A/c'}
+                  placeholder={accountType === 'CASH' ? 'e.g. Cash, Petty Cash Drawer' : 'e.g. HDFC Operations Current A/c'}
                   className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#408DFB]"
                 />
                 {accountType === 'CASH' && (
                   <div className="flex items-center gap-1.5 mt-1.5">
                     <span className="text-[10px] text-gray-400">Suggestions:</span>
-                    {['Cash in Hand', 'Petty Cash', 'Shop Cash Counter'].map((suggest) => (
+                    {['Cash', 'Petty Cash', 'Shop Cash Counter'].map((suggest) => (
                       <button
                         key={suggest}
                         type="button"
