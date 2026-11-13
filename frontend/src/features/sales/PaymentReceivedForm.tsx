@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   X,
+  ArrowLeft,
   ChevronDown,
   ChevronRight,
   Settings,
@@ -100,6 +101,14 @@ export const PaymentReceivedForm: React.FC = () => {
       newParams.delete('transaction_type');
     }
     setSearchParams(newParams, { replace: true });
+  };
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/receipts');
+    }
   };
 
   // Shared Customer & Invoice State
@@ -423,8 +432,20 @@ export const PaymentReceivedForm: React.FC = () => {
   return (
     <div className="w-full h-full flex flex-col bg-white overflow-hidden text-xs text-[#2B2F36]">
       {/* 1. Header & Tabs Bar */}
-      <div className="border-b border-[#E5E7EB] bg-white px-8 flex items-center justify-between h-11 shrink-0">
-        <div className="flex items-center gap-6 h-full">
+      <div className="border-b border-[#E5E7EB] bg-white px-6 flex items-center justify-between h-11 shrink-0">
+        <div className="flex items-center gap-4 h-full">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-[#4B5563] hover:text-[#111827] hover:bg-[#F3F4F6] rounded transition-colors cursor-pointer mr-1"
+            title="Go back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back</span>
+          </button>
+
+          <div className="h-4 w-[1px] bg-[#E5E7EB]" />
+
           <button
             type="button"
             onClick={() => handleTabSwitch('INVOICE_PAYMENT')}
@@ -451,7 +472,7 @@ export const PaymentReceivedForm: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => navigate('/receipts')}
+          onClick={handleBack}
           className="text-[#6B7280] hover:text-[#1E2540] p-1.5 rounded-[4px] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
           title="Close and exit form"
         >
@@ -1255,7 +1276,7 @@ export const PaymentReceivedForm: React.FC = () => {
         <button
           type="button"
           disabled={isSubmitting}
-          onClick={() => navigate('/receipts')}
+          onClick={handleBack}
           className="h-8 px-4 bg-white border border-[#CBD5E1] text-[#2B2F36] hover:bg-[#F8F9FA] rounded-[4px] text-xs font-medium cursor-pointer transition-colors"
         >
           Cancel

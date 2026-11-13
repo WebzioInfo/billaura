@@ -28,23 +28,43 @@ export class BankService {
     const [bankAccounts, cashAccounts] = await Promise.all([
       this.prisma.bankAccount.findMany({
         where: { companyId, deletedAt: null },
+        include: {
+          account: {
+            select: { id: true, balance: true, name: true },
+          },
+        },
         orderBy: { name: 'asc' },
       }),
       this.prisma.cashAccount.findMany({
         where: { companyId, deletedAt: null },
+        include: {
+          account: {
+            select: { id: true, balance: true, name: true },
+          },
+        },
         orderBy: { name: 'asc' },
       }),
     ]);
 
+    const mappedBankAccounts = bankAccounts.map((b) => ({
+      ...b,
+      currentBalance: b.account?.balance !== undefined && b.account?.balance !== null
+        ? Number(b.account.balance)
+        : Number(b.currentBalance || 0),
+    }));
+
     const mappedCashAccounts = cashAccounts.map((c) => ({
       ...c,
+      currentBalance: c.account?.balance !== undefined && c.account?.balance !== null
+        ? Number(c.account.balance)
+        : Number(c.currentBalance || 0),
       accountType: 'CASH' as const,
       bankName: c.name || 'Cash',
       accountNumber: '',
       ifsc: '',
     }));
 
-    return [...bankAccounts, ...mappedCashAccounts];
+    return [...mappedBankAccounts, ...mappedCashAccounts];
   }
 
   async findAllTransactions() {
