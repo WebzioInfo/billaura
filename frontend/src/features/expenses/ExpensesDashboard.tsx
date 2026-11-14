@@ -20,6 +20,9 @@ import {
   User,
   Inbox,
   Paperclip,
+  Calendar,
+  ArrowUpDown,
+  X,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { ensureArray } from '@/core/api';
@@ -96,6 +99,12 @@ export const ExpensesDashboard: React.FC = () => {
   const [selectedExpense, setSelectedExpense] = useState<any | null>(null);
   const [showPdfView, setShowPdfView] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+
+  // Date Filtering & Sorting state
+  const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD
+  const [dateFilterPreset, setDateFilterPreset] = useState<string>('ALL'); // 'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM'
+  const [sortField, setSortField] = useState<'date' | 'expenseNo' | 'amount'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Modals
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -363,20 +372,95 @@ export const ExpensesDashboard: React.FC = () => {
     }
   };
 
-  // Filter expenses based on search and current view
+  const getExpenseDateStr = (dateVal: any): string => {
+    if (!dateVal) return '';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '';
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Filter expenses based on search, current view, and date
   const filteredExpenses = expenses.filter((e: any) => {
     const matchesSearch =
       (e.expenseNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (e.category?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (e.vendor?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (e.reference || e.billNumber || '').toLowerCase().includes(searchQuery.toLowerCase());
+      (e.reference || e.billNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      formatDate(e.date).toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
     if (currentView === 'non_billable') return !e.isBillable;
     if (currentView === 'billable') return Boolean(e.isBillable && !e.isInvoiced);
     if (currentView === 'invoiced') return Boolean(e.isInvoiced);
+
+    // Date Filter logic
+    if (selectedDate) {
+      const expDateStr = getExpenseDateStr(e.date);
+      if (expDateStr !== selectedDate) return false;
+    } else if (dateFilterPreset !== 'ALL') {
+      const expDate = new Date(e.date);
+      if (isNaN(expDate.getTime())) return false;
+      const now = new Date();
+
+      if (dateFilterPreset === 'TODAY') {
+        if (getExpenseDateStr(expDate) !== getExpenseDateStr(now)) return false;
+      } else if (dateFilterPreset === 'YESTERDAY') {
+        const yest = new Date(now);
+        yest.setDate(yest.getDate() - 1);
+        if (getExpenseDateStr(expDate) !== getExpenseDateStr(yest)) return false;
+      } else if (dateFilterPreset === 'THIS_MONTH') {
+        if (
+          expDate.getFullYear() !== now.getFullYear() ||
+          expDate.getMonth() !== now.getMonth()
+        ) {
+          return false;
+        }
+      } else if (dateFilterPreset === 'LAST_MONTH') {
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        if (
+          expDate.getFullYear() !== lastMonth.getFullYear() ||
+          expDate.getMonth() !== lastMonth.getMonth()
+        ) {
+          return false;
+        }
+      }
+    }
+
     return true;
+  });
+
+  // Sort expenses strictly date-wise, tie-breaking sequentially with expense number
+  const sortedExpenses = [...filteredExpenses].sort((a: any, b: any) => {
+    if (sortField === 'date') {
+      const dateA = new Date(a.date).getTime() || 0;
+      const dateB = new Date(b.date).getTime() || 0;
+      if (dateA !== dateB) {
+        return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+      }
+      // Secondary sort: expenseNo sequentially
+      const noA = (a.expenseNo || '').toLowerCase();
+      const noB = (b.expenseNo || '').toLowerCase();
+      return sortOrder === 'asc' ? noA.localeCompare(noB) : noB.localeCompare(noA);
+    }
+    if (sortField === 'expenseNo') {
+      const noA = (a.expenseNo || '').toLowerCase();
+      const noB = (b.expenseNo || '').toLowerCase();
+      return sortOrder === 'asc' ? noA.localeCompare(noB) : noB.localeCompare(noA);
+    }
+    if (sortField === 'amount') {
+      const amtA = Number(a.totalAmount || a.amount || 0);
+      const amtB = Number(b.totalAmount || b.amount || 0);
+      return sortOrder === 'asc' ? amtA - amtB : amtB - amtA;
+    }
+    return 0;
   });
 
   const viewOptions: { id: ExpenseView; label: string }[] = [
@@ -389,12 +473,29 @@ export const ExpensesDashboard: React.FC = () => {
 
   const currentViewLabel = viewOptions.find((v) => v.id === currentView)?.label || 'All Expenses';
 
-  // Table Columns matching Screenshot 2
+  // Table Columns matching Screenshot with interactive Date Wise Sorting & Filtering
   const expenseColumns: ZohoColumn<any>[] = [
     {
       key: 'slNo',
-      label: '#',
-      width: '50px',
+      label: (
+        <button
+          type="button"
+          onClick={() => {
+            setSortField('date');
+            setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+          }}
+          className="flex items-center justify-center gap-1 hover:text-[#408DFB] transition-colors cursor-pointer w-full"
+          title={`Sorted ${sortOrder === 'asc' ? 'Oldest to Newest' : 'Newest to Oldest'}. Click to reverse.`}
+        >
+          <span>#</span>
+          {sortField === 'date' && (
+            <span className="text-[10px] text-[#408DFB] font-bold">
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </span>
+          )}
+        </button>
+      ),
+      width: '55px',
       align: 'center',
       render: (_exp, index) => (
         <span className="text-[12px] font-medium text-[#6B7280] tabular-nums">
@@ -404,15 +505,65 @@ export const ExpensesDashboard: React.FC = () => {
     },
     {
       key: 'date',
-      label: 'DATE',
-      width: '110px',
+      label: (
+        <button
+          type="button"
+          onClick={() => {
+            setSortField('date');
+            setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+          }}
+          className="flex items-center gap-1.5 hover:text-[#408DFB] transition-colors cursor-pointer"
+          title="Click to sort date-wise (toggle Oldest/Newest)"
+        >
+          <span>DATE</span>
+          {sortField === 'date' ? (
+            <span className="text-[10px] text-[#408DFB] font-semibold bg-[#EFF6FF] px-1 py-0.5 rounded">
+              {sortOrder === 'asc' ? '▲ OLDEST' : '▼ NEWEST'}
+            </span>
+          ) : (
+            <span className="text-[10px] text-gray-400">⇅</span>
+          )}
+        </button>
+      ),
+      width: '130px',
       render: (exp) => (
-        <span className="text-[13px] text-[#1E2540]">{formatDate(exp.date)}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const dStr = getExpenseDateStr(exp.date);
+            if (dStr) {
+              setSelectedDate(dStr);
+              setDateFilterPreset('CUSTOM');
+            }
+          }}
+          className="text-[13px] text-[#1E2540] hover:text-[#408DFB] hover:underline cursor-pointer text-left font-medium"
+          title="Click to filter all expenses for this date"
+        >
+          {formatDate(exp.date)}
+        </button>
       ),
     },
     {
       key: 'expenseNo',
-      label: 'EXPENSE#',
+      label: (
+        <button
+          type="button"
+          onClick={() => {
+            setSortField('expenseNo');
+            setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+          }}
+          className="flex items-center gap-1 hover:text-[#408DFB] transition-colors cursor-pointer"
+          title="Click to sort by expense number"
+        >
+          <span>EXPENSE#</span>
+          {sortField === 'expenseNo' && (
+            <span className="text-[10px] text-[#408DFB] font-bold">
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </span>
+          )}
+        </button>
+      ),
       width: '125px',
       render: (exp) => (
         <button
@@ -588,6 +739,80 @@ export const ExpensesDashboard: React.FC = () => {
               <Plus className="w-3.5 h-3.5" />
               New
             </button>
+          )}
+
+          {/* Date Filter & Sort Controls */}
+          {currentView !== 'categories' && (
+            <>
+              {/* Date Filter Presets */}
+              <div className="flex items-center gap-1 bg-[#F9FAFB] border border-[#E5E7EB] rounded px-2 h-8 text-xs text-[#1E2540]">
+                <Calendar className="w-3.5 h-3.5 text-[#6B7280]" />
+                <select
+                  value={dateFilterPreset}
+                  onChange={(e) => {
+                    const preset = e.target.value;
+                    setDateFilterPreset(preset);
+                    if (preset !== 'CUSTOM') {
+                      setSelectedDate('');
+                    }
+                  }}
+                  className="bg-transparent border-none outline-hidden text-[12px] text-[#1E2540] cursor-pointer"
+                >
+                  <option value="ALL">All Dates</option>
+                  <option value="TODAY">Today</option>
+                  <option value="YESTERDAY">Yesterday</option>
+                  <option value="THIS_MONTH">This Month</option>
+                  <option value="LAST_MONTH">Last Month</option>
+                  <option value="CUSTOM">Specific Date</option>
+                </select>
+              </div>
+
+              {/* Exact Date Picker Input */}
+              <div className="flex items-center gap-1 bg-[#F9FAFB] border border-[#E5E7EB] rounded px-2 h-8 text-xs text-[#1E2540] focus-within:border-[#408DFB]">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    setDateFilterPreset(e.target.value ? 'CUSTOM' : 'ALL');
+                  }}
+                  className="bg-transparent border-none outline-hidden text-[12px] text-[#1E2540] cursor-pointer"
+                  title="Select specific date to filter"
+                />
+                {selectedDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate('');
+                      setDateFilterPreset('ALL');
+                    }}
+                    className="p-0.5 text-[#9CA3AF] hover:text-[#DC2626] rounded cursor-pointer"
+                    title="Clear date filter"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Date Sort Toggle Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSortField('date');
+                  setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                }}
+                className={cn(
+                  'h-8 px-2.5 rounded border text-[12px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer',
+                  sortField === 'date'
+                    ? 'bg-[#F0F7FF] border-[#408DFB] text-[#408DFB]'
+                    : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#6B7280] hover:text-[#1E2540]'
+                )}
+                title="Toggle Date Sort: Oldest First / Newest First"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" />
+                <span>{sortOrder === 'asc' ? 'Oldest First' : 'Newest First'}</span>
+              </button>
+            </>
           )}
 
           <div className="relative">
@@ -768,7 +993,7 @@ export const ExpensesDashboard: React.FC = () => {
             {selectedExpense ? (
               <ZohoSplitDetail
                 moduleTitle="All Expenses"
-                items={filteredExpenses.map((exp: any) => ({
+                items={sortedExpenses.map((exp: any) => ({
                   id: exp.id,
                   name: exp.category?.name || 'General Expense',
                   amount: `₹${Number(exp.totalAmount || exp.amount || 0).toLocaleString('en-IN')}`,
@@ -1065,8 +1290,50 @@ export const ExpensesDashboard: React.FC = () => {
                 </ZohoSplitDetail>
             ) : (
               <div className="w-full h-full flex flex-col">
+                {/* Active Date Filter Alert / Indicator */}
+                {(selectedDate || dateFilterPreset !== 'ALL') && (
+                  <div className="px-4 py-2 bg-[#F0F7FF] border-b border-[#BFDBFE] flex items-center justify-between text-xs text-[#1E40AF] shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-[#3B82F6]" />
+                      <span>
+                        Showing expenses for{' '}
+                        <strong>
+                          {selectedDate
+                            ? formatDate(selectedDate)
+                            : dateFilterPreset === 'TODAY'
+                            ? 'Today'
+                            : dateFilterPreset === 'YESTERDAY'
+                            ? 'Yesterday'
+                            : dateFilterPreset === 'THIS_MONTH'
+                            ? 'This Month'
+                            : 'Last Month'}
+                        </strong>
+                        {' '}({sortedExpenses.length} {sortedExpenses.length === 1 ? 'expense' : 'expenses'} • Total:{' '}
+                        <strong>
+                          {formatCurrency(
+                            sortedExpenses.reduce(
+                              (sum, exp) => sum + Number(exp.totalAmount || exp.amount || 0),
+                              0
+                            )
+                          )}
+                        </strong>)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate('');
+                        setDateFilterPreset('ALL');
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-[#BFDBFE] text-xs font-medium text-[#1E40AF] hover:bg-[#DBEAFE] transition-colors cursor-pointer shadow-2xs"
+                    >
+                      <X className="w-3 h-3" />
+                      Clear Filter
+                    </button>
+                  </div>
+                )}
                 <ZohoListTable
-                  data={filteredExpenses}
+                  data={sortedExpenses}
                   columns={expenseColumns}
                   keyField="id"
                   isLoading={loadingExpenses}

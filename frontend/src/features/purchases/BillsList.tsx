@@ -58,6 +58,7 @@ interface Purchase {
   id: string;
   purchaseNo: string;
   vendorId: string;
+  businessPartnerId?: string;
   date: string;
   dueDate?: string;
   status: string;
@@ -519,7 +520,7 @@ export const BillsList: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate(`/vendor-payments/new?vendorId=${selectedBill.vendorId || ''}&billId=${selectedBill.id}`)}
+                  onClick={() => navigate(`/vendor-payments/new?vendorId=${selectedBill.businessPartnerId || selectedBill.vendorId || selectedBill.vendor?.id || ''}&billId=${selectedBill.id}`)}
                   className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#408DFB] hover:bg-[#2563EB] text-white rounded-[4px] text-xs font-medium cursor-pointer"
                 >
                   <DollarSign className="w-3.5 h-3.5" />

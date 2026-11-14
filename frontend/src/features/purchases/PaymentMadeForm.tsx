@@ -154,9 +154,26 @@ export const PaymentMadeForm: React.FC = () => {
     queryKey: ['unpaid-bills', vendorId],
     queryFn: async () => {
       if (!vendorId) return [];
-      const res = await apiClient.get('/purchases', { params: { vendorId, limit: 100 } });
-      const list = res.data?.data || res.data || [];
-      return Array.isArray(list) ? list : [];
+      try {
+        const res = await apiClient.get('/purchases', { params: { vendorId, limit: 100 } });
+        const list = ensureArray(res);
+        if (list.length > 0) return list;
+      } catch (_) {
+        // Fallback below
+      }
+      // Robust fallback: fetch purchases and filter client-side by vendor
+      try {
+        const fallbackRes = await apiClient.get('/purchases', { params: { limit: 500 } });
+        const allList = ensureArray(fallbackRes);
+        return allList.filter(
+          (b: any) =>
+            b.businessPartnerId === vendorId ||
+            b.vendorId === vendorId ||
+            b.vendor?.id === vendorId
+        );
+      } catch (_) {
+        return [];
+      }
     },
     enabled: !!vendorId,
   });
@@ -260,7 +277,27 @@ export const PaymentMadeForm: React.FC = () => {
     return unpaidBills.reduce((acc, b) => acc + Math.max(0, Number(b.grandTotal || 0) - Number(b.amountPaid || 0)), 0);
   }, [selectedVendor, unpaidBills]);
 
-  // Auto-allocate amount across bills (FIFO) if preselectedBillId or on initial amount
+  // Auto-allocate amount across bills if preselectedBillId or on initial amount
+  useEffect(() => {
+    if (preselectedBillId) {
+      apiClient
+        .get(`/purchases/${preselectedBillId}`)
+        .then((res) => {
+          const bill = res.data?.data || res.data;
+          if (bill) {
+            const vId = bill.businessPartnerId || bill.vendorId;
+            if (vId && !vendorId) {
+              setVendorId(vId);
+            }
+            const due = Math.max(0, Number(bill.grandTotal || 0) - Number(bill.amountPaid || 0));
+            setAmount(due);
+            setBillAllocations({ [bill.id]: due });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [preselectedBillId]);
+
   useEffect(() => {
     if (preselectedBillId && unpaidBills.length > 0) {
       const targetBill = unpaidBills.find((b) => b.id === preselectedBillId);
@@ -294,6 +331,26 @@ export const PaymentMadeForm: React.FC = () => {
 
   const handleClearApplied = () => {
     setBillAllocations({});
+  };
+
+  const handleAmountChange = (newVal: number | '') => {
+    setAmount(newVal);
+    if (activeTab === 'BILL_PAYMENT' && typeof newVal === 'number' && newVal > 0 && unpaidBills.length > 0) {
+      let remaining = newVal;
+      const newAllocations: { [bId: string]: number } = {};
+      for (const bill of unpaidBills) {
+        if (remaining <= 0) break;
+        const total = Number(bill.grandTotal || 0);
+        const paid = Number(bill.amountPaid || 0);
+        const due = Math.max(0, Number((total - paid).toFixed(2)));
+        if (due > 0) {
+          const allocate = Math.min(remaining, due);
+          newAllocations[bill.id] = Number(allocate.toFixed(2));
+          remaining = Number((remaining - allocate).toFixed(2));
+        }
+      }
+      setBillAllocations(newAllocations);
+    }
   };
 
   const handleBillAllocationChange = (billId: string, val: number, maxDue: number) => {
@@ -344,13 +401,37 @@ export const PaymentMadeForm: React.FC = () => {
         attachedFiles,
       };
 
+      let finalAllocations = Object.entries(billAllocations)
+        .filter(([_, amt]) => Number(amt) > 0)
+        .map(([bId, amt]) => ({
+          purchaseId: bId,
+          amount: Number(amt),
+        }));
+
+      // Fallback: If user didn't manually type in the table but there are unpaid bills and an amount entered
+      if (activeTab === 'BILL_PAYMENT' && finalAllocations.length === 0 && unpaidBills.length > 0 && numAmount > 0) {
+        let remaining = numAmount;
+        const autoAlloc: { [bId: string]: number } = {};
+        for (const bill of unpaidBills) {
+          if (remaining <= 0) break;
+          const total = Number(bill.grandTotal || 0);
+          const paid = Number(bill.amountPaid || 0);
+          const due = Math.max(0, Number((total - paid).toFixed(2)));
+          if (due > 0) {
+            const allocate = Math.min(remaining, due);
+            autoAlloc[bill.id] = Number(allocate.toFixed(2));
+            remaining = Number((remaining - allocate).toFixed(2));
+          }
+        }
+        setBillAllocations(autoAlloc);
+        finalAllocations = Object.entries(autoAlloc).map(([bId, amt]) => ({
+          purchaseId: bId,
+          amount: Number(amt),
+        }));
+      }
+
       if (activeTab === 'BILL_PAYMENT') {
-        payload.allocations = Object.entries(billAllocations)
-          .filter(([_, amt]) => Number(amt) > 0)
-          .map(([bId, amt]) => ({
-            purchaseId: bId,
-            amount: Number(amt),
-          }));
+        payload.allocations = finalAllocations;
       } else {
         // Vendor Advance
         payload.sourceOfSupply = sourceOfSupply;
@@ -540,7 +621,7 @@ export const PaymentMadeForm: React.FC = () => {
                     min="0.01"
                     step="any"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) => handleAmountChange(e.target.value === '' ? '' : Number(e.target.value))}
                     placeholder="0.00"
                     className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-r-[4px] text-xs font-semibold text-[#2B2F36] outline-none focus:border-[#408DFB]"
                   />
@@ -710,29 +791,53 @@ export const PaymentMadeForm: React.FC = () => {
                             <td className="py-2.5 px-4 text-right font-medium tabular-nums text-[#2B2F36]">
                               {total.toFixed(2)}
                             </td>
-                            <td className="py-2.5 px-4 text-right font-medium tabular-nums text-[#2B2F36]">
+                            <td
+                              onClick={() => {
+                                handleBillAllocationChange(bill.id, due, due);
+                                if (!amount || Number(amount) < due) {
+                                  setAmount(due);
+                                }
+                              }}
+                              className="py-2.5 px-4 text-right font-medium tabular-nums text-[#2B2F36] cursor-pointer hover:text-[#408DFB] hover:underline"
+                              title="Click to apply full due balance"
+                            >
                               {due.toFixed(2)}
                             </td>
                             <td className="py-2.5 px-4 text-right text-[#6B7280] tabular-nums">
                               {paid.toFixed(2)}
                             </td>
                             <td className="py-2 px-4 text-right">
-                              <input
-                                type="number"
-                                min="0"
-                                max={due}
-                                step="any"
-                                value={applied === 0 ? '' : applied}
-                                onChange={(e) =>
-                                  handleBillAllocationChange(
-                                    bill.id,
-                                    e.target.value === '' ? 0 : Number(e.target.value),
-                                    due
-                                  )
-                                }
-                                placeholder="0.00"
-                                className="w-28 h-7 px-2 text-right bg-white border border-[#CBD5E1] rounded-[4px] text-xs font-semibold text-[#2B2F36] outline-none focus:border-[#408DFB]"
-                              />
+                              <div className="flex items-center justify-end gap-1.5">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={due}
+                                  step="any"
+                                  value={applied === 0 ? '' : applied}
+                                  onChange={(e) =>
+                                    handleBillAllocationChange(
+                                      bill.id,
+                                      e.target.value === '' ? 0 : Number(e.target.value),
+                                      due
+                                    )
+                                  }
+                                  placeholder="0.00"
+                                  className="w-24 h-7 px-2 text-right bg-white border border-[#CBD5E1] rounded-[4px] text-xs font-semibold text-[#2B2F36] outline-none focus:border-[#408DFB]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleBillAllocationChange(bill.id, due, due);
+                                    if (!amount || Number(amount) < due) {
+                                      setAmount(due);
+                                    }
+                                  }}
+                                  className="text-[10px] text-[#408DFB] hover:underline font-semibold cursor-pointer whitespace-nowrap bg-[#F0F7FF] px-1.5 py-0.5 rounded border border-[#BFDBFE]"
+                                  title="Pay full due balance"
+                                >
+                                  Pay Full
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -902,7 +1007,7 @@ export const PaymentMadeForm: React.FC = () => {
                   min="0.01"
                   step="any"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  onChange={(e) => handleAmountChange(e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder="0.00"
                   className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-r-[4px] text-xs font-semibold text-[#2B2F36] outline-none focus:border-[#408DFB]"
                 />

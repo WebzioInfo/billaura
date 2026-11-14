@@ -10,9 +10,10 @@ import {
 } from "@nestjs/common";
 import { SerialsService } from "./serials.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 
 @Controller("serials")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class SerialsController {
   constructor(private readonly serialsService: SerialsService) {}
 

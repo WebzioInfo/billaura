@@ -10,9 +10,10 @@ import {
 } from "@nestjs/common";
 import { BomService } from "./bom.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 
 @Controller("bom")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class BomController {
   constructor(private readonly bomService: BomService) {}
 

@@ -7,10 +7,11 @@ import {
 } from "@nestjs/common";
 import { ReportsService } from "./reports.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 import { CompanyContext } from "../common/context/company-context";
 
 @Controller("reports")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 

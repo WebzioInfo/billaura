@@ -148,13 +148,7 @@ export class PurchaseOrdersService {
           where: { companyId, orderNo },
         });
         if (existing) {
-          const next = await this.getNextNumber();
-          if (next.nextNumber && next.nextNumber !== orderNo) {
-            const check = await tx.purchaseOrder.findFirst({ where: { companyId, orderNo: next.nextNumber } });
-            orderNo = check ? `PO-${Date.now().toString().slice(-5)}` : next.nextNumber;
-          } else {
-            throw new ConflictException(`Purchase Order number "${orderNo}" is already in use`);
-          }
+          throw new ConflictException(`Purchase Order number "${orderNo}" is already in use`);
         }
       } else {
         orderNo = await this.sequenceService.generateNextSequence(companyId, 'PURCHASE_ORDER', tx);

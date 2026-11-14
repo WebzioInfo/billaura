@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateExpenseDto, UpdateExpenseApprovalDto, UpdateExpenseDto } from './dto/expense.dto';
+import { CreateExpenseDto, UpdateExpenseApprovalDto, UpdateExpenseDto, ExpenseQueryDto } from './dto/expense.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
@@ -16,7 +16,7 @@ export class ExpensesService {
     private readonly sequenceService: SequenceService
   ) {}
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: ExpenseQueryDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -24,9 +24,27 @@ export class ExpensesService {
 
     const { skip, take } = getPagination(query);
 
+    let dateFilter: Prisma.DateTimeFilter | undefined;
+    if (query.date) {
+      const parsed = new Date(query.date);
+      if (!isNaN(parsed.getTime())) {
+        const start = new Date(parsed);
+        start.setUTCHours(0, 0, 0, 0);
+        const end = new Date(parsed);
+        end.setUTCHours(23, 59, 59, 999);
+        dateFilter = { gte: start, lte: end };
+      }
+    } else if (query.startDate || query.endDate) {
+      dateFilter = {
+        ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+        ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+      };
+    }
+
     const where: Prisma.ExpenseWhereInput = {
       companyId,
       deletedAt: null,
+      ...(dateFilter ? { date: dateFilter } : {}),
       ...(query.search
         ? {
             OR: [
@@ -37,13 +55,33 @@ export class ExpensesService {
         : {}),
     };
 
+    const sortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
+    const orderBy: Prisma.ExpenseOrderByWithRelationInput[] =
+      query.sortBy === 'expenseNo'
+        ? [
+            { expenseNo: sortOrder },
+            { date: sortOrder },
+            { createdAt: sortOrder },
+          ]
+        : query.sortBy === 'amount'
+        ? [
+            { amount: sortOrder },
+            { date: sortOrder },
+            { expenseNo: sortOrder },
+          ]
+        : [
+            { date: sortOrder },
+            { expenseNo: sortOrder },
+            { createdAt: sortOrder },
+          ];
+
     const [data, total] = await this.prisma.$transaction([
       this.prisma.expense.findMany({
         where,
         skip,
         take,
         include: { bankAccount: true, cashAccount: true, category: true, employee: true, vendor: true, department: true, attachments: true },
-        orderBy: { date: 'desc' },
+        orderBy,
       }),
       this.prisma.expense.count({ where }),
     ]);

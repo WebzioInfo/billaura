@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreatePurchaseDto } from './dto/purchase.dto';
+import { CreatePurchaseDto, PurchaseQueryDto } from './dto/purchase.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, toPaginatedResult } from '../common/pagination';
 import { CompanyContext } from '../common/context/company-context';
@@ -17,7 +17,7 @@ export class PurchasesService {
     private readonly sequenceService: SequenceService
   ) {}
 
-  async findAll(query: PaginationQueryDto & { status?: string; vendorId?: string }) {
+  async findAll(query: PurchaseQueryDto) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -71,6 +71,11 @@ export class PurchasesService {
       throw new ConflictException('Company context is required');
     }
 
+    if (this.sequenceService) {
+      const nextNumber = await this.sequenceService.previewNextSequence(companyId, 'BILL');
+      if (nextNumber) return { nextNumber };
+    }
+
     const seq = await this.prisma.documentSequence.findUnique({
       where: { companyId_documentType: { companyId, documentType: 'BILL' } },
     });
@@ -78,10 +83,11 @@ export class PurchasesService {
     const padding = seq?.padding || 5;
 
     // Scan existing purchases to guarantee we never collide with existing bill numbers
-    const purchases = await this.prisma.purchase.findMany({
-      where: { companyId, deletedAt: null },
-      select: { purchaseNo: true },
-    });
+    const purchases =
+      (await this.prisma.purchase.findMany({
+        where: { companyId, deletedAt: null },
+        select: { purchaseNo: true },
+      })) || [];
 
     let maxNum = seq?.currentNumber || 0;
     for (const p of purchases) {

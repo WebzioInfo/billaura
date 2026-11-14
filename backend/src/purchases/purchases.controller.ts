@@ -12,7 +12,7 @@ import {
   HttpCode,
 } from "@nestjs/common";
 import { PurchasesService } from "./purchases.service";
-import { CreatePurchaseDto } from "./dto/purchase.dto";
+import { CreatePurchaseDto, PurchaseQueryDto } from "./dto/purchase.dto";
 import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
@@ -23,7 +23,7 @@ export class PurchasesController {
   constructor(private readonly purchasesService: PurchasesService) {}
 
   @Get()
-  async findAll(@Query() query: PaginationQueryDto) {
+  async findAll(@Query() query: PurchaseQueryDto) {
     return this.purchasesService.findAll(query);
   }
 

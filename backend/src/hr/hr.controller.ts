@@ -26,8 +26,27 @@ export class HrController {
 
   // --- EMPLOYEES ---
   @Get("employees")
-  async findEmployees(@Query('query') query?: string) {
-    return this.hrService.findEmployees(query);
+  async findEmployees(
+    @Query('query') query?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('departmentId') departmentId?: string,
+    @Query('designationId') designationId?: string,
+    @Query('status') status?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+  ) {
+    return this.hrService.findEmployees({
+      query: search || query,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      departmentId,
+      designationId,
+      status,
+      sortBy,
+      sortOrder,
+    });
   }
 
   @Get("employees/:id")

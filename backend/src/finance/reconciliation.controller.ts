@@ -1,9 +1,10 @@
 import { Controller, Get, Post, Param, UseGuards } from "@nestjs/common";
 import { ReconciliationService } from "./reconciliation.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 
 @Controller("finance/reconciliation")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class ReconciliationController {
   constructor(private readonly reconciliationService: ReconciliationService) {}
 

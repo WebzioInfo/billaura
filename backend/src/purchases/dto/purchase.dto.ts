@@ -9,6 +9,17 @@ import {
   IsBoolean,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
+
+export class PurchaseQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  vendorId?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
 
 export class CreateProductCandidateDto {
   @IsString()

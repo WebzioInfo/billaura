@@ -19,6 +19,7 @@ import {
   UpdateExpenseDto,
   CreateExpenseCategoryDto,
   UpdateExpenseCategoryDto,
+  ExpenseQueryDto,
 } from "./dto/expense.dto";
 import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -68,7 +69,7 @@ export class ExpensesController {
   // --- Expense Claims Endpoints ---
 
   @Get()
-  async findAll(@Query() query: PaginationQueryDto) {
+  async findAll(@Query() query: ExpenseQueryDto) {
     const result = await this.expensesService.findAll(query);
     return { success: true, ...result };
   }

@@ -11,9 +11,10 @@ import {
 } from "@nestjs/common";
 import { IncomeCategoriesService } from "./income-categories.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 
 @Controller("income-categories")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class IncomeCategoriesController {
   constructor(private readonly categoriesService: IncomeCategoriesService) {}
 

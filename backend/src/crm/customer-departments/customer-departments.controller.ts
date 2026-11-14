@@ -3,9 +3,10 @@ import { CustomerDepartmentsService } from './customer-departments.service';
 import { CreateCustomerDepartmentDto } from './dto/create-customer-department.dto';
 import { UpdateCustomerDepartmentDto } from './dto/update-customer-department.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { TenantGuard } from '../../common/guards/tenant.guard';
 
 @Controller('customer-departments')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class CustomerDepartmentsController {
   constructor(private readonly customerDepartmentsService: CustomerDepartmentsService) {}
 

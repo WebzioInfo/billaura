@@ -251,6 +251,11 @@ describe('Invoice Stock Deduction & Inventory Integration Test Suite', () => {
       journalLine: {
         deleteMany: jest.fn().mockResolvedValue({}),
       },
+      documentSequence: {
+        upsert: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
     };
 
     const mockPrisma: any = {

@@ -223,6 +223,15 @@ describe('AccountsService - Delete Account & Zoho Account Types Suite', () => {
           );
         }),
         findMany: jest.fn().mockResolvedValue([]),
+        upsert: jest.fn().mockImplementation(({ create, update }) => {
+          return Promise.resolve({ id: 'exp-cat-1', ...create, ...update });
+        }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      expense: {
+        count: jest.fn().mockImplementation(() => {
+          return Promise.resolve(expenseCategoriesStore.length);
+        }),
       },
       incomeCategory: {
         count: jest.fn().mockImplementation(({ where }) => {

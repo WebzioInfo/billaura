@@ -9,6 +9,21 @@ import {
 } from "class-validator";
 import { PartialType } from "@nestjs/swagger";
 import { PaymentMethod, PaidFromType, ApprovalStatus, TaxPreference } from "@prisma/client";
+import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
+
+export class ExpenseQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  date?: string;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+}
 
 export class CreateExpenseDto {
   @IsString()

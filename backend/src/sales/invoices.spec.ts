@@ -301,6 +301,11 @@ describe('InvoicesService - Production Test Matrix (Phase 15)', () => {
       commissionRecord: {
         delete: jest.fn().mockResolvedValue({ id: 'comm-1' }),
       },
+      documentSequence: {
+        upsert: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
     };
 
     prisma = {
@@ -1788,30 +1793,30 @@ describe('InvoicesService - Production Test Matrix (Phase 15)', () => {
     expect(totalDebits).toBe(totalCredits);
   });
 
-  // TEST 49: Statutory lock prohibits direct modification of issued invoices
-  it('TEST 49: Direct update of an already-issued invoice is blocked by statutory lock', async () => {
+  // TEST 49: Paid-amount floor protection prohibits reducing invoice below paid amount
+  it('TEST 49: Direct update of an already-issued invoice is blocked if reducing below paid amount', async () => {
     const existingIssued: any = {
       id: 'inv-already-issued-1',
       companyId: mockCompanyId,
       invoiceNo: 'B2BF/ISSUED-EDIT-01',
-      status: 'SENT',
+      status: 'PARTIAL',
       deletedAt: null,
       businessPartnerId: mockCustomer.id,
       date: new Date('2026-10-10'),
       dueDate: new Date('2026-10-17'),
       subTotal: 1000,
       grandTotal: 1180,
-      amountPaid: 0,
+      amountPaid: 800,
       items: [{ id: 'item-1', productId: mockProduct.id, qty: 10, rate: 100, taxPercent: 18 }],
     };
     createdInvoices.push(existingIssued);
 
     await expect(
       service.update(existingIssued.id, {
-        items: [{ productId: mockProduct.id, qty: 15, rate: 100, taxPercent: 18 }],
-        status: 'SENT',
+        items: [{ productId: mockProduct.id, qty: 5, rate: 100, taxPercent: 18 }],
+        status: 'PARTIAL',
       }, mockUserId)
-    ).rejects.toThrow('Only draft invoices can be edited. Issued invoices are legally locked.');
+    ).rejects.toThrow(/Cannot reduce invoice grand total/);
   });
 
   // TEST 50: Cancelling an issued invoice posts reversal journals and reverts customer receivable balance

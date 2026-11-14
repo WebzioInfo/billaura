@@ -13,7 +13,7 @@ import { Checkbox } from '@/shared/components/ui/Checkbox';
 
 export interface ZohoColumn<T> {
   key: string;
-  label: string;
+  label: string | React.ReactNode;
   align?: 'left' | 'center' | 'right';
   width?: string;
   isNumeric?: boolean;

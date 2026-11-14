@@ -10,9 +10,10 @@ import {
 } from "@nestjs/common";
 import { BatchesService } from "./batches.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 
 @Controller("batches")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class BatchesController {
   constructor(private readonly batchesService: BatchesService) {}
 

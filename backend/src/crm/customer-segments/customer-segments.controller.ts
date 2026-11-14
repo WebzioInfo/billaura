@@ -3,9 +3,10 @@ import { CustomerSegmentsService } from './customer-segments.service';
 import { CreateCustomerSegmentDto } from './dto/create-customer-segment.dto';
 import { UpdateCustomerSegmentDto } from './dto/update-customer-segment.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { TenantGuard } from '../../common/guards/tenant.guard';
 
 @Controller('customer-segments')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class CustomerSegmentsController {
   constructor(private readonly customerSegmentsService: CustomerSegmentsService) {}
 

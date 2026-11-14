@@ -28,6 +28,7 @@ import {
   ZohoViewOption,
 } from '@/shared/components/zoho';
 import { DeleteDialog } from '@/shared/components/ui';
+import { cn } from '@/lib/utils';
 
 interface VendorPayment {
   id: string;
@@ -361,16 +362,19 @@ export const PaymentsMadeList: React.FC = () => {
             detailTitle={selectedPayment.paymentNumber || `Payment #${selectedPayment.id.slice(-5)}`}
             detailActions={
               <div className="flex items-center gap-1.5">
-                {selectedPayment.status === 'DRAFT' && (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/payments-made/new?editId=${selectedPayment.id}`)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] rounded-[4px] text-xs font-medium text-[#2B2F36] cursor-pointer"
-                  >
-                    <Edit className="w-3.5 h-3.5 text-[#6B7280]" />
-                    <span>Edit Draft</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => navigate(`/payments-made/new?editId=${selectedPayment.id}`)}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-[4px] text-xs font-medium cursor-pointer transition-colors",
+                    Number(selectedPayment.unusedAmount || 0) > 0
+                      ? "bg-[#408DFB] text-white hover:bg-[#2563EB] shadow-xs"
+                      : "bg-white border border-[#CBD5E1] hover:bg-[#F8F9FB] text-[#2B2F36]"
+                  )}
+                >
+                  <Edit className={cn("w-3.5 h-3.5", Number(selectedPayment.unusedAmount || 0) > 0 ? "text-white" : "text-[#6B7280]")} />
+                  <span>{Number(selectedPayment.unusedAmount || 0) > 0 ? "Apply to Bills" : "Edit"}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => notification.info('Email payment confirmation to vendor')}

@@ -17,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentTemplatesService } from './document-templates.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../auth/permissions.guard';
+import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentCompany } from '../../common/decorators/tenant.decorator';
 import { CloudinaryStorageService } from '../../storage/cloudinary-storage.service';
 import { UploadedMulterFile } from '../../common/utils/file-validation.util';
@@ -31,7 +32,7 @@ const ALLOWED_MIME_TYPES = [
 const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2 MB
 
 @Controller('document-templates')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 export class DocumentTemplatesController {
   private readonly logger = new Logger(DocumentTemplatesController.name);
 

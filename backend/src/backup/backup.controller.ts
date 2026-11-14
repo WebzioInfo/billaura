@@ -12,11 +12,12 @@ import {
 } from "@nestjs/common";
 import { BackupService } from "./backup.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TenantGuard } from "../common/guards/tenant.guard";
 import { Response } from "express";
 import { StorageService } from "../storage/storage.service";
 
 @Controller("backups")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class BackupController {
   constructor(
     private readonly backupService: BackupService,
