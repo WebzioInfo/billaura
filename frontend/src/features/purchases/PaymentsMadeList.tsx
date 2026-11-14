@@ -609,14 +609,16 @@ export const PaymentsMadeList: React.FC = () => {
                         </>
                       ) : (
                         <>
-                          <tr>
-                            <td className="py-2 font-medium">Accounts Payable ({selectedPayment.vendor?.name || 'Vendor'})</td>
-                            <td className="py-2 text-right tabular-nums font-semibold">
-                              ₹{Number(selectedPayment.allocatedAmount || selectedPayment.amount || 0).toFixed(2)}
-                            </td>
-                            <td className="py-2 text-right tabular-nums">-</td>
-                          </tr>
-                          {selectedPayment.unusedAmount ? (
+                          {Number(selectedPayment.allocatedAmount || 0) > 0 && (
+                            <tr>
+                              <td className="py-2 font-medium">Accounts Payable ({selectedPayment.vendor?.name || 'Vendor'})</td>
+                              <td className="py-2 text-right tabular-nums font-semibold">
+                                ₹{Number(selectedPayment.allocatedAmount).toFixed(2)}
+                              </td>
+                              <td className="py-2 text-right tabular-nums">-</td>
+                            </tr>
+                          )}
+                          {Number(selectedPayment.unusedAmount || 0) > 0 ? (
                             <tr>
                               <td className="py-2 font-medium">Vendor Advances (Excess)</td>
                               <td className="py-2 text-right tabular-nums font-semibold">

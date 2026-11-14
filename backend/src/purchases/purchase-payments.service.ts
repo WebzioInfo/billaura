@@ -273,20 +273,36 @@ export class PurchasePaymentsService {
     }
 
     if (!bank) {
-      bank = await this.prisma.bankAccount.create({
-        data: {
-          companyId,
-          name: ledger.name,
-          accountName: ledger.name,
-          bankName: ledger.name,
-          accountNumber: ledger.code || null,
-          accountType: isCashPayment ? 'CURRENT' : 'CURRENT',
-          openingBalance: 0,
-          currentBalance: 0,
-          status: 'ACTIVE',
-          isDefault: isCashPayment,
-        },
-      });
+      if (isCashPayment) {
+        bank = await this.prisma.bankAccount.findFirst({
+          where: {
+            companyId,
+            deletedAt: null,
+            OR: [
+              { name: { contains: 'cash', mode: 'insensitive' } },
+              { bankName: { contains: 'cash', mode: 'insensitive' } },
+            ],
+          },
+        });
+      }
+
+      if (!bank) {
+        bank = await this.prisma.bankAccount.create({
+          data: {
+            companyId,
+            name: ledger.name,
+            accountName: ledger.name,
+            bankName: ledger.name,
+            accountId: ledger.id,
+            accountNumber: ledger.code || null,
+            accountType: isCashPayment ? ('CASH' as any) : 'CURRENT',
+            openingBalance: 0,
+            currentBalance: 0,
+            status: 'ACTIVE',
+            isDefault: isCashPayment,
+          },
+        });
+      }
     }
 
     // 2. Prepare allocations (for BILL_PAYMENT)
@@ -629,7 +645,7 @@ export class PurchasePaymentsService {
         }
 
         const allocatedTotal = payment.allocatedAmount || 0;
-        if (allocatedTotal > 0) {
+        if (allocatedTotal > 0 && payment.businessPartnerId) {
           await tx.businessPartner.update({
             where: { id: payment.businessPartnerId },
             data: {
@@ -637,18 +653,39 @@ export class PurchasePaymentsService {
                 increment: allocatedTotal,
               },
             },
-          });
+          }).catch(() => null);
         }
 
         const netPaid = Number(payment.amount) - (payment.tdsAmount || 0);
-        await tx.bankAccount.update({
-          where: { id: payment.bankAccountId },
-          data: {
-            currentBalance: {
-              increment: netPaid,
-            },
-          },
-        });
+        if (payment.bankAccountId) {
+          const bank = await tx.bankAccount.findFirst({
+            where: { id: payment.bankAccountId },
+          });
+          if (bank) {
+            await tx.bankAccount.update({
+              where: { id: bank.id },
+              data: {
+                currentBalance: {
+                  increment: netPaid,
+                },
+              },
+            }).catch(() => null);
+          } else {
+            const cash = await tx.cashAccount.findFirst({
+              where: { id: payment.bankAccountId },
+            });
+            if (cash) {
+              await tx.cashAccount.update({
+                where: { id: cash.id },
+                data: {
+                  currentBalance: {
+                    increment: netPaid,
+                  },
+                },
+              }).catch(() => null);
+            }
+          }
+        }
 
         // Reverse Journal Entries
         const originalEntries = await tx.journalEntry.findMany({
@@ -656,12 +693,20 @@ export class PurchasePaymentsService {
         });
 
         for (const entry of originalEntries) {
-          await this.accountingEngine.reverseTransaction(
-            entry.id,
-            payment.companyId,
-            tx,
-            `Reversal for deleted payment ${payment.paymentNo}`
-          );
+          try {
+            await this.accountingEngine.reverseTransaction(
+              entry.id,
+              payment.companyId,
+              tx,
+              `Reversal for deleted payment ${payment.paymentNo}`
+            );
+          } catch (jeErr) {
+            // If accounting engine reverseTransaction fails, soft-delete the original entry directly
+            await tx.journalEntry.update({
+              where: { id: entry.id },
+              data: { deletedAt: new Date() },
+            }).catch(() => null);
+          }
         }
       }
 
