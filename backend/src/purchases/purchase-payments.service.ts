@@ -644,7 +644,7 @@ export class PurchasePaymentsService {
           }
         }
 
-        const allocatedTotal = payment.allocatedAmount || 0;
+        const allocatedTotal = Number(payment.allocatedAmount || 0);
         if (allocatedTotal > 0 && payment.businessPartnerId) {
           await tx.businessPartner.update({
             where: { id: payment.businessPartnerId },
@@ -653,11 +653,11 @@ export class PurchasePaymentsService {
                 increment: allocatedTotal,
               },
             },
-          }).catch(() => null);
+          });
         }
 
-        const netPaid = Number(payment.amount) - (payment.tdsAmount || 0);
-        if (payment.bankAccountId) {
+        const netPaid = Number(payment.amount) - Number(payment.tdsAmount || 0);
+        if (payment.bankAccountId && netPaid > 0) {
           const bank = await tx.bankAccount.findFirst({
             where: { id: payment.bankAccountId },
           });
@@ -669,8 +669,10 @@ export class PurchasePaymentsService {
                   increment: netPaid,
                 },
               },
-            }).catch(() => null);
-          } else {
+            });
+          }
+
+          if (!bank && tx.cashAccount) {
             const cash = await tx.cashAccount.findFirst({
               where: { id: payment.bankAccountId },
             });
@@ -682,30 +684,45 @@ export class PurchasePaymentsService {
                     increment: netPaid,
                   },
                 },
-              }).catch(() => null);
+              });
             }
           }
         }
 
-        // Reverse Journal Entries
+        // Reverse Journal Entries and restore GL account balances directly
         const originalEntries = await tx.journalEntry.findMany({
           where: { reference: payment.paymentNo, companyId: payment.companyId },
+          include: { lines: true },
         });
 
         for (const entry of originalEntries) {
-          try {
-            await this.accountingEngine.reverseTransaction(
-              entry.id,
-              payment.companyId,
-              tx,
-              `Reversal for deleted payment ${payment.paymentNo}`
-            );
-          } catch (jeErr) {
-            // If accounting engine reverseTransaction fails, soft-delete the original entry directly
-            await tx.journalEntry.update({
-              where: { id: entry.id },
+          const lines = entry.lines || [];
+          for (const line of lines) {
+            const debit = Number(line.debit || 0);
+            const credit = Number(line.credit || 0);
+            const netImpact = debit - credit;
+            if (netImpact !== 0 && line.accountId) {
+              await tx.account.update({
+                where: { id: line.accountId },
+                data: {
+                  balance: {
+                    decrement: netImpact,
+                  },
+                },
+              });
+            }
+          }
+
+          await tx.journalEntry.update({
+            where: { id: entry.id },
+            data: { deletedAt: new Date() },
+          });
+
+          if (tx.journalLine) {
+            await tx.journalLine.updateMany({
+              where: { journalEntryId: entry.id },
               data: { deletedAt: new Date() },
-            }).catch(() => null);
+            });
           }
         }
       }
@@ -715,6 +732,6 @@ export class PurchasePaymentsService {
         where: { id },
         data: { deletedAt: new Date() },
       });
-    });
+    }, { timeout: 30000 });
   }
 }

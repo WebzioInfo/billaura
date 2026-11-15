@@ -16,11 +16,34 @@ export class HrService {
 
 // Removed Departments & Designations
 
-  async findEmployees(query?: string) {
+  async findEmployees(
+    params?:
+      | string
+      | {
+          query?: string;
+          page?: number;
+          limit?: number;
+          departmentId?: string;
+          designationId?: string;
+          status?: string;
+          sortBy?: string;
+          sortOrder?: 'asc' | 'desc';
+        }
+  ) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
+
+    const isObj = typeof params === 'object' && params !== null;
+    const query = isObj ? params.query : params;
+    const page = isObj && params.page ? Math.max(1, params.page) : undefined;
+    const limit = isObj && params.limit ? Math.max(1, params.limit) : undefined;
+    const departmentId = isObj ? params.departmentId : undefined;
+    const designationId = isObj ? params.designationId : undefined;
+    const status = isObj ? params.status : undefined;
+    const sortBy = isObj && params.sortBy ? params.sortBy : 'name';
+    const sortOrder = isObj && params.sortOrder ? params.sortOrder : 'asc';
 
     const where: any = { companyId, deletedAt: null };
     if (query && query.trim()) {
@@ -34,17 +57,44 @@ export class HrService {
         { aadhaarNumber: { contains: q } },
       ];
     }
+    if (departmentId) where.departmentId = departmentId;
+    if (designationId) where.designationId = designationId;
+    if (status) where.status = status;
+
+    const include = {
+      department: true,
+      designation: true,
+      shift: true,
+      employmentType: true,
+      reportingManager: true,
+    };
+
+    if (page !== undefined && limit !== undefined) {
+      const [data, total] = await Promise.all([
+        this.prisma.employee.findMany({
+          where,
+          include,
+          orderBy: { [sortBy]: sortOrder },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prisma.employee.count({ where }),
+      ]);
+      return {
+        data,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    }
 
     return this.prisma.employee.findMany({
       where,
-      include: {
-        department: true,
-        designation: true,
-        shift: true,
-        employmentType: true,
-        reportingManager: true,
-      },
-      orderBy: { name: 'asc' },
+      include,
+      orderBy: { [sortBy]: sortOrder },
     });
   }
 
