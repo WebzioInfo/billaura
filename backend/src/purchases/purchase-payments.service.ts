@@ -96,10 +96,45 @@ export class PurchasePaymentsService {
     if (!companyId) {
       throw new ConflictException('Company context is required');
     }
-    const nextNumber = await this.sequenceService.previewNextSequence(
-      companyId,
-      'PAYMENT'
-    );
+
+    if (this.sequenceService) {
+      const nextNumber = await this.sequenceService.previewNextSequence(
+        companyId,
+        'PAYMENT'
+      );
+      if (nextNumber) {
+        const existing = await this.prisma.transactionPayment?.findFirst({
+          where: { companyId, paymentNo: nextNumber, deletedAt: null },
+        });
+        if (!existing) {
+          return { nextNumber };
+        }
+      }
+    }
+
+    const seq = await this.prisma.documentSequence?.findUnique({
+      where: { companyId_documentType: { companyId, documentType: 'PAYMENT' } },
+    });
+    const prefix = seq?.prefix || 'PAYMENT-';
+    const padding = seq?.padding || 5;
+
+    const existingPayments =
+      (await this.prisma.transactionPayment?.findMany({
+        where: { companyId, deletedAt: null },
+        select: { paymentNo: true },
+      })) || [];
+
+    let maxNum = seq?.currentNumber || 0;
+    for (const p of existingPayments) {
+      if (p.paymentNo && p.paymentNo.startsWith(prefix)) {
+        const numPart = parseInt(p.paymentNo.slice(prefix.length), 10);
+        if (!isNaN(numPart) && numPart > maxNum) {
+          maxNum = numPart;
+        }
+      }
+    }
+
+    const nextNumber = `${prefix}${(maxNum + 1).toString().padStart(padding, '0')}`;
     return { nextNumber };
   }
 
@@ -539,13 +574,35 @@ export class PurchasePaymentsService {
         },
       });
 
+      // If it's a cash payment, also decrement the operational CashAccount
+      if (isCashPayment && tx.cashAccount) {
+        const cashAcc = await tx.cashAccount.findFirst({
+          where: { companyId, deletedAt: null },
+        });
+        if (cashAcc) {
+          await tx.cashAccount.update({
+            where: { id: cashAcc.id },
+            data: {
+              currentBalance: {
+                decrement: totalPaidNum,
+              },
+            },
+          });
+        }
+      }
+
       // Post balanced General Ledger Journal Entry
       let apAccount = await tx.account.findFirst({
-        where: { companyId, name: 'Accounts Payable' },
+        where: { companyId, name: { in: ['Accounts Payable', 'Trade Payables', 'Sundry Creditors'] }, isGroup: false },
       });
       if (!apAccount) {
+        apAccount = await tx.account.findFirst({
+          where: { companyId, name: 'Accounts Payable' },
+        });
+      }
+      if (!apAccount) {
         apAccount = await tx.account.create({
-          data: { companyId, name: 'Accounts Payable', category: 'LIABILITY', balance: 0 },
+          data: { companyId, name: 'Accounts Payable', category: 'LIABILITY', balance: 0, isGroup: false },
         });
       }
 
