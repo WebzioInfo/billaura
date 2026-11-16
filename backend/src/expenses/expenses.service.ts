@@ -458,13 +458,11 @@ export class ExpensesService {
       throw new ConflictException('Company context is required');
     }
 
-    // Verify or resolve Category
-    let category = dto.categoryId
-      ? await this.prisma.expenseCategory.findFirst({ where: { id: dto.categoryId, companyId } })
-      : null;
-
+    // Verify or resolve Category: prioritize the exact Chart of Accounts ledger account selected
     const candidateAccountId = dto.accountId || dto.expenseAccountId;
-    if (!category && candidateAccountId) {
+    let category: any = null;
+
+    if (candidateAccountId) {
       category = await this.prisma.expenseCategory.findFirst({
         where: { accountId: candidateAccountId, companyId },
       });
@@ -473,17 +471,28 @@ export class ExpensesService {
           where: { id: candidateAccountId, companyId },
         });
         if (ledgerAcc) {
-          category = await this.prisma.expenseCategory.create({
-            data: {
+          category = await this.prisma.expenseCategory.upsert({
+            where: { companyId_name: { companyId, name: ledgerAcc.name } },
+            create: {
               companyId,
               name: ledgerAcc.name,
               accountId: ledgerAcc.id,
               description: `Auto-created for ${ledgerAcc.name}`,
               isActive: true,
             },
+            update: {
+              accountId: ledgerAcc.id,
+              isActive: true,
+            },
           });
         }
       }
+    }
+
+    if (!category && dto.categoryId) {
+      category = await this.prisma.expenseCategory.findFirst({
+        where: { id: dto.categoryId, companyId },
+      });
     }
 
     if (!category) {
@@ -759,28 +768,33 @@ export class ExpensesService {
           }
         }
 
-        // Resolve category if needed
+        // Resolve category if needed: prioritize exact Chart of Accounts ledger
         let categoryId = existing.categoryId;
-        if (dto.categoryId) {
-          categoryId = dto.categoryId;
-        } else if (dto.accountId || dto.expenseAccountId) {
-          const accId = dto.accountId || dto.expenseAccountId;
-          let cat = await tx.expenseCategory.findFirst({ where: { accountId: accId, companyId } });
+        const candidateAccId = dto.accountId || dto.expenseAccountId;
+        if (candidateAccId) {
+          let cat = await tx.expenseCategory.findFirst({ where: { accountId: candidateAccId, companyId } });
           if (!cat) {
-            const ledgerAcc = await tx.account.findFirst({ where: { id: accId, companyId } });
+            const ledgerAcc = await tx.account.findFirst({ where: { id: candidateAccId, companyId } });
             if (ledgerAcc) {
-              cat = await tx.expenseCategory.create({
-                data: {
+              cat = await tx.expenseCategory.upsert({
+                where: { companyId_name: { companyId, name: ledgerAcc.name } },
+                create: {
                   companyId,
                   name: ledgerAcc.name,
                   accountId: ledgerAcc.id,
                   description: `Auto-created for ${ledgerAcc.name}`,
                   isActive: true,
                 },
+                update: {
+                  accountId: ledgerAcc.id,
+                  isActive: true,
+                },
               });
             }
           }
           if (cat) categoryId = cat.id;
+        } else if (dto.categoryId) {
+          categoryId = dto.categoryId;
         }
 
         // Update notes with meta

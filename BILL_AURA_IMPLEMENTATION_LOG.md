@@ -187,3 +187,21 @@
      - Removed the redundant `{a.name} (General Ledger)` options mapping from both Bill Payment and Vendor Advance dropdowns.
      - Added a unified `paidThroughOptions` memo that merges and deduplicates bank accounts, cash registers, and unmapped asset ledgers without duplicate labels.
 - **Verification**: Backend and frontend compile cleanly with 0 TypeScript errors. Clean dropdown now renders only distinct accounts (`Cash`, `Federal Bank (FED-BIOFIX-001)`).
+
+---
+
+### J. Expense Account Dropdown: Strict Alignment with Chart of Accounts & Removal of Fallback Names
+- **Root Cause**:
+  - In `frontend/src/features/expenses/ExpenseForm.tsx`, `expenseAccounts` was combining two different sources:
+    1. `categories` from `GET /expenses/categories` (which held old seeded/system category names like "Rent", "Salary", "Travel", "Maintenance & Repairs").
+    2. `allAccounts` from `GET /accounts` (which held the actual Chart of Accounts names like "Rent Expense", "Salary Expense", "Travel & Fuel Expense", "Maintenance Expense").
+  - Because `categories` was prepended first with `seenIds.add(accId)`, the old category names ("Rent", "Salary") overrode and hid the actual Chart of Accounts created names ("Rent Expense", "Salary Expense").
+  - In cases where IDs didn't match, both sets of names appeared in the dropdown, creating confusing conflicting names as shown in the user's screenshots.
+- **Fix Applied**:
+  1. Updated `frontend/src/features/expenses/ExpenseForm.tsx`:
+     - Removed the old category fallback loop from `expenseAccounts`.
+     - Strictly derived `expenseAccounts` exclusively from `allAccounts` where `category === 'EXPENSE'`, guaranteeing the dropdown displays the **exact same name created in the Chart of Accounts**.
+     - Automatically preserved the backend relational `categoryId` mapping by account ID or normalized name in the background.
+  2. Updated `backend/src/expenses/expenses.service.ts`:
+     - Updated both `create()` and `update()` to prioritize `candidateAccountId` so that the expense is linked directly to the selected Chart of Accounts ledger and auto-upserts matching categories.
+- **Verification**: Full backend build (`npx nest build`) and frontend build (`tsc && vite build`) passed with exit code 0. Deployed to `main`.

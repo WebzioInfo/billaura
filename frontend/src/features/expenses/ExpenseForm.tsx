@@ -195,45 +195,40 @@ export const ExpenseForm: React.FC = () => {
     });
   }, [customers, customerSearchTerm]);
 
-  // Filter accounts for Expense Account and Paid Through
+  // The Expense Account dropdown MUST show the exact accounts created in Chart of Accounts
   const expenseAccounts = useMemo(() => {
+    // Map existing categories by accountId or name to maintain backend relational links
+    const categoryByAccountId = new Map<string, string>();
+    const categoryByName = new Map<string, string>();
+    categories.forEach((cat: any) => {
+      if (cat.accountId) categoryByAccountId.set(cat.accountId, cat.id);
+      if (cat.name) categoryByName.set(cat.name.trim().toLowerCase(), cat.id);
+    });
+
     const list: Array<{ id: string; categoryId?: string; name: string; code?: string }> = [];
     const seenIds = new Set<string>();
 
-    // 1. All expense categories
-    categories.forEach((cat: any) => {
-      const accId = cat.accountId || cat.id;
-      if (accId && !seenIds.has(accId)) {
-        seenIds.add(accId);
-        list.push({
-          id: accId,
-          categoryId: cat.id,
-          name: cat.name,
-          code: cat.account?.code || '',
-        });
-      }
-    });
-
-    // 2. All active GL expense accounts from Chart of Accounts
     allAccounts
       .filter((a: any) => 
         !a.isGroup && 
         !a.deletedAt && 
-        (a.category === 'EXPENSE' || a.accountType === 'EXPENSE' || a.subCategory?.includes('EXPENSE') || a.name?.toLowerCase().includes('expense'))
+        (a.category === 'EXPENSE' || a.accountType === 'EXPENSE' || a.subCategory?.includes('EXPENSE'))
       )
       .forEach((a: any) => {
         if (!seenIds.has(a.id)) {
           seenIds.add(a.id);
+          const matchedCategoryId = categoryByAccountId.get(a.id) || categoryByName.get(a.name.trim().toLowerCase());
           list.push({
             id: a.id,
-            name: a.name,
+            categoryId: matchedCategoryId,
+            name: a.name, // EXACT name created in Chart of Accounts
             code: a.code || '',
           });
         }
       });
 
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [categories, allAccounts]);
+  }, [allAccounts, categories]);
 
   const paidThroughAccounts = useMemo(() => {
     const list: Array<{ id: string; name: string; group: string }> = [];
@@ -659,8 +654,8 @@ export const ExpenseForm: React.FC = () => {
       return;
     }
 
-    const matchedCategory = categories.find((c: any) => c.accountId === accountId || c.id === accountId);
-    const resolvedCategoryId = matchedCategory?.id || existingExpense?.categoryId || undefined;
+    const matchedAccount = expenseAccounts.find((a) => a.id === accountId);
+    const resolvedCategoryId = matchedAccount?.categoryId || categories.find((c: any) => c.accountId === accountId)?.id || existingExpense?.categoryId || undefined;
 
     const payload = {
       date,
