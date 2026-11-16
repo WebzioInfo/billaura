@@ -258,7 +258,9 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
     queryFn: async () => {
       const res = await apiClient.get<any>('/accounts', { params: { limit: 200 } });
       const list = res?.data?.data || res?.data || res || [];
-      return Array.isArray(list) ? list.filter((a: any) => a.category === 'REVENUE' || a.categoryName === 'REVENUE') : [];
+      return Array.isArray(list)
+        ? list.filter((a: any) => (a.category === 'REVENUE' || a.categoryName === 'REVENUE') && !a.isGroup)
+        : [];
     },
     staleTime: 0,
     gcTime: 0,
@@ -328,12 +330,11 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
     }
   }, [nextNoData, setValue, isEditMode]);
 
-  // Set default Revenue Account (e.g. Course Fees Income or Sales Revenue)
+  // Set default Revenue Account (e.g. Course Fees Income)
   useEffect(() => {
     if (!isEditMode && !watch('salesAccountId') && revenueAccounts.length > 0) {
       const preferred =
         revenueAccounts.find((a: any) => a.name.toLowerCase().includes('course')) ||
-        revenueAccounts.find((a: any) => a.name.toLowerCase().includes('sales revenue')) ||
         revenueAccounts[0];
       if (preferred) {
         setValue('salesAccountId', preferred.id);
@@ -1495,7 +1496,7 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
                   }}
                   className="w-full h-8 px-2.5 pr-8 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] appearance-none cursor-pointer"
                 >
-                  <option value="">Default (Sales Revenue)</option>
+                  <option value="">Select Revenue Account</option>
                   {revenueAccounts.map((acc: any) => (
                     <option key={acc.id} value={acc.id}>
                       {acc.name}
