@@ -153,3 +153,16 @@
   3. Updated `accounting-engine.service.ts`:
      - Added `deletedAt: null` to idempotency reference check so re-recorded payments are not blocked by soft-deleted journal entries.
 - **Verification**: All 34 test suites (230 tests) passed. Backend build and Vite frontend build completed with exit code 0. Deployed to `main` (`ecee510`).
+
+---
+
+### H. Commits `3a08030` & `2590412`: Fix Customer & Vendor Creation Crashes on Consumer GST Treatment and Tax Exempt Preference
+- **Root Cause 1 (Consumer GST Treatment Crash)**:
+  - In `schema.prisma`, `GSTRegistrationStatus` enum only permits `REGISTERED`, `UNREGISTERED`, `COMPOSITION`, `SEZ`, `EXPORT`.
+  - The UI form sent `gstRegistrationStatus: 'CONSUMER'`, which Postgres rejected with an invalid enum exception.
+  - **Fix**: Added `toGSTRegistrationStatus` mapper in `customers.service.ts` converting `CONSUMER` to `UNREGISTERED` and automatically classifying customer as `B2C`.
+- **Root Cause 2 (Tax Exempt Preference Crash)**:
+  - In `schema.prisma`, `TaxPreference` enum defines `TAXABLE` and `EXEMPT` (not `TAX_EXEMPT`).
+  - The UI radio button sent `taxPreference: 'TAX_EXEMPT'`, which Postgres rejected with an invalid enum exception.
+  - **Fix**: Added `toTaxPreference` mapper across `customers.service.ts` and `vendors.service.ts` mapping `TAX_EXEMPT` to `EXEMPT`. Updated `BusinessPartnerForm.tsx` state and radio inputs to bind directly to `EXEMPT`.
+- **Verification**: All 34 test suites (230 tests) passed. Full frontend and backend builds completed with exit code 0. Deployed to `main` (`2590412`).
