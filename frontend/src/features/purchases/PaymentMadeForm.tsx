@@ -198,6 +198,38 @@ export const PaymentMadeForm: React.FC = () => {
     return Array.isArray(list) ? list : [];
   }, [accountsData]);
 
+  // Cleanly deduplicated Paid Through options (eliminating redundant cash and bank accounts)
+  const paidThroughOptions = useMemo(() => {
+    const list: Array<{ id: string; label: string }> = [];
+    const seen = new Set<string>();
+
+    for (const b of bankAccounts) {
+      const name = b.name || b.bankName || 'Account';
+      const num = b.accountNumber ? ` (${b.accountNumber})` : '';
+      const label = `${name}${num}`.trim();
+      const norm = (b.name || b.bankName || '').toLowerCase().trim();
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        list.push({ id: b.id, label });
+      }
+    }
+
+    for (const a of accounts) {
+      if (a.category === 'ASSET' && (a.name.toLowerCase().includes('cash') || a.name.toLowerCase().includes('bank'))) {
+        const aNorm = a.name.toLowerCase().trim();
+        const alreadyExists = Array.from(seen).some(
+          (s) => s === aNorm || aNorm.includes(s) || s.includes(aNorm)
+        );
+        if (!alreadyExists) {
+          seen.add(aNorm);
+          list.push({ id: a.id, label: a.name });
+        }
+      }
+    }
+
+    return list;
+  }, [bankAccounts, accounts]);
+
   const selectedVendor = useMemo(() => {
     return vendors.find((v: any) => v.id === vendorId);
   }, [vendorId, vendors]);
@@ -697,18 +729,11 @@ export const PaymentMadeForm: React.FC = () => {
                     className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] cursor-pointer"
                   >
                     <option value="">Select Account</option>
-                    {bankAccounts.map((b: any) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name || b.bankName || 'Bank Account'} {b.accountNumber ? `(${b.accountNumber})` : ''}
+                    {paidThroughOptions.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
                       </option>
                     ))}
-                    {accounts
-                      .filter((a: any) => a.category === 'ASSET' && (a.name.toLowerCase().includes('cash') || a.name.toLowerCase().includes('bank')))
-                      .map((a: any) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name} (General Ledger)
-                        </option>
-                      ))}
                   </select>
                 </div>
               </div>
@@ -1124,18 +1149,11 @@ export const PaymentMadeForm: React.FC = () => {
                   className="w-full h-8 px-2.5 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] cursor-pointer"
                 >
                   <option value="">Select Account</option>
-                  {bankAccounts.map((b: any) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name || b.bankName || 'Bank Account'} {b.accountNumber ? `(${b.accountNumber})` : ''}
+                  {paidThroughOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
                     </option>
                   ))}
-                  {accounts
-                    .filter((a: any) => a.category === 'ASSET' && (a.name.toLowerCase().includes('cash') || a.name.toLowerCase().includes('bank')))
-                    .map((a: any) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} (General Ledger)
-                      </option>
-                    ))}
                 </select>
               </div>
             </div>

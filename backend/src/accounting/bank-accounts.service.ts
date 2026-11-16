@@ -132,12 +132,23 @@ export class BankAccountsService {
         };
       });
 
-    // Merge dedicated cashRegisters if not already mapped
+    // Merge dedicated cashRegisters and directBanks with intelligent deduplication
     const existingIds = new Set(items.map((i) => i.id));
+
     for (const c of cashRegisters) {
-      if (!existingIds.has(c.id) && (!c.accountId || !existingIds.has(c.accountId))) {
+      const cName = (c.name || '').trim().toLowerCase();
+      // Match by accountId or matching name
+      const existingItem = items.find(
+        (i) => (c.accountId && i.id === c.accountId) || (i.name || '').trim().toLowerCase() === cName
+      );
+      if (existingItem) {
+        existingItem.id = c.id; // use direct CashAccount id so relational links work
+        existingItem.ledgerId = c.accountId || existingItem.ledgerId;
+        existingItem.source = "CASH_ACCOUNT";
+        existingItem.accountType = "CASH";
+      } else if (!existingIds.has(c.id)) {
         items.push({
-          id: c.accountId || c.id,
+          id: c.id,
           ledgerId: c.accountId || c.id,
           source: "CASH_ACCOUNT",
           name: c.name,
@@ -149,12 +160,28 @@ export class BankAccountsService {
           isDefault: Boolean(c.isDefault),
           parent: null as any,
         });
+        existingIds.add(c.id);
       }
     }
 
-    // Merge dedicated directBanks if not already mapped
     for (const b of directBanks) {
-      if (!existingIds.has(b.id) && (!b.accountId || !existingIds.has(b.accountId))) {
+      const bName = (b.name || b.bankName || '').trim().toLowerCase();
+      // Match by accountId or matching bank name
+      const existingItem = items.find(
+        (i) =>
+          (b.accountId && i.id === b.accountId) ||
+          (i.name || '').trim().toLowerCase() === bName ||
+          (i.bankName || '').trim().toLowerCase() === bName
+      );
+      if (existingItem) {
+        existingItem.id = b.id; // use direct BankAccount id
+        existingItem.ledgerId = b.accountId || existingItem.ledgerId;
+        existingItem.source = "BANK_ACCOUNT";
+        existingItem.name = b.name;
+        existingItem.bankName = b.bankName || b.name;
+        existingItem.accountNumber = b.accountNumber || existingItem.accountNumber;
+        existingItem.accountType = b.accountType || "CURRENT";
+      } else if (!existingIds.has(b.id)) {
         items.push({
           id: b.id,
           ledgerId: b.accountId || b.id,
@@ -168,8 +195,21 @@ export class BankAccountsService {
           isDefault: Boolean(b.isDefault),
           parent: null as any,
         });
+        existingIds.add(b.id);
       }
     }
+
+    // Final safety deduplication by normalized name and account number
+    const seenKeys = new Set<string>();
+    const deduplicatedItems: typeof items = [];
+    for (const it of items) {
+      const key = `${(it.name || '').toLowerCase().trim()}_${(it.accountNumber || '').toLowerCase().trim()}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        deduplicatedItems.push(it);
+      }
+    }
+    items = deduplicatedItems;
 
     if (type === "CASH") {
       items = items.filter(item => item.accountType === "CASH");

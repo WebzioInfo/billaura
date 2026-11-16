@@ -166,3 +166,24 @@
   - The UI radio button sent `taxPreference: 'TAX_EXEMPT'`, which Postgres rejected with an invalid enum exception.
   - **Fix**: Added `toTaxPreference` mapper across `customers.service.ts` and `vendors.service.ts` mapping `TAX_EXEMPT` to `EXEMPT`. Updated `BusinessPartnerForm.tsx` state and radio inputs to bind directly to `EXEMPT`.
 - **Verification**: All 34 test suites (230 tests) passed. Full frontend and backend builds completed with exit code 0. Deployed to `main` (`2590412`).
+
+---
+
+### I. Deduplication of Paid Through Accounts & Elimination of Redundant Ledger Entries
+- **Root Cause**:
+  - In `backend/src/accounting/bank-accounts.service.ts`: The `findAll` method was querying `Account` (Chart of Accounts) and then separately appending `CashAccount` registers and `BankAccount` records. Because the ID spaces differed (`Account.id` vs `CashAccount.id` vs `BankAccount.id`), the same physical cash drawer and bank account appeared multiple times in the response payload.
+  - In `frontend/src/features/purchases/PaymentMadeForm.tsx`: The form rendered `bankAccounts` AND THEN appended `{accounts.filter(...).map(a => <option>{a.name} (General Ledger)</option>)}`.
+  - This resulted in redundant and duplicated entries in the "Paid Through" dropdown:
+    1. `Cash`
+    2. `Federal Bank (FED-BIOFIX-001)`
+    3. `Cash` (duplicate)
+    4. `Cash (General Ledger)` (redundant duplicate)
+    5. `Federal Bank (General Ledger)` (redundant duplicate)
+- **Fix Applied**:
+  1. Updated `backend/src/accounting/bank-accounts.service.ts`:
+     - Integrated intelligent deduplication where dedicated `CashAccount` and `BankAccount` records upgrade and unify matching generic ledger accounts by name/accountId.
+     - Enforced final safety deduplication by normalized account name and account number, ensuring each financial account is returned exactly once.
+  2. Updated `frontend/src/features/purchases/PaymentMadeForm.tsx`:
+     - Removed the redundant `{a.name} (General Ledger)` options mapping from both Bill Payment and Vendor Advance dropdowns.
+     - Added a unified `paidThroughOptions` memo that merges and deduplicates bank accounts, cash registers, and unmapped asset ledgers without duplicate labels.
+- **Verification**: Backend and frontend compile cleanly with 0 TypeScript errors. Clean dropdown now renders only distinct accounts (`Cash`, `Federal Bank (FED-BIOFIX-001)`).
