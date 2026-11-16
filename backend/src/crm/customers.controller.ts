@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  BadRequestException,
 } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
@@ -57,6 +58,9 @@ export class CustomersController {
   @Post()
   async create(@Body() data: any) {
     const companyId = CompanyContext.getCompanyId() as string;
+    if (!companyId) {
+      throw new BadRequestException("Company context is required");
+    }
     const item = await this.customersService.create(companyId, data);
     return { success: true, data: item, id: item.id };
   }

@@ -3,6 +3,34 @@ import { PrismaService } from "../database/prisma.service";
 import { SequenceService } from "../shared/sequence/sequence.service";
 import { AccountingEngineService } from "../accounting/accounting-engine.service";
 
+function toCustomerType(value?: string): string {
+  const v = value?.toUpperCase?.() || '';
+  if (['B2C', 'INDIVIDUAL', 'CONSUMER'].includes(v)) return 'B2C';
+  if (['GOVERNMENT', 'GOVT'].includes(v)) return 'GOVERNMENT';
+  if (['EXPORT', 'OVERSEAS'].includes(v)) return 'EXPORT';
+  if (['B2B', 'BUSINESS'].includes(v)) return 'B2B';
+  return 'B2B';
+}
+
+function toGSTRegistrationStatus(value?: string): string {
+  const map: Record<string, string> = {
+    REGULAR: "REGISTERED",
+    REGISTERED: "REGISTERED",
+    "REGISTERED BUSINESS - REGULAR": "REGISTERED",
+    "REGISTERED BUSINESS - COMPOSITION": "COMPOSITION",
+    COMPOSITION: "COMPOSITION",
+    "UNREGISTERED BUSINESS": "UNREGISTERED",
+    UNREGISTERED: "UNREGISTERED",
+    CONSUMER: "UNREGISTERED",
+    OVERSEAS: "EXPORT",
+    EXPORT: "EXPORT",
+    "DEEMED EXPORT": "EXPORT",
+    "SPECIAL ECONOMIC ZONE": "SEZ",
+    SEZ: "SEZ",
+  };
+  return map[value?.toUpperCase?.() || ""] || "UNREGISTERED";
+}
+
 @Injectable()
 export class CustomersService {
   constructor(
@@ -235,28 +263,33 @@ export class CustomersService {
       finalBpCode = await this.sequenceService.generateNextSequence(companyId, "CUSTOMER");
     }
 
+    const effectiveGstStatus = toGSTRegistrationStatus(gstRegistrationStatus || gstNumber || customerType);
+    const effectiveCustomerType = (gstRegistrationStatus?.toUpperCase?.() === 'CONSUMER' || customerType?.toUpperCase?.() === 'INDIVIDUAL')
+      ? 'B2C'
+      : toCustomerType(customerType);
+
     const item = await this.prisma.businessPartner.create({
       data: {
         name,
         bpCode: finalBpCode,
         bpType: "CUSTOMER",
-        phone: mobile,
-        whatsapp,
-        email,
-        gstin: gstin || gstNumber,
-        panNumber,
-        gstRegistrationStatus: gstRegistrationStatus || (['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT'].includes(customerType) ? customerType : "UNREGISTERED"),
-        customerType: ['B2B', 'B2C', 'GOVERNMENT', 'EXPORT'].includes(customerType) ? customerType : "B2B",
+        phone: mobile?.trim() || null,
+        whatsapp: whatsapp?.trim() || null,
+        email: email?.trim() || null,
+        gstin: finalGstin && finalGstin.trim() ? finalGstin.trim() : null,
+        panNumber: panNumber && panNumber.trim() ? panNumber.trim() : null,
+        gstRegistrationStatus: effectiveGstStatus as any,
+        customerType: effectiveCustomerType as any,
         taxPreference: taxPreference || "TAXABLE",
-        tradeName,
+        tradeName: tradeName?.trim() || null,
         address,
         pinCode,
         state,
         stateCode,
         placeOfSupply,
         creditLimit: creditLimit ? Number(creditLimit) : 0,
-        customerSegmentId,
-        customerDepartmentId,
+        customerSegmentId: customerSegmentId && customerSegmentId.trim() ? customerSegmentId.trim() : null,
+        customerDepartmentId: customerDepartmentId && customerDepartmentId.trim() ? customerDepartmentId.trim() : null,
         companyId,
         openingBalanceType: openingBalanceType || 'NONE',
         openingBalanceAmount: openingBalanceAmount ? Number(openingBalanceAmount) : 0,
@@ -271,13 +304,37 @@ export class CustomersService {
 
     if (item.openingBalanceType !== 'NONE' && Number(item.openingBalanceAmount) > 0) {
       await this.prisma.$transaction(async (tx) => {
-        let arAccount = await tx.account.findFirst({ where: { companyId, name: 'Accounts Receivable' } });
+        let arAccount = await tx.account.findFirst({
+          where: {
+            companyId,
+            isGroup: false,
+            deletedAt: null,
+            name: { in: ['Accounts Receivable', 'Trade Receivables', 'Sundry Debtors'] }
+          }
+        });
         if (!arAccount) {
-          arAccount = await tx.account.create({ data: { companyId, name: 'Accounts Receivable', category: 'ASSET', balance: 0 } });
+          arAccount = await tx.account.findFirst({
+            where: { companyId, category: 'ASSET', isGroup: false, deletedAt: null, name: { contains: 'Receivable', mode: 'insensitive' } }
+          });
         }
-        let obAccount = await tx.account.findFirst({ where: { companyId, name: 'Opening Balance Equity' } });
+        if (!arAccount) {
+          arAccount = await tx.account.create({
+            data: { companyId, name: 'Accounts Receivable', category: 'ASSET', balance: 0, isGroup: false }
+          });
+        }
+
+        let obAccount = await tx.account.findFirst({
+          where: {
+            companyId,
+            isGroup: false,
+            deletedAt: null,
+            name: { in: ['Opening Balance Equity', 'Owner Equity', 'Retained Earnings'] }
+          }
+        });
         if (!obAccount) {
-          obAccount = await tx.account.create({ data: { companyId, name: 'Opening Balance Equity', category: 'EQUITY', balance: 0 } });
+          obAccount = await tx.account.create({
+            data: { companyId, name: 'Opening Balance Equity', category: 'EQUITY', balance: 0, isGroup: false }
+          });
         }
 
         let debit = 0;
@@ -384,14 +441,21 @@ export class CustomersService {
       updateData.gstin = null;
     }
 
-    if (panNumber !== undefined) updateData.panNumber = panNumber;
-    if (gstRegistrationStatus !== undefined) updateData.gstRegistrationStatus = gstRegistrationStatus;
-    if (customerType !== undefined) {
-      if (['REGISTERED', 'UNREGISTERED', 'COMPOSITION', 'SEZ', 'EXPORT'].includes(customerType)) {
-        updateData.gstRegistrationStatus = customerType;
-      } else if (['B2B', 'B2C', 'GOVERNMENT', 'EXPORT'].includes(customerType)) {
-        updateData.customerType = customerType;
+    if (panNumber !== undefined) updateData.panNumber = panNumber && panNumber.trim() ? panNumber.trim() : null;
+    if (gstRegistrationStatus !== undefined) {
+      updateData.gstRegistrationStatus = toGSTRegistrationStatus(gstRegistrationStatus);
+      if (gstRegistrationStatus?.toUpperCase?.() === 'CONSUMER') {
+        updateData.customerType = 'B2C';
       }
+    }
+    if (customerType !== undefined) {
+      updateData.customerType = toCustomerType(customerType);
+    }
+    if (customerSegmentId !== undefined) {
+      updateData.customerSegmentId = customerSegmentId && customerSegmentId.trim() ? customerSegmentId.trim() : null;
+    }
+    if (customerDepartmentId !== undefined) {
+      updateData.customerDepartmentId = customerDepartmentId && customerDepartmentId.trim() ? customerDepartmentId.trim() : null;
     }
     if (taxPreference !== undefined) updateData.taxPreference = taxPreference;
     if (tradeName !== undefined) updateData.tradeName = tradeName;
