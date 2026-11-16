@@ -190,7 +190,7 @@ export const ACCOUNT_TYPES_METADATA: Record<string, AccountTypeMetadata> = {
   // --- LIABILITIES ---
   OTHER_CURRENT_LIABILITY: {
     id: 'OTHER_CURRENT_LIABILITY',
-    displayName: 'Other Current Liability',
+    displayName: 'Current Liability',
     mainGroup: 'LIABILITY',
     mainGroupLabel: 'Liability',
     normalBalance: 'CREDIT',
@@ -370,7 +370,6 @@ export const GROUPED_ACCOUNT_TYPES: MainGroupDefinition[] = [
       ACCOUNT_TYPES_METADATA.OTHER_CURRENT_LIABILITY,
       ACCOUNT_TYPES_METADATA.CREDIT_CARD,
       ACCOUNT_TYPES_METADATA.NON_CURRENT_LIABILITY,
-      ACCOUNT_TYPES_METADATA.OTHER_LIABILITY,
       ACCOUNT_TYPES_METADATA.OVERSEAS_TAX_PAYABLE,
       ACCOUNT_TYPES_METADATA.DEFERRED_TAX_LIABILITY,
       ACCOUNT_TYPES_METADATA.ACCOUNTS_PAYABLE,
