@@ -386,7 +386,7 @@ describe('PurchasePaymentsService - Payments Made & Vendor Advance', () => {
       // Soft-deleted
       expect(prisma.transactionPayment.update).toHaveBeenCalledWith({
         where: { id: 'pay-to-delete' },
-        data: { deletedAt: expect.any(Date) },
+        data: expect.objectContaining({ deletedAt: expect.any(Date) }),
       });
     });
   });

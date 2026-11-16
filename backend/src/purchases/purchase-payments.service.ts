@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import {
@@ -120,14 +121,16 @@ export class PurchasePaymentsService {
 
     const existingPayments =
       (await this.prisma.transactionPayment?.findMany({
-        where: { companyId, deletedAt: null },
+        where: { companyId },
         select: { paymentNo: true },
       })) || [];
 
     let maxNum = seq?.currentNumber || 0;
     for (const p of existingPayments) {
       if (p.paymentNo && p.paymentNo.startsWith(prefix)) {
-        const numPart = parseInt(p.paymentNo.slice(prefix.length), 10);
+        // Strip any -DELETED suffix if present
+        const cleanNo = p.paymentNo.split('-DELETED')[0];
+        const numPart = parseInt(cleanNo.slice(prefix.length), 10);
         if (!isNaN(numPart) && numPart > maxNum) {
           maxNum = numPart;
         }
@@ -281,16 +284,32 @@ export class PurchasePaymentsService {
       }
     }
 
-    if (!ledger) {
-      // Fallback for Cash
+    // Ensure ledger is a leaf account (isGroup: false)
+    if (ledger && ledger.isGroup) {
+      const leafAccount = await this.prisma.account.findFirst({
+        where: {
+          companyId,
+          parentId: ledger.id,
+          isGroup: false,
+          deletedAt: null,
+        },
+      });
+      if (leafAccount) {
+        ledger = leafAccount;
+      }
+    }
+
+    if (!ledger || ledger.isGroup) {
+      // Fallback for Cash / Bank leaf account
       ledger = await this.prisma.account.findFirst({
         where: {
           companyId,
           isGroup: false,
           category: 'ASSET',
+          deletedAt: null,
           OR: [
-            { name: { contains: 'cash', mode: 'insensitive' } },
-            { parent: { name: { contains: 'cash', mode: 'insensitive' } } },
+            { name: { contains: isCashPayment ? 'cash' : 'bank', mode: 'insensitive' } },
+            { parent: { name: { contains: isCashPayment ? 'cash' : 'bank', mode: 'insensitive' } } },
           ],
         },
         orderBy: { name: 'asc' },
@@ -299,9 +318,10 @@ export class PurchasePaymentsService {
         ledger = await this.prisma.account.create({
           data: {
             companyId,
-            name: 'Petty Cash',
+            name: isCashPayment ? 'Cash' : 'Bank',
             category: 'ASSET',
             balance: 0,
+            isGroup: false,
           },
         });
       }
@@ -330,7 +350,7 @@ export class PurchasePaymentsService {
             bankName: ledger.name,
             accountId: ledger.id,
             accountNumber: ledger.code || null,
-            accountType: isCashPayment ? ('CASH' as any) : 'CURRENT',
+            accountType: 'CURRENT',
             openingBalance: 0,
             currentBalance: 0,
             status: 'ACTIVE',
@@ -351,13 +371,25 @@ export class PurchasePaymentsService {
       // 3. Payment Number: Custom or auto-generated
       let paymentNo = (dto.paymentNumber || dto.paymentNo)?.trim();
       if (paymentNo) {
-        const existing = await tx.transactionPayment.findFirst({
+        // Check for active payment collision
+        const activeExisting = await tx.transactionPayment.findFirst({
           where: { companyId, paymentNo, deletedAt: null },
         });
-        if (existing) {
+        if (activeExisting) {
           throw new ConflictException(
             `Payment number "${paymentNo}" already exists in this company`
           );
+        }
+
+        // If a soft-deleted payment has this paymentNo, rename it to release the unique key
+        const deletedExisting = await tx.transactionPayment.findFirst({
+          where: { companyId, paymentNo, deletedAt: { not: null } },
+        });
+        if (deletedExisting) {
+          await tx.transactionPayment.update({
+            where: { id: deletedExisting.id },
+            data: { paymentNo: `${paymentNo}-DELETED-${Date.now()}` },
+          });
         }
       } else {
         paymentNo = await this.sequenceService.generateNextSequence(
@@ -437,13 +469,15 @@ export class PurchasePaymentsService {
         let advanceAccount: any = null;
         if (dto.depositToAccountId) {
           advanceAccount = await tx.account.findFirst({
-            where: { id: dto.depositToAccountId, companyId },
+            where: { id: dto.depositToAccountId, companyId, isGroup: false },
           });
         }
         if (!advanceAccount) {
           advanceAccount = await tx.account.findFirst({
             where: {
               companyId,
+              isGroup: false,
+              deletedAt: null,
               name: { in: ['Vendor Advances', 'Prepaid Expenses', 'Advance to Vendors'] },
             },
           });
@@ -454,6 +488,7 @@ export class PurchasePaymentsService {
                 name: 'Vendor Advances',
                 category: 'ASSET',
                 balance: 0,
+                isGroup: false,
               },
             });
           }
@@ -467,7 +502,7 @@ export class PurchasePaymentsService {
         // If TDS: Credit TDS Payable
         if (tdsAmt > 0) {
           let tdsPayable = await tx.account.findFirst({
-            where: { companyId, name: 'TDS Payable' },
+            where: { companyId, name: 'TDS Payable', isGroup: false, deletedAt: null },
           });
           if (!tdsPayable) {
             tdsPayable = await tx.account.create({
@@ -476,6 +511,7 @@ export class PurchasePaymentsService {
                 name: 'TDS Payable',
                 category: 'LIABILITY',
                 balance: 0,
+                isGroup: false,
               },
             });
           }
@@ -574,35 +610,62 @@ export class PurchasePaymentsService {
         },
       });
 
-      // If it's a cash payment, also decrement the operational CashAccount
+      // If it's a cash payment, synchronize the CashAccount
       if (isCashPayment && tx.cashAccount) {
         const cashAcc = await tx.cashAccount.findFirst({
           where: { companyId, deletedAt: null },
         });
         if (cashAcc) {
-          await tx.cashAccount.update({
-            where: { id: cashAcc.id },
-            data: {
-              currentBalance: {
-                decrement: totalPaidNum,
+          if (!cashAcc.accountId) {
+            await tx.cashAccount.update({
+              where: { id: cashAcc.id },
+              data: { accountId: ledger.id },
+            });
+          } else if (cashAcc.accountId !== ledger.id) {
+            await tx.cashAccount.update({
+              where: { id: cashAcc.id },
+              data: {
+                currentBalance: {
+                  decrement: totalPaidNum,
+                },
               },
-            },
-          });
+            });
+          }
         }
       }
 
       // Post balanced General Ledger Journal Entry
       let apAccount = await tx.account.findFirst({
-        where: { companyId, name: { in: ['Accounts Payable', 'Trade Payables', 'Sundry Creditors'] }, isGroup: false },
+        where: {
+          companyId,
+          name: { in: ['Accounts Payable', 'Trade Payables', 'Sundry Creditors'] },
+          isGroup: false,
+          deletedAt: null,
+        },
       });
       if (!apAccount) {
         apAccount = await tx.account.findFirst({
-          where: { companyId, name: 'Accounts Payable' },
+          where: {
+            companyId,
+            category: 'LIABILITY',
+            isGroup: false,
+            deletedAt: null,
+            OR: [
+              { name: { contains: 'Payable', mode: 'insensitive' } },
+              { name: { contains: 'Creditor', mode: 'insensitive' } },
+            ],
+          },
         });
       }
       if (!apAccount) {
         apAccount = await tx.account.create({
-          data: { companyId, name: 'Accounts Payable', category: 'LIABILITY', balance: 0, isGroup: false },
+          data: {
+            companyId,
+            name: 'Accounts Payable',
+            category: 'LIABILITY',
+            balance: 0,
+            isGroup: false,
+          },
         });
       }
 
@@ -614,11 +677,17 @@ export class PurchasePaymentsService {
 
       if (unusedAmount > 0) {
         let advAccount = await tx.account.findFirst({
-          where: { companyId, name: 'Vendor Advances' },
+          where: { companyId, name: 'Vendor Advances', isGroup: false, deletedAt: null },
         });
         if (!advAccount) {
           advAccount = await tx.account.create({
-            data: { companyId, name: 'Vendor Advances', category: 'ASSET', balance: 0 },
+            data: {
+              companyId,
+              name: 'Vendor Advances',
+              category: 'ASSET',
+              balance: 0,
+              isGroup: false,
+            },
           });
         }
         glLines.push({ accountId: advAccount.id, debit: unusedAmount, credit: 0 });
@@ -644,10 +713,19 @@ export class PurchasePaymentsService {
       });
     };
 
-    if (txClient) {
-      return execute(txClient);
+    try {
+      if (txClient) {
+        return await execute(txClient);
+      }
+      return await this.prisma.$transaction(execute, { timeout: 25000 });
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error?.message || 'Failed to process purchase payment'
+      );
     }
-    return this.prisma.$transaction(execute, { timeout: 25000 });
   }
 
   async update(id: string, dto: UpdatePurchasePaymentDto) {
@@ -784,10 +862,13 @@ export class PurchasePaymentsService {
         }
       }
 
-      // Soft delete payment
+      // Soft delete payment and release its paymentNo so it can be re-recorded or edited
       return tx.transactionPayment.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: {
+          deletedAt: new Date(),
+          paymentNo: `${payment.paymentNo}-DELETED-${Date.now()}`,
+        },
       });
     }, { timeout: 30000 });
   }

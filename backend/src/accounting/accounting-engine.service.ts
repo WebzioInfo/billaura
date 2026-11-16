@@ -333,6 +333,7 @@ export class AccountingEngineService {
         where: {
           companyId: params.companyId,
           reference: params.reference.trim(),
+          deletedAt: null,
         },
         include: { lines: true },
       });

@@ -46,7 +46,20 @@ export class BankService {
       }),
     ]);
 
-    const mappedBankAccounts = bankAccounts.map((b) => ({
+    // Exclude shadow BankAccounts created solely as an internal bridge for cash transactions
+    const cashNames = new Set(
+      cashAccounts.map((c) => (c.name || '').toLowerCase().trim())
+    );
+    const filteredBankAccounts = bankAccounts.filter((b) => {
+      const name = (b.name || '').toLowerCase().trim();
+      const bankName = (b.bankName || '').toLowerCase().trim();
+      if (cashNames.has(name) || name === 'cash' || bankName === 'cash') {
+        return false;
+      }
+      return true;
+    });
+
+    const mappedBankAccounts = filteredBankAccounts.map((b) => ({
       ...b,
       currentBalance: b.account?.balance !== undefined && b.account?.balance !== null
         ? Number(b.account.balance)
