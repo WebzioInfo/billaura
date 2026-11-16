@@ -229,6 +229,7 @@ export function PlatformDashboard() {
 
     switch (currentTab) {
       case 'dashboard':
+      default:
         return (
           <div className="space-y-4 animate-fadeIn text-left">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -953,13 +954,6 @@ export function PlatformDashboard() {
                 <p><strong>Access Authority:</strong> Read/Write Global System</p>
               </div>
             </div>
-          </div>
-        );
-
-      default:
-        return (
-          <div className="text-center py-20 text-slate-500">
-            Tab not implemented
           </div>
         );
     }
