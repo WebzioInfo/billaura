@@ -30,6 +30,7 @@ export class ReportsController {
       ? new Date(startDate)
       : new Date(new Date().getFullYear(), 0, 1);
     const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
 
     return this.reportsService.generateProfitLoss(companyId, start, end);
   }

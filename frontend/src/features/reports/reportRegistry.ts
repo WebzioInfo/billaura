@@ -48,7 +48,7 @@ export const REPORT_CATALOG: ReportDefinition[] = [
       const res = await apiClient.get('/reports/profit-loss', {
         params: { startDate, endDate },
       });
-      return res.data;
+      return res.data || res;
     },
   },
   {

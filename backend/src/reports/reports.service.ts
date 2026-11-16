@@ -9,6 +9,10 @@ export class ReportsService {
   async generateProfitLoss(companyId: string, startDate: Date, endDate: Date) {
     if (!companyId) throw new BadRequestException('Company ID is required');
 
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
     // 1. Fetch aggregated ledger balances for the date range
     // We strictly use double-entry records from JournalLines and filter soft-deletes
     const aggregates = await this.prisma.journalLine.groupBy({
@@ -16,7 +20,7 @@ export class ReportsService {
       where: {
         journalEntry: {
           companyId,
-          date: { gte: startDate, lte: endDate },
+          date: { gte: start, lte: end },
           deletedAt: null,
         },
         account: {
@@ -163,8 +167,9 @@ export class ReportsService {
     };
 
     return {
-      period: { startDate, endDate },
+      period: { startDate: start, endDate: end },
       statement: pnl,
+      ...pnl,
       kpis: {
         totalRevenue: pnl.netRevenue,
         grossProfit: pnl.grossProfit,

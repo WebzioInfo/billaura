@@ -64,6 +64,8 @@ type DatePreset =
   | 'prev_month'
   | 'prev_quarter'
   | 'prev_fiscal_year'
+  | 'fy_2024_2025'
+  | 'all_time'
   | 'custom';
 
 const DATE_PRESET_LABELS: Record<DatePreset, string> = {
@@ -77,7 +79,16 @@ const DATE_PRESET_LABELS: Record<DatePreset, string> = {
   prev_month: 'Previous Month',
   prev_quarter: 'Previous Quarter',
   prev_fiscal_year: 'Previous Fiscal Year',
+  fy_2024_2025: 'FY 2024-2025',
+  all_time: 'All Time',
   custom: 'Custom Date',
+};
+
+const formatYMD = (d: Date): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const getDatePresetRange = (preset: DatePreset) => {
@@ -87,53 +98,76 @@ const getDatePresetRange = (preset: DatePreset) => {
 
   switch (preset) {
     case 'today': {
-      const d = new Date(year, month, now.getDate()).toISOString().slice(0, 10);
+      const d = formatYMD(now);
       return { start: d, end: d };
     }
     case 'yesterday': {
-      const d = new Date(year, month, now.getDate() - 1).toISOString().slice(0, 10);
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      const d = formatYMD(y);
       return { start: d, end: d };
     }
     case 'this_week': {
       const day = now.getDay();
       const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      const start = new Date(year, month, diff).toISOString().slice(0, 10);
-      const end = new Date(year, month, diff + 6).toISOString().slice(0, 10);
+      const start = formatYMD(new Date(year, month, diff));
+      const end = formatYMD(new Date(year, month, diff + 6));
+      return { start, end };
+    }
+    case 'prev_week': {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
+      const start = formatYMD(new Date(year, month, diff));
+      const end = formatYMD(new Date(year, month, diff + 6));
       return { start, end };
     }
     case 'this_month': {
-      const start = new Date(year, month, 1).toISOString().slice(0, 10);
-      const end = new Date(year, month + 1, 0).toISOString().slice(0, 10);
+      const start = formatYMD(new Date(year, month, 1));
+      const end = formatYMD(new Date(year, month + 1, 0));
       return { start, end };
     }
     case 'prev_month': {
-      const start = new Date(year, month - 1, 1).toISOString().slice(0, 10);
-      const end = new Date(year, month, 0).toISOString().slice(0, 10);
+      const start = formatYMD(new Date(year, month - 1, 1));
+      const end = formatYMD(new Date(year, month, 0));
       return { start, end };
     }
     case 'this_quarter': {
       const qMonth = Math.floor(month / 3) * 3;
-      const start = new Date(year, qMonth, 1).toISOString().slice(0, 10);
-      const end = new Date(year, qMonth + 3, 0).toISOString().slice(0, 10);
+      const start = formatYMD(new Date(year, qMonth, 1));
+      const end = formatYMD(new Date(year, qMonth + 3, 0));
       return { start, end };
     }
     case 'prev_quarter': {
       const qMonth = Math.floor(month / 3) * 3 - 3;
-      const start = new Date(year, qMonth, 1).toISOString().slice(0, 10);
-      const end = new Date(year, qMonth + 3, 0).toISOString().slice(0, 10);
+      const start = formatYMD(new Date(year, qMonth, 1));
+      const end = formatYMD(new Date(year, qMonth + 3, 0));
       return { start, end };
     }
     case 'this_fiscal_year': {
       const fyStartYear = month >= 3 ? year : year - 1;
-      const start = new Date(fyStartYear, 3, 1).toISOString().slice(0, 10);
-      const end = new Date(fyStartYear + 1, 2, 31).toISOString().slice(0, 10);
-      return { start, end };
+      return {
+        start: `${fyStartYear}-04-01`,
+        end: `${fyStartYear + 1}-03-31`,
+      };
     }
     case 'prev_fiscal_year': {
       const fyStartYear = (month >= 3 ? year : year - 1) - 1;
-      const start = new Date(fyStartYear, 3, 1).toISOString().slice(0, 10);
-      const end = new Date(fyStartYear + 1, 2, 31).toISOString().slice(0, 10);
-      return { start, end };
+      return {
+        start: `${fyStartYear}-04-01`,
+        end: `${fyStartYear + 1}-03-31`,
+      };
+    }
+    case 'fy_2024_2025': {
+      return {
+        start: '2024-04-01',
+        end: '2025-03-31',
+      };
+    }
+    case 'all_time': {
+      return {
+        start: '2020-01-01',
+        end: formatYMD(now),
+      };
     }
     default:
       return { start: '', end: '' };
@@ -162,23 +196,23 @@ export const ReportViewer: React.FC = () => {
 
   // Filter UI state (read initial values from URL query string)
   const [datePreset, setDatePreset] = useState<DatePreset>(() => {
-    return (searchParams.get('preset') as DatePreset) || (reportDef?.dateMode === 'asOf' ? 'today' : 'this_month');
+    return (searchParams.get('preset') as DatePreset) || (reportDef?.dateMode === 'asOf' ? 'today' : 'this_fiscal_year');
   });
 
   const [startDate, setStartDate] = useState<string>(() => {
     const fromParam = searchParams.get('from');
     if (fromParam) return fromParam;
-    return getDatePresetRange('this_month').start;
+    return getDatePresetRange('this_fiscal_year').start;
   });
 
   const [endDate, setEndDate] = useState<string>(() => {
     const toParam = searchParams.get('to');
     if (toParam) return toParam;
-    return getDatePresetRange('this_month').end;
+    return getDatePresetRange('this_fiscal_year').end;
   });
 
   const [asOfDate, setAsOfDate] = useState<string>(() => {
-    return searchParams.get('asOf') || new Date().toISOString().slice(0, 10);
+    return searchParams.get('asOf') || formatYMD(new Date());
   });
 
   const [reportingBasis, setReportingBasis] = useState<'Accrual' | 'Cash'>(() => {
@@ -220,12 +254,23 @@ export const ReportViewer: React.FC = () => {
   // Sync date preset changes
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
-    setHasUnsavedFilterChanges(true);
     if (preset !== 'custom') {
       const { start, end } = getDatePresetRange(preset);
       setStartDate(start);
       setEndDate(end);
       setAsOfDate(end || start);
+      setHasUnsavedFilterChanges(false);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set('preset', preset);
+      if (reportDef?.dateMode === 'asOf') {
+        newParams.set('asOf', end || start);
+      } else {
+        newParams.set('from', start);
+        newParams.set('to', end);
+      }
+      setSearchParams(newParams, { replace: true });
+    } else {
+      setHasUnsavedFilterChanges(true);
     }
   };
 
@@ -918,70 +963,217 @@ export const ReportViewer: React.FC = () => {
               )}
 
               {/* PROFIT AND LOSS TABLE */}
-              {reportDef.key === 'profit-and-loss' && (
-                <div className="space-y-4">
-                  <table className="w-full text-left text-[13px] border-collapse">
-                    <thead className="bg-[#f9f9fb] border-b border-[#e5e7eb]">
-                      <tr className="h-9 text-[11px] uppercase tracking-wider font-semibold text-[#6c7380]">
-                        <th className="py-2 px-3">Account</th>
-                        <th className="py-2 px-3 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#f7f8fa]">
-                      <tr className="font-semibold text-[#333333]">
-                        <td className="py-2 px-3">Operating Income</td>
-                        <td className="py-2 px-3 text-right tabular-nums"></td>
-                      </tr>
-                      {reportData.revenue?.salesRevenue?.map((acc: any) => (
-                        <tr key={acc.id} className="hover:bg-[#f7f9ff]">
-                          <td className="py-1 px-6">
-                            <Link to={getLedgerLink(acc.id)} className="text-[#408dfb] hover:underline">
-                              {acc.name}
-                            </Link>
-                          </td>
-                          <td className="py-1 px-3 text-right tabular-nums text-[#333333]">
-                            {formatNumber(acc.balance)}
+              {reportDef.key === 'profit-and-loss' && (() => {
+                const pnl = reportData.statement || reportData || {};
+                const salesRevenue = pnl.revenue?.salesRevenue || [];
+                const serviceRevenue = pnl.revenue?.serviceRevenue || [];
+                const otherIncome = pnl.revenue?.otherIncome || pnl.otherIncome?.items || [];
+                const cogsItems = pnl.cogs?.items || [];
+                const operatingExpenses = pnl.operatingExpenses?.items || [];
+                const otherExpenses = pnl.otherExpenses?.items || [];
+
+                return (
+                  <div className="space-y-4">
+                    <table className="w-full text-left text-[13px] border-collapse">
+                      <thead className="bg-[#f9f9fb] border-b border-[#e5e7eb]">
+                        <tr className="h-9 text-[11px] uppercase tracking-wider font-semibold text-[#6c7380]">
+                          <th className="py-2 px-3">Account</th>
+                          <th className="py-2 px-3 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#f7f8fa]">
+                        {/* OPERATING INCOME */}
+                        <tr className="font-semibold text-[#333333] bg-[#fdfdfd]">
+                          <td className="py-2 px-3">Operating Income</td>
+                          <td className="py-2 px-3 text-right tabular-nums"></td>
+                        </tr>
+
+                        {/* Sales Revenue accounts */}
+                        {salesRevenue.length > 0 && (
+                          <>
+                            <tr className="font-medium text-[#555555]">
+                              <td className="py-1.5 px-6">Sales Revenue</td>
+                              <td className="py-1.5 px-3 text-right tabular-nums"></td>
+                            </tr>
+                            {salesRevenue.map((acc: any) => (
+                              <tr key={acc.id} className="hover:bg-[#f7f9ff]">
+                                <td className="py-1 px-9">
+                                  <Link to={getLedgerLink(acc.id)} className="text-[#408dfb] hover:underline">
+                                    {acc.name}
+                                  </Link>
+                                </td>
+                                <td className="py-1 px-3 text-right tabular-nums text-[#333333]">
+                                  {formatNumber(acc.balance)}
+                                </td>
+                              </tr>
+                            ))}
+                          </>
+                        )}
+
+                        {/* Service Revenue accounts */}
+                        {serviceRevenue.length > 0 && (
+                          <>
+                            <tr className="font-medium text-[#555555]">
+                              <td className="py-1.5 px-6">Service Revenue</td>
+                              <td className="py-1.5 px-3 text-right tabular-nums"></td>
+                            </tr>
+                            {serviceRevenue.map((acc: any) => (
+                              <tr key={acc.id} className="hover:bg-[#f7f9ff]">
+                                <td className="py-1 px-9">
+                                  <Link to={getLedgerLink(acc.id)} className="text-[#408dfb] hover:underline">
+                                    {acc.name}
+                                  </Link>
+                                </td>
+                                <td className="py-1 px-3 text-right tabular-nums text-[#333333]">
+                                  {formatNumber(acc.balance)}
+                                </td>
+                              </tr>
+                            ))}
+                          </>
+                        )}
+
+                        {/* Other Income accounts */}
+                        {otherIncome.length > 0 && (
+                          <>
+                            <tr className="font-medium text-[#555555]">
+                              <td className="py-1.5 px-6">Other Income</td>
+                              <td className="py-1.5 px-3 text-right tabular-nums"></td>
+                            </tr>
+                            {otherIncome.map((acc: any) => (
+                              <tr key={acc.id} className="hover:bg-[#f7f9ff]">
+                                <td className="py-1 px-9">
+                                  <Link to={getLedgerLink(acc.id)} className="text-[#408dfb] hover:underline">
+                                    {acc.name}
+                                  </Link>
+                                </td>
+                                <td className="py-1 px-3 text-right tabular-nums text-[#333333]">
+                                  {formatNumber(acc.balance)}
+                                </td>
+                              </tr>
+                            ))}
+                          </>
+                        )}
+
+                        {/* Gross Revenue Total */}
+                        <tr className="font-semibold border-t border-[#e5e7eb] text-[#333333] bg-[#f9f9fb]">
+                          <td className="py-2 px-3">Gross Revenue</td>
+                          <td className="py-2 px-3 text-right tabular-nums font-bold">
+                            {formatNumber(pnl.revenue?.grossRevenue ?? pnl.grossRevenue ?? 0)}
                           </td>
                         </tr>
-                      ))}
-                      <tr className="font-semibold border-t border-[#e5e7eb] text-[#333333] bg-[#f9f9fb]">
-                        <td className="py-2 px-3">Gross Revenue</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-bold">
-                          {formatNumber(reportData.revenue?.grossRevenue)}
-                        </td>
-                      </tr>
-                      <tr className="font-semibold text-[#333333]">
-                        <td className="py-2 px-3">Cost of Goods Sold (COGS)</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-bold">
-                          {formatNumber(reportData.cogs?.total)}
-                        </td>
-                      </tr>
-                      <tr className="font-bold border-t border-b border-[#e5e7eb] text-[#333333]">
-                        <td className="py-2 px-3">Gross Profit</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-bold text-[#2e7d32]">
-                          {formatNumber(reportData.grossProfit)}
-                        </td>
-                      </tr>
-                      <tr className="font-semibold text-[#333333]">
-                        <td className="py-2 px-3">Operating Expenses</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-bold">
-                          {formatNumber(reportData.operatingExpenses?.total)}
-                        </td>
-                      </tr>
-                      <tr className="font-bold border-t-2 border-b-2 border-[#333333] text-[#333333] bg-[#fdfdfd]">
-                        <td className="py-2.5 px-3">Net Profit / (Loss)</td>
-                        <td
-                          className={`py-2.5 px-3 text-right tabular-nums text-[14px] ${
-                            Number(reportData.netProfit) >= 0 ? 'text-[#2e7d32]' : 'text-[#dc2626]'
-                          }`}
-                        >
-                          {formatNumber(reportData.netProfit)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
+
+                        {/* COST OF GOODS SOLD */}
+                        <tr className="font-semibold text-[#333333] pt-2">
+                          <td className="py-2 px-3">Cost of Goods Sold (COGS)</td>
+                          <td className="py-2 px-3 text-right tabular-nums"></td>
+                        </tr>
+                        {cogsItems.map((acc: any) => (
+                          <tr key={acc.id} className="hover:bg-[#f7f9ff]">
+                            <td className="py-1 px-6">
+                              <Link to={getLedgerLink(acc.id)} className="text-[#408dfb] hover:underline">
+                                {acc.name}
+                              </Link>
+                            </td>
+                            <td className="py-1 px-3 text-right tabular-nums text-[#333333]">
+                              {formatNumber(acc.balance)}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="font-semibold border-t border-[#e5e7eb] text-[#333333] bg-[#f9f9fb]">
+                          <td className="py-2 px-3">Total Cost of Goods Sold</td>
+                          <td className="py-2 px-3 text-right tabular-nums font-bold">
+                            {formatNumber(pnl.cogs?.total ?? 0)}
+                          </td>
+                        </tr>
+
+                        {/* GROSS PROFIT */}
+                        <tr className="font-bold border-t border-b border-[#e5e7eb] text-[#333333] bg-[#fdfdfd]">
+                          <td className="py-2 px-3">Gross Profit</td>
+                          <td className={`py-2 px-3 text-right tabular-nums font-bold ${
+                            Number(pnl.grossProfit) >= 0 ? 'text-[#2e7d32]' : 'text-[#dc2626]'
+                          }`}>
+                            {formatNumber(pnl.grossProfit)}
+                          </td>
+                        </tr>
+
+                        {/* OPERATING EXPENSES */}
+                        <tr className="font-semibold text-[#333333] pt-2">
+                          <td className="py-2 px-3">Operating Expenses</td>
+                          <td className="py-2 px-3 text-right tabular-nums"></td>
+                        </tr>
+                        {operatingExpenses.map((acc: any) => (
+                          <tr key={acc.id} className="hover:bg-[#f7f9ff]">
+                            <td className="py-1 px-6">
+                              <Link to={getLedgerLink(acc.id)} className="text-[#408dfb] hover:underline">
+                                {acc.name}
+                              </Link>
+                            </td>
+                            <td className="py-1 px-3 text-right tabular-nums text-[#333333]">
+                              {formatNumber(acc.balance)}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="font-semibold border-t border-[#e5e7eb] text-[#333333] bg-[#f9f9fb]">
+                          <td className="py-2 px-3">Total Operating Expenses</td>
+                          <td className="py-2 px-3 text-right tabular-nums font-bold">
+                            {formatNumber(pnl.operatingExpenses?.total ?? 0)}
+                          </td>
+                        </tr>
+
+                        {/* OPERATING PROFIT */}
+                        <tr className="font-bold border-t border-b border-[#e5e7eb] text-[#333333]">
+                          <td className="py-2 px-3">Operating Profit</td>
+                          <td className={`py-2 px-3 text-right tabular-nums font-bold ${
+                            Number(pnl.operatingProfit) >= 0 ? 'text-[#2e7d32]' : 'text-[#dc2626]'
+                          }`}>
+                            {formatNumber(pnl.operatingProfit)}
+                          </td>
+                        </tr>
+
+                        {/* OTHER EXPENSES */}
+                        {otherExpenses.length > 0 && (
+                          <>
+                            <tr className="font-semibold text-[#333333] pt-2">
+                              <td className="py-2 px-3">Other Expenses</td>
+                              <td className="py-2 px-3 text-right tabular-nums"></td>
+                            </tr>
+                            {otherExpenses.map((acc: any) => (
+                              <tr key={acc.id} className="hover:bg-[#f7f9ff]">
+                                <td className="py-1 px-6">
+                                  <Link to={getLedgerLink(acc.id)} className="text-[#408dfb] hover:underline">
+                                    {acc.name}
+                                  </Link>
+                                </td>
+                                <td className="py-1 px-3 text-right tabular-nums text-[#333333]">
+                                  {formatNumber(acc.balance)}
+                                </td>
+                              </tr>
+                            ))}
+                            <tr className="font-semibold border-t border-[#e5e7eb] text-[#333333] bg-[#f9f9fb]">
+                              <td className="py-2 px-3">Total Other Expenses</td>
+                              <td className="py-2 px-3 text-right tabular-nums font-bold">
+                                {formatNumber(pnl.otherExpenses?.total ?? 0)}
+                              </td>
+                            </tr>
+                          </>
+                        )}
+
+                        {/* NET PROFIT / (LOSS) */}
+                        <tr className="font-bold border-t-2 border-b-2 border-[#333333] text-[#333333] bg-[#fdfdfd]">
+                          <td className="py-2.5 px-3">Net Profit / (Loss)</td>
+                          <td
+                            className={`py-2.5 px-3 text-right tabular-nums text-[14px] ${
+                              Number(pnl.netProfit) >= 0 ? 'text-[#2e7d32]' : 'text-[#dc2626]'
+                            }`}
+                          >
+                            {formatNumber(pnl.netProfit)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
 
               {/* CASH FLOW STATEMENT (Reference Image 4) */}
               {reportDef.key === 'cash-flow-statement' && (
