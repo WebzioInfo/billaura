@@ -194,21 +194,23 @@ export const ReportViewer: React.FC = () => {
   // Drawer state for Quick Report Switch
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  const defaultPreset: DatePreset = reportDef?.dateMode === 'asOf' ? 'today' : 'all_time';
+
   // Filter UI state (read initial values from URL query string)
   const [datePreset, setDatePreset] = useState<DatePreset>(() => {
-    return (searchParams.get('preset') as DatePreset) || (reportDef?.dateMode === 'asOf' ? 'today' : 'this_fiscal_year');
+    return (searchParams.get('preset') as DatePreset) || defaultPreset;
   });
 
   const [startDate, setStartDate] = useState<string>(() => {
     const fromParam = searchParams.get('from');
     if (fromParam) return fromParam;
-    return getDatePresetRange('this_fiscal_year').start;
+    return getDatePresetRange(defaultPreset).start;
   });
 
   const [endDate, setEndDate] = useState<string>(() => {
     const toParam = searchParams.get('to');
     if (toParam) return toParam;
-    return getDatePresetRange('this_fiscal_year').end;
+    return getDatePresetRange(defaultPreset).end;
   });
 
   const [asOfDate, setAsOfDate] = useState<string>(() => {
