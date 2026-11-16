@@ -2654,10 +2654,12 @@ export class InvoicesService {
       });
       if (account) {
         const lower = account.name.toLowerCase();
-        if (lower.includes('course') || lower.includes('institute')) {
-          detectedPrefix = 'INV-BFCF';
-        } else if (lower.includes('chemical') || lower.includes('solution')) {
+        if (lower.includes('solution')) {
+          detectedPrefix = 'INV-BFSR';
+        } else if (lower.includes('chemical')) {
           detectedPrefix = 'INV-BFCS';
+        } else if (lower.includes('course') || lower.includes('institute')) {
+          detectedPrefix = 'INV-BFCF';
         } else if (lower.includes('water') || lower.includes('testing') || lower.includes('test')) {
           detectedPrefix = 'INV-BFWT';
         }
