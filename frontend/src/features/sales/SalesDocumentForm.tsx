@@ -263,13 +263,21 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
     staleTime: 5 * 60 * 1000,
   });
 
+  const selectedSalesAccountId = watch('salesAccountId');
+
   const { data: nextNoData, error: nextNoError, isLoading: nextNoLoading, refetch: refetchNextNo } = useQuery<any>({
-    queryKey: ['sales-documents', 'next-number', docType],
+    queryKey: ['sales-documents', 'next-number', docType, selectedSalesAccountId],
     queryFn: async () => {
       let endpoint = '/sales/invoices/next-number';
+      const params = new URLSearchParams();
       if (docType === 'QUOTATION') endpoint = '/sales/quotations/next-number';
-      if (docType === 'SALES_ORDER') endpoint = '/sales-orders/next-number';
-      if (docType === 'PROFORMA') endpoint = '/sales/invoices/next-number?type=PROFORMA';
+      else if (docType === 'SALES_ORDER') endpoint = '/sales-orders/next-number';
+      else {
+        if (docType === 'PROFORMA') params.set('type', 'PROFORMA');
+        if (selectedSalesAccountId) params.set('salesAccountId', selectedSalesAccountId);
+        const queryStr = params.toString();
+        if (queryStr) endpoint += `?${queryStr}`;
+      }
       const res = await apiClient.get<any>(endpoint);
       return res?.data?.data || res?.data || res;
     },
@@ -310,16 +318,13 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
     (!isEditMode && nextNoLoading) ||
     (isEditMode && draftLoading);
 
-  // Assign next sequence number if not set
+  // Assign next sequence number when nextNoData changes or when switching categories
   useEffect(() => {
     const nextNum = nextNoData?.nextNumber;
     if (!isEditMode && nextNum) {
-      const currentVal = watch('invoiceNo');
-      if (!currentVal) {
-        setValue('invoiceNo', nextNum);
-      }
+      setValue('invoiceNo', nextNum);
     }
-  }, [nextNoData, setValue, isEditMode, watch]);
+  }, [nextNoData, setValue, isEditMode]);
 
   // Set default Revenue Account (e.g. Course Fees Income or Sales Revenue)
   useEffect(() => {

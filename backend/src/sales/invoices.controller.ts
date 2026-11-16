@@ -64,8 +64,12 @@ export class InvoicesController {
   }
 
   @Get("next-number")
-  async getNextNumber(@Query('type') type?: string) {
-    return this.invoicesService.getNextInvoiceNumber(type);
+  async getNextNumber(
+    @Query('type') type?: string,
+    @Query('salesAccountId') salesAccountId?: string,
+    @Query('prefix') prefix?: string,
+  ) {
+    return this.invoicesService.getNextInvoiceNumber(type, salesAccountId, prefix);
   }
 
   @Get(":id")

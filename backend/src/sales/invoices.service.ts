@@ -1156,20 +1156,12 @@ export class InvoicesService {
       // 1. Concurrency-Safe Document Sequence Allocation
       let invoiceNo = (dto.invoiceNo || dto.documentNo || dto.docNo)?.trim();
       if (!invoiceNo) {
-        invoiceNo = await this.sequenceService.generateUniversalSequence(
-          companyId,
+        const nextResult = await this.getNextInvoiceNumber(
           docType,
-          { seriesId: dto.numberingSeriesId },
-          tx
+          (dto as any).salesAccountId,
+          (dto as any).prefix
         );
-        while (await tx.invoice.findFirst({ where: { companyId, invoiceNo } })) {
-          invoiceNo = await this.sequenceService.generateUniversalSequence(
-            companyId,
-            docType,
-            { seriesId: dto.numberingSeriesId },
-            tx
-          );
-        }
+        invoiceNo = nextResult.nextNumber;
       } else {
         // Validate uniqueness if manually provided (including archived/soft-deleted records due to statutory audit trail)
         const existing = await tx.invoice.findFirst({
@@ -2620,7 +2612,7 @@ export class InvoicesService {
     });
   }
 
-  async getNextInvoiceNumber(type?: string) {
+  async getNextInvoiceNumber(type?: string, salesAccountId?: string, customPrefix?: string) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -2651,34 +2643,58 @@ export class InvoicesService {
       where: { companyId, documentType: docType as any },
     });
 
-    // 2. Scan recent invoices for this company to identify active prefix format and highest sequence
-    const existingInvoices = await this.prisma.invoice.findMany({
-      where: { companyId, deletedAt: null },
-      select: { invoiceNo: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
-
+    // 2. Determine target prefix based on customPrefix or salesAccountId
     let detectedPrefix = sequence?.prefix || `${defaultPrefix}-`;
-    let padding = sequence?.padding || 5;
-    let maxNum = sequence?.currentNumber || 0;
-
-    if (existingInvoices.length > 0) {
-      const latestInvoiceNo = existingInvoices[0]?.invoiceNo?.trim();
-      const match = latestInvoiceNo?.match(/^(.*?)(\d+)$/);
-      if (match) {
-        detectedPrefix = match[1];
-        padding = Math.max(match[2].length, padding);
-      }
-
-      for (const inv of existingInvoices) {
-        if (inv.invoiceNo && inv.invoiceNo.startsWith(detectedPrefix)) {
-          const numPart = parseInt(inv.invoiceNo.slice(detectedPrefix.length), 10);
-          if (!isNaN(numPart) && numPart > maxNum) {
-            maxNum = numPart;
-          }
+    if (customPrefix && customPrefix.trim()) {
+      detectedPrefix = customPrefix.trim();
+    } else if (salesAccountId && salesAccountId.trim()) {
+      const account = await this.prisma.account.findFirst({
+        where: { id: salesAccountId.trim(), companyId },
+        select: { name: true },
+      });
+      if (account) {
+        const lower = account.name.toLowerCase();
+        if (lower.includes('course') || lower.includes('institute')) {
+          detectedPrefix = 'INV-BFCF';
+        } else if (lower.includes('chemical') || lower.includes('solution')) {
+          detectedPrefix = 'INV-BFCS';
+        } else if (lower.includes('water') || lower.includes('testing') || lower.includes('test')) {
+          detectedPrefix = 'INV-BFWT';
         }
       }
+    }
+
+    // 3. Scan existing invoices for this tenant starting with detectedPrefix
+    const matchingInvoices = await this.prisma.invoice.findMany({
+      where: {
+        companyId,
+        invoiceNo: { startsWith: detectedPrefix },
+      },
+      select: { invoiceNo: true },
+      orderBy: { invoiceNo: 'desc' },
+      take: 500,
+    });
+
+    let padding = sequence?.padding || 5;
+    let maxNum = 0;
+
+    for (const inv of matchingInvoices) {
+      if (inv.invoiceNo && inv.invoiceNo.startsWith(detectedPrefix)) {
+        const cleanNo = inv.invoiceNo.split('-DELETED')[0];
+        const numPart = parseInt(cleanNo.slice(detectedPrefix.length), 10);
+        if (!isNaN(numPart) && numPart > maxNum) {
+          maxNum = numPart;
+        }
+        const digits = cleanNo.slice(detectedPrefix.length).length;
+        if (digits > padding) {
+          padding = digits;
+        }
+      }
+    }
+
+    // If sequence matches this specific prefix and is higher, respect it
+    if (sequence && sequence.prefix === detectedPrefix && sequence.currentNumber > maxNum) {
+      maxNum = sequence.currentNumber;
     }
 
     let nextNum = maxNum + 1;
@@ -2688,7 +2704,7 @@ export class InvoicesService {
       candidate = `${detectedPrefix}${String(nextNum).padStart(padding, '0')}`;
     }
 
-    return { nextNumber: candidate };
+    return { nextNumber: candidate, prefix: detectedPrefix };
   }
 
   normalizeInvoiceType(raw?: string): InvoiceType {
