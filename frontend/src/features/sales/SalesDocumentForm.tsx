@@ -260,7 +260,9 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
       const list = res?.data?.data || res?.data || res || [];
       return Array.isArray(list) ? list.filter((a: any) => a.category === 'REVENUE' || a.categoryName === 'REVENUE') : [];
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
 
   const selectedSalesAccountId = watch('salesAccountId');
@@ -1465,6 +1467,32 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
               <div className="relative">
                 <select
                   {...register('salesAccountId')}
+                  onChange={async (e) => {
+                    const newAccId = e.target.value;
+                    setValue('salesAccountId', newAccId);
+                    if (!isEditMode) {
+                      const selectedAcc = revenueAccounts.find((a: any) => a.id === newAccId);
+                      const accName = (selectedAcc?.name || '').toLowerCase();
+                      let targetPrefix = '';
+                      if (accName.includes('solution')) targetPrefix = 'INV-BFSR';
+                      else if (accName.includes('chemical')) targetPrefix = 'INV-BFCS';
+                      else if (accName.includes('course') || accName.includes('institute')) targetPrefix = 'INV-BFCF';
+                      else if (accName.includes('water') || accName.includes('test')) targetPrefix = 'INV-BFWT';
+
+                      try {
+                        const params = new URLSearchParams();
+                        if (newAccId) params.set('salesAccountId', newAccId);
+                        if (targetPrefix) params.set('prefix', targetPrefix);
+                        const res = await apiClient.get<any>(`/sales/invoices/next-number?${params.toString()}`);
+                        const nextNum = res?.data?.data?.nextNumber || res?.data?.nextNumber;
+                        if (nextNum) {
+                          setValue('invoiceNo', nextNum);
+                        }
+                      } catch (err) {
+                        console.error('Failed to update invoice number for revenue account', err);
+                      }
+                    }
+                  }}
                   className="w-full h-8 px-2.5 pr-8 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] appearance-none cursor-pointer"
                 >
                   <option value="">Default (Sales Revenue)</option>
