@@ -135,3 +135,21 @@
     AND je.reference IN ('REV-BIL-00003', 'REV-BIL-00004');
   ```
 - **Rule Compliance:** Per strict implementation instructions, this SQL has **NOT** been run against production and will only execute upon explicit user command.
+
+---
+
+### G. Commit `ecee510`: Fix Payment Creation 500 Error, Unique Constraint Collision on Soft-Deleted Payments, and Duplicate Cash Accounts in Banking
+- **Root Cause 1 (500 Error on Save as Paid)**: When previous `PAYMENT-00005` was soft-deleted, `transaction_payments` has a PostgreSQL database constraint `@@unique([companyId, paymentNo])`. Because Postgres unique constraints enforce uniqueness across all rows (including soft-deleted rows), attempting to insert a new payment with `paymentNo: 'PAYMENT-00005'` threw a duplicate key constraint violation (`P2002`), which bubbled up as an unhandled 500 error.
+- **Root Cause 2 (Duplicate Cash Accounts & -₹6,42,000 on Banking Page)**: The system was fetching all `bankAccount` records AND all `cashAccount` records. An internal bridge row `BankAccount` named "Cash" was created with balance `-₹6,42,000.00`, while the genuine operational `CashAccount` was `₹1,57,196.00`.
+- **Root Cause 3 (AccountingEngine Group Account Rejection)**: If a group account was selected for ledger or AP, `postTransaction` threw a BadRequestException when encountering an account with `isGroup: true`.
+- **Fix Applied**:
+  1. Updated `purchase-payments.service.ts`:
+     - When soft-deleting any payment in `remove()`, its `paymentNo` is renamed to `${paymentNo}-DELETED-${Date.now()}` to immediately release the sequence number.
+     - In `create()`, if any soft-deleted payment exists with `paymentNo`, it is automatically renamed to free the unique constraint.
+     - Group account checks (`isGroup: false`) are strictly enforced for ledger, AP, and Advance accounts with automatic leaf resolution.
+     - Wrapped interactive transaction in try/catch to rethrow clear descriptive error messages rather than generic 500s.
+  2. Updated `bank.service.ts`:
+     - Filtered out internal shadow bank accounts named "Cash" from `findAllAccounts()`, leaving only the genuine operational Cash account card on the Banking page.
+  3. Updated `accounting-engine.service.ts`:
+     - Added `deletedAt: null` to idempotency reference check so re-recorded payments are not blocked by soft-deleted journal entries.
+- **Verification**: All 34 test suites (230 tests) passed. Backend build and Vite frontend build completed with exit code 0. Deployed to `main` (`ecee510`).
