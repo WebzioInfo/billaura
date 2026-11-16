@@ -574,10 +574,10 @@ export class ExpensesService {
 
       // 5. Serialize Zoho metadata into notes
       const metaData = {
-        expenseType: dto.expenseType || 'SERVICES',
-        sacCode: dto.sacCode || (dto.expenseType === 'SERVICES' ? dto.hsnSac : null),
-        hsnCode: dto.hsnCode || (dto.expenseType === 'GOODS' ? dto.hsnSac : null),
-        hsnSac: dto.hsnSac || dto.sacCode || dto.hsnCode || null,
+        expenseType: dto.expenseType && dto.expenseType !== 'NONE' ? dto.expenseType : null,
+        sacCode: dto.expenseType === 'SERVICES' ? (dto.sacCode || dto.hsnSac || null) : null,
+        hsnCode: dto.expenseType === 'GOODS' ? (dto.hsnCode || dto.hsnSac || null) : null,
+        hsnSac: dto.expenseType && dto.expenseType !== 'NONE' ? (dto.hsnSac || dto.sacCode || dto.hsnCode || null) : null,
         gstTreatment: dto.gstTreatment || null,
         vendorGstin: dto.vendorGstin || null,
         sourceOfSupply: dto.sourceOfSupply || null,
@@ -808,7 +808,7 @@ export class ExpensesService {
 
         const updatedMeta = {
           ...existingMeta,
-          ...(dto.expenseType !== undefined ? { expenseType: dto.expenseType } : {}),
+          ...(dto.expenseType !== undefined ? { expenseType: dto.expenseType === 'NONE' ? null : dto.expenseType } : {}),
           ...(dto.hsnSac !== undefined ? { hsnSac: dto.hsnSac } : {}),
           ...(dto.sacCode !== undefined ? { sacCode: dto.sacCode } : {}),
           ...(dto.hsnCode !== undefined ? { hsnCode: dto.hsnCode } : {}),

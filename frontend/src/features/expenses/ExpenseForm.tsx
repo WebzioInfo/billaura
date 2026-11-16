@@ -52,7 +52,7 @@ export const ExpenseForm: React.FC = () => {
   const [amount, setAmount] = useState<string>('');
   const [currency, setCurrency] = useState<string>('INR');
   const [paidThroughId, setPaidThroughId] = useState<string>('');
-  const [expenseType, setExpenseType] = useState<'GOODS' | 'SERVICES'>('SERVICES');
+  const [expenseType, setExpenseType] = useState<'GOODS' | 'SERVICES' | 'NONE'>('NONE');
   const [hsnSac, setHsnSac] = useState<string>('');
   const [vendorId, setVendorId] = useState<string>('');
   const [vendorGstin, setVendorGstin] = useState<string>('');
@@ -319,7 +319,7 @@ export const ExpenseForm: React.FC = () => {
       setAccountId(matchedAccount?.id || existingExpense.category?.accountId || existingExpense.categoryId || '');
       setAmount(existingExpense.amount ? String(existingExpense.amount) : '');
       setPaidThroughId(existingExpense.bankAccountId || existingExpense.cashAccountId || '');
-      setExpenseType(existingExpense.expenseType === 'GOODS' ? 'GOODS' : 'SERVICES');
+      setExpenseType(existingExpense.expenseType === 'GOODS' ? 'GOODS' : existingExpense.expenseType === 'SERVICES' ? 'SERVICES' : 'NONE');
       setHsnSac(existingExpense.hsnSac || existingExpense.sacCode || existingExpense.hsnCode || '');
       setVendorId(existingExpense.vendorId || '');
       setVendorGstin(existingExpense.vendorGstin || existingExpense.vendor?.gstin || '');
@@ -665,8 +665,8 @@ export const ExpenseForm: React.FC = () => {
       taxAmount: calculations.totalTax,
       totalAmount: calculations.finalTotal,
       paidThroughAccountId: paidThroughId,
-      expenseType,
-      hsnSac: isGstApplicable ? (hsnSac.trim() || undefined) : undefined,
+      expenseType: expenseType === 'NONE' ? undefined : expenseType,
+      hsnSac: expenseType !== 'NONE' && isGstApplicable ? (hsnSac.trim() || undefined) : undefined,
       vendorId: vendorId || undefined,
       vendorGstin: isGstApplicable ? (vendorGstin.trim() || undefined) : undefined,
       gstTreatment: isGstApplicable ? gstTreatment : 'Unregistered Business',
@@ -920,8 +920,8 @@ export const ExpenseForm: React.FC = () => {
 
                 {/* 5. Expense Type */}
                 <div className="grid grid-cols-[160px_1fr] items-center gap-3">
-                  <label className="text-xs text-[#DC2626] font-medium">
-                    Expense Type<span className="text-[#DC2626]">*</span>
+                  <label className="text-xs text-gray-700 font-medium">
+                    Expense Type
                   </label>
                   <div className="flex items-center gap-6 text-xs text-[#2B2F36]">
                     <label className="inline-flex items-center gap-2 cursor-pointer select-none">
@@ -950,27 +950,43 @@ export const ExpenseForm: React.FC = () => {
                       />
                       <span>Services</span>
                     </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="expenseType"
+                        checked={expenseType === 'NONE'}
+                        onChange={() => {
+                          setExpenseType('NONE');
+                          setHsnSac('');
+                          markDirty();
+                        }}
+                        className="text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                      />
+                      <span>None</span>
+                    </label>
                   </div>
                 </div>
 
-                {/* 6. SAC / HSN */}
-                <div className="grid grid-cols-[160px_1fr] items-center gap-3">
-                  <label className="text-xs text-gray-700 font-medium">
-                    {expenseType === 'SERVICES' ? 'SAC:' : 'HSN:'}
-                  </label>
-                  <div className="w-full max-w-[360px]">
-                    <input
-                      type="text"
-                      placeholder={expenseType === 'SERVICES' ? 'e.g. 998311' : 'e.g. 8471'}
-                      value={hsnSac}
-                      onChange={(e) => {
-                        setHsnSac(e.target.value);
-                        markDirty();
-                      }}
-                      className="w-full h-8 px-2.5 text-xs border border-gray-300 rounded-[4px] bg-white text-[#2B2F36] focus:outline-none focus:border-[#408DFB] uppercase"
-                    />
+                {/* 6. SAC / HSN (Only shown when Goods or Services is selected) */}
+                {expenseType !== 'NONE' && (
+                  <div className="grid grid-cols-[160px_1fr] items-center gap-3">
+                    <label className="text-xs text-gray-700 font-medium">
+                      {expenseType === 'SERVICES' ? 'SAC:' : 'HSN:'}
+                    </label>
+                    <div className="w-full max-w-[360px]">
+                      <input
+                        type="text"
+                        placeholder={expenseType === 'SERVICES' ? 'e.g. 998311' : 'e.g. 8471'}
+                        value={hsnSac}
+                        onChange={(e) => {
+                          setHsnSac(e.target.value);
+                          markDirty();
+                        }}
+                        className="w-full h-8 px-2.5 text-xs border border-gray-300 rounded-[4px] bg-white text-[#2B2F36] focus:outline-none focus:border-[#408DFB] uppercase"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 7. Vendor */}
                 <div className="grid grid-cols-[160px_1fr] items-center gap-3">
