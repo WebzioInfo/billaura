@@ -31,6 +31,18 @@ function toGSTRegistrationStatus(value?: string): string {
   return map[value?.toUpperCase?.() || ""] || "UNREGISTERED";
 }
 
+function toTaxPreference(value?: string): string {
+  const v = value?.toUpperCase?.() || '';
+  if (v === 'TAX_EXEMPT' || v === 'EXEMPT') return 'EXEMPT';
+  if (v === 'NON_TAXABLE' || v === 'NON_GST') return 'NON_GST';
+  if (v === 'NIL_RATED') return 'NIL_RATED';
+  if (v === 'ZERO_RATED') return 'ZERO_RATED';
+  if (v === 'COMPOSITION') return 'COMPOSITION';
+  if (v === 'REVERSE_CHARGE') return 'REVERSE_CHARGE';
+  if (v === 'NOT_APPLICABLE') return 'NOT_APPLICABLE';
+  return 'TAXABLE';
+}
+
 @Injectable()
 export class CustomersService {
   constructor(
@@ -280,7 +292,7 @@ export class CustomersService {
         panNumber: panNumber && panNumber.trim() ? panNumber.trim() : null,
         gstRegistrationStatus: effectiveGstStatus as any,
         customerType: effectiveCustomerType as any,
-        taxPreference: taxPreference || "TAXABLE",
+        taxPreference: toTaxPreference(taxPreference) as any,
         tradeName: tradeName?.trim() || null,
         address,
         pinCode,
@@ -457,7 +469,7 @@ export class CustomersService {
     if (customerDepartmentId !== undefined) {
       updateData.customerDepartmentId = customerDepartmentId && customerDepartmentId.trim() ? customerDepartmentId.trim() : null;
     }
-    if (taxPreference !== undefined) updateData.taxPreference = taxPreference;
+    if (taxPreference !== undefined) updateData.taxPreference = toTaxPreference(taxPreference) as any;
     if (tradeName !== undefined) updateData.tradeName = tradeName;
     if (address !== undefined) updateData.address = address;
     if (pinCode !== undefined) updateData.pinCode = pinCode;

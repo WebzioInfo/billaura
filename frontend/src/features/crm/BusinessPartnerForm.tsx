@@ -58,7 +58,7 @@ export const BusinessPartnerForm: React.FC = () => {
   const [gstin, setGstin] = useState('');
   const [panNumber, setPanNumber] = useState('');
   const [placeOfSupply, setPlaceOfSupply] = useState('Maharashtra');
-  const [taxPreference, setTaxPreference] = useState<'TAXABLE' | 'TAX_EXEMPT'>('TAXABLE');
+  const [taxPreference, setTaxPreference] = useState<'TAXABLE' | 'EXEMPT'>('TAXABLE');
   const [currency] = useState('INR');
   const [openingBalanceType, setOpeningBalanceType] = useState<'NONE' | 'DEBIT_BALANCE' | 'CREDIT_BALANCE'>('NONE');
   const [openingBalanceAmount, setOpeningBalanceAmount] = useState('0');
@@ -118,7 +118,7 @@ export const BusinessPartnerForm: React.FC = () => {
       setGstin(partnerData.gstin || '');
       setPanNumber(partnerData.panNumber || '');
       setPlaceOfSupply(partnerData.placeOfSupply || partnerData.state || 'Maharashtra');
-      setTaxPreference(partnerData.taxPreference === 'TAX_EXEMPT' ? 'TAX_EXEMPT' : 'TAXABLE');
+      setTaxPreference(partnerData.taxPreference === 'EXEMPT' || partnerData.taxPreference === 'TAX_EXEMPT' ? 'EXEMPT' : 'TAXABLE');
       setRemarks(partnerData.notes || '');
       setCreditLimit(partnerData.creditLimit ? String(partnerData.creditLimit) : '');
       setCustomerSegmentId(partnerData.customerSegmentId || '');
@@ -636,8 +636,8 @@ export const BusinessPartnerForm: React.FC = () => {
                   <input
                     type="radio"
                     name="tax_pref"
-                    checked={taxPreference === 'TAX_EXEMPT'}
-                    onChange={() => setTaxPreference('TAX_EXEMPT')}
+                    checked={taxPreference === 'EXEMPT'}
+                    onChange={() => setTaxPreference('EXEMPT')}
                     className="text-[#408DFB] focus:ring-0 cursor-pointer"
                   />
                   <span>Tax Exempt</span>

@@ -32,6 +32,18 @@ function toGSTRegistrationStatus(value?: string): string {
   return map[value?.toUpperCase?.() || ""] || "UNREGISTERED";
 }
 
+function toTaxPreference(value?: string): string {
+  const v = value?.toUpperCase?.() || '';
+  if (v === 'TAX_EXEMPT' || v === 'EXEMPT') return 'EXEMPT';
+  if (v === 'NON_TAXABLE' || v === 'NON_GST') return 'NON_GST';
+  if (v === 'NIL_RATED') return 'NIL_RATED';
+  if (v === 'ZERO_RATED') return 'ZERO_RATED';
+  if (v === 'COMPOSITION') return 'COMPOSITION';
+  if (v === 'REVERSE_CHARGE') return 'REVERSE_CHARGE';
+  if (v === 'NOT_APPLICABLE') return 'NOT_APPLICABLE';
+  return 'TAXABLE';
+}
+
 @Injectable()
 export class VendorsService {
   constructor(
@@ -291,7 +303,7 @@ export class VendorsService {
           panNumber: trimmedPan,
           gstRegistrationStatus: toGSTRegistrationStatus(gstRegistrationStatus || gstTreatment || customerType) as any,
           customerType: toCustomerType(customerType) as any,
-          taxPreference: (taxPreference as any) || "TAXABLE",
+          taxPreference: toTaxPreference(taxPreference) as any,
           address: effectiveAddress,
           state: effectiveState,
           stateCode: trimmedGstin ? trimmedGstin.substring(0, 2) : null,
@@ -473,7 +485,7 @@ export class VendorsService {
         updateData.customerType = toCustomerType(customerType) as any;
       }
       if (taxPreference !== undefined) {
-        updateData.taxPreference = taxPreference as any;
+        updateData.taxPreference = toTaxPreference(taxPreference) as any;
       }
       if (openingBalanceType !== undefined) {
         updateData.openingBalanceType = openingBalanceType;
