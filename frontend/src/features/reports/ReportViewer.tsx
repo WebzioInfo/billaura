@@ -65,6 +65,8 @@ type DatePreset =
   | 'prev_quarter'
   | 'prev_fiscal_year'
   | 'fy_2024_2025'
+  | 'fy_2025_2026'
+  | 'fy_2026_2027'
   | 'all_time'
   | 'custom';
 
@@ -80,6 +82,8 @@ const DATE_PRESET_LABELS: Record<DatePreset, string> = {
   prev_quarter: 'Previous Quarter',
   prev_fiscal_year: 'Previous Fiscal Year',
   fy_2024_2025: 'FY 2024-2025',
+  fy_2025_2026: 'FY 2025-2026',
+  fy_2026_2027: 'FY 2026-2027',
   all_time: 'All Time',
   custom: 'Custom Date',
 };
@@ -161,6 +165,18 @@ const getDatePresetRange = (preset: DatePreset) => {
       return {
         start: '2024-04-01',
         end: '2025-03-31',
+      };
+    }
+    case 'fy_2025_2026': {
+      return {
+        start: '2025-04-01',
+        end: '2026-03-31',
+      };
+    }
+    case 'fy_2026_2027': {
+      return {
+        start: '2026-04-01',
+        end: '2027-03-31',
       };
     }
     case 'all_time': {
