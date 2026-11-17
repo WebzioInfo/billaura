@@ -330,22 +330,11 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
     }
   }, [nextNoData, setValue, isEditMode]);
 
-  // Set default Revenue Account (e.g. Course Fees Income)
-  useEffect(() => {
-    if (!isEditMode && !watch('salesAccountId') && revenueAccounts.length > 0) {
-      const preferred =
-        revenueAccounts.find((a: any) => a.name.toLowerCase().includes('course')) ||
-        revenueAccounts[0];
-      if (preferred) {
-        setValue('salesAccountId', preferred.id);
-      }
-    }
-  }, [revenueAccounts, isEditMode, watch, setValue]);
-
   // Pre-populate if editing an existing draft
   useEffect(() => {
     if (isEditMode && draftData) {
       if (draftData.businessPartnerId) setValue('customerId', draftData.businessPartnerId);
+      if (draftData.salesAccountId) setValue('salesAccountId', draftData.salesAccountId);
       if (draftData.invoiceType) {
         setValue(
           'invoiceType',
@@ -735,6 +724,26 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
   const handleFormSubmit = async (data: InvoiceFormValues, allowNegativeStock = false) => {
     setIsSubmitting(true);
     try {
+      const isInvoiceDoc =
+        docType !== 'QUOTATION' &&
+        docType !== 'SALES_ORDER' &&
+        docType !== 'CREDIT_NOTE' &&
+        docType !== 'DELIVERY_CHALLAN';
+
+      if (isInvoiceDoc && (!data.salesAccountId || !data.salesAccountId.trim())) {
+        form.setError('salesAccountId', {
+          type: 'manual',
+          message: 'Revenue Account is required. Please choose an account from the dropdown.',
+        });
+        notification.error('Please choose a Revenue Account from the dropdown');
+        setIsSubmitting(false);
+        const element = document.querySelector('select[name="salesAccountId"]') as HTMLElement;
+        if (element) {
+          element.focus();
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
       // Stock availability validation for stock-tracked products
       if (!allowNegativeStock && submitStatus !== 'DRAFT' && docType !== 'QUOTATION' && docType !== 'CREDIT_NOTE') {
         const aggregatedQty = new Map<string, number>();
@@ -1462,15 +1471,19 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#2B2F36] mb-1.5">
-                Revenue Account
+              <label className="block text-xs font-semibold text-[#2B2F36] mb-1.5 flex items-center gap-1">
+                <span>Revenue Account</span>
+                <span className="text-[#DC2626]">*</span>
               </label>
               <div className="relative">
                 <select
                   {...register('salesAccountId')}
                   onChange={async (e) => {
                     const newAccId = e.target.value;
-                    setValue('salesAccountId', newAccId);
+                    setValue('salesAccountId', newAccId, { shouldValidate: true, shouldDirty: true });
+                    if (newAccId) {
+                      form.clearErrors('salesAccountId');
+                    }
                     if (!isEditMode) {
                       const selectedAcc = revenueAccounts.find((a: any) => a.id === newAccId);
                       const accName = (selectedAcc?.name || '').toLowerCase();
@@ -1494,7 +1507,9 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
                       }
                     }
                   }}
-                  className="w-full h-8 px-2.5 pr-8 bg-white border border-[#CBD5E1] rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] appearance-none cursor-pointer"
+                  className={`w-full h-8 px-2.5 pr-8 bg-white border ${
+                    errors.salesAccountId ? 'border-[#DC2626] ring-1 ring-[#DC2626]' : 'border-[#CBD5E1]'
+                  } rounded-[4px] text-xs text-[#2B2F36] outline-none focus:border-[#408DFB] appearance-none cursor-pointer`}
                 >
                   <option value="">Select Revenue Account</option>
                   {revenueAccounts.map((acc: any) => (
@@ -1505,6 +1520,9 @@ export const SalesDocumentForm: React.FC<SalesDocumentFormProps> = ({
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] absolute right-2 top-2.5 pointer-events-none" />
               </div>
+              {errors.salesAccountId && (
+                <p className="text-[#DC2626] text-[11px] mt-1 font-medium">{errors.salesAccountId.message}</p>
+              )}
             </div>
           </div>
 

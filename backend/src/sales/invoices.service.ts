@@ -1445,6 +1445,7 @@ export class InvoicesService {
               notes: dto.notes || dto.customerNotes,
               termsConditions: dto.termsConditions,
               documentType: docType,
+              salesAccountId: dto.salesAccountId,
               paymentMode: dto.paymentMode,
               paymentReference: dto.paymentReference,
               paymentTerms: dto.paymentTerms,
