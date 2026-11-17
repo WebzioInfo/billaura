@@ -18,6 +18,9 @@ import {
   Car,
   Receipt,
   Tag,
+  Copy,
+  Minus,
+  Square,
 } from 'lucide-react';
 import apiClient, { ensureArray } from '@/core/api';
 import notification from '@/core/services/NotificationService';
@@ -34,6 +37,418 @@ export const TAX_RATES = [
   { id: 'GST18', name: '[GST18] GST 18% (18%)', rate: 18, type: 'GST' },
   { id: 'GST28', name: '[GST28] GST 28% (28%)', rate: 28, type: 'GST' },
 ];
+
+export interface ClonedExpenseDraft {
+  id: string;
+  title: string;
+  date: string;
+  accountId: string;
+  amount: string;
+  currency: string;
+  paidThroughId: string;
+  expenseType: 'GOODS' | 'SERVICES' | 'NONE';
+  hsnSac: string;
+  vendorId: string;
+  vendorGstin: string;
+  isGstApplicable: boolean;
+  gstTreatment: string;
+  sourceOfSupply: string;
+  destinationOfSupply: string;
+  reverseCharge: boolean;
+  selectedTaxId: string;
+  amountIs: 'TAX_EXCLUSIVE' | 'TAX_INCLUSIVE';
+  invoiceNumber: string;
+  notes: string;
+  customerId: string;
+  isBillable: boolean;
+  reportingTags: string[];
+  isMinimized: boolean;
+}
+
+interface FloatingExpenseCardProps {
+  draft: ClonedExpenseDraft;
+  index: number;
+  expenseAccounts: Array<{ id: string; name: string; categoryId?: string; code?: string }>;
+  paidThroughAccounts: Array<{ id: string; name: string; group: string }>;
+  vendors: any[];
+  categories: any[];
+  onUpdate: (updated: ClonedExpenseDraft) => void;
+  onClose: () => void;
+  onCloneAnother: (draft: ClonedExpenseDraft) => void;
+  onSuccessSave: () => void;
+}
+
+const FloatingExpenseCard: React.FC<FloatingExpenseCardProps> = ({
+  draft,
+  expenseAccounts,
+  paidThroughAccounts,
+  vendors,
+  categories,
+  onUpdate,
+  onClose,
+  onCloneAnother,
+  onSuccessSave,
+}) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Dynamic calculations
+  const rawAmount = parseFloat(draft.amount) || 0;
+  const taxOption = TAX_RATES.find((t) => t.id === draft.selectedTaxId) || TAX_RATES[0];
+  const rate = draft.isGstApplicable ? (taxOption.rate || 0) : 0;
+
+  let taxableBase = 0;
+  let totalTax = 0;
+  let finalTotal = 0;
+
+  if (rate > 0) {
+    if (draft.amountIs === 'TAX_INCLUSIVE') {
+      finalTotal = Math.round(rawAmount * 100) / 100;
+      totalTax = Math.round(((rawAmount * rate) / (100 + rate)) * 100) / 100;
+      taxableBase = Math.round((finalTotal - totalTax) * 100) / 100;
+    } else {
+      taxableBase = Math.round(rawAmount * 100) / 100;
+      totalTax = Math.round(((taxableBase * rate) / 100) * 100) / 100;
+      finalTotal = Math.round((taxableBase + totalTax) * 100) / 100;
+    }
+  } else {
+    taxableBase = Math.round(rawAmount * 100) / 100;
+    totalTax = 0;
+    finalTotal = taxableBase;
+  }
+
+  const handleSave = async (andClone = false) => {
+    if (!draft.date) {
+      notification.error('Please enter an expense date in popup');
+      return;
+    }
+    if (!draft.accountId) {
+      notification.error('Please select an Expense Account in popup');
+      return;
+    }
+    if (isNaN(rawAmount) || rawAmount <= 0) {
+      notification.error('Please enter a valid expense Amount greater than zero in popup');
+      return;
+    }
+    if (!draft.paidThroughId) {
+      notification.error('Please select a Paid Through account in popup');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const matchedAccount = expenseAccounts.find((a) => a.id === draft.accountId);
+      const resolvedCategoryId =
+        matchedAccount?.categoryId ||
+        categories.find((c: any) => c.accountId === draft.accountId)?.id ||
+        undefined;
+
+      const cgst = Math.round((totalTax / 2) * 100) / 100;
+      const sgst = Math.round((totalTax - cgst) * 100) / 100;
+
+      const payload = {
+        date: draft.date,
+        accountId: draft.accountId,
+        categoryId: resolvedCategoryId,
+        amount: rawAmount,
+        taxAmount: totalTax,
+        totalAmount: finalTotal,
+        paidThroughAccountId: draft.paidThroughId,
+        vendorId: draft.vendorId || undefined,
+        gstTreatment: draft.isGstApplicable ? draft.gstTreatment : 'Unregistered Business',
+        taxId: draft.isGstApplicable ? (draft.selectedTaxId || undefined) : undefined,
+        gstRate: rate,
+        taxApplicable: rate > 0,
+        taxType: rate > 0 ? 'GST' : undefined,
+        taxMode: draft.amountIs,
+        taxableAmount: taxableBase,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: 0,
+        invoiceNumber: draft.invoiceNumber?.trim() || undefined,
+        billNumber: draft.invoiceNumber?.trim() || undefined,
+        notes: draft.notes?.trim() || undefined,
+        autoApprove: true,
+        approvalStatus: 'APPROVED',
+      };
+
+      await apiClient.post('/expenses', payload);
+      notification.success(`${draft.title} recorded successfully!`);
+
+      if (andClone) {
+        onCloneAnother(draft);
+      }
+      onSuccessSave();
+    } catch (err: any) {
+      const msg = err.response?.data?.message;
+      const formatted = Array.isArray(msg) ? msg.join(', ') : msg;
+      notification.error(formatted || `Failed to save ${draft.title}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (draft.isMinimized) {
+    return (
+      <div
+        onClick={() => onUpdate({ ...draft, isMinimized: false })}
+        className="pointer-events-auto w-64 sm:w-72 h-10 bg-[#1E293B] hover:bg-[#0F172A] text-white px-3 py-2 flex items-center justify-between rounded-t-lg shadow-xl cursor-pointer border border-[#334155] transition-all"
+        title="Click to expand"
+      >
+        <div className="flex items-center gap-2 truncate">
+          <Receipt className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+          <span className="text-xs font-medium truncate">
+            {draft.title}: ₹{draft.amount || '0'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => onUpdate({ ...draft, isMinimized: false })}
+            className="p-1 hover:bg-[#334155] rounded text-[#94A3B8] hover:text-white"
+            title="Expand"
+          >
+            <Square className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 hover:bg-[#DC2626] rounded text-[#94A3B8] hover:text-white"
+            title="Close"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pointer-events-auto w-[360px] sm:w-[420px] max-h-[85vh] h-[520px] bg-white rounded-t-lg shadow-2xl border border-[#CBD5E1] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
+      {/* Card Header (Gmail style) */}
+      <div className="bg-[#1E293B] text-white px-3.5 py-2.5 flex items-center justify-between select-none shrink-0">
+        <div className="flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-[#38BDF8]" />
+          <span className="font-semibold text-xs text-white">{draft.title}</span>
+          <span className="text-[10px] bg-[#334155] text-[#CBD5E1] px-1.5 py-0.5 rounded font-mono">
+            {draft.date}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onUpdate({ ...draft, isMinimized: true })}
+            className="p-1 hover:bg-[#334155] rounded text-[#94A3B8] hover:text-white transition-colors"
+            title="Minimize"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 hover:bg-[#DC2626] rounded text-[#94A3B8] hover:text-white transition-colors"
+            title="Discard popup"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-[#F8FAFC]">
+        {/* Row 1: Date & Paid Through */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+              Date <span className="text-[#DC2626]">*</span>
+            </label>
+            <input
+              type="date"
+              value={draft.date}
+              onChange={(e) => onUpdate({ ...draft, date: e.target.value })}
+              className="w-full h-7 px-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] outline-none focus:border-[#2563EB]"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+              Paid Through <span className="text-[#DC2626]">*</span>
+            </label>
+            <select
+              value={draft.paidThroughId}
+              onChange={(e) => onUpdate({ ...draft, paidThroughId: e.target.value })}
+              className="w-full h-7 px-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] outline-none focus:border-[#2563EB]"
+            >
+              <option value="">Select Account</option>
+              {paidThroughAccounts.map((acc) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Row 2: Expense Account */}
+        <div>
+          <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+            Expense Account <span className="text-[#DC2626]">*</span>
+          </label>
+          <select
+            value={draft.accountId}
+            onChange={(e) => onUpdate({ ...draft, accountId: e.target.value })}
+            className="w-full h-7 px-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] outline-none focus:border-[#2563EB]"
+          >
+            <option value="">Select Expense Account</option>
+            {expenseAccounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>
+                {acc.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Row 3: Amount & Tax Mode */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+              Amount (₹) <span className="text-[#DC2626]">*</span>
+            </label>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              placeholder="0.00"
+              value={draft.amount}
+              onChange={(e) => onUpdate({ ...draft, amount: e.target.value })}
+              className="w-full h-7 px-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] font-semibold outline-none focus:border-[#2563EB]"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+              Tax Mode
+            </label>
+            <select
+              value={draft.amountIs}
+              onChange={(e) => onUpdate({ ...draft, amountIs: e.target.value as any })}
+              className="w-full h-7 px-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] outline-none focus:border-[#2563EB]"
+            >
+              <option value="TAX_EXCLUSIVE">Tax Exclusive</option>
+              <option value="TAX_INCLUSIVE">Tax Inclusive</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Row 4: Vendor & Tax Rate */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+              Vendor
+            </label>
+            <select
+              value={draft.vendorId}
+              onChange={(e) => onUpdate({ ...draft, vendorId: e.target.value })}
+              className="w-full h-7 px-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] outline-none focus:border-[#2563EB]"
+            >
+              <option value="">Select Vendor (Optional)</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name || v.companyName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+              Tax Rate
+            </label>
+            <select
+              value={draft.selectedTaxId}
+              onChange={(e) => onUpdate({ ...draft, selectedTaxId: e.target.value })}
+              className="w-full h-7 px-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] outline-none focus:border-[#2563EB]"
+            >
+              {TAX_RATES.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Row 5: Invoice Number & Notes */}
+        <div>
+          <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+            Bill / Invoice#
+          </label>
+          <input
+            type="text"
+            placeholder="INV-99882 (optional)"
+            value={draft.invoiceNumber}
+            onChange={(e) => onUpdate({ ...draft, invoiceNumber: e.target.value })}
+            className="w-full h-7 px-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] outline-none focus:border-[#2563EB]"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+            Notes
+          </label>
+          <textarea
+            rows={2}
+            placeholder="Reason, details or memo..."
+            value={draft.notes}
+            onChange={(e) => onUpdate({ ...draft, notes: e.target.value })}
+            className="w-full p-2 bg-white border border-[#CBD5E1] rounded text-xs text-[#1E293B] outline-none focus:border-[#2563EB] resize-none"
+          />
+        </div>
+
+        {/* Calculation summary bar */}
+        <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded p-2 text-[11px] text-[#1E3A8A] flex justify-between items-center font-medium">
+          <div>
+            <span>Taxable: ₹{taxableBase.toFixed(2)}</span>
+            {rate > 0 && <span className="ml-1.5 text-[#2563EB]">(GST {rate}%: ₹{totalTax.toFixed(2)})</span>}
+          </div>
+          <div className="font-bold text-[#1D4ED8] text-xs">
+            Total: ₹{finalTotal.toFixed(2)}
+          </div>
+        </div>
+      </div>
+
+      {/* Card Footer */}
+      <div className="bg-white px-3 py-2 border-t border-[#E2E8F0] flex items-center justify-between gap-2 shrink-0">
+        <button
+          type="button"
+          disabled={isSaving}
+          onClick={() => handleSave(true)}
+          className="text-[11px] font-medium text-[#2563EB] hover:text-[#1D4ED8] flex items-center gap-1 hover:underline disabled:opacity-50 cursor-pointer"
+          title="Save this expense and immediately open another clone with same date"
+        >
+          <Copy className="w-3 h-3" />
+          <span>Save & Clone</span>
+        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="px-2.5 py-1 text-xs text-[#475569] hover:bg-[#F1F5F9] rounded border border-[#CBD5E1] cursor-pointer"
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => handleSave(false)}
+            className="px-3 py-1 text-xs font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded shadow-xs disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+          >
+            {isSaving && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />}
+            <span>Save Expense</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const ExpenseForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -90,6 +505,9 @@ export const ExpenseForm: React.FC = () => {
   const markDirty = () => {
     if (!isDirty) setIsDirty(true);
   };
+
+  // Floating cloned expense drafts (Gmail compose card style)
+  const [clonedModals, setClonedModals] = useState<ClonedExpenseDraft[]>([]);
 
   // Queries
   const { data: accountsData } = useQuery({
@@ -587,9 +1005,8 @@ export const ExpenseForm: React.FC = () => {
     markDirty();
   };
 
-  // Form Reset for "Save and New"
+  // Form Reset for "Save and New" - keeps date and paidThrough account intact for batch entry
   const resetForm = () => {
-    setDate(new Date().toISOString().split('T')[0]);
     setAmount('');
     setHsnSac('');
     setVendorId('');
@@ -606,6 +1023,39 @@ export const ExpenseForm: React.FC = () => {
     setNotes('');
     setUploadedReceipts([]);
     setIsDirty(false);
+  };
+
+  // Clone current entered data into a floating Gmail-style modal
+  const handleCloneToModal = () => {
+    const nextIndex = clonedModals.length + 2;
+    const newDraft: ClonedExpenseDraft = {
+      id: `draft-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      title: `Expense #${nextIndex}`,
+      date: date || new Date().toISOString().split('T')[0],
+      accountId: accountId || (expenseAccounts[0]?.id ?? ''),
+      amount: amount || '',
+      currency,
+      paidThroughId: paidThroughId || (paidThroughAccounts[0]?.id ?? ''),
+      expenseType,
+      hsnSac,
+      vendorId,
+      vendorGstin,
+      isGstApplicable,
+      gstTreatment,
+      sourceOfSupply,
+      destinationOfSupply,
+      reverseCharge,
+      selectedTaxId,
+      amountIs,
+      invoiceNumber,
+      notes,
+      customerId,
+      isBillable,
+      reportingTags: [...reportingTags],
+      isMinimized: false,
+    };
+    setClonedModals((prev) => [...prev, newDraft]);
+    notification.success(`Duplicate expense popup opened (Expense #${nextIndex})`);
   };
 
   // Save Mutation
@@ -706,7 +1156,7 @@ export const ExpenseForm: React.FC = () => {
     navigate('/expenses');
   };
 
-  // Keyboard shortcut listener (Alt+S, Alt+N)
+  // Keyboard shortcut listener (Alt+S, Alt+N, Alt+D)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && (e.key === 's' || e.key === 'S')) {
@@ -715,6 +1165,9 @@ export const ExpenseForm: React.FC = () => {
       } else if (e.altKey && (e.key === 'n' || e.key === 'N')) {
         e.preventDefault();
         handleSubmit(true);
+      } else if (e.altKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        handleCloneToModal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1691,6 +2144,23 @@ export const ExpenseForm: React.FC = () => {
           </button>
         )}
 
+        {!isEditMode && (
+          <button
+            type="button"
+            onClick={handleCloneToModal}
+            className="bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#1E293B] border border-[#CBD5E1] font-semibold px-3.5 py-1.5 rounded-[4px] text-xs transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer hover:border-[#94A3B8]"
+            title="Pop open a duplicate expense modal with current data (Alt+D)"
+          >
+            <Copy className="w-3.5 h-3.5 text-[#2563EB]" />
+            <span>Duplicate into Modal (Alt+D)</span>
+            {clonedModals.length > 0 && (
+              <span className="ml-0.5 bg-[#EFF6FF] text-[#2563EB] text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[#BFDBFE]">
+                {clonedModals.length}
+              </span>
+            )}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={handleCancel}
@@ -1993,6 +2463,47 @@ export const ExpenseForm: React.FC = () => {
           </div>
         </div>
       </ZohoModal>
+
+      {/* 6. Floating Cloned Expense Windows (Gmail style compose dock) */}
+      {clonedModals.length > 0 && (
+        <div className="fixed bottom-0 right-4 z-50 flex items-end gap-3 pointer-events-none max-w-full overflow-x-auto p-2">
+          {clonedModals.map((draft, idx) => (
+            <FloatingExpenseCard
+              key={draft.id}
+              draft={draft}
+              index={idx}
+              expenseAccounts={expenseAccounts}
+              paidThroughAccounts={paidThroughAccounts}
+              vendors={vendors}
+              categories={categories}
+              onUpdate={(updated) => {
+                setClonedModals((prev) =>
+                  prev.map((d) => (d.id === draft.id ? updated : d))
+                );
+              }}
+              onClose={() => {
+                setClonedModals((prev) => prev.filter((d) => d.id !== draft.id));
+              }}
+              onCloneAnother={(current) => {
+                const newIndex = clonedModals.length + 2;
+                const newDraft: ClonedExpenseDraft = {
+                  ...current,
+                  id: `draft-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                  title: `Expense #${newIndex}`,
+                  isMinimized: false,
+                };
+                setClonedModals((prev) => [...prev, newDraft]);
+              }}
+              onSuccessSave={() => {
+                queryClient.invalidateQueries({ queryKey: ['expenses'] });
+                queryClient.invalidateQueries({ queryKey: ['accounts'] });
+                queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+                setClonedModals((prev) => prev.filter((d) => d.id !== draft.id));
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
