@@ -685,18 +685,17 @@ export class ExpensesService {
 
     return this.prisma.$transaction(
       async (tx) => {
-        // 1. If previously approved, reverse original journal postings to unwind accounting and bank balances
+        // 1. If previously approved, cleanly unwind original journal postings so the updated entry replaces it without cluttering the ledger with reversals
         if (existing.approvalStatus === 'APPROVED') {
           const originalEntries = await tx.journalEntry.findMany({
             where: { reference: existing.expenseNo, companyId },
           });
 
           for (const entry of originalEntries) {
-            await this.accountingEngine.reverseTransaction(
+            await this.accountingEngine.unwindTransaction(
               entry.id,
               companyId,
               tx,
-              `Reversal for edit of expense ${existing.expenseNo}`,
             );
           }
         }

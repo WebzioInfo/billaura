@@ -591,4 +591,84 @@ export class AccountingEngineService {
       tx
     );
   }
+
+  /**
+   * Unwinds and removes an existing journal entry cleanly without posting a reversal entry.
+   * Restores account, bank, and cash balances to their pre-posting state.
+   */
+  async unwindTransaction(
+    journalEntryId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient
+  ) {
+    const originalEntry = await tx.journalEntry.findUnique({
+      where: { id: journalEntryId },
+      include: { lines: true },
+    });
+
+    if (!originalEntry || originalEntry.companyId !== companyId) {
+      return;
+    }
+
+    // Unwind balances
+    for (const line of originalEntry.lines) {
+      const debitNum = Number(line.debit || 0);
+      const creditNum = Number(line.credit || 0);
+      const netChange = debitNum - creditNum;
+
+      // Revert account balance
+      await tx.account.update({
+        where: { id: line.accountId },
+        data: {
+          balance: {
+            decrement: netChange,
+          },
+        },
+      });
+
+      // Revert linked BankAccount
+      const linkedBank = await tx.bankAccount.findFirst({
+        where: { accountId: line.accountId, companyId, deletedAt: null },
+      });
+      if (linkedBank) {
+        await tx.bankAccount.update({
+          where: { id: linkedBank.id },
+          data: {
+            currentBalance: { decrement: netChange },
+          },
+        });
+      }
+
+      // Revert linked CashAccount
+      const linkedCash = await tx.cashAccount.findFirst({
+        where: { accountId: line.accountId, companyId, deletedAt: null },
+      });
+      if (linkedCash) {
+        await tx.cashAccount.update({
+          where: { id: linkedCash.id },
+          data: {
+            currentBalance: { decrement: netChange },
+          },
+        });
+      }
+    }
+
+    // Remove any bank/cash transactions created for this reference
+    if (originalEntry.reference) {
+      await tx.bankTransaction.deleteMany({
+        where: { companyId, reference: originalEntry.reference },
+      });
+      await tx.cashTransaction.deleteMany({
+        where: { companyId, reference: originalEntry.reference },
+      });
+    }
+
+    // Delete lines and entry
+    await tx.journalLine.deleteMany({
+      where: { journalEntryId: originalEntry.id },
+    });
+    await tx.journalEntry.delete({
+      where: { id: originalEntry.id },
+    });
+  }
 }
