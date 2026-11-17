@@ -64,6 +64,7 @@ type DatePreset =
   | 'prev_month'
   | 'prev_quarter'
   | 'prev_fiscal_year'
+  | 'fy_2023_2024'
   | 'fy_2024_2025'
   | 'fy_2025_2026'
   | 'fy_2026_2027'
@@ -81,12 +82,42 @@ const DATE_PRESET_LABELS: Record<DatePreset, string> = {
   prev_month: 'Previous Month',
   prev_quarter: 'Previous Quarter',
   prev_fiscal_year: 'Previous Fiscal Year',
+  fy_2023_2024: 'FY 2023-2024',
   fy_2024_2025: 'FY 2024-2025',
   fy_2025_2026: 'FY 2025-2026',
   fy_2026_2027: 'FY 2026-2027',
   all_time: 'All Time',
   custom: 'Custom Date',
 };
+
+// Balance Sheet and other point-in-time statements are tracked by Financial Years
+const AS_OF_DATE_PRESETS: DatePreset[] = [
+  'fy_2024_2025',
+  'fy_2025_2026',
+  'fy_2026_2027',
+  'this_fiscal_year',
+  'prev_fiscal_year',
+  'all_time',
+  'custom',
+];
+
+const PERIOD_DATE_PRESETS: DatePreset[] = [
+  'this_month',
+  'this_quarter',
+  'this_fiscal_year',
+  'prev_month',
+  'prev_quarter',
+  'prev_fiscal_year',
+  'fy_2024_2025',
+  'fy_2025_2026',
+  'fy_2026_2027',
+  'today',
+  'this_week',
+  'yesterday',
+  'prev_week',
+  'all_time',
+  'custom',
+];
 
 const formatYMD = (d: Date): string => {
   const year = d.getFullYear();
@@ -161,6 +192,12 @@ const getDatePresetRange = (preset: DatePreset) => {
         end: `${fyStartYear + 1}-03-31`,
       };
     }
+    case 'fy_2023_2024': {
+      return {
+        start: '2023-04-01',
+        end: '2024-03-31',
+      };
+    }
     case 'fy_2024_2025': {
       return {
         start: '2024-04-01',
@@ -207,14 +244,24 @@ export const ReportViewer: React.FC = () => {
     return reportKey ? getReportByKey(reportKey) : undefined;
   }, [reportKey]);
 
+  const isAsOf = reportDef?.dateMode === 'asOf';
+  const allowedPresets = useMemo(
+    () => (isAsOf ? AS_OF_DATE_PRESETS : PERIOD_DATE_PRESETS),
+    [isAsOf]
+  );
+
   // Drawer state for Quick Report Switch
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const defaultPreset: DatePreset = reportDef?.dateMode === 'asOf' ? 'today' : 'all_time';
+  const defaultPreset: DatePreset = 'all_time';
 
   // Filter UI state (read initial values from URL query string)
   const [datePreset, setDatePreset] = useState<DatePreset>(() => {
-    return (searchParams.get('preset') as DatePreset) || defaultPreset;
+    const fromParam = searchParams.get('preset') as DatePreset;
+    if (fromParam && (isAsOf ? AS_OF_DATE_PRESETS : PERIOD_DATE_PRESETS).includes(fromParam)) {
+      return fromParam;
+    }
+    return defaultPreset;
   });
 
   const [startDate, setStartDate] = useState<string>(() => {
@@ -230,7 +277,7 @@ export const ReportViewer: React.FC = () => {
   });
 
   const [asOfDate, setAsOfDate] = useState<string>(() => {
-    return searchParams.get('asOf') || formatYMD(new Date());
+    return searchParams.get('asOf') || getDatePresetRange(defaultPreset).end || formatYMD(new Date());
   });
 
   const [reportingBasis, setReportingBasis] = useState<'Accrual' | 'Cash'>(() => {
@@ -291,6 +338,13 @@ export const ReportViewer: React.FC = () => {
       setHasUnsavedFilterChanges(true);
     }
   };
+
+  // If current preset is not valid for this report type (e.g. daily/weekly preset on balance sheet), fallback
+  useEffect(() => {
+    if (!allowedPresets.includes(datePreset)) {
+      handlePresetChange(defaultPreset);
+    }
+  }, [reportKey, isAsOf, allowedPresets]);
 
   // Run Report handler
   const handleRunReport = () => {
@@ -567,7 +621,7 @@ export const ReportViewer: React.FC = () => {
               onChange={(e) => handlePresetChange(e.target.value as DatePreset)}
               className="h-8 pl-3 pr-8 text-[12px] font-medium text-[#333333] bg-white border border-[#d9dce3] rounded appearance-none cursor-pointer hover:border-[#b0b5c0] focus:outline-none focus:border-[#408dfb]"
             >
-              {(Object.keys(DATE_PRESET_LABELS) as DatePreset[]).map((p) => (
+              {allowedPresets.map((p) => (
                 <option key={p} value={p}>
                   {reportDef.dateMode === 'asOf' ? `As of: ${DATE_PRESET_LABELS[p]}` : `Date Range: ${DATE_PRESET_LABELS[p]}`}
                 </option>
