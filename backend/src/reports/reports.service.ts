@@ -280,6 +280,41 @@ export class ReportsService {
 
     const currentYearEarnings = currentYearRevenue - currentYearExpense;
 
+    // 3b. Compute Prior Years Earnings (carried forward into Retained Earnings)
+    const priorYearRevenueExpenses = await this.prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where: {
+        journalEntry: {
+          companyId,
+          date: { lt: fyStartDate },
+          deletedAt: null,
+        },
+        account: {
+          category: { in: ['REVENUE', 'EXPENSE'] },
+        },
+        deletedAt: null,
+      },
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    let priorYearRevenue = 0;
+    let priorYearExpense = 0;
+    priorYearRevenueExpenses.forEach((re) => {
+      const acc = accountMap.get(re.accountId);
+      const debit = Number(re._sum.debit || 0);
+      const credit = Number(re._sum.credit || 0);
+      if (acc?.category === 'REVENUE') {
+        priorYearRevenue += credit - debit;
+      } else if (acc?.category === 'EXPENSE') {
+        priorYearExpense += debit - credit;
+      }
+    });
+
+    const priorYearsEarnings = priorYearRevenue - priorYearExpense;
+
     // 4. Organize Assets into Zoho Hierarchical Structure
     const assetAccounts = processedAccounts.filter((a) => a.category === 'ASSET');
     const cashList = assetAccounts.filter(
@@ -351,7 +386,8 @@ export class ReportsService {
 
     const totalCapital = capitalList.reduce((s, a) => s + a.balance, 0);
     const totalDrawings = drawingsList.reduce((s, a) => s + a.balance, 0);
-    const totalRetained = retainedList.reduce((s, a) => s + a.balance, 0) + otherEquityList.reduce((s, a) => s + a.balance, 0);
+    const totalExplicitRetained = retainedList.reduce((s, a) => s + a.balance, 0) + otherEquityList.reduce((s, a) => s + a.balance, 0);
+    const totalRetained = totalExplicitRetained + priorYearsEarnings;
     const totalEquities = totalCapital - totalDrawings + totalRetained + currentYearEarnings;
 
     const totalLiabilitiesAndEquities = totalLiabilities + totalEquities;
