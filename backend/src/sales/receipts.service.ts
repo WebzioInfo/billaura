@@ -710,71 +710,27 @@ export class ReceiptsService {
         },
       });
 
-      // 3. Revert Cash/Bank Account balances on BankAccount/CashAccount (GL Account is reverted by accountingEngine.reverseTransaction below)
-      for (const payment of receipt.payments) {
-        const bankCharges = Number(payment.bankCharges || 0);
-        const netDeposit = Number(payment.amount) - bankCharges;
-        const bankAcc = await tx.bankAccount.findFirst({
-          where: { OR: [{ id: payment.accountId }, { accountId: payment.accountId }], companyId },
-        });
-        if (bankAcc) {
-          await tx.bankAccount.update({
-            where: { id: bankAcc.id },
-            data: { currentBalance: { decrement: netDeposit } },
-          });
-        } else {
-          const cashAcc = await tx.cashAccount.findFirst({
-            where: { OR: [{ id: payment.accountId }, { accountId: payment.accountId }], companyId },
-          });
-          if (cashAcc) {
-            await tx.cashAccount.update({
-              where: { id: cashAcc.id },
-              data: { currentBalance: { decrement: netDeposit } },
-            });
-          }
-        }
-      }
-
-      // 4. Revert Customer Statement (create contra entry or delete)
-      await tx.customerStatement.create({
-        data: {
-          companyId,
-          businessPartnerId: receipt.businessPartnerId,
-          date: new Date(),
-          type: 'REFUND',
-          reference: `REV-${receipt.receiptNo}`,
-          debit: receipt.amount,
-          credit: 0,
-          balance: Number(receipt.businessPartner.receivableBalance) + Number(receipt.amount),
-        },
+      // 3. Delete customer statement for this receipt
+      await tx.customerStatement.deleteMany({
+        where: { companyId, reference: receipt.receiptNo },
       });
 
-      // 5. Revert General Ledger Journal entries using AccountingEngineService
+      // 4. Unwind General Ledger Journal entries cleanly using AccountingEngineService
+      // (This automatically unwinds account balances, linked bank/cash balances, and deletes bank/cash transactions)
       const originalEntries = await tx.journalEntry.findMany({
         where: { reference: receipt.receiptNo, companyId: receipt.companyId },
       });
 
       for (const entry of originalEntries) {
-        await this.accountingEngine.reverseTransaction(entry.id, receipt.companyId, tx, `Reversal entry for receipt void ${receipt.receiptNo}`);
+        await this.accountingEngine.unwindTransaction(entry.id, receipt.companyId, tx);
       }
 
-      // Soft delete receipt
-      await tx.receipt.update({
-        where: { id },
-        data: {
-          status: 'VOID',
-          deletedAt: new Date(),
-        },
-      });
-
-      await tx.receiptAudit.create({
-        data: {
-          receiptId: id,
-          userId,
-          action: 'DELETE',
-          details: { reason: 'Void Receipt' },
-        },
-      });
+      // 5. Delete receipt and its child records cleanly
+      await tx.receiptAllocation.deleteMany({ where: { receiptId: id } });
+      await tx.receiptPayment.deleteMany({ where: { receiptId: id } });
+      await tx.receiptAttachment.deleteMany({ where: { receiptId: id } });
+      await tx.receiptAudit.deleteMany({ where: { receiptId: id } });
+      await tx.receipt.delete({ where: { id } });
 
       return { success: true };
     }, { timeout: 30000 });

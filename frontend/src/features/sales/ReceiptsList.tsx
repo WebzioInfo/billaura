@@ -45,6 +45,7 @@ export const ReceiptsList: React.FC = () => {
   const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [receiptToVoid, setReceiptToVoid] = useState<any | null>(null);
+  const [receiptToDelete, setReceiptToDelete] = useState<any | null>(null);
 
   // Fetch unified receipts
   const { data: receiptsResponse, isLoading, refetch } = useQuery({
@@ -205,6 +206,25 @@ export const ReceiptsList: React.FC = () => {
       width: '100px',
       render: (row) => <ZohoStatusText status={row.status || 'PAID'} />,
     },
+    {
+      key: 'actions',
+      label: 'Actions',
+      width: '80px',
+      align: 'center',
+      render: (row) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setReceiptToDelete(row);
+          }}
+          className="p-1 text-[#9CA3AF] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded transition-colors cursor-pointer"
+          title="Delete Payment"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      ),
+    },
   ];
 
   return (
@@ -243,6 +263,15 @@ export const ReceiptsList: React.FC = () => {
                 title="Void Payment"
               >
                 <Ban className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptToDelete(selectedReceipt)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-[#CBD5E1] hover:bg-[#FEF2F2] hover:border-[#FCA5A5] rounded-[4px] text-xs font-medium text-[#EF4444] cursor-pointer transition-colors"
+                title="Delete Payment Received"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-[#EF4444]" />
+                <span>Delete</span>
               </button>
             </div>
           }
@@ -389,6 +418,8 @@ export const ReceiptsList: React.FC = () => {
             setReceiptToVoid(null);
             setSelectedReceiptId(null);
             queryClient.invalidateQueries({ queryKey: ['receipts-unified'] });
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['financial-reports'] });
           } catch (err: any) {
             notification.error(err?.response?.data?.message || 'Failed to void payment');
           }
@@ -397,6 +428,31 @@ export const ReceiptsList: React.FC = () => {
         message={`Are you sure you want to void payment receipt ${receiptToVoid?.receiptNo}? All applied invoice balances will be restored.`}
         confirmText="Void Payment"
         loadingText="Voiding..."
+        variant="danger"
+      />
+
+      {/* Delete Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(receiptToDelete)}
+        onClose={() => setReceiptToDelete(null)}
+        onConfirm={async () => {
+          if (!receiptToDelete) return;
+          try {
+            await apiClient.delete(`/receipts/${receiptToDelete.rawId || receiptToDelete.id}`);
+            notification.success('Payment received deleted successfully');
+            setReceiptToDelete(null);
+            setSelectedReceiptId(null);
+            queryClient.invalidateQueries({ queryKey: ['receipts-unified'] });
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['financial-reports'] });
+          } catch (err: any) {
+            notification.error(err?.response?.data?.message || 'Failed to delete payment');
+          }
+        }}
+        title="Delete Payment Received"
+        message={`Are you sure you want to permanently delete payment receipt ${receiptToDelete?.receiptNo}? All applied invoice balances will be restored and accounting entries removed.`}
+        confirmText="Delete"
+        loadingText="Deleting..."
         variant="danger"
       />
     </div>

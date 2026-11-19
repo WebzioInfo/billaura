@@ -920,18 +920,17 @@ export class ExpensesService {
 
     return this.prisma.$transaction(
       async (tx) => {
-        // If approved, reverse the journal using AccountingEngineService
+        // If approved, cleanly unwind the journal using AccountingEngineService
         if (expense.approvalStatus === 'APPROVED') {
           const originalEntries = await tx.journalEntry.findMany({
             where: { reference: expense.expenseNo, companyId: expense.companyId },
           });
 
           for (const entry of originalEntries) {
-            await this.accountingEngine.reverseTransaction(
+            await this.accountingEngine.unwindTransaction(
               entry.id,
               expense.companyId,
-              tx,
-              `Reversal for deleted expense ${expense.expenseNo}`
+              tx
             );
           }
         }
