@@ -124,7 +124,7 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload);
-    const accessTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const accessTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     return {
@@ -264,7 +264,7 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload);
-    const accessTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const accessTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     return {
@@ -317,7 +317,7 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload);
-    const accessTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const accessTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     return {

@@ -137,7 +137,10 @@ export class AuthController {
     @Ip() ip: string,
     @Res({ passthrough: true }) response: Response,
   ) {
-    this.assertCsrf(request);
+    // If refresh token is not passed explicitly in body (i.e. relying on ambient cookie), enforce CSRF validation
+    if (!body.refreshToken) {
+      this.assertCsrf(request);
+    }
     
     // Accept refresh token from body OR cookie
     const refreshToken = body.refreshToken || this.getCookie(request, "ba_refresh");
@@ -155,7 +158,11 @@ export class AuthController {
   @Post("logout")
   @HttpCode(HttpStatus.OK)
   async logout(@Req() request: ExpressRequest, @Res({ passthrough: true }) response: Response) {
-    this.assertCsrf(request);
+    try {
+      this.assertCsrf(request);
+    } catch {
+      // Allow logout to proceed even if CSRF token is absent or mismatched
+    }
     const refreshToken = this.getCookie(request, "ba_refresh");
     if (refreshToken) {
       await this.sessionService.revokeSessionByToken(refreshToken);

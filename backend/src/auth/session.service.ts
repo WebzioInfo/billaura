@@ -48,8 +48,8 @@ export class SessionService {
     const rawToken = this.generateToken();
     const tokenHash = this.hashToken(rawToken);
     
-    // Sessions last 30 days if rememberMe, else 24 hours
-    const durationMs = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+    // Sessions last 90 days if rememberMe, else 30 days
+    const durationMs = rememberMe ? 90 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
     const expiresAt = new Date(Date.now() + durationMs);
     const { deviceName, browser, os } = parseUserAgent(userAgent);
 
@@ -93,10 +93,10 @@ export class SessionService {
     const newTokenHash = this.hashToken(newRawToken);
     const { deviceName, browser, os } = parseUserAgent(userAgent);
 
-    // Refresh extends session lifespan based on original duration
-    const durationMs = (session.expiresAt.getTime() - session.createdAt.getTime()) > (24 * 60 * 60 * 1000) 
-      ? 30 * 24 * 60 * 60 * 1000 
-      : 24 * 60 * 60 * 1000;
+    // Refresh extends session lifespan based on original duration (90 days or 30 days)
+    const durationMs = (session.expiresAt.getTime() - session.createdAt.getTime()) > (30 * 24 * 60 * 60 * 1000) 
+      ? 90 * 24 * 60 * 60 * 1000 
+      : 30 * 24 * 60 * 60 * 1000;
     const expiresAt = new Date(Date.now() + durationMs);
 
     // Compare-and-swap makes refresh rotation single-use even when two requests race.

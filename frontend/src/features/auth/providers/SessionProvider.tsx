@@ -45,9 +45,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
           TokenService.clearTokens();
           clearSession();
         }
-      } catch {
-        TokenService.clearTokens();
-        clearSession();
+      } catch (err: any) {
+        // Only clear tokens if the refresh endpoint explicitly rejected the token
+        if (err?.response && (err.response.status === 401 || err.response.status === 403 || err.response.status === 400)) {
+          TokenService.clearTokens();
+          clearSession();
+        }
       } finally {
         setInitFinished(true);
       }
