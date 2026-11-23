@@ -58,13 +58,13 @@ type JournalView = 'MANUAL' | 'ALL' | 'SYSTEM' | 'DRAFT' | 'PUBLISHED';
 const isAutomaticJournal = (j: any) => {
   const ref = (j.reference || '').toUpperCase();
   const desc = (j.description || '').toLowerCase();
+  if (ref.startsWith('JN-')) return false;
   return (
     ref.startsWith('EXP-') ||
     ref.startsWith('INV-') ||
     ref.startsWith('RCP-') ||
-    ref.startsWith('REC-') ||
     ref.startsWith('REV-') ||
-    ref.startsWith('PAY-') ||
+    ref.startsWith('PAYMENT-') ||
     ref.startsWith('BIL-') ||
     ref.startsWith('PUR-') ||
     desc.startsWith('automatic') ||
@@ -267,7 +267,7 @@ export const JournalVouchersList: React.FC = () => {
       id: j.id,
       name: j.description || j.notes || 'Manual Journal',
       amount: formatCurrency(getEntryTotal(j)),
-      number: j.journalNo || `JN-${j.id.slice(-5)}`,
+      number: j.journalNo || (j.reference?.startsWith('JN-') ? j.reference : `JN-${j.id.slice(-5)}`),
       date: formatDate(j.date),
       status: (j.status || 'PUBLISHED').toUpperCase(),
     }));
@@ -287,17 +287,23 @@ export const JournalVouchersList: React.FC = () => {
       key: 'journalNo',
       label: 'Journal#',
       width: '140px',
-      render: (j) => (
-        <span className="text-[#408DFB] hover:underline font-mono font-medium cursor-pointer">
-          {j.journalNo || `JN-${j.id.slice(-5)}`}
-        </span>
-      ),
+      render: (j) => {
+        const jNum = j.journalNo || (j.reference?.startsWith('JN-') ? j.reference : `JN-${j.id.slice(-5)}`);
+        return (
+          <span className="text-[#408DFB] hover:underline font-mono font-medium cursor-pointer">
+            {jNum}
+          </span>
+        );
+      },
     },
     {
       key: 'reference',
       label: 'Reference#',
       width: '130px',
-      render: (j) => <span className="text-[#6B7280]">{j.reference || '—'}</span>,
+      render: (j) => {
+        const isAutoRef = j.reference?.startsWith('JN-');
+        return <span className="text-[#6B7280]">{isAutoRef ? '—' : j.reference || '—'}</span>;
+      },
     },
     {
       key: 'status',
@@ -355,7 +361,10 @@ export const JournalVouchersList: React.FC = () => {
             onSelect={(id) => setSelectedJournalId(id)}
             onNew={() => navigate('/journal-entries/new')}
             onClose={() => setSelectedJournalId(null)}
-            detailTitle={selectedJournal.journalNo || `Journal #${selectedJournal.id.slice(-5)}`}
+            detailTitle={
+              selectedJournal.journalNo ||
+              (selectedJournal.reference?.startsWith('JN-') ? selectedJournal.reference : `Journal #${selectedJournal.id.slice(-5)}`)
+            }
             searchValue={searchQuery}
             onSearchChange={setSearchQuery}
             searchPlaceholder="Search journals..."
@@ -399,7 +408,8 @@ export const JournalVouchersList: React.FC = () => {
                       MANUAL JOURNAL
                     </h2>
                     <p className="font-mono text-xs text-[#6B7280] mt-0.5">
-                      {selectedJournal.journalNo || `JN-${selectedJournal.id.slice(-5)}`}
+                      {selectedJournal.journalNo ||
+                        (selectedJournal.reference?.startsWith('JN-') ? selectedJournal.reference : `JN-${selectedJournal.id.slice(-5)}`)}
                     </p>
                   </div>
                   <div className="text-right">

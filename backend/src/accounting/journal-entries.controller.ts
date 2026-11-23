@@ -31,6 +31,16 @@ export class JournalEntriesController {
     };
   }
 
+  @Get("next-number")
+  async getNextNumber() {
+    const data = await this.journalEntriesService.getNextNumber();
+    return {
+      success: true,
+      message: "Next journal number generated successfully",
+      data,
+    };
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     const data = await this.journalEntriesService.findOne(id);

@@ -47,7 +47,45 @@ export class JournalEntriesService {
       this.prisma.journalEntry.count({ where }),
     ]);
 
-    return toPaginatedResult(data, total, query);
+    const mapped = data.map((entry) => ({
+      ...entry,
+      journalNo: entry.reference?.startsWith('JN-') ? entry.reference : `JN-${entry.id.slice(-5)}`,
+    }));
+
+    return toPaginatedResult(mapped, total, query);
+  }
+
+  async getNextNumber(): Promise<{ nextNumber: string; formattedNumber: string }> {
+    const companyId = CompanyContext.getCompanyId();
+    if (!companyId) {
+      throw new ConflictException('Company context is required');
+    }
+
+    const entries = await this.prisma.journalEntry.findMany({
+      where: {
+        companyId,
+        reference: { startsWith: 'JN-' },
+      },
+      select: { reference: true },
+    });
+
+    let maxNum = 0;
+    for (const entry of entries) {
+      if (!entry.reference) continue;
+      const match = entry.reference.match(/^JN-(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+
+    const nextNumber = String(maxNum + 1);
+    return {
+      nextNumber,
+      formattedNumber: `JN-${nextNumber}`,
+    };
   }
 
   async findOne(id: string) {
@@ -65,7 +103,10 @@ export class JournalEntriesService {
       throw new NotFoundException(`Journal Entry with ID ${id} not found`);
     }
 
-    return entry;
+    return {
+      ...entry,
+      journalNo: entry.reference?.startsWith('JN-') ? entry.reference : `JN-${entry.id.slice(-5)}`,
+    };
   }
 
   async create(dto: CreateJournalEntryDto) {
@@ -74,11 +115,32 @@ export class JournalEntriesService {
       throw new ConflictException('Company context is required');
     }
 
+    let reference = dto.reference?.trim();
+    if (!reference) {
+      const next = await this.getNextNumber();
+      reference = next.formattedNumber;
+    } else {
+      // Check if reference already exists in the active company
+      const existing = await this.prisma.journalEntry.findFirst({
+        where: { companyId, reference, deletedAt: null },
+      });
+      if (existing) {
+        if (reference.startsWith('JN-')) {
+          // If auto-numbered JN- format collided, advance to next guaranteed unique number
+          const next = await this.getNextNumber();
+          reference = next.formattedNumber;
+        } else {
+          throw new ConflictException(`Journal entry with reference "${reference}" already exists.`);
+        }
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       return this.journalPostingService.post(tx as any, companyId, {
         date: new Date(dto.date),
-        reference: dto.reference,
+        reference,
         description: dto.description,
+        throwOnDuplicateReference: true,
         lines: dto.lines,
       });
     }, { timeout: 20000 });

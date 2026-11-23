@@ -13,6 +13,7 @@ export interface PostJournalPayload {
   date: Date;
   reference?: string;
   description?: string;
+  throwOnDuplicateReference?: boolean;
   lines: PostJournalLine[];
 }
 
@@ -35,6 +36,7 @@ export class JournalPostingService {
         date: payload.date,
         reference: payload.reference,
         description: payload.description,
+        throwOnDuplicateReference: payload.throwOnDuplicateReference,
         lines: payload.lines.map((l) => ({
           accountId: l.accountId,
           debit: l.debit || 0,

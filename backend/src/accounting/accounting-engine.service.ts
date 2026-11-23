@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 
@@ -8,6 +8,7 @@ export interface PostJournalParams {
   reference?: string;
   description?: string;
   allowDuplicateReference?: boolean;
+  throwOnDuplicateReference?: boolean;
   lines: {
     accountId: string;
     costCenterId?: string;
@@ -338,6 +339,11 @@ export class AccountingEngineService {
         include: { lines: true },
       });
       if (existing) {
+        if (params.throwOnDuplicateReference) {
+          throw new ConflictException(
+            `A journal entry with reference "${params.reference}" already exists. Please use a unique reference.`
+          );
+        }
         return existing;
       }
     }

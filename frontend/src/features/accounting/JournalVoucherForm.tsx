@@ -468,21 +468,21 @@ export const JournalVoucherForm: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Prefill next sequential journal number if not editing draft
-  const { data: countData } = useQuery({
-    queryKey: ['journal-entries-count'],
+  const { data: nextNumberData } = useQuery({
+    queryKey: ['journal-entries-next-number'],
     queryFn: async () => {
-      const res = await api.get('/journal-entries', { params: { limit: 1 } });
-      const total = res.data?.meta?.total ?? res.data?.total ?? 0;
-      return Number(total);
+      const res = await api.get('/journal-entries/next-number');
+      const val = res.data?.data?.nextNumber || res.data?.nextNumber;
+      return val ? String(val) : '1';
     },
-    staleTime: 60000,
+    staleTime: 5000,
   });
 
   useEffect(() => {
-    if (countData !== undefined && !searchParams.get('draftId')) {
-      setJournalNumber(String(countData + 1));
+    if (nextNumberData && !searchParams.get('draftId')) {
+      setJournalNumber(String(nextNumberData));
     }
-  }, [countData, searchParams]);
+  }, [nextNumberData, searchParams]);
 
   // Restore draft if draftId is in URL
   useEffect(() => {
@@ -796,23 +796,26 @@ export const JournalVoucherForm: React.FC = () => {
     if (!voucherDate) {
       return 'Date is required.';
     }
-    if (!notes.trim()) {
-      return 'Notes are required.';
-    }
     if (notes.length > 500) {
       return 'Notes must be within 500 characters.';
     }
-    if (lines.length < 2) {
+
+    // Filter out completely blank lines so extra unused rows don't block saving
+    const activeLines = lines.filter(
+      (l) => l.accountId || (Number(l.debit) || 0) > 0 || (Number(l.credit) || 0) > 0
+    );
+
+    if (activeLines.length < 2) {
       return 'At least two journal lines are required.';
     }
 
-    const missingAccIdx = lines.findIndex((l) => !l.accountId);
+    const missingAccIdx = activeLines.findIndex((l) => !l.accountId);
     if (missingAccIdx !== -1) {
       return `Please select an account for line ${missingAccIdx + 1}.`;
     }
 
-    for (let i = 0; i < lines.length; i++) {
-      const l = lines[i];
+    for (let i = 0; i < activeLines.length; i++) {
+      const l = activeLines[i];
       const dr = Number(l.debit) || 0;
       const cr = Number(l.credit) || 0;
       if (dr <= 0 && cr <= 0) {
@@ -837,11 +840,20 @@ export const JournalVoucherForm: React.FC = () => {
   // Save / Publish Mutation
   const postMutation = useMutation({
     mutationFn: async () => {
+      // Filter out empty lines
+      const activeLines = lines.filter(
+        (l) => l.accountId || (Number(l.debit) || 0) > 0 || (Number(l.credit) || 0) > 0
+      );
+
+      const refClean = referenceNo.trim();
+      const finalReference = refClean ? refClean : `JN-${journalNumber}`.trim();
+      const finalDescription = notes.trim() || 'Manual Journal';
+
       const payload = {
         date: voucherDate,
-        reference: referenceNo.trim() || `JN-${journalNumber}`.trim(),
-        description: notes.trim(),
-        lines: lines.map((l) => {
+        reference: finalReference,
+        description: finalDescription,
+        lines: activeLines.map((l) => {
           const contact = contactOptions.find((c) => c.id === l.contactId);
           const memo = l.description.trim();
           const lineDesc = contact
@@ -876,6 +888,7 @@ export const JournalVoucherForm: React.FC = () => {
       notification.success('Manual journal published successfully to General Ledger!');
       await erpInvalidate.journalEntry(queryClient);
       await queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+      await queryClient.invalidateQueries({ queryKey: ['journal-entries-next-number'] });
       await queryClient.invalidateQueries({ queryKey: ['accounts-lookup-full'] });
       navigate('/journal-entries');
     },
