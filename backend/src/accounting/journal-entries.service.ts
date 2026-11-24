@@ -15,7 +15,7 @@ export class JournalEntriesService {
     private readonly journalPostingService: JournalPostingService
   ) {}
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: PaginationQueryDto & { type?: string; view?: string }) {
     const companyId = CompanyContext.getCompanyId();
     if (!companyId) {
       throw new ConflictException('Company context is required');
@@ -23,17 +23,44 @@ export class JournalEntriesService {
 
     const { skip, take } = getPagination(query);
 
+    const conditions: Prisma.JournalEntryWhereInput[] = [
+      { companyId, deletedAt: null },
+    ];
+
+    if (query.search?.trim()) {
+      const q = query.search.trim();
+      conditions.push({
+        OR: [
+          { description: { contains: q } },
+          { reference: { contains: q } },
+        ],
+      });
+    }
+
+    const type = query.type || (query as any)?.view;
+    const autoPrefixes = ['EXP-', 'INV-', 'RCP-', 'REV-', 'PAYMENT-', 'BIL-', 'PUR-'];
+
+    if (type === 'MANUAL') {
+      conditions.push({
+        OR: [
+          { reference: { startsWith: 'JN-' } },
+          {
+            AND: autoPrefixes.map((p) => ({
+              reference: { not: { startsWith: p } },
+            })),
+          },
+        ],
+      });
+    } else if (type === 'SYSTEM') {
+      conditions.push({
+        OR: autoPrefixes.map((p) => ({
+          reference: { startsWith: p },
+        })),
+      });
+    }
+
     const where: Prisma.JournalEntryWhereInput = {
-      companyId,
-      deletedAt: null,
-      ...(query.search
-        ? {
-            OR: [
-              { description: { contains: query.search } },
-              { reference: { contains: query.search } },
-            ],
-          }
-        : {}),
+      AND: conditions,
     };
 
     const [data, total] = await this.prisma.$transaction([

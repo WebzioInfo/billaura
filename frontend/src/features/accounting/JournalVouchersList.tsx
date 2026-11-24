@@ -87,9 +87,18 @@ export const JournalVouchersList: React.FC = () => {
 
   // Queries
   const { data: journalEntriesData, isLoading } = useQuery({
-    queryKey: ['journal-entries'],
+    queryKey: ['journal-entries', activeView],
     queryFn: async () => {
-      const res = await api.get<any>('/journal-entries', { params: { limit: 500 } });
+      const typeParam =
+        activeView === 'MANUAL'
+          ? 'MANUAL'
+          : activeView === 'SYSTEM'
+          ? 'SYSTEM'
+          : undefined;
+
+      const res = await api.get<any>('/journal-entries', {
+        params: { limit: 1000, type: typeParam },
+      });
       const raw = res.data?.data || res.data || res || [];
       return Array.isArray(raw) ? raw : Array.isArray((res as any)?.items) ? (res as any).items : [];
     },
