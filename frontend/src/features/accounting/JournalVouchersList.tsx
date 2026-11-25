@@ -81,35 +81,47 @@ export const JournalVouchersList: React.FC = () => {
 
   const [activeView, setActiveView] = useState<string>('MANUAL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(50);
   const [selectedJournalId, setSelectedJournalId] = useState<string | null>(null);
   const [journalToDelete, setJournalToDelete] = useState<JournalEntry | null>(null);
   const [localDraftRevision, setLocalDraftRevision] = useState<number>(0);
 
   // Queries
-  const { data: journalEntriesData, isLoading } = useQuery({
-    queryKey: ['journal-entries', activeView],
+  const { data: journalEntriesResponse, isLoading } = useQuery({
+    queryKey: ['journal-entries', activeView, page, limit, searchQuery],
     queryFn: async () => {
       const typeParam =
-        activeView === 'MANUAL'
+        activeView === 'MANUAL' || activeView === 'PUBLISHED'
           ? 'MANUAL'
           : activeView === 'SYSTEM'
           ? 'SYSTEM'
           : undefined;
 
       const res = await api.get<any>('/journal-entries', {
-        params: { limit: 1000, type: typeParam },
+        params: {
+          page,
+          limit,
+          type: typeParam,
+          search: searchQuery.trim() || undefined,
+        },
       });
       const raw = res.data?.data || res.data || res || [];
-      return Array.isArray(raw) ? raw : Array.isArray((res as any)?.items) ? (res as any).items : [];
+      const items = Array.isArray(raw) ? raw : Array.isArray((res as any)?.items) ? (res as any).items : [];
+      const total = res.data?.meta?.total ?? (res as any)?.meta?.total ?? items.length;
+      return { items, total: Number(total) };
     },
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: 'always',
   });
 
+  const journalEntriesData = journalEntriesResponse?.items || [];
+  const totalCount = journalEntriesResponse?.total || 0;
+
   // Local drafts stored per tenant
   const localDrafts = useMemo<JournalEntry[]>(() => {
-    if (!companyId) return [];
+    if (!companyId || page > 1) return [];
     try {
       const raw = localStorage.getItem(`billaura_manual_journal_drafts_${companyId}`);
       if (!raw) return [];
@@ -118,7 +130,7 @@ export const JournalVouchersList: React.FC = () => {
     } catch {
       return [];
     }
-  }, [companyId, localDraftRevision]);
+  }, [companyId, localDraftRevision, page]);
 
   const journalEntries: JournalEntry[] = useMemo(() => {
     const serverEntries = Array.isArray(journalEntriesData) ? journalEntriesData : [];
@@ -350,9 +362,15 @@ export const JournalVouchersList: React.FC = () => {
         title={viewTitle}
         views={views}
         activeViewId={activeView}
-        onViewChange={(vId) => setActiveView(vId)}
+        onViewChange={(vId) => {
+          setActiveView(vId);
+          setPage(1);
+        }}
         searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={(q) => {
+          setSearchQuery(q);
+          setPage(1);
+        }}
         searchPlaceholder="Search journals (Journal#, Reference, Notes, Account)..."
         newAction={{
           label: '+ New Journal',
@@ -513,6 +531,16 @@ export const JournalVouchersList: React.FC = () => {
             isLoading={isLoading}
             keyField="id"
             onRowClick={(j) => setSelectedJournalId(j.id)}
+            pagination={{
+              currentPage: page,
+              pageSize: limit,
+              totalCount: totalCount + localDrafts.length,
+              onPageChange: (p) => setPage(p),
+              onPageSizeChange: (l) => {
+                setLimit(l);
+                setPage(1);
+              },
+            }}
             emptyState={
               <ZohoEmptyState
                 title={searchQuery ? 'No matching journal entries found.' : 'Post double-entry manual journal vouchers.'}

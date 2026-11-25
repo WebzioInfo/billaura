@@ -11,8 +11,7 @@ import {
   HttpStatus,
 } from "@nestjs/common";
 import { JournalEntriesService } from "./journal-entries.service";
-import { CreateJournalEntryDto } from "./dto/journal-entry.dto";
-import { PaginationQueryDto } from "../common/dto/pagination-query.dto";
+import { CreateJournalEntryDto, JournalEntriesQueryDto } from "./dto/journal-entry.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { TenantGuard } from "../common/guards/tenant.guard";
 
@@ -22,7 +21,7 @@ export class JournalEntriesController {
   constructor(private readonly journalEntriesService: JournalEntriesService) {}
 
   @Get()
-  async findAll(@Query() query: PaginationQueryDto) {
+  async findAll(@Query() query: JournalEntriesQueryDto) {
     const result = await this.journalEntriesService.findAll(query);
     return {
       success: true,

@@ -8,6 +8,17 @@ import {
   IsDateString,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
+
+export class JournalEntriesQueryDto extends PaginationQueryDto {
+  @IsString()
+  @IsOptional()
+  type?: string;
+
+  @IsString()
+  @IsOptional()
+  view?: string;
+}
 
 export class JournalLineDto {
   @IsString()
